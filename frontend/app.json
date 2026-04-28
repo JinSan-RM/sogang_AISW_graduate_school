@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Sogang Community",
+    "slug": "sogang-community",
+    "scheme": "sogang-community",
+    "plugins": [
+      "expo-router",
+      "expo-asset",
+      "expo-font"
+    ],
+    "android": {
+      "package": "com.anonymous.sogangcommunity"
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "bf5cf461-a033-4fd9-9fbf-2ba2019d4c35"
+      }
+    }
+  }
+}

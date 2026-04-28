@@ -1,0 +1,3 @@
+Run from backend/:
+1) alembic upgrade head
+2) alembic downgrade -1
