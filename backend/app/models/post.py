@@ -14,6 +14,7 @@ class Post(Base):
         Index("ix_posts_board_pinned_created", "board_id", "is_pinned", "created_at"),
         Index("ix_posts_board_category", "board_id", "category"),
         Index("ix_posts_author_created", "author_id", "created_at"),
+        Index("ix_posts_notice_deadline", "is_notice", "deadline_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -30,6 +31,7 @@ class Post(Base):
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     comment_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    deadline_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime)

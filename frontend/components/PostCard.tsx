@@ -1,55 +1,221 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { PostListItem } from "../types";
+import { formatCohortName } from "../utils/userLabel";
 
 type Props = {
   post: PostListItem;
   onPress: (postId: number) => void;
+  boardType?: string;
+  boardSlug?: string;
 };
 
-export default function PostCard({ post, onPress }: Props) {
+const COLORS = {
+  primary: "#2761FF",
+  primary50: "#EDF2FE",
+  text: "#111827",
+  muted: "#6B7280",
+  subtle: "#8A919C",
+  divider: "#EEF0F3",
+  pink50: "#FFEAF1",
+  pink700: "#B91C4C",
+  yellow50: "#FFF6DC",
+  yellow700: "#9A6B00",
+  green50: "#EAF8EF",
+  green700: "#1F7A46",
+  purple50: "#F1EEFB",
+  purple700: "#5B49C8",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  album: "사진첩",
+  external_link: "외부 링크",
+  faq: "FAQ",
+  organization_intro: "소개",
+  suggestion: "건의",
+  notice: "공지",
+  calendar: "일정",
+  guide: "가이드",
+  resource: "자료",
+  activity_certification: "활동 인증",
+  activity_history: "활동 내역",
+  mutual_aid: "상조회",
+};
+
+function shortDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(2, 10).replace(/-/g, ".");
+  }
+  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function normalizeCategory(post: PostListItem, boardType?: string) {
+  if (boardType === "suggestion" && post.suggestion) {
+    return post.suggestion.status === "answered" ? "답변완료" : "대기중";
+  }
+  if (boardType === "mutual_aid" && post.mutual_aid) {
+    return {
+      processing: "처리중",
+      completed: "처리 완료",
+      rejected: "반려",
+    }[post.mutual_aid.status];
+  }
+  const raw = post.category?.trim();
+  if (raw) {
+    const lower = raw.toLowerCase();
+    if (lower.includes("event") || raw.includes("행사")) return "행사공지";
+    if (lower.includes("academic") || raw.includes("학사")) return "학사공지";
+    if (raw.includes("전체")) return "공지";
+    return raw.length <= 8 ? raw : "공지";
+  }
+  return boardType ? (TYPE_LABELS[boardType] ?? boardType) : "게시글";
+}
+
+function categoryTone(label: string) {
+  if (label.includes("반려")) {
+    return { bg: COLORS.pink50, fg: COLORS.pink700 };
+  }
+  if (label.includes("완료")) {
+    return { bg: COLORS.green50, fg: COLORS.green700 };
+  }
+  if (label.includes("대기")) {
+    return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
+  }
+  if (label.includes("행사") || label.includes("시험")) {
+    return { bg: COLORS.pink50, fg: COLORS.pink700 };
+  }
+  if (label.includes("종합") || label.includes("모집")) {
+    return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
+  }
+  if (label.includes("졸업") || label.includes("인증")) {
+    return { bg: COLORS.green50, fg: COLORS.green700 };
+  }
+  if (label.includes("강의") || label.includes("스터디")) {
+    return { bg: COLORS.purple50, fg: COLORS.purple700 };
+  }
+  return { bg: COLORS.primary50, fg: COLORS.primary };
+}
+
+function compactPreview(post: PostListItem) {
+  const title = post.title.trim();
+  const preview = post.content_preview.trim();
+  const withoutDuplicateTitle = preview.startsWith(title) ? preview.slice(title.length).trim() : preview;
+  const firstMeaningfulLine = withoutDuplicateTitle
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && line !== title);
+  return firstMeaningfulLine ?? "";
+}
+
+export default function PostCard({ post, onPress, boardType, boardSlug }: Props) {
+  const label = normalizeCategory(post, boardType);
+  const tone = categoryTone(label);
+  const preview = compactPreview(post);
+  const isAnonymousNoCommentBoard = boardSlug === "lecture-reviews" || boardSlug === "exam-archive";
+  const isMutualAid = boardType === "mutual_aid";
+  const isSuggestion = boardType === "suggestion";
+  const isWorkflowRequest = isMutualAid || isSuggestion;
+
   return (
-    <Pressable onPress={() => onPress(post.id)}>
-      <View
-        style={{
-          marginHorizontal: 14,
-          marginBottom: 10,
-          padding: 14,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: "#dbe3ef",
-          backgroundColor: "#ffffff",
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          {post.is_pinned || post.is_notice ? (
-        <Text style={{ color: "#b91c1c", fontSize: 12, fontWeight: "900" }}>고정</Text>
-          ) : null}
-          {post.category ? <Text style={{ color: "#2563eb", fontSize: 12, fontWeight: "800" }}>{post.category}</Text> : null}
-          {post.status && post.status !== "published" ? (
-            <Text style={{ color: "#0f766e", fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>{post.status}</Text>
-          ) : null}
+    <Pressable onPress={() => onPress(post.id)} style={styles.row}>
+      <View style={styles.metaRow}>
+        <View style={[styles.pill, { backgroundColor: tone.bg }]}>
+          <Text style={[styles.pillText, { color: tone.fg }]}>{label}</Text>
         </View>
-        <Text style={{ color: "#111827", fontSize: 16, fontWeight: "900" }} numberOfLines={1}>
-          {post.title}
-        </Text>
-        <Text style={{ color: "#475569", marginTop: 6, lineHeight: 19 }} numberOfLines={2}>
-          {post.content_preview}
-        </Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 10 }}>
-          <Text style={{ color: "#64748b", fontSize: 12 }}>{post.author_nickname}</Text>
-          <Text style={{ color: "#94a3b8", fontSize: 12 }}>{new Date(post.created_at).toLocaleDateString()}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-            <Ionicons name="heart-outline" size={14} color="#64748b" />
-            <Text style={{ color: "#64748b", fontSize: 12 }}>{post.like_count}</Text>
+        {post.is_pinned || post.is_notice ? (
+          <View style={styles.pinPill}>
+            <Ionicons name="bookmark" size={11} color={COLORS.primary} />
+            <Text style={styles.pinText}>고정</Text>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-            <Ionicons name="chatbubble-outline" size={14} color="#64748b" />
-            <Text style={{ color: "#64748b", fontSize: 12 }}>{post.comment_count}</Text>
-          </View>
-        </View>
+        ) : null}
+      </View>
+      <Text style={styles.title} numberOfLines={2}>
+        {post.title}
+      </Text>
+      {preview && !isWorkflowRequest ? (
+        <Text style={styles.preview} numberOfLines={2}>
+          {preview}
+        </Text>
+      ) : null}
+      <View style={styles.footer}>
+        {!isAnonymousNoCommentBoard && !isSuggestion ? (
+          <Text style={styles.footerText} numberOfLines={1}>
+            {isMutualAid ? formatCohortName(post.author_cohort, post.author_nickname) : post.author_nickname}
+          </Text>
+        ) : null}
+        <Text style={styles.footerText}>{shortDate(post.created_at)}</Text>
+        {!isAnonymousNoCommentBoard && !isWorkflowRequest ? <Text style={styles.footerText}>댓글 {post.comment_count}</Text> : null}
+        {!isWorkflowRequest ? <Text style={styles.footerText}>추천 {post.like_count}</Text> : null}
+        {!isWorkflowRequest && post.attachment_count ? <Text style={styles.footerText}>첨부 {post.attachment_count}</Text> : null}
       </View>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  row: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  metaRow: {
+    minHeight: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  pill: {
+    height: 24,
+    justifyContent: "center",
+    borderRadius: 6,
+    paddingHorizontal: 9,
+  },
+  pillText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  pinPill: {
+    height: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderRadius: 6,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: 7,
+  },
+  pinText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  title: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 22,
+    marginTop: 7,
+  },
+  preview: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 19,
+    marginTop: 5,
+  },
+  footer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 7,
+  },
+  footerText: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+});

@@ -25,6 +25,28 @@ export type AuthSession = {
   user: AuthUser;
 };
 
+export type MajorOption = {
+  id: number;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PrivacyPolicyVersion = {
+  id: number;
+  version: string;
+  effective_at: string;
+  is_active: boolean;
+  updated_at: string;
+};
+
+export type RegistrationOptions = {
+  majors: MajorOption[];
+  privacy_policy: PrivacyPolicyVersion;
+};
+
 export type Board = {
   id: number;
   name: string;
@@ -36,6 +58,9 @@ export type Board = {
   allow_anonymous: boolean;
   read_permission: string;
   write_permission: string;
+  metadata?: Record<string, unknown> | null;
+  is_active?: boolean;
+  created_at?: string;
 };
 
 export type BoardGroup = {
@@ -43,22 +68,79 @@ export type BoardGroup = {
   boards: Board[];
 };
 
+export type BannerItem = {
+  id: number;
+  placement: "home";
+  title?: string | null;
+  subtitle?: string | null;
+  badge_text?: string | null;
+  cta_label?: string | null;
+  cta_href?: string | null;
+  image_url?: string | null;
+  image_urls?: {
+    mobile?: string;
+    tablet?: string;
+    desktop?: string;
+  } | null;
+  theme: "none" | "blue" | "navy" | "cyan" | "purple";
+  sort_order: number;
+  is_active: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  deadline_at?: string | null;
+  created_by?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BannerPayload = {
+  placement?: "home";
+  title?: string | null;
+  subtitle?: string | null;
+  badge_text?: string | null;
+  cta_label?: string | null;
+  cta_href?: string | null;
+  image_url?: string | null;
+  image_urls?: {
+    mobile?: string;
+    tablet?: string;
+    desktop?: string;
+  } | null;
+  theme: "none" | "blue" | "navy" | "cyan" | "purple";
+  sort_order?: number;
+  is_active?: boolean;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  deadline_at?: string | null;
+};
+
 export type PostListItem = {
   id: number;
   board_id: number;
+  board_name?: string;
+  board_category?: string;
+  board_type?: string;
   title: string;
   content_preview: string;
   author_id: number;
   author_nickname: string;
+  author_cohort?: string | null;
   is_anonymous: boolean;
   is_pinned: boolean;
   is_notice: boolean;
   status: string;
   category?: string;
+  metadata?: Record<string, unknown>;
+  suggestion?: SuggestionDetail | null;
+  mutual_aid?: MutualAidDetail | null;
+  attachment_count?: number;
+  thumbnail_url?: string | null;
   view_count: number;
   like_count: number;
   comment_count: number;
   created_at: string;
+  updated_at?: string;
+  deadline_at?: string | null;
   highlights?: {
     title: string;
     content_preview: string;
@@ -72,19 +154,15 @@ export type PostDetail = {
   content: string;
   author_id: number;
   author_nickname: string;
+  author_cohort?: string | null;
   is_anonymous: boolean;
   is_pinned: boolean;
   is_notice: boolean;
   status: string;
   category?: string;
   metadata?: Record<string, unknown>;
-  suggestion?: {
-    category?: string;
-    status: string;
-    admin_reply?: string;
-    replied_by?: number;
-    replied_at?: string;
-  } | null;
+  suggestion?: SuggestionDetail | null;
+  mutual_aid?: MutualAidDetail | null;
   attachments: MediaAsset[];
   view_count: number;
   like_count: number;
@@ -93,6 +171,27 @@ export type PostDetail = {
   is_bookmarked: boolean;
   created_at: string;
   updated_at: string;
+  deadline_at?: string | null;
+};
+
+export type MutualAidStatus = "processing" | "completed" | "rejected";
+
+export type SuggestionDetail = {
+  category?: string;
+  status: "received" | "answered";
+  admin_reply?: string | null;
+  replied_by?: number | null;
+  replied_at?: string | null;
+};
+
+export type MutualAidDetail = {
+  event_type: string;
+  event_date: string;
+  relation: string;
+  status: MutualAidStatus;
+  rejection_reason?: string | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
 };
 
 export type MediaAsset = {
@@ -102,6 +201,7 @@ export type MediaAsset = {
   content_type: string;
   file_size: number;
   url?: string;
+  is_private?: boolean;
   status?: string;
   created_at?: string;
 };
@@ -111,6 +211,8 @@ export type SearchResult = {
   id: number;
   board_id: number;
   board_name: string;
+  board_slug?: string;
+  category?: string | null;
   title: string;
   content_preview: string;
   author_nickname: string;
@@ -152,7 +254,18 @@ export type UserActivityItem = {
   title: string;
   content_preview?: string;
   board_id: number;
+  board_name?: string;
+  category?: string | null;
+  comment_count?: number;
+  like_count?: number;
   created_at: string;
+};
+
+export type UserSearchItem = {
+  id: number;
+  nickname: string;
+  cohort?: string | null;
+  major?: string | null;
 };
 
 export type FAQItem = {
@@ -181,6 +294,85 @@ export type NotificationSettings = {
   notify_like: boolean;
   notify_notice: boolean;
   notify_event: boolean;
+  notify_council: boolean;
+};
+
+export type ReportStatus = "open" | "reviewing" | "resolved" | "dismissed";
+
+export type BlockedUserItem = {
+  id: number;
+  blocked_user_id: number;
+  blocked_user_nickname: string;
+  reason?: string | null;
+  created_at: string;
+};
+
+export type AdminUserItem = {
+  id: number;
+  email: string;
+  nickname: string;
+  cohort?: string | null;
+  major?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  job_title?: string | null;
+  position?: string | null;
+  role: "user" | "admin";
+  is_active: boolean;
+  enrollment_status: "active" | "leave" | "graduated";
+  dues_status: "paid" | "unpaid" | "exempt";
+  last_login_at?: string | null;
+  created_at: string;
+  privacy_policy_version?: string | null;
+  privacy_consented_at?: string | null;
+};
+
+export type AdminReportItem = {
+  id: number;
+  target_type: "post" | "comment";
+  target_id: number;
+  reason: string;
+  detail?: string | null;
+  status: ReportStatus;
+  reporter_id: number;
+  reporter_nickname: string;
+  created_at: string;
+  updated_at: string;
+  target: {
+    target_exists: boolean;
+    target_deleted: boolean;
+    post_id?: number;
+    board_id?: number;
+    title?: string;
+    content_preview?: string;
+    author_id?: number;
+    author_nickname?: string;
+  };
+};
+
+export type AdminStats = {
+  users_total: number;
+  users_active: number;
+  users_active_30d: number;
+  admins: number;
+  posts: number;
+  notices: number;
+  comments: number;
+  events: number;
+  open_reports: number;
+  active_push_tokens: number;
+  push_failed: number;
+};
+
+export type AdminAuditLog = {
+  id: number;
+  actor_id?: number | null;
+  actor_nickname: string;
+  action: string;
+  target_type: string;
+  target_id?: number | null;
+  details?: Record<string, unknown> | null;
+  created_at: string;
 };
 
 export type CommentNode = {
@@ -204,6 +396,9 @@ export type UserMe = {
   company?: string;
   job_title?: string;
   position?: string;
+  profile_image_url?: string | null;
   email: string;
   role: string;
+  privacy_policy_version?: string | null;
+  privacy_consented_at?: string | null;
 };

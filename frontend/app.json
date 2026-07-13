@@ -6,10 +6,37 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "게시글 및 프로필 이미지 첨부를 위해 사진 보관함 접근 권한이 필요합니다.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default",
+          "color": "#2761FF"
+        }
+      ]
     ],
     "android": {
       "package": "com.anonymous.sogangcommunity"
+    },
+    "ios": {
+      "bundleIdentifier": "com.anonymous.sogangcommunity",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "같은 Wi-Fi의 테스트 서버에 연결하기 위해 로컬 네트워크 접근이 필요합니다.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        }
+      }
     },
     "extra": {
       "router": {

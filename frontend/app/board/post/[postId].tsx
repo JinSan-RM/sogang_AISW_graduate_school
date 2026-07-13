@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import BackButton from "../../../components/BackButton";
 import CommentItem from "../../../components/CommentItem";
+import { useBoardsQuery } from "../../../hooks/useApi";
 import {
   useCreateComment,
   useDeleteComment,
@@ -13,32 +15,139 @@ import {
   usePostDetail,
   useToggleBookmark,
   useToggleLike,
-  useUpdateSuggestion,
   useUpdateComment,
+  useUpdateMutualAid,
+  useUpdateSuggestion,
 } from "../../../hooks/usePosts";
+import { API_ORIGIN, mediaApi, reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
-import { API_ORIGIN, reportApi } from "../../../services/api";
+import type { MutualAidStatus } from "../../../types";
+import { formatCohortName } from "../../../utils/userLabel";
 
 const COLORS = {
-  navy: "#112d4e",
-  blue: "#2563eb",
-  red: "#b91c1c",
-  bg: "#f4f7fb",
-  border: "#dbe3ef",
+  primary: "#2761FF",
+  primary50: "#EDF2FE",
   text: "#111827",
-  muted: "#64748b",
+  muted: "#6B7280",
+  subtle: "#8A919C",
+  divider: "#EEF0F3",
+  surface: "#FFFFFF",
+  page: "#FFFFFF",
+  danger: "#B91C1C",
+  danger50: "#FFF1F2",
+  cyan50: "#E6F9FB",
+  cyan700: "#14788A",
+  green50: "#EAF8EF",
+  green700: "#1F7A46",
+  pink50: "#FFEAF1",
+  pink700: "#B91C4C",
+  yellow50: "#FFF6DC",
+  yellow700: "#9A6B00",
 };
+
+const ALBUM_FALLBACK_GRADIENTS: readonly (readonly [string, string])[] = [
+  ["#2761FF", "#86C8FF"],
+  ["#5B49C8", "#B7A4F8"],
+  ["#0E7B60", "#55C69A"],
+  ["#B94A2F", "#F39A7D"],
+];
+
+const NO_COMMENT_RESOURCE_SLUGS = new Set(["lecture-reviews", "exam-archive"]);
+
+type ReportTarget = {
+  type: "post" | "comment";
+  id: number;
+  label: string;
+};
+
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const REPORT_REASONS = [
+  { value: "spam", label: "스팸/광고입니다" },
+  { value: "harassment", label: "욕설 및 비방이 포함되어 있어요" },
+  { value: "misinformation", label: "허위 정보예요" },
+  { value: "other", label: "기타" },
+];
+
+const SUGGESTION_STATUSES = [
+  { value: "received", label: "대기중" },
+  { value: "answered", label: "답변 완료" },
+];
+
+const MUTUAL_AID_STATUSES: { value: MutualAidStatus; label: string }[] = [
+  { value: "processing", label: "처리중" },
+  { value: "completed", label: "처리 완료" },
+  { value: "rejected", label: "반려" },
+];
+
+function shortDate(value: string) {
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
+  const date = new Date(value.includes("T") && !hasTimezone ? `${value}Z` : value);
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(2, 10).replace(/-/g, ".");
+  }
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
+}
+
+function categoryLabel(value?: string | null, fallback = "게시글") {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (lower.includes("event") || raw.includes("행사")) return "행사공지";
+  if (lower.includes("academic") || raw.includes("학사")) return "학사공지";
+  if (raw.includes("전체")) return "공지";
+  if (lower === "all" || lower.includes("other") || lower.includes("general") || raw.includes("기타")) return "기타공지";
+  return raw.length <= 8 ? raw : fallback;
+}
+
+function categoryTone(label: string) {
+  if (label.includes("반려")) return { bg: COLORS.pink50, fg: COLORS.pink700 };
+  if (label.includes("행사") || label.includes("시험")) return { bg: COLORS.pink50, fg: COLORS.pink700 };
+  if (label.includes("인증") || label.includes("완료")) return { bg: COLORS.green50, fg: COLORS.green700 };
+  if (label.includes("대기")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
+  if (label.includes("건의") || label.includes("답변")) return { bg: COLORS.cyan50, fg: COLORS.cyan700 };
+  return { bg: COLORS.primary50, fg: COLORS.primary };
+}
+
+function fileUrl(value?: string | null) {
+  if (!value) return null;
+  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
+}
+
+function isAdminParticipationGuideBoard(board?: { slug?: string } | null) {
+  return board?.slug === "club-promo" || board?.slug === "networking-programs";
+}
+
+function firstUrlFromText(value: string) {
+  return value.match(/https?:\/\/[^\s)]+/)?.[0];
+}
+
+function IconButton({ icon, onPress, label }: { icon: IconName; onPress: () => void; label: string }) {
+  return (
+    <Pressable accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
+      <Ionicons name={icon} size={24} color={COLORS.text} />
+    </Pressable>
+  );
+}
 
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string }>();
+  const insets = useSafeAreaInsets();
   const postId = Number(params.postId);
   const userId = useUserStore((state) => state.userId);
   const currentUser = useUserStore((state) => state.user);
 
   const { data: postRes, isLoading } = usePostDetail(postId);
-  const { data: commentRes } = usePostComments(postId);
+  const { data: boardsRes } = useBoardsQuery();
 
   const post = postRes?.data;
+  const boards = boardsRes?.data.flatMap((group) => group.boards) ?? [];
+  const board = boards.find((item) => item.id === post?.board_id);
+  const isMutualAidRequest = board?.board_type === "mutual_aid";
+  const isSuggestionRequest = board?.board_type === "suggestion";
+  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
+  const { data: commentRes } = usePostComments(postId, Boolean(board) && !commentsDisabled);
   const comments = commentRes?.data ?? [];
 
   const [commentText, setCommentText] = useState("");
@@ -46,13 +155,19 @@ export default function PostDetailScreen() {
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [reportTarget, setReportTarget] = useState<{ type: "post" | "comment"; id: number; label: string } | null>(null);
-  const [reportReason, setReportReason] = useState("inappropriate");
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [reportReason, setReportReason] = useState(REPORT_REASONS[0].value);
   const [reportDetail, setReportDetail] = useState("");
   const [isReporting, setIsReporting] = useState(false);
+  const [isBlockingAuthor, setIsBlockingAuthor] = useState(false);
   const [reportedTargets, setReportedTargets] = useState<Record<string, boolean>>({});
   const [suggestionStatus, setSuggestionStatus] = useState("received");
   const [suggestionReply, setSuggestionReply] = useState("");
+  const [mutualAidStatus, setMutualAidStatus] = useState<MutualAidStatus>("processing");
+  const [mutualAidRejectionReason, setMutualAidRejectionReason] = useState("");
+  const [showPostMenu, setShowPostMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   const likeMutation = useToggleLike(postId, post?.board_id ?? 0);
   const bookmarkMutation = useToggleBookmark(postId);
@@ -61,36 +176,97 @@ export default function PostDetailScreen() {
   const deleteCommentMutation = useDeleteComment(postId);
   const deletePostMutation = useDeletePost(postId, post?.board_id ?? 0);
   const updateSuggestionMutation = useUpdateSuggestion(postId);
+  const updateMutualAidMutation = useUpdateMutualAid(postId);
 
   useEffect(() => {
-    if (!post) {
-      return;
-    }
+    if (!post) return;
     setIsLiked(post.is_liked);
     setIsBookmarked(post.is_bookmarked);
     setLikeCount(post.like_count);
     setSuggestionStatus(post.suggestion?.status ?? post.status ?? "received");
     setSuggestionReply(post.suggestion?.admin_reply ?? "");
-  }, [
-    post?.id,
-    post?.is_liked,
-    post?.is_bookmarked,
-    post?.like_count,
-    post?.status,
-    post?.suggestion?.status,
-    post?.suggestion?.admin_reply,
-  ]);
+    setMutualAidStatus(post.mutual_aid?.status ?? "processing");
+    setMutualAidRejectionReason(post.mutual_aid?.rejection_reason ?? "");
+  }, [post]);
+
+  useEffect(() => {
+    setGalleryIndex(0);
+  }, [postId]);
 
   if (isLoading || !post) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.bg }}>
-        <ActivityIndicator />
+      <View style={styles.center}>
+        <ActivityIndicator color={COLORS.primary} />
       </View>
     );
   }
 
   const isMine = post.author_id === userId;
   const isAdmin = currentUser?.role === "admin";
+  const hasLockedSuggestion = Boolean(post.suggestion?.admin_reply);
+  const metadata = post.metadata ?? {};
+  const isCouncilActivityEntry = metadata.show_in_council_activity === true;
+  const isAdminParticipationGuide = isAdminParticipationGuideBoard(board);
+  const applicationButtonLabel = board?.slug === "networking-programs" ? "참가 신청" : "가입 신청";
+  const label = isMutualAidRequest
+    ? MUTUAL_AID_STATUSES.find((status) => status.value === post.mutual_aid?.status)?.label ?? "처리중"
+    : isSuggestionRequest
+      ? SUGGESTION_STATUSES.find((status) => status.value === post.suggestion?.status)?.label ?? "대기중"
+      : categoryLabel(post.category, isAdminParticipationGuide ? "모집중" : board?.board_type === "notice" ? "공지" : board?.name ?? "게시글");
+  const tone = categoryTone(label);
+  const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
+  const contentUrl = firstUrlFromText(post.content);
+  const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
+  const currentSuggestionLabel =
+    SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
+    post.suggestion?.status ??
+    suggestionStatus;
+  const currentMutualAidLabel =
+    MUTUAL_AID_STATUSES.find((status) => status.value === post.mutual_aid?.status)?.label ?? "처리중";
+  const detailRows: [string, unknown][] =
+    board?.board_type === "activity_certification"
+      ? [
+          ["활동일", metadata.activity_date],
+          ["참가자", metadata.participants],
+          ...(isAdmin ? ([["계좌번호", metadata.bank_account]] as [string, unknown][]) : []),
+        ]
+      : board?.board_type === "mutual_aid"
+        ? [
+            ["경조사 종류", post.mutual_aid?.event_type ?? post.category],
+            ["날짜", post.mutual_aid?.event_date ?? metadata.event_date],
+            ["관계", post.mutual_aid?.relation ?? metadata.relation],
+          ]
+        : board?.slug === "study-recruit"
+          ? [["스터디장 연락수단", metadata.contact]]
+        : [];
+  const imageAttachments = post.attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
+  const firstImageUrl = fileUrl(imageAttachments[0]?.url);
+  const normalizedGalleryIndex = Math.min(galleryIndex, Math.max(imageAttachments.length - 1, 0));
+  const selectedImageUrl = fileUrl(imageAttachments[normalizedGalleryIndex]?.url);
+  const isActivityCertification = board?.board_type === "activity_certification";
+  const heroImageUrl = board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? selectedImageUrl : firstImageUrl;
+  const galleryTotal = Math.max(imageAttachments.length, 1);
+  const isPhotoAlbum = board?.board_type === "album";
+  const hasVisualHero = board?.board_type === "album" || isActivityCertification || isAdminParticipationGuide || isCouncilActivityEntry;
+  const visibleAttachments = isPhotoAlbum
+    ? []
+    : hasVisualHero
+      ? post.attachments.filter((attachment) => !attachment.content_type.startsWith("image/"))
+      : post.attachments;
+  const appBarTitle =
+    board?.board_type === "album"
+      ? post.title
+      : isAdminParticipationGuide
+        ? board?.slug === "networking-programs" ? "네트워킹" : "동아리"
+        : isCouncilActivityEntry
+          ? "원우회 활동내역"
+        : isMutualAidRequest
+          ? "상조회 신청 상세"
+        : board?.board_type === "activity_certification"
+          ? "활동 인증"
+          : board?.board_type === "notice"
+            ? "공지사항"
+            : board?.name ?? "게시글";
 
   const requireLogin = () => {
     if (!userId) {
@@ -100,42 +276,33 @@ export default function PostDetailScreen() {
     return true;
   };
 
-  const handleLike = async () => {
-    if (!requireLogin() || likeMutation.isPending) {
-      return;
-    }
-    try {
-      const response = await likeMutation.mutateAsync();
-      setIsLiked(response.data.is_liked);
-      setLikeCount(response.data.like_count);
-    } catch {
-      Alert.alert("수정 실패", "댓글을 수정할 수 없습니다.");
-    }
+  const showPreviousImage = () => {
+    if (imageAttachments.length < 2) return;
+    setGalleryIndex((current) => (current - 1 + imageAttachments.length) % imageAttachments.length);
   };
 
-  const handleBookmark = async () => {
-    if (!requireLogin() || bookmarkMutation.isPending) {
-      return;
-    }
-    try {
-      const response = await bookmarkMutation.mutateAsync();
-      setIsBookmarked(response.data.is_bookmarked);
-    } catch {
-      Alert.alert("삭제 실패", "댓글을 삭제할 수 없습니다.");
-    }
+  const showNextImage = () => {
+    if (imageAttachments.length < 2) return;
+    setGalleryIndex((current) => (current + 1) % imageAttachments.length);
+  };
+
+  const startReport = (target: ReportTarget) => {
+    if (!requireLogin()) return;
+    setReportTarget(target);
+    setReportReason(REPORT_REASONS[0].value);
+    setReportDetail("");
   };
 
   const submitReport = async () => {
-    if (!reportTarget || !requireLogin()) {
-      return;
-    }
+    if (!reportTarget || !requireLogin()) return;
     try {
       setIsReporting(true);
-      const payload = { reason: reportReason, detail: reportDetail.trim() || undefined };
+      const payload = {
+        reason: reportReason,
+        detail: reportReason === "other" ? reportDetail.trim() || undefined : undefined,
+      };
       const response =
-        reportTarget.type === "post"
-          ? await reportApi.reportPost(reportTarget.id, payload)
-          : await reportApi.reportComment(reportTarget.id, payload);
+        reportTarget.type === "post" ? await reportApi.reportPost(reportTarget.id, payload) : await reportApi.reportComment(reportTarget.id, payload);
       setReportedTargets((current) => ({ ...current, [`${reportTarget.type}:${reportTarget.id}`]: true }));
       setReportTarget(null);
       setReportDetail("");
@@ -147,324 +314,1285 @@ export default function PostDetailScreen() {
     }
   };
 
+  const handleBlockAuthor = () => {
+    if (!requireLogin() || isMine || isBlockingAuthor) return;
+    Alert.alert("작성자 차단", "이 작성자의 게시글과 댓글을 내 화면에서 숨길까요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "차단",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setIsBlockingAuthor(true);
+            await userApi.blockUser({ blocked_user_id: post.author_id, reason: "post_detail" });
+            Alert.alert("차단 완료", "차단한 작성자의 콘텐츠를 숨겼습니다.");
+            router.replace(`/board/${post.board_id}`);
+          } catch {
+            Alert.alert("차단 실패", "잠시 후 다시 시도하세요.");
+          } finally {
+            setIsBlockingAuthor(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleLike = async () => {
+    if (!requireLogin() || likeMutation.isPending) return;
+    try {
+      const response = await likeMutation.mutateAsync();
+      setIsLiked(response.data.is_liked);
+      setLikeCount(response.data.like_count);
+    } catch {
+      Alert.alert("좋아요 실패", "좋아요 상태를 변경할 수 없습니다.");
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!requireLogin() || bookmarkMutation.isPending) return;
+    try {
+      const response = await bookmarkMutation.mutateAsync();
+      setIsBookmarked(response.data.is_bookmarked);
+    } catch {
+      Alert.alert("북마크 실패", "북마크 상태를 변경할 수 없습니다.");
+    }
+  };
+
+  const handleParticipationApply = () => {
+    if (applicationUrl) {
+      Linking.openURL(applicationUrl);
+      return;
+    }
+    Alert.alert(applicationButtonLabel, "관리자가 참여 링크를 준비 중입니다.");
+  };
+
+  const handleDeletePost = () => {
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeletePost = () => {
+    deletePostMutation.mutate(undefined, {
+      onSuccess: () => {
+        setShowDeleteConfirm(false);
+        router.replace(`/board/${post.board_id}`);
+      },
+      onError: () => Alert.alert("삭제 실패", "게시글을 삭제할 수 없습니다."),
+    });
+  };
+
+  const handleDeleteComment = (commentId: number) => {
+    Alert.alert("댓글 삭제", "이 댓글을 삭제할까요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: () =>
+          deleteCommentMutation.mutate(commentId, {
+            onError: () => Alert.alert("댓글 삭제 실패", "댓글을 삭제할 수 없습니다."),
+          }),
+      },
+    ]);
+  };
+
+  const handleCreateComment = () => {
+    if (!requireLogin() || createCommentMutation.isPending) return;
+    const trimmed = commentText.trim();
+    if (!trimmed) return;
+    createCommentMutation.mutate(
+      { content: trimmed, parent_id: replyParentId },
+      {
+        onSuccess: () => {
+          setCommentText("");
+          setReplyParentId(null);
+        },
+        onError: () => Alert.alert("댓글 등록 실패", "댓글을 저장할 수 없습니다."),
+      }
+    );
+  };
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-      <View style={{ marginBottom: 12 }}>
-        <BackButton fallback={`/board/${post.board_id}`} />
-      </View>
-      <View style={{ borderRadius: 8, backgroundColor: "#ffffff", borderWidth: 1, borderColor: COLORS.border, padding: 18 }}>
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
-          {post.is_pinned || post.is_notice ? (
-        <Text style={{ color: COLORS.red, fontSize: 12, fontWeight: "800" }}>삭제됨</Text>
-          ) : null}
-          {post.category ? <Text style={{ color: COLORS.blue, fontSize: 12, fontWeight: "800" }}>{post.category}</Text> : null}
-          {post.status && post.status !== "published" ? (
-            <Text style={{ color: "#0f766e", fontSize: 12, fontWeight: "800", textTransform: "uppercase" }}>{post.status}</Text>
+    <View style={styles.screen}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <IconButton
+          icon="chevron-back"
+          label="뒤로"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace(`/board/${post.board_id}` as never);
+          }}
+        />
+        <Text numberOfLines={1} style={styles.appBarTitle}>
+          {appBarTitle}
+        </Text>
+        <View style={styles.appBarActions}>
+          <IconButton
+            icon={board?.board_type === "album" ? "download-outline" : isBookmarked ? "bookmark" : "bookmark-outline"}
+            label={board?.board_type === "album" ? "다운로드" : "북마크"}
+            onPress={() => {
+              const downloadUrl = board?.board_type === "album" ? selectedImageUrl : firstImageUrl;
+              if (board?.board_type === "album" && downloadUrl) {
+                Linking.openURL(downloadUrl);
+                return;
+              }
+              handleBookmark();
+            }}
+          />
+          {!isPhotoAlbum || canManagePost ? (
+            <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} />
           ) : null}
         </View>
-        <Text style={{ color: COLORS.text, fontSize: 24, fontWeight: "800", lineHeight: 30 }}>{post.title}</Text>
-        <Text style={{ marginTop: 8, color: COLORS.muted }}>
-          {post.author_nickname} | {new Date(post.created_at).toLocaleString()}
-        </Text>
-        <Text style={{ marginTop: 18, color: COLORS.text, fontSize: 16, lineHeight: 25 }}>{post.content}</Text>
+      </View>
 
-        {post.suggestion ? (
-          <View style={{ marginTop: 18, borderRadius: 8, borderWidth: 1, borderColor: "#99f6e4", backgroundColor: "#f0fdfa", padding: 14 }}>
-            <Text style={{ color: "#0f766e", fontSize: 16, fontWeight: "900" }}>제안 답변 등록</Text>
-            <Text style={{ color: COLORS.text, marginTop: 6, fontWeight: "800", textTransform: "capitalize" }}>
-              {post.suggestion.status}
-            </Text>
-            {post.suggestion.admin_reply ? (
-              <View style={{ marginTop: 10, borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}>
-            <Text style={{ color: COLORS.navy, fontWeight: "900" }}>답변 상태</Text>
-                <Text style={{ color: COLORS.text, marginTop: 8, lineHeight: 22 }}>{post.suggestion.admin_reply}</Text>
-                {post.suggestion.replied_at ? (
-                  <Text style={{ color: COLORS.muted, marginTop: 8 }}>{new Date(post.suggestion.replied_at).toLocaleString()}</Text>
-                ) : null}
-              </View>
-            ) : null}
-            {isAdmin ? (
-              <View style={{ marginTop: 12, gap: 10 }}>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {["received", "reviewing", "answered", "closed"].map((status) => (
-                    <Pressable
-                      key={status}
-                      onPress={() => setSuggestionStatus(status)}
-                      style={{
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: suggestionStatus === status ? "#0f766e" : "#99f6e4",
-                        backgroundColor: suggestionStatus === status ? "#ccfbf1" : "#ffffff",
-                        paddingHorizontal: 10,
-                        paddingVertical: 7,
-                      }}
-                    >
-                      <Text style={{ color: suggestionStatus === status ? "#0f766e" : COLORS.muted, fontWeight: "800", textTransform: "capitalize" }}>
-                        {status}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <TextInput
-                  multiline
-                  onChangeText={setSuggestionReply}
-                  placeholder="공식 답변"
-                  style={{ minHeight: 86, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 8, backgroundColor: "#ffffff", padding: 10 }}
-                  value={suggestionReply}
+      <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
+        {hasVisualHero ? (
+          <View style={styles.visualHeroBlock}>
+            <View style={styles.visualHero}>
+              {heroImageUrl ? (
+                <Image source={{ uri: heroImageUrl }} style={styles.visualHeroImage} />
+              ) : (
+                <LinearGradient
+                  colors={board?.board_type === "album" ? ALBUM_FALLBACK_GRADIENTS[normalizedGalleryIndex % ALBUM_FALLBACK_GRADIENTS.length] : ["#2761FF", "#86C8FF"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.visualHeroFallback}
                 />
-                <Pressable
-                  disabled={updateSuggestionMutation.isPending}
-                  onPress={() =>
-                    updateSuggestionMutation.mutate(
-                      { status: suggestionStatus, admin_reply: suggestionReply.trim() || undefined },
-                { onSuccess: () => Alert.alert("답변 저장", "공식 답변 상태가 저장되었습니다.") }
-                    )
-                  }
-                  style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#0f766e", paddingVertical: 11 }}
-                >
-                  <Text style={{ color: "#ffffff", fontWeight: "900" }}>
-                {updateSuggestionMutation.isPending ? "저장 중" : "답변 저장"}
-                  </Text>
-                </Pressable>
-              </View>
+              )}
+              {board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? (
+                <>
+                  {imageAttachments.length > 1 ? (
+                    <>
+                      <Pressable accessibilityLabel="이전 사진" onPress={showPreviousImage} style={[styles.galleryArrow, styles.galleryArrowLeft]}>
+                        <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+                      </Pressable>
+                      <Pressable accessibilityLabel="다음 사진" onPress={showNextImage} style={[styles.galleryArrow, styles.galleryArrowRight]}>
+                        <Ionicons name="chevron-forward" size={26} color="#FFFFFF" />
+                      </Pressable>
+                    </>
+                  ) : null}
+                  <View style={styles.galleryCount}>
+                    <Text style={styles.galleryCountText}>{normalizedGalleryIndex + 1}/{galleryTotal}</Text>
+                  </View>
+                </>
+              ) : null}
+            </View>
+            {board?.board_type === "album" ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbs}>
+                {(imageAttachments.length > 0 ? imageAttachments : [null, null, null, null]).map((attachment, index) => {
+                  const thumbUrl = attachment ? fileUrl(attachment.url) : null;
+                  return (
+                    <Pressable
+                      key={attachment?.id ?? `fallback-${index}`}
+                      accessibilityLabel={`${index + 1}번째 사진`}
+                      disabled={!attachment}
+                      onPress={() => setGalleryIndex(index)}
+                      style={[styles.galleryThumb, index === normalizedGalleryIndex ? styles.galleryThumbActive : null]}
+                    >
+                      {thumbUrl ? (
+                        <Image source={{ uri: thumbUrl }} style={styles.galleryThumbImage} />
+                      ) : (
+                        <LinearGradient
+                          colors={ALBUM_FALLBACK_GRADIENTS[index % ALBUM_FALLBACK_GRADIENTS.length]}
+                          style={styles.galleryThumbFallback}
+                        />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             ) : null}
           </View>
         ) : null}
 
-        {post.attachments.length > 0 ? (
-          <View style={{ gap: 10, marginTop: 18 }}>
-          <Text style={{ color: COLORS.navy, fontWeight: "900" }}>첨부파일</Text>
-            {post.attachments.map((attachment) => {
-              const url = attachment.url?.startsWith("http") ? attachment.url : `${API_ORIGIN}${attachment.url ?? ""}`;
+        {board?.board_type !== "album" ? (
+          <>
+            <View style={[styles.categoryPill, { backgroundColor: tone.bg }]}>
+              <Text style={[styles.categoryText, { color: tone.fg }]}>{label}</Text>
+            </View>
+
+            <Text style={styles.title}>{post.title}</Text>
+            <Text style={styles.meta}>
+              {board?.board_type === "notice"
+                ? `${shortDate(post.created_at)} · 조회 ${post.view_count}`
+                : isMutualAidRequest
+                  ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
+                : commentsDisabled
+                  ? `${shortDate(post.created_at)}${post.view_count ? ` · 조회 ${post.view_count}` : ""}`
+                : `${post.author_nickname} · ${shortDate(post.created_at)}${post.view_count ? ` · 조회 ${post.view_count}` : ""}`}
+            </Text>
+
+            <View style={styles.bodyDivider} />
+          </>
+        ) : null}
+        {!isPhotoAlbum && post.content.trim() ? <Text style={styles.body}>{post.content}</Text> : null}
+
+        {board?.board_type === "notice" && contentUrl ? (
+          <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.externalLinkButton}>
+            <Ionicons name="link-outline" size={18} color={COLORS.primary} />
+            <Text numberOfLines={1} style={styles.externalLinkText}>{contentUrl}</Text>
+            <Ionicons name="open-outline" size={17} color={COLORS.primary} />
+          </Pressable>
+        ) : null}
+
+        {detailRows.length > 0 ? (
+          <View style={styles.infoBox}>
+            {detailRows
+              .filter((row): row is [string, string] => typeof row[1] === "string" && row[1].trim().length > 0)
+              .map(([rowLabel, value]) => (
+                <View key={rowLabel} style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>{rowLabel}</Text>
+                  <Text style={styles.infoValue}>{value}</Text>
+                </View>
+              ))}
+          </View>
+        ) : null}
+
+        {visibleAttachments.length > 0 ? (
+          <View style={styles.attachments}>
+            {visibleAttachments.map((attachment) => {
+              const url = fileUrl(attachment.url);
               const isImage = attachment.content_type.startsWith("image/");
               return (
                 <Pressable
                   key={attachment.id}
-                  onPress={() => {
-                    if (attachment.url) {
-                      Linking.openURL(url);
+                  onPress={async () => {
+                    if (attachment.is_private) {
+                      try {
+                        const response = await mediaApi.getPrivateDownloadLink(attachment.id);
+                        await Linking.openURL(fileUrl(response.data.url) ?? response.data.url);
+                      } catch {
+                        Alert.alert("파일 열기 실패", "비공개 증빙 파일에 접근할 수 없습니다.");
+                      }
+                      return;
                     }
+                    if (url) await Linking.openURL(url);
                   }}
-                  style={{ borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: "#f8fafc", padding: 10 }}
+                  style={isImage && url ? styles.imageAttachment : styles.fileAttachment}
                 >
-                  {isImage && attachment.url ? (
-                    <Image source={{ uri: url }} style={{ width: "100%", height: 220, borderRadius: 8, marginBottom: 8, backgroundColor: "#e5e7eb" }} />
-                  ) : null}
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Ionicons name={isImage ? "image-outline" : "document-attach-outline"} size={18} color={COLORS.blue} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "800" }} numberOfLines={1}>
+                  {isImage && url ? <Image source={{ uri: url }} style={styles.attachmentImage} /> : null}
+                  {!isImage || !url ? (
+                    <>
+                      <Ionicons name="document-outline" size={19} color={COLORS.subtle} />
+                      <Text numberOfLines={1} style={styles.fileName}>
                         {attachment.original_filename}
                       </Text>
-                      <Text style={{ color: COLORS.muted, marginTop: 2 }}>{Math.ceil(attachment.file_size / 1024)} KB</Text>
-                    </View>
-                  </View>
+                      <Ionicons name="download-outline" size={19} color={COLORS.primary} />
+                    </>
+                  ) : null}
                 </Pressable>
               );
             })}
           </View>
         ) : null}
 
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 20 }}>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            disabled={likeMutation.isPending}
-            onPress={handleLike}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: isLiked ? COLORS.blue : COLORS.border,
-              backgroundColor: isLiked ? "#eff6ff" : "#ffffff",
-              paddingHorizontal: 12,
-              paddingVertical: 9,
-            }}
-          >
-            <Ionicons name={isLiked ? "heart" : "heart-outline"} size={18} color={isLiked ? COLORS.blue : COLORS.muted} />
-            <Text style={{ color: isLiked ? COLORS.blue : COLORS.text, fontWeight: "800" }}>{likeCount}</Text>
-              <Text style={{ color: isLiked ? COLORS.blue : COLORS.muted, fontWeight: "800" }}>{isLiked ? "좋아요 취소" : "좋아요"}</Text>
-          </TouchableOpacity>
+        {isAdminParticipationGuide ? (
+          <Pressable onPress={handleParticipationApply} style={styles.joinButton}>
+            <Text style={styles.joinButtonText}>{applicationButtonLabel}</Text>
+          </Pressable>
+        ) : null}
 
-          <TouchableOpacity
-            activeOpacity={0.75}
-            disabled={bookmarkMutation.isPending}
-            onPress={handleBookmark}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: isBookmarked ? COLORS.blue : COLORS.border,
-              backgroundColor: isBookmarked ? "#eff6ff" : "#ffffff",
-              paddingHorizontal: 12,
-              paddingVertical: 9,
-            }}
-          >
-            <Ionicons
-              name={isBookmarked ? "bookmark" : "bookmark-outline"}
-              size={18}
-              color={isBookmarked ? COLORS.blue : COLORS.muted}
-            />
-            <Text style={{ color: isBookmarked ? COLORS.blue : COLORS.text, fontWeight: "800" }}>
-              {isBookmarked ? "북마크됨" : "북마크"}
-            </Text>
-          </TouchableOpacity>
-
-          {isMine ? (
-            <>
-              <Pressable
-                onPress={() =>
-                  router.push(`/board/post/edit/${post.id}`)
-                }
-                style={{ borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12, paddingVertical: 9 }}
-              >
-            <Text style={{ color: COLORS.text, fontWeight: "800" }}>수정</Text>
-              </Pressable>
-              <Pressable
-                onPress={() =>
-                  deletePostMutation.mutate(undefined, {
-                    onSuccess: () => router.replace(`/board/${post.board_id}`),
-                  })
-                }
-                style={{ borderRadius: 8, borderWidth: 1, borderColor: "#fecaca", paddingHorizontal: 12, paddingVertical: 9 }}
-              >
-            <Text style={{ color: COLORS.red, fontWeight: "800" }}>삭제</Text>
-              </Pressable>
-            </>
-          ) : reportedTargets[`post:${post.id}`] ? (
-            <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#bbf7d0", backgroundColor: "#f0fdf4", paddingHorizontal: 12, paddingVertical: 9 }}>
-            <Text style={{ color: "#15803d", fontWeight: "800" }}>신고됨</Text>
+        {post.suggestion?.admin_reply ? (
+          <View style={styles.suggestionBox}>
+            <View style={styles.officialReplyHeader}>
+              <Ionicons name="chatbubble-ellipses-outline" size={15} color={COLORS.cyan700} />
+              <Text style={styles.suggestionTitle}>원우회 답변</Text>
             </View>
-          ) : (
-            <Pressable
-              onPress={() => setReportTarget({ type: "post", id: post.id, label: "이 게시글" })}
-              style={{ borderRadius: 8, borderWidth: 1, borderColor: "#fecaca", paddingHorizontal: 12, paddingVertical: 9 }}
-            >
-            <Text style={{ color: COLORS.red, fontWeight: "800" }}>신고</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
+            <Text style={styles.suggestionBody}>{post.suggestion.admin_reply}</Text>
+            {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{shortDate(post.suggestion.replied_at)}</Text> : null}
+          </View>
+        ) : null}
 
-      {reportTarget ? (
-        <View style={{ marginTop: 14, borderRadius: 8, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fff7f7", padding: 14 }}>
-              <Text style={{ color: COLORS.red, fontSize: 16, fontWeight: "900" }}>{reportTarget.label} 신고</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            {["inappropriate", "spam", "harassment", "privacy", "other"].map((reason) => (
-              <Pressable
-                key={reason}
-                onPress={() => setReportReason(reason)}
-                style={{
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: reportReason === reason ? COLORS.red : "#fecaca",
-                  backgroundColor: reportReason === reason ? "#fee2e2" : "#ffffff",
-                  paddingHorizontal: 10,
-                  paddingVertical: 7,
-                }}
-              >
-                <Text style={{ color: reportReason === reason ? COLORS.red : COLORS.muted, fontWeight: "800" }}>{reason}</Text>
-              </Pressable>
+        {post.suggestion && isAdmin ? (
+          <View style={styles.suggestionBox}>
+            <Text style={styles.suggestionTitle}>관리자 답변 관리</Text>
+            <Text style={styles.suggestionStatus}>{currentSuggestionLabel}</Text>
+            <View style={styles.adminReplyBox}>
+                <View style={styles.statusRow}>
+                  {SUGGESTION_STATUSES.map((status) => (
+                    <Pressable
+                      key={status.value}
+                      onPress={() => setSuggestionStatus(status.value)}
+                      style={[styles.statusChip, suggestionStatus === status.value ? styles.statusChipActive : null]}
+                    >
+                      <Text style={[styles.statusChipText, suggestionStatus === status.value ? styles.statusChipTextActive : null]}>{status.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <TextInput
+                  multiline
+                  value={suggestionReply}
+                  onChangeText={setSuggestionReply}
+                  placeholder="공식 답변"
+                  placeholderTextColor={COLORS.subtle}
+                  style={styles.replyTextarea}
+                />
+                <Pressable
+                  disabled={updateSuggestionMutation.isPending}
+                  onPress={() => {
+                    if (suggestionStatus === "answered" && !suggestionReply.trim()) {
+                      Alert.alert("답변 내용 필요", "답변완료 처리하려면 공식 답변을 입력해주세요.");
+                      return;
+                    }
+                    updateSuggestionMutation.mutate(
+                      { status: suggestionStatus, admin_reply: suggestionReply.trim() || undefined },
+                      { onSuccess: () => Alert.alert("답변 저장", "건의사항 답변이 저장되었습니다.") }
+                    );
+                  }}
+                  style={styles.replySaveButton}
+                >
+                  <Text style={styles.replySaveText}>{updateSuggestionMutation.isPending ? "저장 중" : "답변 저장"}</Text>
+                </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {post.mutual_aid ? (
+          <View style={styles.suggestionBox}>
+            <Text style={styles.suggestionTitle}>상조회 처리 상태</Text>
+            <Text style={styles.suggestionStatus}>{currentMutualAidLabel}</Text>
+            {post.mutual_aid.rejection_reason ? (
+              <Text style={styles.suggestionBody}>반려 사유: {post.mutual_aid.rejection_reason}</Text>
+            ) : null}
+            {isAdmin ? (
+              <View style={styles.adminReplyBox}>
+                <View style={styles.statusRow}>
+                  {MUTUAL_AID_STATUSES.map((status) => (
+                    <Pressable
+                      key={status.value}
+                      onPress={() => setMutualAidStatus(status.value)}
+                      style={[styles.statusChip, mutualAidStatus === status.value ? styles.statusChipActive : null]}
+                    >
+                      <Text style={[styles.statusChipText, mutualAidStatus === status.value ? styles.statusChipTextActive : null]}>
+                        {status.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {mutualAidStatus === "rejected" ? (
+                  <TextInput
+                    multiline
+                    value={mutualAidRejectionReason}
+                    onChangeText={setMutualAidRejectionReason}
+                    placeholder="반려 사유를 입력하세요"
+                    placeholderTextColor={COLORS.subtle}
+                    style={styles.replyTextarea}
+                  />
+                ) : null}
+                <Pressable
+                  disabled={updateMutualAidMutation.isPending}
+                  onPress={() => {
+                    if (mutualAidStatus === "rejected" && !mutualAidRejectionReason.trim()) {
+                      Alert.alert("반려 사유 필요", "반려 사유를 입력해주세요.");
+                      return;
+                    }
+                    updateMutualAidMutation.mutate(
+                      {
+                        status: mutualAidStatus,
+                        rejection_reason: mutualAidStatus === "rejected" ? mutualAidRejectionReason.trim() : undefined,
+                      },
+                      { onSuccess: () => Alert.alert("상태 저장", "상조회 처리 상태가 저장되었습니다.") }
+                    );
+                  }}
+                  style={styles.replySaveButton}
+                >
+                  <Text style={styles.replySaveText}>{updateMutualAidMutation.isPending ? "저장 중" : "상태 저장"}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest ? (
+          <View style={styles.actionRow}>
+            <Pressable disabled={likeMutation.isPending} onPress={handleLike} style={styles.iconAction}>
+              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={18} color={isLiked ? COLORS.primary : COLORS.muted} />
+              <Text style={styles.actionText}>추천 {likeCount}</Text>
+            </Pressable>
+            {!commentsDisabled ? (
+              <View style={styles.iconAction}>
+                <Ionicons name="chatbubble-outline" size={17} color={COLORS.muted} />
+                <Text style={styles.actionText}>댓글 {post.comment_count}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !commentsDisabled ? (
+          <View style={styles.commentSection}>
+            <Text style={styles.commentTitle}>댓글 {post.comment_count}</Text>
+            {comments.length === 0 ? <Text style={styles.emptyComment}>등록된 댓글이 없습니다.</Text> : null}
+            {comments.map((comment) => (
+              <CommentItem
+                key={comment.id}
+                comment={comment}
+                currentUserId={userId}
+                onDelete={handleDeleteComment}
+                onEdit={(commentId, content) =>
+                  updateCommentMutation.mutate(
+                    { commentId, content },
+                    { onError: () => Alert.alert("댓글 수정 실패", "댓글을 수정할 수 없습니다.") }
+                  )
+                }
+                onReport={startReport}
+                reportedTargets={reportedTargets}
+                onReply={(commentId) => setReplyParentId(commentId)}
+              />
             ))}
           </View>
-          <TextInput
-            multiline
-            onChangeText={setReportDetail}
-                  placeholder="신고 사유(선택)"
-            style={{ minHeight: 76, marginTop: 10, borderWidth: 1, borderColor: "#fecaca", borderRadius: 8, backgroundColor: "#ffffff", padding: 10 }}
-            value={reportDetail}
-          />
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-            <Pressable
-              onPress={submitReport}
-              disabled={isReporting}
-              style={{ flex: 1, alignItems: "center", borderRadius: 8, backgroundColor: COLORS.red, paddingVertical: 11 }}
-            >
-                <Text style={{ color: "#ffffff", fontWeight: "900" }}>{isReporting ? "신고 중" : "신고 접수"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setReportTarget(null)}
-              style={{ flex: 1, alignItems: "center", borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, paddingVertical: 11 }}
-            >
-                <Text style={{ color: COLORS.text, fontWeight: "900" }}>취소</Text>
+        ) : null}
+      </ScrollView>
+
+      {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !commentsDisabled ? (
+        <View style={[styles.commentBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          {replyParentId ? (
+            <View style={styles.replyNotice}>
+              <Text style={styles.replyNoticeText}>#{replyParentId} 답글 작성 중</Text>
+              <Pressable onPress={() => setReplyParentId(null)}>
+                <Text style={styles.replyCancelText}>취소</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <View style={styles.commentInputRow}>
+            <TextInput
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="댓글을 남겨보세요"
+              placeholderTextColor={COLORS.subtle}
+              style={styles.commentInput}
+            />
+            <Pressable disabled={createCommentMutation.isPending} onPress={handleCreateComment} style={styles.sendButton}>
+              <Ionicons name="send" size={18} color="#FFFFFF" />
             </Pressable>
           </View>
         </View>
       ) : null}
 
-      <View style={{ marginTop: 18 }}>
-        <Text style={{ color: COLORS.navy, fontSize: 18, fontWeight: "800" }}>댓글 {post.comment_count}</Text>
-        {comments.length === 0 ? (
-          <View style={{ marginTop: 10, padding: 18, borderRadius: 8, backgroundColor: "#ffffff", borderWidth: 1, borderColor: COLORS.border }}>
-              <Text style={{ color: COLORS.muted }}>등록된 댓글이 없습니다.</Text>
-          </View>
-        ) : (
-          comments.map((comment) => (
-            <CommentItem
-              key={comment.id}
-              comment={comment}
-              currentUserId={userId}
-              onDelete={(commentId) =>
-                deleteCommentMutation.mutate(commentId, {
-              onError: () => Alert.alert("댓글 실패", "댓글을 저장할 수 없습니다."),
-                })
-              }
-              onEdit={(commentId, content) =>
-                updateCommentMutation.mutate(
-                  { commentId, content },
-                  {
-              onError: () => Alert.alert("댓글 실패", "답글을 저장할 수 없습니다."),
-                  }
-                )
-              }
-              onReport={setReportTarget}
-              reportedTargets={reportedTargets}
-              onReply={(commentId) => setReplyParentId(commentId)}
-            />
-          ))
-        )}
-      </View>
-
-      <View style={{ marginTop: 18, borderRadius: 8, backgroundColor: "#ffffff", borderWidth: 1, borderColor: COLORS.border, padding: 14 }}>
-        {replyParentId ? (
-          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-            <Text style={{ color: COLORS.blue, fontWeight: "700" }}>#{replyParentId}</Text>
-            <Pressable onPress={() => setReplyParentId(null)}>
-              <Text style={{ color: COLORS.muted, fontWeight: "700" }}>취소</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        <TextInput
-          multiline
-              placeholder="댓글 입력"
-          value={commentText}
-          onChangeText={setCommentText}
-          style={{ minHeight: 88, borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, padding: 12, backgroundColor: "#ffffff" }}
-        />
-        <Pressable
-          onPress={() => {
-            const trimmed = commentText.trim();
-            if (!trimmed) {
-              return;
-            }
-            createCommentMutation.mutate(
-              { content: trimmed, parent_id: replyParentId },
-              {
-                onSuccess: () => {
-                  setCommentText("");
-                  setReplyParentId(null);
-                },
-              }
-            );
-          }}
-          style={{ marginTop: 10, alignItems: "center", borderRadius: 8, backgroundColor: COLORS.navy, paddingVertical: 12 }}
-        >
-            <Text style={{ color: "#ffffff", fontWeight: "800" }}>댓글 등록</Text>
+      <Modal animationType="slide" transparent visible={showPostMenu} onRequestClose={() => setShowPostMenu(false)}>
+        <Pressable accessibilityLabel="더보기 메뉴 닫기" onPress={() => setShowPostMenu(false)} style={styles.modalBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.menuSheet}>
+            <View style={styles.sheetHandle} />
+            {canManagePost && !hasLockedSuggestion && board?.board_type !== "notice" ? (
+              <>
+                <Pressable
+                  onPress={() => {
+                    setShowPostMenu(false);
+                    router.push(`/board/post/edit/${post.id}`);
+                  }}
+                  style={styles.sheetMenuItem}
+                >
+                  <Ionicons name="create-outline" size={20} color={COLORS.text} />
+                  <Text style={styles.sheetMenuText}>수정</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setShowPostMenu(false);
+                    handleDeletePost();
+                  }}
+                  style={styles.sheetMenuItem}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
+                </Pressable>
+              </>
+            ) : null}
+            {!isMine ? (
+              <Pressable
+                disabled={reportedTargets[`post:${post.id}`]}
+                onPress={() => {
+                  setShowPostMenu(false);
+                  startReport({ type: "post", id: post.id, label: "게시글" });
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <Ionicons name="flag-outline" size={20} color={COLORS.text} />
+                <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
+              </Pressable>
+            ) : null}
+            {!isMine && !canManagePost ? (
+                <Pressable
+                  disabled={isBlockingAuthor}
+                  onPress={() => {
+                    setShowPostMenu(false);
+                    handleBlockAuthor();
+                  }}
+                  style={styles.sheetMenuItem}
+                >
+                  <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
+                  <Text style={styles.sheetMenuText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
+                </Pressable>
+            ) : null}
+          </Pressable>
         </Pressable>
-      </View>
-    </ScrollView>
+      </Modal>
+
+      <Modal animationType="slide" transparent visible={Boolean(reportTarget)} onRequestClose={() => setReportTarget(null)}>
+        <Pressable accessibilityLabel="신고하기 닫기" onPress={() => setReportTarget(null)} style={styles.modalBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.reportSheetTitle}>신고하기</Text>
+            <Text style={styles.reportSheetSubtitle}>신고 사유를 선택해주세요</Text>
+            <View style={styles.reportReasonList}>
+              {REPORT_REASONS.map((reason) => {
+                const selected = reportReason === reason.value;
+                return (
+                  <Pressable key={reason.value} onPress={() => setReportReason(reason.value)} style={styles.reportReasonItem}>
+                    <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
+                      {selected ? <View style={styles.radioInner} /> : null}
+                    </View>
+                    <Text style={styles.reportReasonText}>{reason.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {reportReason === "other" ? (
+              <TextInput
+                multiline
+                value={reportDetail}
+                onChangeText={setReportDetail}
+                placeholder="구체적인 사유를 입력해주세요"
+                placeholderTextColor={COLORS.subtle}
+                style={styles.reportDetailInput}
+                textAlignVertical="top"
+              />
+            ) : null}
+            <Pressable disabled={isReporting} onPress={submitReport} style={[styles.reportPrimaryButton, isReporting ? styles.buttonDisabled : null]}>
+              <Text style={styles.reportPrimaryButtonText}>{isReporting ? "제출 중" : "제출"}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal animationType="fade" transparent visible={showDeleteConfirm} onRequestClose={() => setShowDeleteConfirm(false)}>
+        <Pressable accessibilityLabel="게시물 삭제 닫기" onPress={() => setShowDeleteConfirm(false)} style={styles.confirmBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>게시물 삭제</Text>
+            <Text style={styles.confirmBody}>삭제한 게시물은 복구할 수 없어요.{"\n"}작성한 댓글도 함께 삭제돼요.</Text>
+            <View style={styles.confirmActions}>
+              <Pressable disabled={deletePostMutation.isPending} onPress={() => setShowDeleteConfirm(false)} style={styles.confirmCancelButton}>
+                <Text style={styles.confirmCancelText}>취소</Text>
+              </Pressable>
+              <Pressable disabled={deletePostMutation.isPending} onPress={confirmDeletePost} style={[styles.confirmDeleteButton, deletePostMutation.isPending ? styles.buttonDisabled : null]}>
+                <Text style={styles.confirmDeleteText}>{deletePostMutation.isPending ? "삭제 중" : "삭제"}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.page,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.page,
+  },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+  },
+  appBarTitle: {
+    position: "absolute",
+    left: 88,
+    right: 88,
+    textAlign: "center",
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  appBarActions: {
+    flexDirection: "row",
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(17, 24, 39, 0.38)",
+  },
+  menuSheet: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 22,
+  },
+  sheetHandle: {
+    width: 34,
+    height: 4,
+    alignSelf: "center",
+    borderRadius: 2,
+    backgroundColor: "#CDD2DA",
+    marginBottom: 8,
+  },
+  sheetMenuItem: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  sheetMenuText: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  sheetMenuDangerText: {
+    color: "#EF4444",
+  },
+  reportSheet: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 24,
+  },
+  reportSheetTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 6,
+  },
+  reportSheetSubtitle: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  reportReasonList: {
+    marginTop: 4,
+  },
+  reportReasonItem: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: "#CBD1DA",
+  },
+  radioOuterSelected: {
+    borderColor: COLORS.primary,
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
+  reportReasonText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reportDetailInput: {
+    minHeight: 88,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 8,
+    color: COLORS.text,
+    fontSize: 13,
+    padding: 12,
+    marginTop: 12,
+  },
+  reportPrimaryButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 6,
+    backgroundColor: COLORS.primary,
+    marginTop: 16,
+  },
+  reportPrimaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  buttonDisabled: {
+    opacity: 0.55,
+  },
+  confirmBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.38)",
+    paddingHorizontal: 28,
+  },
+  confirmCard: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 16,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 18,
+    shadowColor: "#111827",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  confirmTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  confirmBody: {
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 10,
+  },
+  confirmActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 20,
+  },
+  confirmCancelButton: {
+    minWidth: 76,
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "#F3F4F6",
+  },
+  confirmCancelText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  confirmDeleteButton: {
+    minWidth: 76,
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "#EF4444",
+  },
+  confirmDeleteText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  postMenu: {
+    position: "absolute",
+    right: 18,
+    zIndex: 20,
+    minWidth: 152,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    backgroundColor: COLORS.surface,
+    paddingVertical: 5,
+    shadowColor: "#111827",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  postMenuItem: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    paddingHorizontal: 14,
+  },
+  postMenuText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  scroller: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 116,
+  },
+  contentWithoutCommentBar: {
+    paddingBottom: 44,
+  },
+  categoryPill: {
+    alignSelf: "flex-start",
+    height: 24,
+    justifyContent: "center",
+    borderRadius: 6,
+    paddingHorizontal: 9,
+  },
+  categoryText: {
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  visualHeroBlock: {
+    marginHorizontal: -24,
+    marginTop: -18,
+    marginBottom: 18,
+  },
+  visualHero: {
+    position: "relative",
+    height: 230,
+    overflow: "hidden",
+    backgroundColor: "#EEF2F7",
+  },
+  visualHeroImage: {
+    width: "100%",
+    height: "100%",
+  },
+  visualHeroFallback: {
+    flex: 1,
+  },
+  galleryArrow: {
+    position: "absolute",
+    top: "42%",
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+    backgroundColor: "rgba(17,24,39,0.16)",
+    zIndex: 2,
+  },
+  galleryArrowLeft: {
+    left: 8,
+  },
+  galleryArrowRight: {
+    right: 8,
+  },
+  galleryCount: {
+    position: "absolute",
+    right: 14,
+    bottom: 14,
+    borderRadius: 12,
+    backgroundColor: "rgba(17,24,39,0.48)",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  galleryCountText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  galleryThumbs: {
+    gap: 10,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+  },
+  galleryThumb: {
+    width: 50,
+    height: 50,
+    borderRadius: 6,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB",
+  },
+  galleryThumbActive: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  galleryThumbImage: {
+    width: "100%",
+    height: "100%",
+  },
+  galleryThumbFallback: {
+    flex: 1,
+  },
+  title: {
+    color: COLORS.text,
+    fontSize: 23,
+    fontWeight: "900",
+    lineHeight: 31,
+    marginTop: 12,
+  },
+  meta: {
+    color: COLORS.subtle,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 8,
+  },
+  bodyDivider: {
+    height: 1,
+    backgroundColor: COLORS.divider,
+    marginTop: 22,
+    marginBottom: 22,
+  },
+  body: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 25,
+  },
+  externalLinkButton: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 13,
+    marginTop: 14,
+  },
+  externalLinkText: {
+    flex: 1,
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  galleryCaption: {
+    marginTop: 4,
+  },
+  joinButton: {
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 7,
+    backgroundColor: COLORS.primary,
+    marginTop: 26,
+  },
+  joinButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  infoBox: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.divider,
+    marginTop: 22,
+  },
+  infoRow: {
+    paddingVertical: 12,
+  },
+  infoLabel: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  infoValue: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+    marginTop: 5,
+  },
+  attachments: {
+    gap: 10,
+    marginTop: 24,
+  },
+  fileAttachment: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  imageAttachment: {
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#F3F4F6",
+  },
+  attachmentImage: {
+    width: "100%",
+    height: 220,
+  },
+  fileName: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  suggestionBox: {
+    borderRadius: 8,
+    backgroundColor: COLORS.cyan50,
+    padding: 14,
+    marginTop: 24,
+  },
+  suggestionTitle: {
+    color: COLORS.cyan700,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  officialReplyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  officialReplyDate: {
+    color: COLORS.subtle,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 9,
+  },
+  suggestionStatus: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 7,
+  },
+  suggestionBody: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 22,
+    marginTop: 9,
+  },
+  adminReplyBox: {
+    gap: 10,
+    marginTop: 12,
+  },
+  statusRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  statusChip: {
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  statusChipActive: {
+    backgroundColor: COLORS.cyan700,
+  },
+  statusChipText: {
+    color: COLORS.cyan700,
+    fontWeight: "900",
+  },
+  statusChipTextActive: {
+    color: "#FFFFFF",
+  },
+  replyTextarea: {
+    minHeight: 86,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    color: COLORS.text,
+    padding: 12,
+    textAlignVertical: "top",
+  },
+  replySaveButton: {
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.cyan700,
+    paddingVertical: 11,
+  },
+  replySaveText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+  },
+  actionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: COLORS.divider,
+    paddingVertical: 14,
+    marginTop: 24,
+  },
+  iconAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  actionText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  ownerActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+  },
+  ownerButton: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    paddingVertical: 11,
+  },
+  ownerButtonText: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
+  deleteButton: {
+    borderColor: "#FECACA",
+  },
+  deleteButtonText: {
+    color: COLORS.danger,
+    fontWeight: "900",
+  },
+  reportBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: COLORS.danger50,
+    padding: 14,
+    marginTop: 18,
+  },
+  reportTitle: {
+    color: COLORS.danger,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  reasonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  reasonChip: {
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
+  reasonChipActive: {
+    backgroundColor: COLORS.danger,
+  },
+  reasonText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  reasonTextActive: {
+    color: "#FFFFFF",
+  },
+  reportInput: {
+    minHeight: 76,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    color: COLORS.text,
+    padding: 12,
+    marginTop: 10,
+    textAlignVertical: "top",
+  },
+  reportActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  reportSubmit: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.danger,
+    paddingVertical: 11,
+  },
+  reportSubmitText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+  },
+  reportCancel: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 11,
+  },
+  reportCancelText: {
+    color: COLORS.text,
+    fontWeight: "900",
+  },
+  commentSection: {
+    marginTop: 24,
+  },
+  commentTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  emptyComment: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 12,
+  },
+  commentBar: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 24,
+    paddingTop: 10,
+  },
+  replyNotice: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  replyNoticeText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  replyCancelText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  commentInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  commentInput: {
+    flex: 1,
+    height: 38,
+    borderWidth: 1,
+    borderColor: COLORS.divider,
+    borderRadius: 19,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "700",
+    paddingHorizontal: 14,
+  },
+  sendButton: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 19,
+    backgroundColor: COLORS.primary,
+  },
+});

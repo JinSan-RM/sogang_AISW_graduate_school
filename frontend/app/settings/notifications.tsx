@@ -1,177 +1,216 @@
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import BackButton from "../../components/BackButton";
 import { notificationApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
-import type { NotificationItem, NotificationSettings } from "../../types";
+import type { NotificationSettings } from "../../types";
+import { getWebNotificationPermission, requestWebNotificationPermission, showWebNotification, type WebNotificationPermission } from "../../utils/webNotifications";
+
+const COLORS = {
+  primary: "#2761FF",
+  text: "#111827",
+  muted: "#6B7280",
+  subtle: "#8A919C",
+  border: "#EEF0F3",
+  bg: "#FFFFFF",
+};
 
 const DEFAULT_SETTINGS: NotificationSettings = {
   notify_comment: true,
   notify_like: true,
   notify_notice: true,
   notify_event: true,
+  notify_council: true,
 };
 
-const LABELS: Record<keyof NotificationSettings, string> = {
-  notify_comment: "댓글",
-  notify_like: "좋아요",
-  notify_notice: "공지 및 안내",
-  notify_event: "일정",
-};
-
-const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
-  comment: "댓글",
-  like: "좋아요",
-  notice: "공지",
-  event: "일정",
-};
+const SETTING_ROWS: Array<{ key: keyof NotificationSettings; label: string }> = [
+  { key: "notify_notice", label: "공지사항 알림" },
+  { key: "notify_event", label: "일정 알림" },
+  { key: "notify_comment", label: "커뮤니티 댓글 알림" },
+  { key: "notify_council", label: "원우회 소식 알림" },
+];
 
 export default function NotificationSettingsScreen() {
-  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState("");
+  const insets = useSafeAreaInsets();
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
-
-  const load = async () => {
-    try {
-      setIsLoading(true);
-      setLoadError("");
-      const settingsRes = await notificationApi.getSettings();
-      const notificationsRes = await notificationApi.getNotifications();
-      setSettings(settingsRes.data);
-      setNotifications(notificationsRes.data);
-    } catch {
-      setLoadError("알림 정보를 불러오지 못했습니다. 잠시 후 다시 시도하세요.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState<keyof NotificationSettings | null>(null);
+  const [webPermission, setWebPermission] = useState<WebNotificationPermission>(() => getWebNotificationPermission());
 
   useEffect(() => {
     if (!isAuthenticated) {
+      setIsLoading(false);
       return;
     }
-    load();
+    notificationApi
+      .getSettings()
+      .then((response) => setSettings(response.data))
+      .catch(() => Alert.alert("불러오기 실패", "알림 설정을 불러오지 못했습니다."))
+      .finally(() => setIsLoading(false));
   }, [isAuthenticated]);
 
-  const update = (key: keyof NotificationSettings, value: boolean) => {
-    setSettings((current) => ({ ...current, [key]: value }));
-  };
-
-  const save = async () => {
-    const response = await notificationApi.updateSettings(settings);
-    setSettings(response.data);
-    Alert.alert("저장 완료", "알림 설정이 저장되었습니다.");
-  };
-
-  const markRead = async (notificationId: number) => {
-    await notificationApi.markRead(notificationId);
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === notificationId ? { ...notification, is_read: true } : notification
-      )
-    );
-  };
-
-  const openNotification = async (notification: NotificationItem) => {
-    if (!notification.is_read) {
-      markRead(notification.id).catch(() => undefined);
+  const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    setSavingKey(key);
+    try {
+      const response = await notificationApi.updateSettings(next);
+      setSettings(response.data);
+    } catch {
+      setSettings(settings);
+      Alert.alert("저장 실패", "알림 설정을 저장하지 못했습니다.");
+    } finally {
+      setSavingKey(null);
     }
-    if (notification.post_id) {
-      router.push(`/board/post/${notification.post_id}`);
-    } else if (notification.event_id) {
-      router.push("/events");
-    }
+  };
+
+  const enableWebNotifications = async () => {
+    const permission = await requestWebNotificationPermission();
+    setWebPermission(permission);
+    if (permission === "granted") showWebNotification("Sogang AI-SW", "웹 브라우저 알림이 켜졌어요.", () => undefined);
+    if (permission === "denied") Alert.alert("브라우저 알림 차단됨", "브라우저 사이트 설정에서 알림 권한을 허용해주세요.");
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#f4f7fb" }} contentContainerStyle={{ gap: 16, padding: 16, paddingBottom: 32 }}>
-      <BackButton fallback="/(tabs)/settings" />
-      <Text style={{ color: "#112d4e", fontSize: 24, fontWeight: "900" }}>알림</Text>
-
-      {!isAuthenticated ? (
-        <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 16 }}>
-          <Text style={{ color: "#111827", fontSize: 16, fontWeight: "900" }}>로그인이 필요합니다</Text>
-          <Text style={{ color: "#64748b", marginTop: 6 }}>알림 설정과 알림함은 로그인 후 사용할 수 있습니다.</Text>
-          <Pressable
-            onPress={() => router.push("/auth/login")}
-            style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#112d4e", marginTop: 12, paddingVertical: 12 }}
-          >
-            <Text style={{ color: "#ffffff", fontWeight: "900" }}>로그인하러 가기</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {isAuthenticated ? (
-      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 14 }}>
-        <Text style={{ color: "#112d4e", fontSize: 17, fontWeight: "900", marginBottom: 8 }}>알림 설정</Text>
-        {(Object.keys(settings) as Array<keyof NotificationSettings>).map((key) => (
-          <View key={key} style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between", paddingVertical: 10 }}>
-            <Text style={{ color: "#111827", fontWeight: "700" }}>{LABELS[key]}</Text>
-            <Switch onValueChange={(next) => update(key, next)} value={settings[key]} />
-          </View>
-        ))}
-        <Pressable onPress={save} style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#112d4e", marginTop: 10, paddingVertical: 12 }}>
-          <Text style={{ color: "#ffffff", fontWeight: "900" }}>설정 저장</Text>
+    <View style={styles.screen}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <Pressable
+          accessibilityLabel="뒤로"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/(tabs)/settings");
+          }}
+          style={styles.iconButton}
+        >
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </Pressable>
+        <Text style={styles.appBarTitle}>알림 설정</Text>
+        <View style={styles.iconButton} />
       </View>
-      ) : null}
 
-      {isAuthenticated ? (
-      <View>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <Text style={{ color: "#112d4e", fontSize: 17, fontWeight: "900" }}>최근 알림</Text>
-          <Pressable onPress={load} style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", paddingHorizontal: 10, paddingVertical: 7 }}>
-            <Text style={{ color: "#2563eb", fontWeight: "800" }}>새로고침</Text>
-          </Pressable>
+      {isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={COLORS.primary} />
         </View>
-        {isLoading ? (
-          <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 16 }}>
-            <ActivityIndicator />
-          </View>
-        ) : null}
-        {loadError ? (
-          <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#fecaca", backgroundColor: "#fff7f7", padding: 16, marginBottom: 10 }}>
-            <Text style={{ color: "#b91c1c", fontWeight: "800" }}>{loadError}</Text>
-          </View>
-        ) : null}
-        {!isLoading && !loadError && notifications.length === 0 ? (
-          <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 16 }}>
-            <Text style={{ color: "#64748b" }}>새 알림이 없습니다.</Text>
-          </View>
-        ) : null}
-        {!isLoading && !loadError && notifications.length > 0 ? (
-          notifications.map((notification) => (
-            <Pressable
-              key={notification.id}
-              onPress={() => openNotification(notification)}
-              style={{
-                flexDirection: "row",
-                gap: 10,
-                marginBottom: 10,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: notification.is_read ? "#dbe3ef" : "#bfdbfe",
-                backgroundColor: notification.is_read ? "#ffffff" : "#eff6ff",
-                padding: 14,
-              }}
-            >
-              <Ionicons name={notification.is_read ? "mail-open-outline" : "mail-unread-outline"} size={22} color="#2563eb" />
+      ) : (
+        <View style={styles.list}>
+          {Platform.OS === "web" ? (
+            <View style={styles.webPermissionRow}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: "#111827", fontWeight: "800" }}>{notification.message}</Text>
-                <Text style={{ color: "#64748b", marginTop: 4 }}>
-                  {NOTIFICATION_TYPE_LABELS[notification.notification_type] ?? notification.notification_type} | {new Date(notification.created_at).toLocaleString()}
+                <Text style={styles.rowText}>웹 브라우저 알림</Text>
+                <Text style={styles.permissionHelp}>
+                  {webPermission === "granted" ? "브라우저 시스템 알림이 허용되어 있어요." : webPermission === "denied" ? "브라우저 설정에서 권한을 허용해주세요." : webPermission === "unsupported" ? "이 브라우저는 시스템 알림을 지원하지 않아요." : "사이트가 열려 있을 때 시스템 알림을 받을 수 있어요."}
                 </Text>
               </View>
+              <Pressable disabled={webPermission === "granted" || webPermission === "unsupported"} onPress={() => void enableWebNotifications()} style={[styles.permissionButton, webPermission === "granted" ? styles.permissionButtonActive : null]}>
+                <Text style={[styles.permissionButtonText, webPermission === "granted" ? styles.permissionButtonTextActive : null]}>{webPermission === "granted" ? "허용됨" : "허용"}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {SETTING_ROWS.map((row) => (
+            <View key={row.key} style={styles.row}>
+              <Text style={styles.rowText}>{row.label}</Text>
+              <Switch
+                disabled={!isAuthenticated || savingKey === row.key}
+                onValueChange={(value) => updateSetting(row.key, value)}
+                thumbColor="#FFFFFF"
+                trackColor={{ false: "#D1D5DB", true: COLORS.primary }}
+                value={settings[row.key]}
+              />
+            </View>
+          ))}
+          {!isAuthenticated ? (
+            <Pressable onPress={() => router.replace("/auth/login")} style={styles.loginButton}>
+              <Text style={styles.loginButtonText}>로그인 후 설정하기</Text>
             </Pressable>
-          ))
-        ) : null}
-      </View>
-      ) : null}
-    </ScrollView>
+          ) : null}
+        </View>
+      )}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.bg,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appBarTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  list: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  row: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: 24,
+  },
+  rowText: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  webPermissionRow: {
+    minHeight: 76,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  permissionHelp: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  permissionButton: { borderRadius: 8, borderWidth: 1, borderColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8 },
+  permissionButtonActive: { backgroundColor: COLORS.primary },
+  permissionButtonText: { color: COLORS.primary, fontSize: 12, fontWeight: "900" },
+  permissionButtonTextActive: { color: "#FFFFFF" },
+  loginButton: {
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    marginHorizontal: 24,
+    marginTop: 22,
+  },
+  loginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+});

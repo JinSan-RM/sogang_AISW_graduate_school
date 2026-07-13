@@ -58,6 +58,16 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def can_read_board(user: User, read_permission: str) -> bool:
+    if user.role == "admin":
+        return True
+    if read_permission in {"guest", "user"}:
+        return True
+    if read_permission == "admin":
+        return False
+    return False
+
+
 def can_write_board(user: User, write_permission: str) -> bool:
     if user.role == "admin":
         return True

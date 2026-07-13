@@ -8,7 +8,12 @@ from app.database import Base
 
 class Event(Base):
     __tablename__ = "events"
-    __table_args__ = (CheckConstraint("category IN ('academic', 'event', 'exam', 'other')", name="ck_events_category"),)
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('academic', 'event', 'exam', 'council', 'external', 'other')",
+            name="ck_events_category",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)

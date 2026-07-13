@@ -8,3 +8,5 @@ pydantic-settings
 python-dotenv
 email-validator
 python-multipart
+openpyxl
+argon2-cffi>=23.1.0

@@ -1,3 +1,5 @@
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 import { create } from "zustand";
 
 import type { AuthUser } from "../types";
@@ -11,67 +13,90 @@ type StoredSession = {
 type UserState = StoredSession & {
   userId: number | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
+  hydrateSession: () => Promise<void>;
   setSession: (session: { access_token: string; refresh_token: string; user: AuthUser }) => void;
   clearSession: () => void;
 };
 
 const STORAGE_KEY = "aisw-auth-session";
+const EMPTY_SESSION: StoredSession = { accessToken: null, refreshToken: null, user: null };
 
-function readStoredSession(): StoredSession {
-  if (typeof localStorage === "undefined") {
-    return { accessToken: null, refreshToken: null, user: null };
-  }
+function parseSession(raw: string | null): StoredSession {
+  if (!raw) return EMPTY_SESSION;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : { accessToken: null, refreshToken: null, user: null };
+    const parsed = JSON.parse(raw) as Partial<StoredSession>;
+    return {
+      accessToken: typeof parsed.accessToken === "string" ? parsed.accessToken : null,
+      refreshToken: typeof parsed.refreshToken === "string" ? parsed.refreshToken : null,
+      user: parsed.user && typeof parsed.user.id === "number" ? (parsed.user as AuthUser) : null,
+    };
   } catch {
-    return { accessToken: null, refreshToken: null, user: null };
+    return EMPTY_SESSION;
   }
 }
 
-function writeStoredSession(session: StoredSession) {
-  if (typeof localStorage === "undefined") {
+function readWebSession() {
+  if (Platform.OS !== "web" || typeof localStorage === "undefined") return EMPTY_SESSION;
+  return parseSession(localStorage.getItem(STORAGE_KEY));
+}
+
+async function readStoredSession() {
+  if (Platform.OS === "web") return readWebSession();
+  try {
+    return parseSession(await SecureStore.getItemAsync(STORAGE_KEY));
+  } catch {
+    return EMPTY_SESSION;
+  }
+}
+
+async function writeStoredSession(session: StoredSession) {
+  const raw = JSON.stringify(session);
+  if (Platform.OS === "web") {
+    if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_KEY, raw);
     return;
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  await SecureStore.setItemAsync(STORAGE_KEY, raw, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+  });
 }
 
-function clearStoredSession() {
-  if (typeof localStorage === "undefined") {
+async function clearStoredSession() {
+  if (Platform.OS === "web") {
+    if (typeof localStorage !== "undefined") localStorage.removeItem(STORAGE_KEY);
     return;
   }
-  localStorage.removeItem(STORAGE_KEY);
+  await SecureStore.deleteItemAsync(STORAGE_KEY);
 }
 
-const stored = readStoredSession();
+const initialSession = readWebSession();
 
-export const useUserStore = create<UserState>((set) => ({
-  accessToken: stored.accessToken,
-  refreshToken: stored.refreshToken,
-  user: stored.user,
-  userId: stored.user?.id ?? null,
-  isAuthenticated: Boolean(stored.accessToken && stored.refreshToken && stored.user),
+export const useUserStore = create<UserState>((set, get) => ({
+  ...initialSession,
+  userId: initialSession.user?.id ?? null,
+  isAuthenticated: Boolean(initialSession.accessToken && initialSession.refreshToken && initialSession.user),
+  hasHydrated: Platform.OS === "web",
+  hydrateSession: async () => {
+    if (get().hasHydrated) return;
+    const stored = await readStoredSession();
+    set({
+      ...stored,
+      userId: stored.user?.id ?? null,
+      isAuthenticated: Boolean(stored.accessToken && stored.refreshToken && stored.user),
+      hasHydrated: true,
+    });
+  },
   setSession: (session) => {
     const next = {
       accessToken: session.access_token,
       refreshToken: session.refresh_token,
       user: session.user,
     };
-    writeStoredSession(next);
-    set({
-      ...next,
-      userId: session.user.id,
-      isAuthenticated: true,
-    });
+    void writeStoredSession(next);
+    set({ ...next, userId: session.user.id, isAuthenticated: true, hasHydrated: true });
   },
   clearSession: () => {
-    clearStoredSession();
-    set({
-      accessToken: null,
-      refreshToken: null,
-      user: null,
-      userId: null,
-      isAuthenticated: false,
-    });
+    void clearStoredSession();
+    set({ ...EMPTY_SESSION, userId: null, isAuthenticated: false, hasHydrated: true });
   },
 }));

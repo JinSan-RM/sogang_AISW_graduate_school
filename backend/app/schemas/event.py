@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -7,7 +8,7 @@ class EventCreate(BaseModel):
     title: str
     description: str | None = None
     location: str | None = None
-    category: str
+    category: Literal["academic", "event", "exam", "council", "external", "other"]
     color: str | None = None
     start_at: datetime
     end_at: datetime | None = None

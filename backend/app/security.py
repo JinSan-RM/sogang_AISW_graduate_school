@@ -6,11 +6,15 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
+
 from app.config import settings
 from app.errors import AppException
 
 
 PBKDF2_ITERATIONS = 120_000
+ARGON2_HASHER = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
 
 
 def utc_now() -> datetime:
@@ -18,20 +22,40 @@ def utc_now() -> datetime:
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), PBKDF2_ITERATIONS)
-    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${digest.hex()}"
+    return ARGON2_HASHER.hash(password)
 
 
-def verify_password(password: str, password_hash: str) -> bool:
+def _verify_legacy_pbkdf2(password: str, password_hash: str) -> bool:
     try:
         algorithm, iterations, salt, expected = password_hash.split("$", 3)
     except ValueError:
         return False
     if algorithm != "pbkdf2_sha256":
         return False
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), int(iterations))
+    try:
+        iteration_count = int(iterations)
+    except ValueError:
+        return False
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iteration_count)
     return hmac.compare_digest(digest.hex(), expected)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    if password_hash.startswith("$argon2"):
+        try:
+            return ARGON2_HASHER.verify(password_hash, password)
+        except (VerificationError, InvalidHashError):
+            return False
+    return _verify_legacy_pbkdf2(password, password_hash)
+
+
+def password_needs_rehash(password_hash: str) -> bool:
+    if not password_hash.startswith("$argon2"):
+        return True
+    try:
+        return ARGON2_HASHER.check_needs_rehash(password_hash)
+    except InvalidHashError:
+        return True
 
 
 def hash_token(token: str) -> str:
@@ -98,8 +122,17 @@ def decode_access_token(token: str) -> dict[str, Any]:
 
 
 def ensure_password_policy(password: str) -> None:
-    if len(password) < 8:
-        raise AppException(status_code=422, message="Password must be at least 8 characters.", code="VALIDATION_ERROR")
+    if (
+        len(password) < 8
+        or not any("a" <= character.lower() <= "z" for character in password)
+        or not any(character.isdigit() for character in password)
+        or not any(not character.isalnum() for character in password)
+    ):
+        raise AppException(
+            status_code=422,
+            message="Password must be at least 8 characters and include a letter, number, and special character.",
+            code="VALIDATION_ERROR",
+        )
 
 
 def ensure_school_email(email: str) -> None:

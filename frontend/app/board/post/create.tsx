@@ -1,25 +1,141 @@
-import { router, useLocalSearchParams } from "expo-router";
-import { Controller, useForm } from "react-hook-form";
-import { Alert, Platform, Pressable, Text, TextInput, View } from "react-native";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery } from "@tanstack/react-query";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { Alert, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
-import { useState } from "react";
 
-import BackButton from "../../../components/BackButton";
+import { useBoardsQuery } from "../../../hooks/useApi";
 import { useCreatePost, useUpdatePost } from "../../../hooks/usePosts";
-import { mediaApi } from "../../../services/api";
-import type { MediaAsset } from "../../../types";
+import { API_ORIGIN, postApi, userApi } from "../../../services/api";
+import type { MediaAsset, PostListItem, UserSearchItem } from "../../../types";
+import { pickAndUploadDocuments, pickAndUploadImages } from "../../../utils/mediaPicker";
+
+const COLORS = {
+  primary: "#2761FF",
+  primary50: "#EDF2FE",
+  primary100: "#D5E0FE",
+  text: "#111827",
+  navy: "#0B1F56",
+  muted: "#6B7280",
+  subtle: "#8A919C",
+  border: "#E1E4E9",
+  danger: "#B91C1C",
+  bg: "#FFFFFF",
+  page: "#F7F8FA",
+};
 
 const schema = z.object({
-  title: z.string().min(1, "제목을 입력하세요."),
+  title: z.string().optional(),
   category: z.string().optional(),
-  content: z.string().min(1, "내용을 입력하세요."),
+  content: z.string().optional(),
+  activityDate: z.string().optional(),
+  participants: z.string().optional(),
+  bankAccount: z.string().optional(),
+  eventDate: z.string().optional(),
+  relation: z.string().optional(),
+  contact: z.string().optional(),
+  applicationUrl: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
+type FormFieldProps = {
+  label: string;
+  required?: boolean;
+  helper?: string;
+  error?: string;
+  children: ReactNode;
+};
+
+function FormField({ label, required, helper, error, children }: FormFieldProps) {
+  return (
+    <View style={styles.field}>
+      {label ? (
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>{label}</Text>
+          {required ? (
+            <View style={styles.requiredPill}>
+              <Text style={styles.requiredText}>필수</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {children}
+      {helper ? <Text style={styles.helperText}>{helper}</Text> : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
+function clean(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
+function todayDotDate() {
+  const date = new Date();
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function activitySelectPlaceholder(slug?: string) {
+  if (slug?.includes("study")) return "모집글을 선택하세요";
+  if (slug?.includes("networking")) return "네트워킹을 선택하세요";
+  return "동아리명을 선택하세요";
+}
+
+function participantLabel(user: UserSearchItem) {
+  return [user.cohort ? `${user.cohort}기` : null, user.nickname].filter(Boolean).join(" ");
+}
+
+function mediaUrl(value?: string | null) {
+  if (!value) return null;
+  return /^(https?:|file:|blob:|data:)/.test(value) ? value : `${API_ORIGIN}${value}`;
+}
+
+type SelectionOption = { key: string; label: string };
+
+function SelectionSheet({
+  visible,
+  title,
+  options,
+  emptyText,
+  onClose,
+  onSelect,
+}: {
+  visible: boolean;
+  title: string;
+  options: SelectionOption[];
+  emptyText: string;
+  onClose: () => void;
+  onSelect: (option: SelectionOption) => void;
+}) {
+  return (
+    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+      <Pressable onPress={onClose} style={styles.sheetBackdrop}>
+        <Pressable onPress={() => undefined} style={styles.sheetCard}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>{title}</Text>
+          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+            {options.length === 0 ? <Text style={styles.sheetEmpty}>{emptyText}</Text> : null}
+            {options.map((option) => (
+              <Pressable key={option.key} onPress={() => onSelect(option)} style={styles.sheetOption}>
+                <Text style={styles.sheetOptionText}>{option.label}</Text>
+                <Ionicons name="chevron-forward" size={17} color={COLORS.subtle} />
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 export default function PostCreateScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
     boardId: string;
     postId?: string;
@@ -33,22 +149,258 @@ export default function PostCreateScreen() {
 
   const createMutation = useCreatePost(boardId);
   const updateMutation = useUpdatePost(postId ?? 0, boardId);
+  const { data: boardsRes } = useBoardsQuery();
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [selectedParticipants, setSelectedParticipants] = useState<UserSearchItem[]>([]);
+  const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | null>(null);
+  const [activitySourcePostId, setActivitySourcePostId] = useState<number | null>(null);
+  const [createdPostId, setCreatedPostId] = useState<number | null>(null);
+  const boards = useMemo(() => boardsRes?.data.flatMap((group) => group.boards) ?? [], [boardsRes?.data]);
+  const board = useMemo(
+    () => boards.find((item) => item.id === boardId),
+    [boardId, boards]
+  );
+  const fallbackBoardType = [10, 11, 12].includes(boardId)
+    ? "activity_certification"
+    : boardId === 15
+      ? "suggestion"
+      : boardId === 16
+        ? "mutual_aid"
+        : undefined;
+  const boardType = board?.board_type ?? fallbackBoardType;
+  const isSuggestion = boardType === "suggestion";
+  const isActivity = boardType === "activity_certification";
+  const isMutualAid = boardType === "mutual_aid";
+  const isAlbum = boardType === "album";
+  const isStudyRecruit = board?.slug === "study-recruit";
+  const isNetworkingProgram = board?.slug === "networking-programs";
+  const isAdminParticipationPost = board?.slug === "club-promo" || isNetworkingProgram;
+  const compactCreate = !isActivity && !isMutualAid;
+  const requiresAttachment = isActivity || isMutualAid || isAlbum || isAdminParticipationPost;
+  const trimmedParticipantQuery = participantQuery.trim();
+  const participantSearch = useQuery({
+    queryKey: ["user-search", trimmedParticipantQuery],
+    queryFn: () => userApi.searchUsers({ q: trimmedParticipantQuery, size: 8 }),
+    enabled: isActivity && trimmedParticipantQuery.length > 0,
+    retry: false,
+  });
+  const activitySourceBoard = useMemo(() => {
+    if (!isActivity) return undefined;
+    if (board?.slug.includes("study")) return boards.find((item) => item.slug === "study-recruit");
+    if (board?.slug.includes("networking")) {
+      return boards.find((item) => item.slug === "networking-programs") ?? boards.find((item) => item.slug === "alumni-directory");
+    }
+    return boards.find((item) => item.slug === "club-promo");
+  }, [board?.slug, boards, isActivity]);
+  const activitySourceQuery = useQuery({
+    queryKey: ["activity-source-options", activitySourceBoard?.id],
+    queryFn: () => postApi.getPosts(activitySourceBoard?.id ?? 0, 1, 50, { sort: "latest" }),
+    enabled: isActivity && Boolean(activitySourceBoard?.id),
+    retry: false,
+  });
 
-  const { control, handleSubmit } = useForm<FormValues>({
+  const { control, handleSubmit, setValue } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       title: params.title ?? "",
       category: params.category ?? "",
       content: params.content ?? "",
+      activityDate: todayDotDate(),
+      participants: "",
+      bankAccount: "",
+      eventDate: "",
+      relation: "",
+      contact: "",
+      applicationUrl: "",
     },
   });
 
+  useEffect(() => {
+    if (isStudyRecruit && (!params.category || params.category === "모집")) {
+      setValue("category", "진행중");
+    }
+  }, [isStudyRecruit, params.category, setValue]);
+
+  useEffect(() => {
+    if (isAdminParticipationPost && !params.category) {
+      setValue("category", "모집중");
+    }
+  }, [isAdminParticipationPost, params.category, setValue]);
+
   const attachmentIds = attachments.map((attachment) => attachment.id);
+  const syncParticipants = (items: UserSearchItem[]) => {
+    setSelectedParticipants(items);
+    setValue("participants", items.map(participantLabel).join(", "), { shouldValidate: true });
+  };
+  const addParticipant = (participant: UserSearchItem) => {
+    if (selectedParticipants.some((item) => item.id === participant.id)) {
+      setParticipantQuery("");
+      return;
+    }
+    syncParticipants([...selectedParticipants, participant]);
+    setParticipantQuery("");
+  };
+  const removeParticipant = (participantId: number) => {
+    syncParticipants(selectedParticipants.filter((item) => item.id !== participantId));
+  };
+  const labels = {
+    screenTitle: postId ? (isAlbum ? "사진 수정" : "게시글 수정") : isAlbum ? "사진 등록" : isMutualAid ? "상조회 신청" : isActivity ? "활동 인증" : isSuggestion ? "건의사항 작성" : isStudyRecruit ? "스터디 모집" : isNetworkingProgram ? "네트워킹 등록" : isAdminParticipationPost ? "동아리 등록" : "글쓰기",
+    title: isAlbum ? "행사명" : isMutualAid ? "신청 제목" : isActivity ? "인증 제목" : isSuggestion ? "건의 제목" : "제목",
+    titlePlaceholder: isMutualAid
+      ? "신청 내용을 한 줄로 입력하세요"
+      : isAlbum
+        ? "행사 사진 제목을 입력하세요"
+      : isActivity
+        ? "활동명을 입력하세요"
+        : isSuggestion
+          ? "건의 내용을 한 줄로 요약해 주세요"
+          : "제목을 입력하세요",
+    category: isMutualAid ? "경조사 종류" : isActivity ? "소속 그룹" : isStudyRecruit ? "모집 상태" : "분류",
+    categoryPlaceholder: isMutualAid ? "결혼 / 상(喪) 중 선택" : isActivity ? "활동 대상을 선택하세요" : isStudyRecruit ? "진행중 / 마감" : "선택 입력",
+    content: isMutualAid ? "전달 사항" : isActivity ? "활동 소감" : isSuggestion ? "건의 내용" : "내용",
+    contentPlaceholder: isMutualAid
+      ? "확인이 필요한 내용을 적어주세요"
+      : isActivity
+        ? "활동 내용과 소감을 적어주세요"
+        : isSuggestion
+          ? "건의 내용을 자세히 적어주세요"
+          : "내용을 입력하세요",
+    attachment: isAlbum ? "사진" : isMutualAid ? "증빙서류" : isActivity ? "활동 사진" : isAdminParticipationPost ? "대표 사진" : "첨부파일",
+    attachmentHelp: isAlbum ? "행사 사진 1장 이상 · 이미지 파일만 가능" : isMutualAid ? "청첩장, 부고장 등 증빙 파일" : isActivity ? "활동 사진 1장 이상" : isAdminParticipationPost ? "목록과 상세 상단에 표시할 사진을 1장 이상 첨부하세요." : "이미지, PDF, 문서 파일",
+  };
+  const guide = isSuggestion
+    ? {
+        icon: "shield-checkmark-outline" as const,
+        title: "익명으로 접수됩니다",
+        body: "작성자 정보는 노출되지 않고, 답변 완료 후 수정과 삭제가 제한됩니다.",
+      }
+    : isAlbum
+      ? {
+          icon: "images-outline" as const,
+          title: "사진만 등록할 수 있어요",
+          body: "행사명과 사진을 등록해주세요. 본문 없이 이미지 파일만 등록할 수 있어요.",
+        }
+    : isAdminParticipationPost
+      ? {
+          icon: "people-outline" as const,
+          title: `관리자 전용 ${isNetworkingProgram ? "네트워킹" : "동아리"} 게시글`,
+          body: `대표 사진과 참여 링크를 함께 등록하면 상세 화면의 ${isNetworkingProgram ? "참가 신청" : "가입 신청"} 버튼에 연결됩니다.`,
+        }
+    : isActivity
+      ? {
+          icon: "camera-outline" as const,
+          title: "활동 인증 기준",
+          body: "활동일, 참가자, 계좌 정보를 입력하고 활동 사진을 1장 이상 첨부하세요.",
+        }
+      : isMutualAid
+        ? {
+            icon: "flower-outline" as const,
+            title: "상조회 신청 기준",
+            body: "경조사 일자와 관계를 입력하고 증빙서류를 첨부하세요.",
+          }
+        : null;
+  const submitLabel = postId
+    ? "변경사항 저장"
+    : isAlbum
+      ? "사진 등록"
+    : isSuggestion
+      ? "익명 건의 등록"
+      : isActivity
+        ? "인증 등록"
+        : isMutualAid
+          ? "상조회 신청"
+          : isStudyRecruit
+            ? "등록"
+          : "등록";
+  const isSubmitting = isUploading || createMutation.isPending || updateMutation.isPending;
+
+  const buildMetadata = (values: FormValues) => {
+    const metadata: Record<string, string> = {};
+    if (isActivity) {
+      if (clean(values.activityDate)) metadata.activity_date = clean(values.activityDate) as string;
+      if (clean(values.participants)) metadata.participants = clean(values.participants) as string;
+      if (clean(values.bankAccount)) metadata.bank_account = clean(values.bankAccount) as string;
+      if (selectedParticipants.length > 0) metadata.participant_user_ids = selectedParticipants.map((item) => String(item.id)).join(",");
+      if (activitySourcePostId) metadata.activity_source_post_id = String(activitySourcePostId);
+    }
+    if (isMutualAid) {
+      if (clean(values.eventDate)) metadata.event_date = clean(values.eventDate) as string;
+      if (clean(values.relation)) metadata.relation = clean(values.relation) as string;
+    }
+    if (isStudyRecruit) {
+      metadata.recruitment_status = values.category === "마감" ? "closed" : "open";
+      if (clean(values.contact)) metadata.contact = clean(values.contact) as string;
+    }
+    if (isAdminParticipationPost && clean(values.applicationUrl)) {
+      metadata.application_url = clean(values.applicationUrl) as string;
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  };
+
+  const requireValue = (value: string | undefined, label: string) => {
+    if (clean(value)) {
+      return false;
+    }
+    Alert.alert("필수 항목", `${label}을 입력하세요.`);
+    return true;
+  };
 
   const onSubmit = (values: FormValues) => {
-    const payload = { ...values, category: values.category?.trim() || undefined, attachment_ids: attachmentIds };
+    if (!isActivity && !isMutualAid && requireValue(values.title, labels.title)) {
+      return;
+    }
+    if (!isMutualAid && !isAlbum && requireValue(values.content, labels.content)) {
+      return;
+    }
+    if (isActivity) {
+      if (
+        requireValue(values.category, "활동 대상") ||
+        requireValue(values.activityDate, "활동일") ||
+        requireValue(values.participants, "참가자") ||
+        requireValue(values.bankAccount, "입금 계좌")
+      ) {
+        return;
+      }
+    }
+    if (isMutualAid) {
+      if (requireValue(values.category, "경조사 종류") || requireValue(values.eventDate, "경조사 일자") || requireValue(values.relation, "관계")) {
+        return;
+      }
+    }
+    if (isStudyRecruit && requireValue(values.contact, "스터디장 연락수단")) {
+      return;
+    }
+    if (isAdminParticipationPost) {
+      const applicationUrl = clean(values.applicationUrl);
+      if (requireValue(applicationUrl, "참여 버튼 링크")) {
+        return;
+      }
+      try {
+        const parsed = new URL(applicationUrl as string);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("INVALID_PROTOCOL");
+      } catch {
+        Alert.alert("참여 버튼 링크", "http:// 또는 https://로 시작하는 올바른 주소를 입력하세요.");
+        return;
+      }
+    }
+    if (requiresAttachment && (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0)) {
+      Alert.alert(labels.attachment, `${labels.attachmentHelp}을 첨부하세요.`);
+      return;
+    }
+
+    const generatedActivityTitle = `${board?.name ?? "활동 인증"}${clean(values.activityDate) ? ` ${clean(values.activityDate)}` : ""}`;
+    const generatedMutualAidTitle = `${clean(values.category) ?? "경조사"} 상조회 신청`;
+    const payload = {
+      title: isActivity ? clean(values.title) ?? clean(values.category) ?? generatedActivityTitle : isMutualAid ? generatedMutualAidTitle : clean(values.title) as string,
+      content: isAlbum ? "" : values.content ?? "",
+      category: isAlbum ? undefined : clean(values.category),
+      metadata: buildMetadata(values),
+      attachment_ids: attachmentIds,
+      is_anonymous: isSuggestion,
+    };
     if (postId) {
       updateMutation.mutate(payload, {
         onSuccess: () => router.replace(`/board/post/${postId}`),
@@ -58,134 +410,1279 @@ export default function PostCreateScreen() {
 
     createMutation.mutate(payload, {
       onSuccess: (res) => {
-        router.replace(`/board/post/${res.data.id}`);
+        const target = `/board/post/${res.data.id}` as const;
+        if (isActivity || isMutualAid || isSuggestion) {
+          setCreatedPostId(res.data.id);
+          return;
+        }
+        router.replace(target);
       },
     });
   };
 
-  const selectFile = () => {
-    if (Platform.OS !== "web") {
-      Alert.alert("첨부 불가", "문서 선택 기능을 불러올 수 없습니다. 잠시 후 다시 시도하세요.");
-      return;
-    }
-
-    const input = document.createElement("input");
-    input.type = "file";
-    input.multiple = true;
-    input.onchange = async () => {
-      const files = Array.from(input.files ?? []);
-      if (files.length === 0) {
-        return;
+  const selectFile = async () => {
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+      const uploaded = (isAlbum || isActivity || isAdminParticipationPost)
+        ? await pickAndUploadImages(setUploadProgress)
+        : await pickAndUploadDocuments(setUploadProgress, isMutualAid);
+      if (uploaded.length > 0) {
+        setAttachments((current) => [...current, ...uploaded]);
       }
-      try {
-        setIsUploading(true);
-        const uploaded = await Promise.all(files.map((file) => mediaApi.upload(file)));
-        setAttachments((current) => [...current, ...uploaded.map((item) => item.data)]);
-      } catch {
+    } catch {
       Alert.alert("업로드 실패", "파일 업로드를 다시 시도하세요.");
-      } finally {
-        setIsUploading(false);
-      }
-    };
-    input.click();
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: "#f4f7fb", padding: 16, gap: 12 }}>
-      <BackButton fallback={`/board/${boardId}`} />
-        <Text style={{ color: "#112d4e", fontSize: 24, fontWeight: "900" }}>{postId ? "게시글 수정" : "글쓰기"}</Text>
+  const participantResults = participantSearch.data?.data ?? [];
+  const activitySourcePosts: PostListItem[] = activitySourceQuery.data?.data ?? [];
+  const activityOptions: SelectionOption[] = activitySourcePosts.map((post) => ({ key: String(post.id), label: post.title }));
+  const mutualAidTypeOptions: SelectionOption[] = [
+    { key: "marriage", label: "결혼" },
+    { key: "bereavement", label: "상(喪)" },
+  ];
+  const mutualAidRelationOptions: SelectionOption[] = ["본인", "배우자", "부모", "자녀", "형제/자매"].map((label) => ({ key: label, label }));
+  const imageAttachments = attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
 
-      <Controller
-        control={control}
-        name="title"
-        render={({ field }) => (
-          <TextInput
-                placeholder="제목"
-            value={field.value}
-            onChangeText={field.onChange}
-            style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="category"
-        render={({ field }) => (
-          <TextInput
-                placeholder="분류(선택)"
-            value={field.value}
-            onChangeText={field.onChange}
-            style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-          />
-        )}
-      />
-
-      <Controller
-        control={control}
-        name="content"
-        render={({ field }) => (
-          <TextInput
-                placeholder="내용"
-            value={field.value}
-            onChangeText={field.onChange}
-            multiline
-            style={{
-              borderWidth: 1,
-              borderColor: "#cbd5e1",
-              borderRadius: 8,
-              backgroundColor: "#ffffff",
-              padding: 12,
-              minHeight: 180,
-              textAlignVertical: "top",
-            }}
-          />
-        )}
-      />
-
-      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 12 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-          <Text style={{ color: "#112d4e", fontWeight: "900" }}>첨부파일</Text>
-          <Text style={{ color: "#64748b", marginTop: 3 }}>이미지, PDF, 문서 파일</Text>
+  if ((isActivity || isMutualAid || isSuggestion) && createdPostId) {
+    return (
+      <View style={styles.successScreen}>
+        <View style={styles.successContent}>
+          <View style={styles.successIcon}>
+            <Ionicons name="checkmark" size={30} color="#16A34A" />
           </View>
+          <Text style={styles.successTitle}>
+            {isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
+          </Text>
           <Pressable
-            disabled={isUploading}
-            onPress={selectFile}
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, backgroundColor: "#eff6ff", paddingHorizontal: 12, paddingVertical: 9 }}
+            onPress={() => router.replace(isMutualAid || isSuggestion ? (`/board/${boardId}` as never) : (`/board/post/${createdPostId}` as never))}
+            style={styles.successButton}
           >
-            <Ionicons name="attach" size={18} color="#2563eb" />
-              <Text style={{ color: "#2563eb", fontWeight: "900" }}>{isUploading ? "업로드 중" : "첨부"}</Text>
+            <Text style={styles.successButtonText}>확인</Text>
           </Pressable>
         </View>
-        {attachments.length > 0 ? (
-          <View style={{ gap: 8, marginTop: 12 }}>
-            {attachments.map((attachment) => (
-              <View
-                key={attachment.id}
-                style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 8, backgroundColor: "#f8fafc", padding: 10 }}
-              >
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ color: "#111827", fontWeight: "800" }} numberOfLines={1}>
-                    {attachment.original_filename}
-                  </Text>
-                  <Text style={{ color: "#64748b", marginTop: 2 }}>{Math.ceil(attachment.file_size / 1024)} KB</Text>
-                </View>
-                <Pressable onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                  <Ionicons name="close-circle" size={22} color="#b91c1c" />
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        ) : null}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <Pressable
+          accessibilityLabel="닫기"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace(`/board/${boardId}` as never);
+          }}
+          style={styles.iconButton}
+        >
+          <Ionicons name={isActivity ? "chevron-back" : "close"} size={24} color={COLORS.text} />
+        </Pressable>
+        <Text style={styles.appBarTitle}>{postId ? "글 수정" : labels.screenTitle}</Text>
+        <View style={styles.iconButton} />
       </View>
 
-      <Pressable
-        onPress={handleSubmit(onSubmit)}
-        style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#112d4e", paddingVertical: 13 }}
+      <ScrollView
+        style={styles.formScroller}
+        contentContainerStyle={[styles.content, isActivity ? styles.activityContent : null]}
+        keyboardShouldPersistTaps="handled"
       >
-          <Text style={{ color: "#ffffff", fontWeight: "900" }}>{postId ? "변경사항 저장" : "등록"}</Text>
+        {isActivity ? (
+          <>
+            <Controller
+              control={control}
+              name="category"
+              render={({ field }) => (
+                <Pressable onPress={() => setSelectionSheet("activity")} style={styles.activitySelect}>
+                  <Text style={[styles.activitySelectValue, !field.value ? styles.activitySelectPlaceholder : null]}>
+                    {field.value || activitySelectPlaceholder(board?.slug)}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color={COLORS.subtle} />
+                </Pressable>
+              )}
+            />
+
+            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.activityPhotoBox, isUploading ? styles.attachButtonDisabled : null]}>
+              {imageAttachments.length > 0 ? (
+                <View style={styles.activityPhotoGrid}>
+                  {imageAttachments.map((attachment) => {
+                    const url = mediaUrl(attachment.url);
+                    return (
+                      <ImageBackground key={attachment.id} source={url ? { uri: url } : undefined} imageStyle={styles.activityPhotoTileImage} style={styles.activityPhotoTile}>
+                        <Pressable
+                          accessibilityLabel={`${attachment.original_filename} 삭제`}
+                          hitSlop={6}
+                          onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                          style={styles.activityPhotoRemove}
+                        >
+                          <Ionicons name="close" size={12} color="#FFFFFF" />
+                        </Pressable>
+                      </ImageBackground>
+                    );
+                  })}
+                  <View style={styles.activityPhotoAddTile}>
+                    <Ionicons name="add" size={20} color={COLORS.subtle} />
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Ionicons name="camera-outline" size={18} color={COLORS.subtle} />
+                  <Text style={styles.activityPhotoText}>
+                    {isUploading ? `업로드 ${uploadProgress || 0}%` : "활동 사진을 추가해주세요"}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
+            <Controller
+              control={control}
+              name="content"
+              render={({ field, fieldState }) => (
+                <TextInput
+                  multiline
+                  onChangeText={field.onChange}
+                  placeholder="활동에 대한 소감을 남겨주세요"
+                  placeholderTextColor={COLORS.subtle}
+                  style={[styles.input, styles.activityFeedbackInput, fieldState.error ? styles.inputError : null]}
+                  textAlignVertical="top"
+                  value={field.value}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="activityDate"
+              render={({ field }) => (
+                <View style={styles.activityInputWithIcon}>
+                  <TextInput
+                    onChangeText={field.onChange}
+                    placeholder="YYYY.MM.DD"
+                    placeholderTextColor={COLORS.subtle}
+                    style={styles.activityInlineInput}
+                    value={field.value}
+                  />
+                  <Ionicons name="calendar-outline" size={16} color={COLORS.subtle} />
+                </View>
+              )}
+            />
+
+            <View style={styles.activityFieldGroup}>
+              <Text style={styles.activityFieldTitle}>활동비 받을 계좌번호</Text>
+              <Controller
+                control={control}
+                name="bankAccount"
+                render={({ field }) => (
+                  <TextInput
+                    onChangeText={field.onChange}
+                    placeholder="은행 / 계좌번호를 입력하세요"
+                    placeholderTextColor={COLORS.subtle}
+                    style={styles.input}
+                    value={field.value}
+                  />
+                )}
+              />
+              <View style={styles.activityWarning}>
+                <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
+                <Text style={styles.activityWarningText}>계좌는 본인 명의로 된 통장 가능해요</Text>
+              </View>
+            </View>
+
+            <View style={styles.activityFieldGroup}>
+              <Text style={styles.activityFieldTitle}>참가자</Text>
+              <Controller
+                control={control}
+                name="participants"
+                render={() => {
+                  return (
+                    <>
+                      <View style={styles.activityInputWithIcon}>
+                        <Ionicons name="search-outline" size={15} color={COLORS.subtle} />
+                        <TextInput
+                          onChangeText={setParticipantQuery}
+                          placeholder="이름으로 검색"
+                          placeholderTextColor={COLORS.subtle}
+                          style={styles.activityInlineInput}
+                          value={participantQuery}
+                        />
+                      </View>
+                      {trimmedParticipantQuery.length > 0 ? (
+                        <View style={styles.participantResultBox}>
+                          {participantSearch.isLoading ? <Text style={styles.participantEmptyText}>검색 중입니다.</Text> : null}
+                          {!participantSearch.isLoading && participantResults.length === 0 ? (
+                            <Text style={styles.participantEmptyText}>검색 결과가 없습니다.</Text>
+                          ) : null}
+                          {participantResults.map((participant) => {
+                            const selected = selectedParticipants.some((item) => item.id === participant.id);
+                            return (
+                              <Pressable
+                                key={participant.id}
+                                disabled={selected}
+                                onPress={() => addParticipant(participant)}
+                                style={[styles.participantResultRow, selected ? styles.participantResultRowDisabled : null]}
+                              >
+                                <View style={styles.participantAvatar}>
+                                  <Text style={styles.participantAvatarText}>{participant.nickname.slice(0, 1)}</Text>
+                                </View>
+                                <View style={styles.participantTextBlock}>
+                                  <Text style={styles.participantName}>{participantLabel(participant)}</Text>
+                                  {participant.major ? <Text style={styles.participantMeta}>{participant.major}</Text> : null}
+                                </View>
+                                <Ionicons name={selected ? "checkmark-circle" : "add-circle-outline"} size={18} color={selected ? COLORS.primary : COLORS.subtle} />
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                      {selectedParticipants.length > 0 ? (
+                        <View style={styles.activityChipRow}>
+                          {selectedParticipants.map((participant) => (
+                            <Pressable key={participant.id} onPress={() => removeParticipant(participant.id)} style={styles.activityMemberChip}>
+                              <Text style={styles.activityMemberChipText}>{participantLabel(participant)}</Text>
+                              <Ionicons name="close" size={12} color={COLORS.muted} />
+                            </Pressable>
+                          ))}
+                        </View>
+                      ) : null}
+                    </>
+                  );
+                }}
+              />
+              <View style={styles.activityWarning}>
+                <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
+                <Text style={styles.activityWarningText}>원우회비 미납자, 휴학자는 검색되지 않아요</Text>
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+        <View style={styles.selectLike}>
+          <Text style={styles.selectText} numberOfLines={1}>
+            {board?.name ?? "게시판을 선택하세요"}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={COLORS.subtle} />
+        </View>
+
+        {guide ? (
+          <View style={styles.guideBox}>
+            <Ionicons name={guide.icon} size={17} color={COLORS.primary} />
+            <Text style={styles.guideBody}>{guide.body}</Text>
+          </View>
+        ) : null}
+
+      {!isMutualAid ? (
+        <Controller
+          control={control}
+          name="title"
+          render={({ field, fieldState }) => (
+            <FormField label={compactCreate ? "" : labels.title} required error={fieldState.error?.message}>
+              <TextInput
+                onChangeText={field.onChange}
+                placeholder={labels.titlePlaceholder}
+                placeholderTextColor={COLORS.subtle}
+                style={[styles.input, fieldState.error ? styles.inputError : null]}
+                value={field.value}
+              />
+            </FormField>
+          )}
+        />
+      ) : null}
+
+      {!isAlbum ? (
+        <Controller
+          control={control}
+          name="category"
+          render={({ field }) => (
+            <FormField label={compactCreate ? "" : labels.category} helper={isSuggestion ? "운영, 행사, 시설 등 필요한 경우만 입력하세요." : undefined}>
+              {isMutualAid ? (
+                <Pressable onPress={() => setSelectionSheet("mutualType")} style={styles.selectionField}>
+                  <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>{field.value || labels.categoryPlaceholder}</Text>
+                  <Ionicons name="chevron-down" size={17} color={COLORS.subtle} />
+                </Pressable>
+              ) : isStudyRecruit ? (
+                <View style={styles.recruitmentStatusRow}>
+                  {["진행중", "마감"].map((status) => (
+                    <Pressable
+                      key={status}
+                      onPress={() => field.onChange(status)}
+                      style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
+                    >
+                      <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <TextInput
+                  onChangeText={field.onChange}
+                  placeholder={labels.categoryPlaceholder}
+                  placeholderTextColor={COLORS.subtle}
+                  style={styles.input}
+                  value={field.value}
+                />
+              )}
+            </FormField>
+          )}
+        />
+      ) : null}
+
+      {isActivity ? (
+        <>
+          <Controller
+            control={control}
+            name="activityDate"
+            render={({ field }) => (
+              <FormField label="활동일" required>
+                <TextInput
+                  onChangeText={field.onChange}
+                  placeholder="YYYY.MM.DD"
+                  placeholderTextColor={COLORS.subtle}
+                  style={styles.input}
+                  value={field.value}
+                />
+              </FormField>
+            )}
+          />
+          <Controller
+            control={control}
+            name="participants"
+            render={({ field }) => (
+              <FormField label="참가자" required helper="여러 명이면 쉼표로 구분해 입력하세요.">
+                <TextInput
+                  onChangeText={field.onChange}
+                  placeholder="예: 홍길동, 김서강"
+                  placeholderTextColor={COLORS.subtle}
+                  style={styles.input}
+                  value={field.value}
+                />
+              </FormField>
+            )}
+          />
+          <Controller
+            control={control}
+            name="bankAccount"
+            render={({ field }) => (
+              <FormField label="입금 계좌" required helper="은행명, 계좌번호, 예금주를 함께 입력하세요.">
+                <TextInput
+                  onChangeText={field.onChange}
+                  placeholder="예: 신한 110-000-000000 홍길동"
+                  placeholderTextColor={COLORS.subtle}
+                  style={styles.input}
+                  value={field.value}
+                />
+              </FormField>
+            )}
+          />
+        </>
+      ) : null}
+
+      {isMutualAid ? (
+        <>
+          <Controller
+            control={control}
+            name="eventDate"
+            render={({ field }) => (
+              <FormField label="경조사 일자" required>
+                <View style={styles.activityInputWithIcon}>
+                  <TextInput
+                    keyboardType="numbers-and-punctuation"
+                    onChangeText={field.onChange}
+                    placeholder="YYYY.MM.DD"
+                    placeholderTextColor={COLORS.subtle}
+                    style={styles.activityInlineInput}
+                    value={field.value}
+                  />
+                  <Ionicons name="calendar-outline" size={17} color={COLORS.subtle} />
+                </View>
+              </FormField>
+            )}
+          />
+          <Controller
+            control={control}
+            name="relation"
+            render={({ field }) => (
+              <FormField label="관계" required>
+                <Pressable onPress={() => setSelectionSheet("mutualRelation")} style={styles.selectionField}>
+                  <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>
+                    {field.value || "본인 / 배우자 / 부모 등 선택"}
+                  </Text>
+                  <Ionicons name="chevron-down" size={17} color={COLORS.subtle} />
+                </Pressable>
+              </FormField>
+            )}
+          />
+        </>
+      ) : null}
+
+      {!isAlbum ? (
+        <Controller
+          control={control}
+          name="content"
+          render={({ field, fieldState }) => (
+            <FormField label={compactCreate ? "" : labels.content} required={!isMutualAid} error={fieldState.error?.message}>
+              <TextInput
+                multiline
+                onChangeText={field.onChange}
+                placeholder={labels.contentPlaceholder}
+                placeholderTextColor={COLORS.subtle}
+                style={[styles.input, styles.textArea, fieldState.error ? styles.inputError : null]}
+                textAlignVertical="top"
+                value={field.value ?? ""}
+              />
+            </FormField>
+          )}
+        />
+      ) : null}
+
+      {isStudyRecruit ? (
+        <Controller
+          control={control}
+          name="contact"
+          render={({ field }) => (
+            <FormField label="스터디장 연락수단" required helper="이메일, 카카오톡 ID, 휴대폰 번호 등을 입력해주세요.">
+              <TextInput
+                onChangeText={field.onChange}
+                placeholder="스터디원들과 연락할 수단"
+                placeholderTextColor={COLORS.subtle}
+                style={styles.input}
+                value={field.value}
+              />
+            </FormField>
+          )}
+        />
+      ) : null}
+
+      {isAdminParticipationPost ? (
+        <Controller
+          control={control}
+          name="applicationUrl"
+          render={({ field }) => (
+            <FormField label="참여 버튼 링크" required helper={`상세 화면의 ${isNetworkingProgram ? "참가 신청" : "가입 신청"} 버튼이 이 주소를 엽니다.`}>
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                onChangeText={field.onChange}
+                placeholder="https://forms.gle/..."
+                placeholderTextColor={COLORS.subtle}
+                style={styles.input}
+                value={field.value}
+              />
+            </FormField>
+          )}
+        />
+      ) : null}
+
+      {compactCreate ? (
+        <View style={styles.compactAttachWrap}>
+          {isAdminParticipationPost ? (
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>{labels.attachment}</Text>
+              <View style={styles.requiredPill}>
+                <Text style={styles.requiredText}>필수</Text>
+              </View>
+            </View>
+          ) : null}
+          <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
+            <Ionicons name="image-outline" size={17} color={COLORS.muted} />
+            <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : isAdminParticipationPost ? "대표 사진 첨부" : "이미지 첨부"}</Text>
+          </Pressable>
+          {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
+          {attachments.length > 0 ? (
+            <View style={styles.compactAttachmentList}>
+              {attachments.map((attachment) => (
+                <View key={attachment.id} style={styles.compactAttachmentItem}>
+                  <Text numberOfLines={1} style={styles.compactAttachmentName}>
+                    {attachment.original_filename}
+                  </Text>
+                  <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                    <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.attachmentBox}>
+          <View style={styles.attachmentHeader}>
+            <View style={styles.attachmentText}>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>{labels.attachment}</Text>
+                {requiresAttachment ? (
+                  <View style={styles.requiredPill}>
+                    <Text style={styles.requiredText}>필수</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={styles.helperText}>{labels.attachmentHelp}</Text>
+            </View>
+            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.attachButton, isUploading ? styles.attachButtonDisabled : null]}>
+              <Ionicons name="attach" size={18} color={COLORS.primary} />
+              <Text style={styles.attachButtonText}>{isUploading ? "업로드 중" : "첨부"}</Text>
+            </Pressable>
+          </View>
+          {isUploading ? <Text style={styles.uploadText}>업로드 {uploadProgress || 0}%</Text> : null}
+          {attachments.length > 0 ? (
+            <View style={styles.attachmentList}>
+              {attachments.map((attachment) => (
+                <View key={attachment.id} style={styles.attachmentItem}>
+                  <View style={styles.attachmentFile}>
+                    <Ionicons name="document-text-outline" size={18} color={COLORS.primary} />
+                    <View style={styles.attachmentNameWrap}>
+                      <Text style={styles.attachmentName} numberOfLines={1}>
+                        {attachment.original_filename}
+                      </Text>
+                      <Text style={styles.attachmentSize}>{Math.ceil(attachment.file_size / 1024)} KB</Text>
+                    </View>
+                  </View>
+                  <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                    <Ionicons name="close-circle" size={22} color={COLORS.danger} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.attachmentEmpty}>
+              <Text style={styles.attachmentEmptyText}>아직 첨부된 파일이 없습니다.</Text>
+            </View>
+          )}
+        </View>
+      )}
+          </>
+        )}
+
+      <Pressable
+        disabled={isSubmitting}
+        onPress={handleSubmit(onSubmit)}
+        style={[styles.submitButton, isActivity ? styles.activitySubmitButton : null, isSubmitting ? styles.submitButtonDisabled : null]}
+      >
+        <Text style={[styles.submitText, isActivity ? styles.activitySubmitText : null]}>{createMutation.isPending || updateMutation.isPending ? "저장 중" : submitLabel}</Text>
       </Pressable>
+      </ScrollView>
+
+      <SelectionSheet
+        visible={selectionSheet === "activity"}
+        title={activitySelectPlaceholder(board?.slug)}
+        options={activityOptions}
+        emptyText={activitySourceQuery.isLoading ? "활동 대상을 불러오는 중입니다." : "선택할 수 있는 활동이 없습니다."}
+        onClose={() => setSelectionSheet(null)}
+        onSelect={(option) => {
+          setValue("category", option.label, { shouldValidate: true });
+          setActivitySourcePostId(Number(option.key));
+          setSelectionSheet(null);
+        }}
+      />
+      <SelectionSheet
+        visible={selectionSheet === "mutualType"}
+        title="경조사 종류"
+        options={mutualAidTypeOptions}
+        emptyText="선택 가능한 경조사 종류가 없습니다."
+        onClose={() => setSelectionSheet(null)}
+        onSelect={(option) => {
+          setValue("category", option.label, { shouldValidate: true });
+          setSelectionSheet(null);
+        }}
+      />
+      <SelectionSheet
+        visible={selectionSheet === "mutualRelation"}
+        title="관계"
+        options={mutualAidRelationOptions}
+        emptyText="선택 가능한 관계가 없습니다."
+        onClose={() => setSelectionSheet(null)}
+        onSelect={(option) => {
+          setValue("relation", option.label, { shouldValidate: true });
+          setSelectionSheet(null);
+        }}
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  successScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 28,
+  },
+  successContent: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+  },
+  successIcon: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+    borderColor: "#22C55E",
+    borderRadius: 24,
+    marginBottom: 20,
+  },
+  successTitle: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  successButton: {
+    width: "100%",
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 7,
+    backgroundColor: COLORS.primary,
+    marginTop: 28,
+  },
+  successButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 21,
+  },
+  appBarTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  formScroller: {
+    flex: 1,
+  },
+  content: {
+    gap: 16,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  activityContent: {
+    gap: 10,
+    paddingTop: 18,
+  },
+  activitySelect: {
+    height: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 12,
+  },
+  activitySelectInput: {
+    flex: 1,
+    height: 40,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "800",
+    paddingVertical: 0,
+  },
+  activitySelectValue: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  activitySelectPlaceholder: {
+    color: COLORS.subtle,
+  },
+  selectionField: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 15,
+  },
+  selectionValue: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  selectionPlaceholder: {
+    color: COLORS.subtle,
+  },
+  recruitmentStatusRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  recruitmentStatusButton: {
+    flex: 1,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+  },
+  recruitmentStatusButtonActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primary50,
+  },
+  recruitmentStatusText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  recruitmentStatusTextActive: {
+    color: COLORS.primary,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(17, 24, 39, 0.42)",
+  },
+  sheetCard: {
+    maxHeight: "70%",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    alignSelf: "center",
+    borderRadius: 2,
+    backgroundColor: "#D1D5DB",
+    marginBottom: 18,
+  },
+  sheetTitle: {
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: "900",
+    marginBottom: 8,
+  },
+  sheetEmpty: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: "700",
+    paddingVertical: 24,
+  },
+  sheetOption: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  sheetOptionText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  activityPhotoBox: {
+    height: 148,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    overflow: "hidden",
+  },
+  activityPhotoGrid: {
+    width: "100%",
+    height: "100%",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    gap: 10,
+    padding: 12,
+  },
+  activityPhotoTile: {
+    width: 62,
+    height: 62,
+    overflow: "hidden",
+    borderRadius: 7,
+    backgroundColor: COLORS.primary100,
+  },
+  activityPhotoTileImage: {
+    borderRadius: 7,
+  },
+  activityPhotoRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 9,
+    backgroundColor: "rgba(17,24,39,0.65)",
+  },
+  activityPhotoAddTile: {
+    width: 62,
+    height: 62,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 7,
+    backgroundColor: COLORS.page,
+  },
+  activityPhotoPreview: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "flex-end",
+    padding: 10,
+  },
+  activityPhotoPreviewImage: {
+    borderRadius: 8,
+  },
+  activityPhotoScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(17,24,39,0.08)",
+  },
+  activityPhotoStatus: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 13,
+    backgroundColor: "rgba(17,24,39,0.62)",
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  activityPhotoStatusText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  activityPhotoCount: {
+    position: "absolute",
+    right: 10,
+    top: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(17,24,39,0.58)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  activityPhotoCountText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  activityPhotoText: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  activityAttachmentList: {
+    gap: 6,
+  },
+  activityAttachmentItem: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 10,
+  },
+  activityAttachmentText: {
+    flex: 1,
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  activityFeedbackInput: {
+    minHeight: 74,
+  },
+  activityInputWithIcon: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 12,
+  },
+  activityInlineInput: {
+    flex: 1,
+    minHeight: 42,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "800",
+    paddingVertical: 0,
+  },
+  participantResultBox: {
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+  },
+  participantResultRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F3F6",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  participantResultRowDisabled: {
+    opacity: 0.5,
+  },
+  participantAvatar: {
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    backgroundColor: COLORS.primary50,
+  },
+  participantAvatarText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  participantTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  participantName: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  participantMeta: {
+    color: COLORS.subtle,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  participantEmptyText: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  activityFieldGroup: {
+    gap: 8,
+  },
+  activityFieldTitle: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  activityWarning: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 7,
+    backgroundColor: "#FEF1D9",
+    paddingHorizontal: 10,
+  },
+  activityWarningText: {
+    color: "#9A6B00",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  activityChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  activityMemberChip: {
+    minHeight: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 9,
+  },
+  activityMemberChipText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  selectLike: {
+    height: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 14,
+  },
+  selectText: {
+    flex: 1,
+    color: COLORS.subtle,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  guideBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  guideBody: {
+    flex: 1,
+    color: COLORS.navy,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 17,
+  },
+  field: {
+    gap: 8,
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  label: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  requiredPill: {
+    borderRadius: 4,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  requiredText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  input: {
+    width: "100%",
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "700",
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+  },
+  inputError: {
+    borderColor: COLORS.danger,
+  },
+  textArea: {
+    minHeight: 132,
+  },
+  helperText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+  },
+  errorText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  attachmentBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bg,
+    padding: 14,
+  },
+  attachmentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  attachmentText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  attachButton: {
+    minWidth: 82,
+    height: 42,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: COLORS.primary50,
+  },
+  attachButtonDisabled: {
+    opacity: 0.55,
+  },
+  attachButtonText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  uploadText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 10,
+  },
+  attachmentList: {
+    gap: 8,
+    marginTop: 12,
+  },
+  attachmentItem: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    padding: 10,
+  },
+  attachmentFile: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  attachmentNameWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  attachmentName: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  attachmentSize: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  attachmentEmpty: {
+    minHeight: 92,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 12,
+    marginTop: 12,
+  },
+  attachmentEmptyText: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  compactAttachWrap: {
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  compactAttachButton: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 13,
+  },
+  compactAttachText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  compactAttachmentList: {
+    width: "100%",
+    gap: 7,
+  },
+  compactAttachmentItem: {
+    minHeight: 34,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 10,
+  },
+  compactAttachmentName: {
+    flex: 1,
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  submitButton: {
+    height: 54,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primary,
+  },
+  activitySubmitButton: {
+    height: 46,
+    borderRadius: 7,
+    marginTop: 2,
+  },
+  submitButtonDisabled: {
+    backgroundColor: "#AABDFD",
+  },
+  submitText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  activitySubmitText: {
+    fontSize: 14,
+  },
+});

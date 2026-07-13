@@ -5,11 +5,16 @@ import type { ApiSuccess, PostDetail } from "../types";
 
 const PAGE_SIZE = 20;
 
-export function useBoardPosts(boardId: number, filters?: { q?: string; sort?: "latest" | "popular" | "views" }) {
+export function useBoardPosts(
+  boardId: number,
+  filters?: { q?: string; category?: string; status?: string; sort?: "latest" | "popular" | "views" }
+) {
   return useInfiniteQuery({
     queryKey: ["posts", boardId, filters],
     queryFn: ({ pageParam }) => postApi.getPosts(boardId, pageParam, PAGE_SIZE, filters),
     initialPageParam: 1,
+    enabled: Number.isFinite(boardId) && boardId > 0,
+    retry: false,
     getNextPageParam: (lastPage) => {
       const pagination = lastPage.pagination;
       if (!pagination) {
@@ -20,6 +25,23 @@ export function useBoardPosts(boardId: number, filters?: { q?: string; sort?: "l
   });
 }
 
+export function useMultiBoardPosts(
+  boardIds: number[],
+  filters?: { q?: string; category?: string; status?: string; sort?: "latest" | "popular" | "views" }
+) {
+  return useQuery({
+    queryKey: ["multi-board-posts", boardIds, filters],
+    queryFn: async () => {
+      const responses = await Promise.all(
+        boardIds.map((boardId) => postApi.getPosts(boardId, 1, PAGE_SIZE, filters))
+      );
+      return responses.flatMap((response) => response.data);
+    },
+    enabled: boardIds.length > 0,
+    retry: false,
+  });
+}
+
 export function usePostDetail(postId: number) {
   return useQuery({
     queryKey: ["post", postId],
@@ -27,10 +49,11 @@ export function usePostDetail(postId: number) {
   });
 }
 
-export function usePostComments(postId: number) {
+export function usePostComments(postId: number, enabled = true) {
   return useQuery({
     queryKey: ["comments", postId],
     queryFn: () => commentApi.getComments(postId),
+    enabled: enabled && Number.isFinite(postId) && postId > 0,
   });
 }
 
@@ -70,6 +93,21 @@ export function useUpdateSuggestion(postId: number) {
     mutationFn: (payload: { status: string; admin_reply?: string }) => postApi.updateSuggestion(postId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["post", postId] });
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-suggestions"] });
+    },
+  });
+}
+
+export function useUpdateMutualAid(postId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { status: "processing" | "completed" | "rejected"; rejection_reason?: string }) =>
+      postApi.updateMutualAid(postId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["post", postId] });
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-mutual-aid"] });
     },
   });
 }

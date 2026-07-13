@@ -3,6 +3,12 @@ import { Pressable, Text, TextInput, View } from "react-native";
 
 import type { CommentNode } from "../types";
 
+type CommentReportTarget = {
+  type: "comment";
+  id: number;
+  label: string;
+};
+
 type Props = {
   comment: CommentNode;
   depth?: number;
@@ -10,7 +16,7 @@ type Props = {
   onReply?: (commentId: number) => void;
   onEdit?: (commentId: number, content: string) => void;
   onDelete?: (commentId: number) => void;
-  onReport?: (target: { type: "comment"; id: number; label: string }) => void;
+  onReport?: (target: CommentReportTarget) => void;
   reportedTargets?: Record<string, boolean>;
 };
 
@@ -27,6 +33,7 @@ export default function CommentItem({
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(comment.content);
   const isMine = currentUserId === comment.author_id;
+  const isReported = reportedTargets[`comment:${comment.id}`];
 
   return (
     <View
@@ -51,12 +58,14 @@ export default function CommentItem({
       ) : (
         <Text style={{ marginTop: 6, color: "#111827", lineHeight: 20 }}>{comment.content}</Text>
       )}
-      <View style={{ flexDirection: "row", gap: 14, marginTop: 10 }}>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 10 }}>
         {depth === 0 && onReply ? (
           <Pressable onPress={() => onReply(comment.id)}>
             <Text style={{ color: "#2563eb", fontWeight: "700" }}>답글</Text>
           </Pressable>
         ) : null}
+
         {isMine && isEditing ? (
           <>
             <Pressable
@@ -80,6 +89,7 @@ export default function CommentItem({
             </Pressable>
           </>
         ) : null}
+
         {isMine && !isEditing ? (
           <>
             <Pressable onPress={() => setIsEditing(true)}>
@@ -90,15 +100,15 @@ export default function CommentItem({
             </Pressable>
           </>
         ) : null}
-        {!isMine && reportedTargets[`comment:${comment.id}`] ? (
-          <Text style={{ color: "#15803d", fontWeight: "700" }}>신고됨</Text>
-        ) : null}
-        {!isMine && onReport && !reportedTargets[`comment:${comment.id}`] ? (
+
+        {!isMine && isReported ? <Text style={{ color: "#15803d", fontWeight: "700" }}>신고됨</Text> : null}
+        {!isMine && onReport && !isReported ? (
           <Pressable onPress={() => onReport({ type: "comment", id: comment.id, label: `댓글 #${comment.id}` })}>
             <Text style={{ color: "#b91c1c", fontWeight: "700" }}>신고</Text>
           </Pressable>
         ) : null}
       </View>
+
       {comment.children.map((child) => (
         <CommentItem
           key={child.id}

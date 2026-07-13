@@ -6,6 +6,7 @@ class NotificationSettingUpdate(BaseModel):
     notify_like: bool = True
     notify_notice: bool = True
     notify_event: bool = True
+    notify_council: bool = True
 
 
 class PushTokenRegister(BaseModel):

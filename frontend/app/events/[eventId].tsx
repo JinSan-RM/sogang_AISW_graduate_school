@@ -1,21 +1,53 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import BackButton from "../../components/BackButton";
 import { eventApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 
-const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사",
-  council: "학생회",
-  event: "행사",
-  external: "외부",
+const COLORS = {
+  primary: "#2761FF",
+  primary50: "#EDF2FE",
+  text: "#111827",
+  muted: "#6B7280",
+  subtle: "#8A919C",
+  border: "#EEF0F3",
+  bg: "#FFFFFF",
+  danger: "#B91C1C",
 };
+
+const EVENT_CATEGORY_LABELS: Record<string, string> = {
+  academic: "학사일정",
+  council: "원우회일정",
+  event: "행사일정",
+  exam: "시험일정",
+  external: "외부일정",
+  other: "기타일정",
+};
+
+const EVENT_CATEGORY_TONES: Record<string, { backgroundColor: string; color: string }> = {
+  academic: { backgroundColor: "#EAF4FF", color: "#3478B8" },
+  council: { backgroundColor: "#F1EAFE", color: "#6C4FCB" },
+  event: { backgroundColor: "#FFF0F4", color: "#D65B7C" },
+  exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
+  external: { backgroundColor: "#EAF8F4", color: "#20856D" },
+  other: { backgroundColor: "#F1F3F6", color: "#667085" },
+};
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday}) · ${hour}:${minute}`;
+}
 
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ eventId: string }>();
+  const insets = useSafeAreaInsets();
   const eventId = Number(params.eventId);
   const user = useUserStore((state) => state.user);
   const { data, isLoading } = useQuery({
@@ -27,8 +59,8 @@ export default function EventDetailScreen() {
 
   if (isLoading || !event) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f7fb" }}>
-        <ActivityIndicator />
+      <View style={styles.center}>
+        <ActivityIndicator color={COLORS.primary} />
       </View>
     );
   }
@@ -42,43 +74,163 @@ export default function EventDetailScreen() {
       Alert.alert("삭제 실패", "일정을 삭제하지 못했습니다.");
     }
   };
+  const categoryTone = EVENT_CATEGORY_TONES[event.category] ?? EVENT_CATEGORY_TONES.other;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#f4f7fb" }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-      <BackButton fallback="/events/calendar" />
-      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 18, marginTop: 12 }}>
-        <Text style={{ color: event.color ?? "#2563eb", fontSize: 12, fontWeight: "900" }}>{EVENT_CATEGORY_LABELS[event.category] ?? event.category}</Text>
-        <Text style={{ color: "#111827", fontSize: 26, fontWeight: "900", lineHeight: 32, marginTop: 8 }}>{event.title}</Text>
+    <View style={styles.screen}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <Pressable
+          accessibilityLabel="뒤로"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/events/calendar");
+          }}
+          style={styles.iconButton}
+        >
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </Pressable>
+        <Text style={styles.appBarTitle}>일정</Text>
+        <View style={styles.iconButton} />
+      </View>
 
-        <View style={{ gap: 10, marginTop: 18 }}>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Ionicons name="time-outline" size={18} color="#2563eb" />
-            <Text style={{ color: "#111827", flex: 1, lineHeight: 21 }}>
-              {new Date(event.start_at).toLocaleString()}
-              {event.end_at ? ` - ${new Date(event.end_at).toLocaleString()}` : ""}
-            </Text>
-          </View>
-          {event.location ? (
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <Ionicons name="location-outline" size={18} color="#2563eb" />
-              <Text style={{ color: "#111827", flex: 1 }}>{event.location}</Text>
-            </View>
-          ) : null}
+      <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+        <View style={[styles.categoryPill, { backgroundColor: categoryTone.backgroundColor }]}>
+          <Text style={[styles.categoryText, { color: categoryTone.color }]}>{EVENT_CATEGORY_LABELS[event.category] ?? event.category}</Text>
         </View>
 
-        {event.description ? <Text style={{ color: "#111827", lineHeight: 24, marginTop: 18 }}>{event.description}</Text> : null}
+        <View style={styles.metaRow}>
+          <Ionicons name="calendar-outline" size={16} color={COLORS.subtle} />
+          <Text style={styles.metaText}>{formatDateTime(event.start_at)}</Text>
+        </View>
+
+        <Text style={styles.title}>{event.title}</Text>
+        <View style={styles.divider} />
+
+        {event.description ? <Text style={styles.body}>{event.description}</Text> : null}
+        {event.location ? <Text style={styles.body}>장소: {event.location}</Text> : null}
+        {event.end_at ? <Text style={styles.body}>종료: {formatDateTime(event.end_at)}</Text> : null}
 
         {user?.role === "admin" ? (
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
-            <Pressable onPress={() => router.push({ pathname: "/admin", params: { editEventId: String(event.id) } })} style={{ flex: 1, alignItems: "center", borderRadius: 8, backgroundColor: "#112d4e", paddingVertical: 12 }}>
-              <Text style={{ color: "#ffffff", fontWeight: "900" }}>수정</Text>
+          <View style={styles.adminActions}>
+            <Pressable onPress={() => router.push({ pathname: "/admin", params: { editEventId: String(event.id) } })} style={styles.adminButton}>
+              <Text style={styles.adminButtonText}>수정</Text>
             </Pressable>
-            <Pressable onPress={deleteEvent} style={{ flex: 1, alignItems: "center", borderRadius: 8, borderWidth: 1, borderColor: "#fecaca", paddingVertical: 12 }}>
-              <Text style={{ color: "#b91c1c", fontWeight: "900" }}>삭제</Text>
+            <Pressable onPress={deleteEvent} style={[styles.adminButton, styles.deleteButton]}>
+              <Text style={styles.deleteButtonText}>삭제</Text>
             </Pressable>
           </View>
         ) : null}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.bg,
+  },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appBarTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  scroller: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 24,
+    paddingTop: 22,
+    paddingBottom: 40,
+  },
+  categoryPill: {
+    alignSelf: "flex-start",
+    borderRadius: 6,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  categoryText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 16,
+  },
+  metaText: {
+    color: COLORS.subtle,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  title: {
+    color: COLORS.text,
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 30,
+    marginTop: 10,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginTop: 22,
+    marginBottom: 22,
+  },
+  body: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 26,
+    marginBottom: 16,
+  },
+  adminActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+  },
+  adminButton: {
+    flex: 1,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+  },
+  adminButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "900",
+  },
+  deleteButton: {
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    backgroundColor: "#FFFFFF",
+  },
+  deleteButtonText: {
+    color: COLORS.danger,
+    fontWeight: "900",
+  },
+});

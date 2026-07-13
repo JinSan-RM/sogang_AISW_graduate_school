@@ -10,6 +10,7 @@ class PostCreate(BaseModel):
     category: str | None = None
     metadata: dict | None = None
     attachment_ids: list[int] = Field(default_factory=list)
+    deadline_at: datetime | None = None
 
 
 class PostUpdate(BaseModel):
@@ -19,11 +20,17 @@ class PostUpdate(BaseModel):
     category: str | None = None
     metadata: dict | None = None
     attachment_ids: list[int] | None = None
+    deadline_at: datetime | None = None
 
 
 class SuggestionUpdate(BaseModel):
-    status: str = Field(pattern="^(received|reviewing|answered|closed)$")
+    status: str = Field(pattern="^(received|answered)$")
     admin_reply: str | None = None
+
+
+class MutualAidUpdate(BaseModel):
+    status: str = Field(pattern="^(processing|completed|rejected)$")
+    rejection_reason: str | None = None
 
 
 class PostListItem(BaseModel):

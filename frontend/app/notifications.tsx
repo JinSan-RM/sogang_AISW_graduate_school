@@ -1,0 +1,241 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { notificationApi } from "../services/api";
+import type { NotificationItem } from "../types";
+
+const COLORS = {
+  primary: "#2761FF",
+  text: "#111827",
+  muted: "#6B7280",
+  subtle: "#9AA3B2",
+  border: "#EEF0F3",
+  bg: "#FFFFFF",
+};
+
+const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
+  notice: { icon: "megaphone-outline", color: "#2761FF", bg: "#EAF2FF" },
+  event: { icon: "calendar-outline", color: "#16A34A", bg: "#EAF8EF" },
+  comment: { icon: "chatbubble-ellipses-outline", color: "#7C3AED", bg: "#F1ECFF" },
+  like: { icon: "heart-outline", color: "#DB2777", bg: "#FDF0F6" },
+  admin_reply: { icon: "person-circle-outline", color: "#0F766E", bg: "#E7F7F4" },
+  report: { icon: "flag-outline", color: "#EA580C", bg: "#FFF4E8" },
+  council: { icon: "people-outline", color: "#0F766E", bg: "#E7F7F4" },
+};
+
+function isSameDay(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+}
+
+function sectionLabel(value: string) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (isSameDay(date, today)) return "오늘";
+  if (isSameDay(date, yesterday)) return "어제";
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function timeLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${minutes}`;
+}
+
+function decorateItems(items: NotificationItem[]) {
+  let lastSection = "";
+  return items.map((item) => {
+    const section = sectionLabel(item.created_at);
+    const showSection = section !== lastSection;
+    lastSection = section;
+    return { item, section, showSection };
+  });
+}
+
+export default function NotificationsScreen() {
+  const insets = useSafeAreaInsets();
+  const { data, isLoading, isError, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
+    queryKey: ["notifications"],
+    queryFn: ({ pageParam }) => notificationApi.getNotifications(pageParam, 30),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.pagination && lastPage.pagination.page < lastPage.pagination.total_pages
+        ? lastPage.pagination.page + 1
+        : undefined,
+  });
+  const rows = decorateItems(data?.pages.flatMap((page) => page.data) ?? []);
+
+  const openNotification = async (notification: NotificationItem) => {
+    if (!notification.is_read) {
+      notificationApi.markRead(notification.id).catch(() => undefined);
+    }
+    if (notification.post_id) {
+      router.push(`/board/post/${notification.post_id}` as never);
+    } else if (notification.event_id) {
+      router.push(`/events/${notification.event_id}` as never);
+    }
+  };
+
+  return (
+    <View style={styles.screen}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <Pressable
+          accessibilityLabel="뒤로"
+          onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace("/(tabs)/home");
+          }}
+          style={styles.iconButton}
+        >
+          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+        </Pressable>
+        <Text style={styles.appBarTitle}>알림</Text>
+        <View style={styles.iconButton} />
+      </View>
+
+      {isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={rows}
+          keyExtractor={({ item }) => String(item.id)}
+          onRefresh={refetch}
+          onEndReached={() => { if (hasNextPage && !isFetchingNextPage) void fetchNextPage(); }}
+          onEndReachedThreshold={0.4}
+          refreshing={isRefetching}
+          contentContainerStyle={[styles.listContent, rows.length === 0 ? styles.emptyContent : null]}
+          ListEmptyComponent={
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyText}>{isError ? "알림을 불러오지 못했습니다. 당겨서 다시 시도해주세요." : "새 알림이 없습니다."}</Text>
+            </View>
+          }
+          ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
+          renderItem={({ item: row }) => {
+            const meta = TYPE_META[row.item.notification_type] ?? TYPE_META.notice;
+            return (
+              <View>
+                {row.showSection ? <Text style={styles.sectionLabel}>{row.section}</Text> : null}
+                <Pressable onPress={() => openNotification(row.item)} style={styles.notificationRow}>
+                  <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
+                    <Ionicons name={meta.icon} size={17} color={meta.color} />
+                  </View>
+                  <View style={styles.notificationText}>
+                    <Text numberOfLines={2} style={styles.message}>
+                      {row.item.message}
+                    </Text>
+                    <Text style={styles.time}>{timeLabel(row.item.created_at)}</Text>
+                  </View>
+                  {!row.item.is_read ? <View style={styles.unreadDot} /> : null}
+                </Pressable>
+              </View>
+            );
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appBarTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  listContent: {
+    paddingBottom: 32,
+  },
+  emptyContent: {
+    flexGrow: 1,
+  },
+  emptyBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  emptyText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  sectionLabel: {
+    color: COLORS.subtle,
+    fontSize: 13,
+    fontWeight: "900",
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  notificationRow: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  iconCircle: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 19,
+  },
+  notificationText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  message: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  time: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+  },
+});

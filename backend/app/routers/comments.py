@@ -1,16 +1,20 @@
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.deps import get_current_user, get_db
+from app.board_policies import comments_are_disabled
+from app.deps import can_read_board, get_current_user, get_db
 from app.errors import AppException
+from app.models.board import Board
 from app.models.comment import Comment
 from app.models.post import Post
 from app.models.user import User
+from app.models.user_block import UserBlock
 from app.notifications import create_notification
 from app.response import success_response
+from app.rate_limit import enforce_rate_limit
 from app.schemas.comment import CommentCreate, CommentUpdate
 
 router = APIRouter()
@@ -30,15 +34,36 @@ def _count_subtree(root_id: int, comments: list[Comment]) -> int:
     return count
 
 
-@router.get("/posts/{post_id}/comments")
-def get_comments(post_id: int, db: Session = Depends(get_db)):
-    post = db.get(Post, post_id)
-    if post is None:
-        raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+def _require_post_read(db: Session, post: Post, user: User) -> Board:
+    board = db.get(Board, post.board_id)
+    if board is None or not board.is_active:
+        raise AppException(status_code=404, message="Board not found.", code="NOT_FOUND")
+    if not can_read_board(user, board.read_permission):
+        raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
+    return board
 
-    comments = db.scalars(
-        select(Comment).where(Comment.post_id == post_id).order_by(Comment.created_at.asc(), Comment.id.asc())
+
+@router.get("/posts/{post_id}/comments")
+def get_comments(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post = db.get(Post, post_id)
+    if post is None or post.deleted_at is not None:
+        raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+    board = _require_post_read(db, post, current_user)
+    if comments_are_disabled(board) and current_user.role != "admin":
+        return success_response([])
+
+    filters = [Comment.post_id == post_id]
+    blocked_author_ids = db.scalars(
+        select(UserBlock.blocked_user_id).where(UserBlock.blocker_id == current_user.id)
     ).all()
+    if blocked_author_ids:
+        filters.append(Comment.author_id.not_in(blocked_author_ids))
+
+    comments = db.scalars(select(Comment).where(*filters).order_by(Comment.created_at.asc(), Comment.id.asc())).all()
 
     author_ids = list({comment.author_id for comment in comments})
     user_rows = db.execute(select(User.id, User.nickname).where(User.id.in_(author_ids))).all() if author_ids else []
@@ -74,12 +99,21 @@ def get_comments(post_id: int, db: Session = Depends(get_db)):
 def create_comment(
     post_id: int,
     payload: CommentCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    enforce_rate_limit(request, action="comment.create", subject=str(current_user.id), limit=30, ip_limit=90, window_seconds=300)
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+    board = _require_post_read(db, post, current_user)
+    if comments_are_disabled(board):
+        raise AppException(
+            status_code=403,
+            message="Comments are disabled for this board.",
+            code="COMMENTS_DISABLED",
+        )
 
     if payload.parent_id is not None:
         parent_comment = db.get(Comment, payload.parent_id)
@@ -121,6 +155,10 @@ def update_comment(
     comment = db.get(Comment, comment_id)
     if comment is None:
         raise AppException(status_code=404, message="Comment not found.", code="NOT_FOUND")
+    post = db.get(Post, comment.post_id)
+    if post is None or post.deleted_at is not None:
+        raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+    _require_post_read(db, post, current_user)
     if comment.author_id != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
 
@@ -136,12 +174,12 @@ def delete_comment(comment_id: int, db: Session = Depends(get_db), current_user:
     comment = db.get(Comment, comment_id)
     if comment is None:
         raise AppException(status_code=404, message="Comment not found.", code="NOT_FOUND")
+    post = db.get(Post, comment.post_id)
+    if post is None or post.deleted_at is not None:
+        raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+    _require_post_read(db, post, current_user)
     if comment.author_id != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
-
-    post = db.get(Post, comment.post_id)
-    if post is None:
-        raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
 
     all_comments = db.scalars(select(Comment).where(Comment.post_id == post.id)).all()
     deleted_count = _count_subtree(comment.id, all_comments)

@@ -1,21 +1,26 @@
 import { router } from "expo-router";
+import Constants from "expo-constants";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 
 import { notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import type { NotificationItem } from "../types";
+import { setStoredPushToken } from "../utils/pushTokenStorage";
+import { showWebNotification } from "../utils/webNotifications";
 
 declare const require: any;
 
 const LAST_NOTIFICATION_KEY = "aisw_last_notification_id";
-const POLL_INTERVAL_MS = 5000;
+const POLL_INTERVAL_MS = 30_000;
 
 type ExpoNotificationsModule = {
   setNotificationHandler?: (handler: unknown) => void;
   getPermissionsAsync: () => Promise<{ status: string }>;
   requestPermissionsAsync: () => Promise<{ status: string }>;
   getExpoPushTokenAsync: (options?: unknown) => Promise<{ data: string }>;
+  setNotificationChannelAsync?: (channelId: string, channel: { name: string; importance: number; vibrationPattern?: number[]; lightColor?: string }) => Promise<unknown>;
+  AndroidImportance?: { MAX?: number };
   addNotificationResponseReceivedListener?: (listener: (response: unknown) => void) => { remove: () => void };
 };
 
@@ -56,7 +61,7 @@ async function openNotification(notification: Pick<NotificationItem, "id" | "pos
   } else if (notification.event_id) {
     router.push("/events");
   } else {
-    router.push("/settings/notifications");
+    router.push("/notifications");
   }
 }
 
@@ -70,6 +75,15 @@ async function registerPushToken() {
     return;
   }
 
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync?.("default", {
+      name: "기본 알림",
+      importance: Notifications.AndroidImportance?.MAX ?? 5,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#2761FF",
+    });
+  }
+
   const currentPermission = await Notifications.getPermissionsAsync();
   let status = currentPermission.status;
   if (status !== "granted") {
@@ -80,8 +94,14 @@ async function registerPushToken() {
     return;
   }
 
-  const token = await Notifications.getExpoPushTokenAsync();
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  if (!projectId) {
+    throw new Error("Expo project ID is missing.");
+  }
+  const token = await Notifications.getExpoPushTokenAsync({ projectId });
   await notificationApi.registerPushToken({ token: token.data, platform: Platform.OS });
+  await setStoredPushToken(token.data);
+  return token.data;
 }
 
 export default function NotificationBootstrap() {
@@ -106,6 +126,8 @@ export default function NotificationBootstrap() {
         shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowAlert: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
       }),
     });
 
@@ -133,7 +155,7 @@ export default function NotificationBootstrap() {
     registerPushToken().catch(() => undefined);
 
     const poll = async () => {
-      const response = await notificationApi.getNotifications();
+      const response = await notificationApi.getNotifications(1, 1);
       const newest = response.data[0];
       if (!newest) {
         initializedRef.current = true;
@@ -155,6 +177,9 @@ export default function NotificationBootstrap() {
       latestSeenIdRef.current = newest.id;
       storeLatestId(newest.id);
       setVisibleNotification(newest);
+      if (Platform.OS === "web") {
+        showWebNotification("Sogang AI-SW", newest.message, () => { void openNotification(newest); });
+      }
     };
 
     poll().catch(() => undefined);

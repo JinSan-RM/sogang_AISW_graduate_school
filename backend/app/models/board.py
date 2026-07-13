@@ -28,7 +28,7 @@ class Board(Base):
     description: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     allow_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    read_permission: Mapped[str] = mapped_column(String(20), default="guest", nullable=False)
+    read_permission: Mapped[str] = mapped_column(String(20), default="user", nullable=False)
     write_permission: Mapped[str] = mapped_column(String(20), default="user", nullable=False)
     metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

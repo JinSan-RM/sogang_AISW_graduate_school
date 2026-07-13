@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,6 +24,21 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend:/app
+
+  notification-worker:
+    build: ./backend
+    command: ["python", "scripts/run_notification_scheduler.py"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
+      NOTIFICATION_JOB_HOUR: "9"
+      NOTIFICATION_JOB_MINUTE: "0"
+      NOTIFICATION_JOB_RUN_ON_START: "false"
     volumes:
       - ./backend:/app
 

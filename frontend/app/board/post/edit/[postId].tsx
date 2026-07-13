@@ -1,62 +1,129 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
-import { Controller, useForm } from "react-hook-form";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Controller, useForm } from "react-hook-form";
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import BackButton from "../../../../components/BackButton";
+import { useBoardsQuery } from "../../../../hooks/useApi";
 import { usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
 import type { MediaAsset } from "../../../../types";
+import { pickAndUploadImages } from "../../../../utils/mediaPicker";
+
+const COLORS = {
+  primary: "#2761FF",
+  text: "#111827",
+  muted: "#6B7280",
+  subtle: "#9CA3AF",
+  border: "#E1E4E9",
+  surface: "#FFFFFF",
+  danger: "#EF4444",
+  danger50: "#FFF5F5",
+};
 
 const schema = z.object({
-  title: z.string().min(1, "제목을 입력하세요."),
+  title: z.string().trim().min(1, "제목을 입력해주세요"),
   category: z.string().optional(),
-  content: z.string().min(1, "내용을 입력하세요."),
+  content: z.string().optional(),
+  contact: z.string().optional(),
+  applicationUrl: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function PostEditScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ postId: string }>();
   const postId = Number(params.postId);
   const { data, isLoading } = usePostDetail(postId);
   const post = data?.data;
+  const { data: boardsRes } = useBoardsQuery();
+  const board = boardsRes?.data.flatMap((group) => group.boards).find((item) => item.id === post?.board_id);
+  const isStudyRecruit = board?.slug === "study-recruit";
+  const isAdminParticipationPost = board?.slug === "club-promo" || board?.slug === "networking-programs";
+  const isAlbum = board?.board_type === "album";
   const updateMutation = useUpdatePost(postId, post?.board_id ?? 0);
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const { control, handleSubmit, reset } = useForm<FormValues>({
+  const { control, handleSubmit, reset, setError } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { title: "", category: "", content: "" },
+    defaultValues: { title: "", category: "", content: "", contact: "", applicationUrl: "" },
   });
 
   useEffect(() => {
-    if (!post) {
-      return;
-    }
+    if (!post) return;
     reset({
       title: post.title,
       category: post.category ?? "",
       content: post.content,
+      contact: typeof post.metadata?.contact === "string" ? post.metadata.contact : "",
+      applicationUrl: typeof post.metadata?.application_url === "string" ? post.metadata.application_url : "",
     });
     setAttachments(post.attachments);
-  }, [post?.id, post?.title, post?.category, post?.content, reset]);
+  }, [post, reset]);
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace(`/board/post/${postId}`);
+  };
 
   if (isLoading || !post) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f7fb" }}>
-        <ActivityIndicator />
+      <View style={styles.center}>
+        <ActivityIndicator color={COLORS.primary} />
       </View>
     );
   }
 
   const onSubmit = (values: FormValues) => {
+    const content = values.content?.trim() ?? "";
+    if (!isAlbum && !content) {
+      setError("content", { message: "내용을 입력해주세요" });
+      return;
+    }
+    if (isStudyRecruit && !values.contact?.trim()) {
+      setError("contact", { message: "연락 수단을 입력해주세요" });
+      return;
+    }
+    if (isAdminParticipationPost) {
+      const applicationUrl = values.applicationUrl?.trim() ?? "";
+      if (!applicationUrl) {
+        setError("applicationUrl", { message: "참여 버튼 링크를 입력해주세요" });
+        return;
+      }
+      try {
+        const parsed = new URL(applicationUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("INVALID_PROTOCOL");
+      } catch {
+        setError("applicationUrl", { message: "http:// 또는 https://로 시작하는 올바른 주소를 입력해주세요" });
+        return;
+      }
+      if (!attachments.some((attachment) => attachment.content_type.startsWith("image/"))) {
+        Alert.alert("대표 사진", "동아리 게시글에는 사진을 1장 이상 첨부해야 합니다.");
+        return;
+      }
+    }
+
     updateMutation.mutate(
       {
-        title: values.title,
-        content: values.content,
+        title: values.title.trim(),
+        content,
         category: values.category?.trim() || undefined,
+        metadata: isStudyRecruit
+          ? {
+              ...(post.metadata ?? {}),
+              recruitment_status: values.category === "마감" ? "closed" : "open",
+              contact: values.contact?.trim() ?? "",
+            }
+          : isAdminParticipationPost
+            ? {
+                ...(post.metadata ?? {}),
+                application_url: values.applicationUrl?.trim() ?? "",
+              }
+          : post.metadata,
         attachment_ids: attachments.map((attachment) => attachment.id),
         is_anonymous: post.is_anonymous,
       },
@@ -67,72 +134,347 @@ export default function PostEditScreen() {
     );
   };
 
+  const selectImages = async () => {
+    try {
+      setIsUploading(true);
+      const uploaded = await pickAndUploadImages();
+      if (uploaded.length > 0) {
+        setAttachments((current) => [...current, ...uploaded]);
+      }
+    } catch {
+      Alert.alert("업로드 실패", "사진 업로드를 다시 시도하세요.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const boardLabel = post.category?.trim() || board?.name || "게시판";
+
   return (
-    <View style={{ flex: 1, backgroundColor: "#f4f7fb", padding: 16, gap: 12 }}>
-      <BackButton fallback={`/board/post/${post.id}`} />
-      <Text style={{ color: "#112d4e", fontSize: 24, fontWeight: "900" }}>게시글 수정</Text>
-
-      <Controller
-        control={control}
-        name="title"
-        render={({ field }) => (
-          <TextInput
-            placeholder="제목"
-            value={field.value}
-            onChangeText={field.onChange}
-            style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-          />
-        )}
-      />
-      <Controller
-        control={control}
-        name="category"
-        render={({ field }) => (
-          <TextInput
-            placeholder="분류"
-            value={field.value}
-            onChangeText={field.onChange}
-            style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-          />
-        )}
-      />
-      <Controller
-        control={control}
-        name="content"
-        render={({ field }) => (
-          <TextInput
-            multiline
-            placeholder="내용"
-            value={field.value}
-            onChangeText={field.onChange}
-            style={{ minHeight: 200, borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12, textAlignVertical: "top" }}
-          />
-        )}
-      />
-
-      <View style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", padding: 12, gap: 8 }}>
-        <Text style={{ color: "#112d4e", fontWeight: "900" }}>첨부파일</Text>
-        {attachments.length === 0 ? <Text style={{ color: "#64748b" }}>첨부파일이 없습니다.</Text> : null}
-        {attachments.map((attachment) => (
-          <View key={attachment.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 8, backgroundColor: "#f8fafc", padding: 10 }}>
-            <Ionicons name="document-attach-outline" size={18} color="#2563eb" />
-            <Text style={{ flex: 1, color: "#111827", fontWeight: "800" }} numberOfLines={1}>
-              {attachment.original_filename}
-            </Text>
-            <Pressable onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-              <Ionicons name="close-circle" size={22} color="#b91c1c" />
-            </Pressable>
-          </View>
-        ))}
+    <View style={styles.screen}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <Pressable accessibilityLabel="닫기" onPress={goBack} style={styles.iconButton}>
+          <Ionicons name="close" size={24} color={COLORS.text} />
+        </Pressable>
+        <Text style={styles.appBarTitle}>글 수정</Text>
+        <View style={styles.iconButton} />
       </View>
 
-      <Pressable
-        disabled={updateMutation.isPending}
-        onPress={handleSubmit(onSubmit)}
-        style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#112d4e", paddingVertical: 13 }}
-      >
-        <Text style={{ color: "#ffffff", fontWeight: "900" }}>{updateMutation.isPending ? "저장 중" : "변경사항 저장"}</Text>
-      </Pressable>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroller} contentContainerStyle={styles.content}>
+        <View style={styles.readOnlyField}>
+          <Text numberOfLines={1} style={styles.readOnlyText}>{boardLabel}</Text>
+        </View>
+
+        {isStudyRecruit ? (
+          <Controller
+            control={control}
+            name="category"
+            render={({ field }) => (
+              <View style={styles.statusRow}>
+                {["진행중", "마감"].map((status) => {
+                  const selected = field.value === status;
+                  return (
+                    <Pressable key={status} onPress={() => field.onChange(status)} style={[styles.statusButton, selected ? styles.statusButtonSelected : null]}>
+                      <Text style={[styles.statusText, selected ? styles.statusTextSelected : null]}>{status}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          />
+        ) : null}
+
+        <Controller
+          control={control}
+          name="title"
+          render={({ field, fieldState }) => (
+            <View>
+              <TextInput
+                accessibilityLabel="제목"
+                onBlur={field.onBlur}
+                onChangeText={field.onChange}
+                placeholder="제목을 입력하세요"
+                placeholderTextColor={COLORS.subtle}
+                style={[styles.input, fieldState.error ? styles.inputError : null]}
+                value={field.value}
+              />
+              {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
+            </View>
+          )}
+        />
+
+        {!isAlbum ? (
+          <Controller
+            control={control}
+            name="content"
+            render={({ field, fieldState }) => (
+              <View>
+                <TextInput
+                  accessibilityLabel="내용"
+                  multiline
+                  onBlur={field.onBlur}
+                  onChangeText={field.onChange}
+                  placeholder="내용을 입력하세요"
+                  placeholderTextColor={COLORS.subtle}
+                  style={[styles.input, styles.contentInput, fieldState.error ? styles.inputError : null]}
+                  textAlignVertical="top"
+                  value={field.value}
+                />
+                {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
+              </View>
+            )}
+          />
+        ) : null}
+
+        {isStudyRecruit ? (
+          <Controller
+            control={control}
+            name="contact"
+            render={({ field, fieldState }) => (
+              <View>
+                <TextInput
+                  accessibilityLabel="연락 수단"
+                  onBlur={field.onBlur}
+                  onChangeText={field.onChange}
+                  placeholder="스터디장 연락 수단"
+                  placeholderTextColor={COLORS.subtle}
+                  style={[styles.input, fieldState.error ? styles.inputError : null]}
+                  value={field.value}
+                />
+                {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
+              </View>
+            )}
+          />
+        ) : null}
+
+        {isAdminParticipationPost ? (
+          <>
+            <Controller
+              control={control}
+              name="applicationUrl"
+              render={({ field, fieldState }) => (
+                <View>
+                  <Text style={styles.fieldLabel}>참여 버튼 링크</Text>
+                  <TextInput
+                    accessibilityLabel="참여 버튼 링크"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    onBlur={field.onBlur}
+                    onChangeText={field.onChange}
+                    placeholder="https://forms.gle/..."
+                    placeholderTextColor={COLORS.subtle}
+                    style={[styles.input, fieldState.error ? styles.inputError : null]}
+                    value={field.value}
+                  />
+                  {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
+                </View>
+              )}
+            />
+
+            <View style={styles.photoBox}>
+              <View style={styles.photoHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>대표 사진</Text>
+                  <Text style={styles.helperText}>목록과 상세 상단에 표시할 사진을 1장 이상 첨부하세요.</Text>
+                </View>
+                <Pressable disabled={isUploading} onPress={selectImages} style={styles.photoAddButton}>
+                  <Ionicons name="image-outline" size={17} color={COLORS.primary} />
+                  <Text style={styles.photoAddText}>{isUploading ? "업로드 중" : "사진 추가"}</Text>
+                </Pressable>
+              </View>
+              {attachments.map((attachment) => (
+                <View key={attachment.id} style={styles.photoRow}>
+                  <Text numberOfLines={1} style={styles.photoName}>{attachment.original_filename}</Text>
+                  <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                    <Ionicons name="close-circle" size={19} color={COLORS.subtle} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <Pressable
+          disabled={updateMutation.isPending || isUploading}
+          onPress={handleSubmit(onSubmit)}
+          style={[styles.submitButton, updateMutation.isPending || isUploading ? styles.submitButtonDisabled : null]}
+        >
+          <Text style={styles.submitText}>{updateMutation.isPending || isUploading ? "저장 중" : "완료"}</Text>
+        </Pressable>
+      </ScrollView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.surface,
+  },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF0F3",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appBarTitle: {
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  scroller: {
+    flex: 1,
+  },
+  content: {
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 40,
+  },
+  readOnlyField: {
+    minHeight: 46,
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 13,
+  },
+  readOnlyText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  statusRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  statusButton: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+  },
+  statusButtonSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#EDF2FE",
+  },
+  statusText: {
+    color: COLORS.muted,
+    fontWeight: "800",
+  },
+  statusTextSelected: {
+    color: COLORS.primary,
+  },
+  input: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
+    fontSize: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+  },
+  contentInput: {
+    minHeight: 148,
+  },
+  inputError: {
+    borderColor: COLORS.danger,
+    backgroundColor: COLORS.danger50,
+  },
+  errorText: {
+    color: COLORS.danger,
+    fontSize: 12,
+    marginTop: 5,
+  },
+  fieldLabel: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "800",
+    marginBottom: 7,
+  },
+  helperText: {
+    color: COLORS.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  photoBox: {
+    gap: 9,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 13,
+  },
+  photoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  photoAddButton: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: 7,
+    paddingHorizontal: 11,
+  },
+  photoAddText: {
+    color: COLORS.primary,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  photoRow: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 7,
+    backgroundColor: "#F7F8FA",
+    paddingHorizontal: 10,
+  },
+  photoName: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 13,
+  },
+  submitButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 7,
+    backgroundColor: COLORS.primary,
+    marginTop: 4,
+  },
+  submitButtonDisabled: {
+    opacity: 0.55,
+  },
+  submitText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+});

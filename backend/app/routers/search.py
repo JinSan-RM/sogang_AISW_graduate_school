@@ -1,14 +1,16 @@
 import math
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.deps import get_current_user_optional, get_db
+from app.board_policies import ANONYMOUS_NO_COMMENT_BOARD_SLUGS
+from app.deps import get_current_user, get_db
 from app.models.board import Board
 from app.models.post import Post
 from app.models.search import SearchHistory
 from app.models.user import User
+from app.models.user_block import UserBlock
 from app.response import success_response
 from app.routers.posts import _highlight
 
@@ -20,19 +22,66 @@ def search(
     q: str = Query(..., min_length=2),
     scope: str = Query("all", pattern="^(all|board|notices|community|participation|council|resources)$"),
     board_id: int | None = None,
+    notice_category: str | None = Query(None, pattern="^(academic|event|other)$"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
 ):
     keyword = f"%{q}%"
     filters = [Post.deleted_at.is_(None), Board.is_active.is_(True)]
+    if current_user.role != "admin":
+        filters.append(Board.read_permission.in_(["guest", "user"]))
     if scope == "board" and board_id is not None:
         filters.append(Post.board_id == board_id)
     elif scope != "all":
         filters.append(Board.category == scope)
+    if scope == "notices" and notice_category == "academic":
+        filters.append(
+            or_(
+                Board.slug.in_(["academic-notices", "academic-calendar"]),
+                func.lower(func.coalesce(Post.category, "")).in_(["academic", "academic-notice"]),
+                Post.category.ilike("%학사%"),
+            )
+        )
+    elif scope == "notices" and notice_category == "event":
+        filters.append(
+            or_(
+                Board.slug.in_(["event-notices", "webinar-notices"]),
+                func.lower(func.coalesce(Post.category, "")).in_(["event", "webinar", "event-notice"]),
+                Post.category.ilike("%행사%"),
+                Post.category.ilike("%특강%"),
+            )
+        )
+    elif scope == "notices" and notice_category == "other":
+        filters.extend(
+            [
+                Board.slug == "all-notices",
+                or_(
+                    func.lower(func.coalesce(Post.category, "")) == "other",
+                    Post.category.ilike("%기타%"),
+                ),
+            ]
+        )
+    blocked_author_ids = db.scalars(
+        select(UserBlock.blocked_user_id).where(UserBlock.blocker_id == current_user.id)
+    ).all()
+    if blocked_author_ids:
+        filters.append(Post.author_id.not_in(blocked_author_ids))
 
-    filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | User.nickname.ilike(keyword))
+    if current_user.role == "admin":
+        filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | User.nickname.ilike(keyword))
+    else:
+        filters.append(
+            or_(
+                Post.title.ilike(keyword),
+                Post.content.ilike(keyword),
+                and_(
+                    Board.slug.not_in(ANONYMOUS_NO_COMMENT_BOARD_SLUGS),
+                    User.nickname.ilike(keyword),
+                ),
+            )
+        )
 
     total = (
         db.scalar(
@@ -47,7 +96,7 @@ def search(
     total_pages = math.ceil(total / size) if total > 0 else 0
 
     rows = db.execute(
-        select(Post, Board.name, User.nickname)
+        select(Post, Board.name, Board.slug, User.nickname)
         .join(Board, Board.id == Post.board_id)
         .join(User, User.id == Post.author_id)
         .where(*filters)
@@ -56,9 +105,8 @@ def search(
         .limit(size)
     ).all()
 
-    if current_user is not None:
-        db.add(SearchHistory(user_id=current_user.id, keyword=q))
-        db.commit()
+    db.add(SearchHistory(user_id=current_user.id, keyword=q))
+    db.commit()
 
     data = [
         {
@@ -66,16 +114,20 @@ def search(
             "id": post.id,
             "board_id": post.board_id,
             "board_name": board_name,
+            "board_slug": board_slug,
+            "category": post.category,
             "title": post.title,
             "content_preview": post.content[:100],
-            "author_nickname": "Anonymous" if post.is_anonymous else nickname,
+            "author_nickname": "Anonymous"
+            if post.is_anonymous or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
+            else nickname,
             "created_at": post.created_at,
             "highlights": {
                 "title": _highlight(post.title, q),
                 "content_preview": _highlight(post.content[:100], q),
             },
         }
-        for post, board_name, nickname in rows
+        for post, board_name, board_slug, nickname in rows
     ]
 
     return success_response(
@@ -90,10 +142,7 @@ def search(
 
 
 @router.get("/recent")
-def recent_searches(db: Session = Depends(get_db), current_user: User | None = Depends(get_current_user_optional)):
-    if current_user is None:
-        return success_response([])
-
+def recent_searches(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = db.scalars(
         select(SearchHistory)
         .where(SearchHistory.user_id == current_user.id)

@@ -7,9 +7,10 @@ type Props = {
   label?: string;
 };
 
-export default function BackButton({ fallback = "/(tabs)/home", label = "Back" }: Props) {
+export default function BackButton({ fallback = "/(tabs)/home", label = "뒤로" }: Props) {
   return (
     <Pressable
+      hitSlop={8}
       onPress={() => {
         if (router.canGoBack()) {
           router.back();
@@ -22,16 +23,17 @@ export default function BackButton({ fallback = "/(tabs)/home", label = "Back" }
         flexDirection: "row",
         alignItems: "center",
         gap: 6,
+        minHeight: 38,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: "#dbe3ef",
+        borderColor: "#E1E4E9",
         backgroundColor: "#ffffff",
-        paddingHorizontal: 10,
-        paddingVertical: 8,
+        paddingHorizontal: 11,
+        paddingVertical: 7,
       }}
     >
-      <Ionicons name="chevron-back" size={18} color="#112d4e" />
-      <Text style={{ color: "#112d4e", fontWeight: "800" }}>{label}</Text>
+      <Ionicons name="chevron-back" size={18} color="#0B1F56" />
+      <Text style={{ color: "#0B1F56", fontSize: 13, fontWeight: "900" }}>{label}</Text>
     </Pressable>
   );
 }

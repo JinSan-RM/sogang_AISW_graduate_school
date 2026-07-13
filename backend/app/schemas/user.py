@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from typing import Literal
 
 
 class UserMeResponse(BaseModel):
@@ -15,8 +16,8 @@ class UserMeResponse(BaseModel):
 
 
 class UserMeUpdate(BaseModel):
-    nickname: str | None = None
-    cohort: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
     major: str | None = None
     phone: str | None = None
     company: str | None = None
@@ -32,3 +33,23 @@ class UserPasswordUpdate(BaseModel):
 
 class UserDeactivateRequest(BaseModel):
     reason: str | None = None
+
+
+class UserBlockCreate(BaseModel):
+    blocked_user_id: int
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class UserBlockItem(BaseModel):
+    id: int
+    blocked_user_id: int
+    blocked_user_nickname: str
+    reason: str | None = None
+    created_at: str
+
+
+class AdminUserUpdate(BaseModel):
+    role: Literal["user", "admin"] | None = None
+    is_active: bool | None = None
+    enrollment_status: Literal["active", "leave", "graduated"] | None = None
+    dues_status: Literal["paid", "unpaid", "exempt"] | None = None

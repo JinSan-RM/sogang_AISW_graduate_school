@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
+import math
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.deps import get_current_user, get_db
+from app.deps import get_current_user, get_db, require_admin
 from app.errors import AppException
 from app.models.notification import Notification, NotificationSetting, PushToken
 from app.models.user import User
 from app.response import success_response
 from app.schemas.notification import NotificationSettingUpdate, PushTokenRegister
+from app.push import sync_push_receipts
 
 router = APIRouter()
 
@@ -18,6 +21,7 @@ def _setting_payload(setting: NotificationSetting) -> dict:
         "notify_like": setting.notify_like,
         "notify_notice": setting.notify_notice,
         "notify_event": setting.notify_event,
+        "notify_council": setting.notify_council,
     }
 
 
@@ -44,14 +48,24 @@ def _get_or_create_setting(db: Session, user: User) -> NotificationSetting:
 
 
 @router.get("")
-def get_notifications(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_notifications(
+    page: int = Query(1, ge=1),
+    size: int = Query(30, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    total = db.scalar(select(func.count(Notification.id)).where(Notification.user_id == user.id)) or 0
     notifications = db.scalars(
         select(Notification)
         .where(Notification.user_id == user.id)
         .order_by(Notification.created_at.desc(), Notification.id.desc())
-        .limit(50)
+        .offset((page - 1) * size)
+        .limit(size)
     ).all()
-    return success_response([_notification_payload(notification) for notification in notifications])
+    return success_response(
+        [_notification_payload(notification) for notification in notifications],
+        pagination={"page": page, "size": size, "total": total, "total_pages": math.ceil(total / size) if total else 0},
+    )
 
 
 @router.put("/{notification_id}/read")
@@ -119,3 +133,11 @@ def deactivate_push_token(
         token.is_active = False
         db.commit()
     return success_response({"registered": False})
+
+
+@router.post("/admin/push-receipts/sync")
+def sync_admin_push_receipts(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    return success_response(sync_push_receipts(db))

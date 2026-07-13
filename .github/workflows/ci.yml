@@ -31,7 +31,6 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/sogang_app
       AUTH_SECRET_KEY: ci-secret-key
-      DEV_AUTH_CODES: "true"
       EXPO_PUSH_ENABLED: "false"
     steps:
       - name: Checkout
@@ -46,10 +45,21 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Compile backend
-        run: python -m compileall app
+        run: python -m compileall app scripts alembic/versions
 
       - name: Run migrations
         run: alembic upgrade head
+
+      - name: Seed clean database
+        run: >-
+          python -c "from app.database import SessionLocal;
+          from app.seed import seed_initial_data;
+          from app.models.user import User;
+          from app.models.banner import Banner;
+          db=SessionLocal(); seed_initial_data(db);
+          assert db.query(User).count() >= 1;
+          assert db.query(Banner).count() >= 1;
+          db.close()"
 
       - name: Validate OpenAPI schema
         run: python -c "from app.main import app; schema = app.openapi(); assert schema.get('openapi')"

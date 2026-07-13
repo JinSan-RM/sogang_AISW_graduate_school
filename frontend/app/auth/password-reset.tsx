@@ -1,98 +1,463 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import BackButton from "../../components/BackButton";
+import SchoolEmailInput from "../../components/SchoolEmailInput";
 import { authApi } from "../../services/api";
+import {
+  apiErrorCode,
+  composeSchoolEmail,
+  emailIdError,
+  formatCountdown,
+  passwordError,
+} from "../../utils/authValidation";
+
+const COLORS = {
+  primary: "#2761FF",
+  text: "#111827",
+  muted: "#6B7280",
+  subtle: "#A0A7B2",
+  border: "#E5E7EB",
+  danger: "#DC2626",
+  success: "#22A163",
+  bg: "#FFFFFF",
+  errorBg: "#FFF5F5",
+  disabled: "#D1D5DB",
+};
+
+type Mode = "request" | "code" | "reset" | "complete";
+type Errors = Partial<Record<"email" | "code" | "password" | "passwordConfirm" | "form", string>>;
+type VerificationMessage = { type: "success" | "error"; text: string } | null;
+type VerificationFailureState = "expired" | "attempts" | null;
+
+function FieldError({ message }: { message?: string }) {
+  return message ? (
+    <View style={styles.messageRow}>
+      <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
+      <Text style={styles.errorText}>{message}</Text>
+    </View>
+  ) : null;
+}
 
 export default function PasswordResetScreen() {
-  const [email, setEmail] = useState("");
-  const [token, setToken] = useState("");
-  const [devToken, setDevToken] = useState("");
+  const insets = useSafeAreaInsets();
+  const [mode, setMode] = useState<Mode>("request");
+  const [emailId, setEmailId] = useState("");
+  const [code, setCode] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
+  const [countdown, setCountdown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const verificationExpiresAtRef = useRef(0);
+  const resendAvailableAtRef = useRef(0);
+  const [verificationMessage, setVerificationMessage] = useState<VerificationMessage>(null);
+  const [verificationFailureState, setVerificationFailureState] = useState<VerificationFailureState>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [resetValidationAttempted, setResetValidationAttempted] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const requestReset = async () => {
+  const email = composeSchoolEmail(emailId);
+
+  useEffect(() => {
+    if (mode !== "code") return;
+    const updateTimers = () => {
+      const now = Date.now();
+      setCountdown(Math.max(0, Math.ceil((verificationExpiresAtRef.current - now) / 1000)));
+      setResendCooldown(Math.max(0, Math.ceil((resendAvailableAtRef.current - now) / 1000)));
+    };
+    updateTimers();
+    const timer = setInterval(updateTimers, 1000);
+    return () => clearInterval(timer);
+  }, [mode]);
+
+  const restartVerification = () => {
+    setMode("request");
+    setCode("");
+    setVerificationToken("");
+    setCountdown(0);
+    setResendCooldown(0);
+    verificationExpiresAtRef.current = 0;
+    resendAvailableAtRef.current = 0;
+    setVerificationMessage(null);
+    setVerificationFailureState(null);
+    setErrors({});
+  };
+
+  const goBack = () => {
+    if (mode === "code" || mode === "reset") {
+      restartVerification();
+      return;
+    }
+    if (router.canGoBack()) router.back();
+    else router.replace("/auth/login");
+  };
+
+  const requestCode = async (resend = false) => {
+    const nextEmailError = emailIdError(emailId);
+    if (nextEmailError) {
+      setErrors({ email: nextEmailError });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
+      setErrors({});
+      setVerificationMessage(null);
       const response = await authApi.requestPasswordReset({ email });
-      setDevToken(response.data.dev_token ?? "");
-      Alert.alert(
-        "재설정 코드 발송",
-        response.data.email_sent
-          ? "비밀번호 재설정 코드를 보냈습니다."
-          : "메일 전송 설정 전에는 개발용 인증 코드가 표시됩니다."
+      if (response.data.email_sent === false) {
+        const message = "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
+        if (resend) setVerificationMessage({ type: "error", text: message });
+        else setErrors({ email: message });
+        return;
+      }
+
+      const requestedAt = Date.now();
+      const resendIn = response.data.resend_in ?? response.data.expires_in;
+      verificationExpiresAtRef.current = requestedAt + response.data.expires_in * 1000;
+      resendAvailableAtRef.current = requestedAt + resendIn * 1000;
+      setCountdown(response.data.expires_in);
+      setResendCooldown(resendIn);
+      setCode("");
+      setVerificationToken("");
+      setVerificationFailureState(null);
+      setVerificationMessage({
+        type: "success",
+        text: resend ? "새 인증코드가 발송되었어요." : "인증코드가 발송되었어요.",
+      });
+      setMode("code");
+    } catch (error) {
+      const errorCode = apiErrorCode(error);
+      const message =
+        errorCode === "RATE_LIMITED" || errorCode === "VERIFICATION_RESEND_COOLDOWN"
+          ? "인증코드는 5분 후 다시 요청할 수 있어요."
+          : "인증코드를 발송하지 못했어요. 이메일을 확인해주세요.";
+      if (resend) setVerificationMessage({ type: "error", text: message });
+      else setErrors({ email: message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    if (Date.now() >= verificationExpiresAtRef.current) {
+      setVerificationFailureState("expired");
+      setErrors({ code: "인증 시간이 만료되었어요. 인증코드를 재전송해주세요." });
+      return;
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setVerificationFailureState(null);
+      setErrors({ code: "인증코드 6자리를 입력해주세요." });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setErrors({});
+      const response = await authApi.verifyPasswordResetCode({ email, code });
+      setVerificationToken(response.data.verification_token);
+      setVerificationMessage(null);
+      setVerificationFailureState(null);
+      setMode("reset");
+    } catch (error) {
+      const errorCode = apiErrorCode(error);
+      const message =
+        errorCode === "VERIFICATION_EXPIRED"
+          ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요."
+          : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
+            ? "인증 시도 횟수를 초과했어요. 잠시 후 새 코드를 요청해주세요."
+            : "인증코드가 일치하지 않아요.";
+      setErrors({ code: message });
+      setVerificationFailureState(
+        errorCode === "VERIFICATION_EXPIRED"
+          ? "expired"
+          : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
+            ? "attempts"
+            : null
       );
-    } catch {
-      Alert.alert("확인 실패", "인증 코드를 확인하세요.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const confirmReset = async () => {
+    setResetValidationAttempted(true);
+    const nextErrors: Errors = {};
+    const nextPasswordError = passwordError(newPassword);
+    if (nextPasswordError) nextErrors.password = nextPasswordError;
+    if (!newPasswordConfirm) nextErrors.passwordConfirm = "비밀번호를 다시 입력해주세요.";
+    else if (newPassword !== newPasswordConfirm) nextErrors.passwordConfirm = "비밀번호가 일치하지 않아요.";
+    if (!verificationToken) nextErrors.form = "이메일 인증을 다시 진행해주세요.";
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      await authApi.confirmPasswordReset({ token, new_password: newPassword });
-      Alert.alert("비밀번호 변경 실패", "새 비밀번호를 확인할 수 없습니다.");
-      router.replace("/auth/login");
+      setErrors({});
+      await authApi.confirmPasswordReset({ token: verificationToken, new_password: newPassword });
+      setMode("complete");
     } catch {
-      Alert.alert("변경 완료", "다시 로그인해 주세요.");
+      setErrors({ form: "비밀번호를 변경하지 못했어요. 인증을 다시 진행해주세요." });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const verificationExpired = mode === "code" && countdown <= 0;
+  const verificationAttemptsLocked = verificationFailureState === "attempts";
+  const codeError = errors.code ?? (verificationExpired ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요." : undefined);
+  const codeErrorHasBackground = Boolean(codeError) && verificationFailureState !== "expired" && !verificationExpired;
+  const displayedPasswordError = errors.password ?? (resetValidationAttempted ? passwordError(newPassword) ?? undefined : undefined);
+  const displayedPasswordConfirmError =
+    errors.passwordConfirm ??
+    (resetValidationAttempted
+      ? !newPasswordConfirm
+        ? "비밀번호를 다시 입력해주세요."
+        : newPassword !== newPasswordConfirm
+          ? "비밀번호가 일치하지 않아요."
+          : undefined
+      : undefined);
+  const resetButtonDisabled =
+    isSubmitting ||
+    (resetValidationAttempted && Boolean(displayedPasswordError || displayedPasswordConfirmError || errors.form));
+  const title = mode === "reset" ? "비밀번호 재설정" : "비밀번호 찾기";
+
   return (
-    <View style={{ flex: 1, gap: 12, backgroundColor: "#f4f7fb", padding: 20 }}>
-      <BackButton fallback="/auth/login" />
-        <Text style={{ color: "#112d4e", fontSize: 24, fontWeight: "900" }}>비밀번호 재설정</Text>
-        <Text style={{ color: "#64748b", lineHeight: 20 }}>학교 이메일로 인증한 뒤 비밀번호를 바꿀 수 있습니다.</Text>
-
-      <TextInput
-        autoCapitalize="none"
-        keyboardType="email-address"
-        onChangeText={setEmail}
-            placeholder="학교 이메일"
-        style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-        value={email}
-      />
-      <Pressable
-        disabled={isSubmitting}
-        onPress={requestReset}
-        style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#112d4e", paddingVertical: 12 }}
-      >
-            <Text style={{ color: "#ffffff", fontWeight: "900" }}>코드 받기</Text>
-      </Pressable>
-
-      {devToken ? (
-        <View style={{ borderRadius: 8, backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", padding: 12 }}>
-              <Text style={{ color: "#1d4ed8", fontWeight: "800" }}>인증 확인</Text>
-          <Text style={{ color: "#1e3a8a", marginTop: 4 }}>{devToken}</Text>
+    <View style={styles.screen}>
+      {mode !== "complete" ? (
+        <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+          <Pressable accessibilityLabel="뒤로" onPress={goBack} style={styles.iconButton}>
+            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          </Pressable>
+          <Text style={styles.appBarTitle}>{title}</Text>
+          <View style={styles.iconButton} />
         </View>
       ) : null}
 
-      <TextInput
-        autoCapitalize="none"
-        onChangeText={setToken}
-            placeholder="인증 코드"
-        style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-        value={token}
-      />
-      <TextInput
-        onChangeText={setNewPassword}
-            placeholder="새 비밀번호"
-        secureTextEntry
-        style={{ borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 8, backgroundColor: "#ffffff", padding: 12 }}
-        value={newPassword}
-      />
-      <Pressable
-        disabled={isSubmitting}
-        onPress={confirmReset}
-        style={{ alignItems: "center", borderRadius: 8, backgroundColor: "#2563eb", paddingVertical: 12 }}
-      >
-            <Text style={{ color: "#ffffff", fontWeight: "900" }}>비밀번호 변경</Text>
-      </Pressable>
+      {mode === "complete" ? (
+        <View style={styles.completeContent}>
+          <View style={styles.successCircle}>
+            <Ionicons name="checkmark" size={27} color={COLORS.success} />
+          </View>
+          <Text style={styles.completeTitle}>비밀번호가 변경되었어요!</Text>
+          <Pressable onPress={() => router.replace("/auth/login")} style={[styles.primaryButton, styles.completeButton]}>
+            <Text style={styles.primaryButtonText}>로그인하러 가기</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {mode === "request" ? (
+            <>
+              <Text style={styles.heading}>가입한 학교 이메일을 입력해주세요</Text>
+              <Text style={styles.helper}>입력하신 이메일로 인증코드를 보내드려요</Text>
+              <View style={styles.field}>
+                <Text style={styles.label}>학교 이메일</Text>
+                <SchoolEmailInput
+                  value={emailId}
+                  onChangeText={(value) => {
+                    setEmailId(value);
+                    setErrors((current) => ({ ...current, email: undefined }));
+                  }}
+                  hasError={Boolean(errors.email)}
+                />
+                <FieldError message={errors.email} />
+              </View>
+              <Pressable
+                disabled={isSubmitting}
+                onPress={() => void requestCode(false)}
+                style={[styles.primaryButton, isSubmitting ? styles.submittingButton : null]}
+              >
+                <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 받기"}</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {mode === "code" ? (
+            <>
+              <Text style={styles.heading}>인증코드를 입력해주세요</Text>
+              <Text style={styles.helper}>{email}로 발송되었어요</Text>
+              <View style={styles.field}>
+                <TextInput
+                  editable={!verificationAttemptsLocked}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  onChangeText={(value) => {
+                    setCode(value.replace(/\D/g, ""));
+                    if (!verificationAttemptsLocked) {
+                      setErrors((current) => ({ ...current, code: undefined }));
+                      setVerificationFailureState(null);
+                    }
+                  }}
+                  placeholder="인증코드 6자리"
+                  placeholderTextColor={COLORS.subtle}
+                  style={[
+                    styles.input,
+                    codeError ? styles.inputError : null,
+                    codeErrorHasBackground ? styles.inputErrorBackground : null,
+                  ]}
+                  value={code}
+                />
+                <FieldError message={codeError} />
+              </View>
+
+              {!codeError && verificationMessage ? (
+                <View style={styles.verificationStatus}>
+                  <View style={styles.messageRow}>
+                    <Ionicons
+                      name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
+                      size={14}
+                      color={verificationMessage.type === "success" ? COLORS.success : COLORS.danger}
+                    />
+                    <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
+                      {verificationMessage.text}
+                    </Text>
+                  </View>
+                  <Text style={styles.timer}>{formatCountdown(countdown)}</Text>
+                </View>
+              ) : null}
+
+              {verificationExpired ? (
+                <Pressable
+                  disabled={isSubmitting || resendCooldown > 0}
+                  onPress={() => void requestCode(true)}
+                  style={[styles.primaryButton, isSubmitting || resendCooldown > 0 ? styles.submittingButton : null]}
+                >
+                  <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 재전송"}</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  disabled={isSubmitting || verificationAttemptsLocked}
+                  onPress={() => void verifyCode()}
+                  style={[
+                    styles.primaryButton,
+                    isSubmitting ? styles.submittingButton : null,
+                    verificationAttemptsLocked ? styles.validationDisabledButton : null,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
+                </Pressable>
+              )}
+            </>
+          ) : null}
+
+          {mode === "reset" ? (
+            <>
+              <Text style={styles.heading}>새 비밀번호를 설정해주세요</Text>
+              <View style={styles.field}>
+                <Text style={styles.label}>새 비밀번호</Text>
+                <TextInput
+                  onChangeText={(value) => {
+                    setNewPassword(value);
+                    setErrors((current) => ({ ...current, password: undefined, form: undefined }));
+                  }}
+                  placeholder="새 비밀번호"
+                  placeholderTextColor={COLORS.subtle}
+                  secureTextEntry
+                  style={[styles.input, displayedPasswordError ? styles.inputErrorBackground : null]}
+                  value={newPassword}
+                />
+                {displayedPasswordError ? (
+                  <FieldError message={displayedPasswordError} />
+                ) : (
+                  <Text style={styles.passwordHelper}>영문, 숫자, 특수문자를 포함해 8자 이상 입력해주세요.</Text>
+                )}
+              </View>
+              <View style={styles.field}>
+                <Text style={styles.label}>비밀번호 확인</Text>
+                <TextInput
+                  onChangeText={(value) => {
+                    setNewPasswordConfirm(value);
+                    setErrors((current) => ({ ...current, passwordConfirm: undefined, form: undefined }));
+                  }}
+                  placeholder="비밀번호 확인"
+                  placeholderTextColor={COLORS.subtle}
+                  secureTextEntry
+                  style={[styles.input, displayedPasswordConfirmError ? styles.inputErrorBackground : null]}
+                  value={newPasswordConfirm}
+                />
+                <FieldError message={displayedPasswordConfirmError} />
+              </View>
+              <FieldError message={errors.form} />
+              <Pressable
+                disabled={resetButtonDisabled}
+                onPress={() => void confirmReset()}
+                style={[
+                  styles.primaryButton,
+                  isSubmitting ? styles.submittingButton : null,
+                  resetButtonDisabled && !isSubmitting ? styles.validationDisabledButton : null,
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>{isSubmitting ? "변경 중" : "변경 완료"}</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </ScrollView>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: COLORS.bg },
+  appBar: {
+    minHeight: 62,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingBottom: 10,
+  },
+  iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
+  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
+  content: { gap: 18, paddingHorizontal: 31, paddingTop: 28, paddingBottom: 40 },
+  heading: { color: COLORS.text, fontSize: 20, fontWeight: "900", lineHeight: 28, marginBottom: 2 },
+  helper: { color: COLORS.subtle, fontSize: 13, fontWeight: "700", lineHeight: 20, marginTop: -12 },
+  field: { gap: 9 },
+  label: { color: COLORS.text, fontSize: 14, fontWeight: "900" },
+  input: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700",
+    paddingHorizontal: 15,
+  },
+  inputError: { borderColor: COLORS.danger },
+  inputErrorBackground: { borderColor: COLORS.danger, backgroundColor: COLORS.errorBg },
+  messageRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "800", lineHeight: 18 },
+  successText: { flexShrink: 1, color: COLORS.success, fontSize: 12, fontWeight: "800", lineHeight: 18 },
+  verificationStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: -8 },
+  timer: { color: COLORS.primary, fontSize: 12, fontWeight: "900" },
+  passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "700", lineHeight: 18 },
+  primaryButton: {
+    height: 54,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+  },
+  submittingButton: { opacity: 0.55 },
+  validationDisabledButton: { backgroundColor: COLORS.disabled },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
+  completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 31, gap: 18 },
+  successCircle: {
+    width: 46,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: COLORS.success,
+    borderRadius: 23,
+    marginBottom: 6,
+  },
+  completeTitle: { color: COLORS.text, fontSize: 22, fontWeight: "900" },
+  completeButton: { alignSelf: "stretch", marginTop: 4 },
+});
