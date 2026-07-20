@@ -19,7 +19,7 @@ export default function SchoolEmailInput({ value, onChangeText, placeholder = "ì
         maxLength={64}
         onChangeText={(next) => onChangeText(next.replace(/@.*$/, "").replace(/\s/g, ""))}
         placeholder={placeholder}
-        placeholderTextColor="#A0A7B2"
+        placeholderTextColor="#A6ACB7"
         style={styles.input}
         value={value}
       />
@@ -33,40 +33,41 @@ export default function SchoolEmailInput({ value, onChangeText, placeholder = "ì
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 52,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "stretch",
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#E1E4E9",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
   },
   containerError: {
-    borderColor: "#DC2626",
+    borderColor: "#D64545", // error/500 (Figma)
     backgroundColor: "#FFF5F5",
   },
   input: {
     flex: 1,
     minWidth: 0,
-    color: "#111827",
-    fontSize: 15,
-    fontWeight: "700",
+    color: "#15171C",
+    fontSize: 14,
+    fontWeight: "400", // Figma: Inter Regular
     paddingHorizontal: 14,
   },
   divider: {
     width: 1,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "#E1E4E9",
   },
   domainBox: {
-    minWidth: 128,
+    width: 130,
     justifyContent: "center",
-    paddingHorizontal: 10,
-    backgroundColor: "#F8FAFC",
+    paddingLeft: 10,
+    paddingRight: 14,
+    backgroundColor: "#F5F5F5",
   },
   domain: {
-    color: "#4B5563",
-    fontSize: 13,
-    fontWeight: "800",
+    color: "#6B7280",
+    fontSize: 12,
+    fontWeight: "400", // Figma: Inter Regular
   },
 });

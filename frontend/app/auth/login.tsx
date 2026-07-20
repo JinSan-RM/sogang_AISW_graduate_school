@@ -10,11 +10,11 @@ import SchoolEmailInput from "../../components/SchoolEmailInput";
 import { composeSchoolEmail, emailIdError } from "../../utils/authValidation";
 
 const COLORS = {
-  primary: "#2761FF",
-  text: "#111827",
-  muted: "#6B7280",
-  subtle: "#A0A7B2",
-  border: "#E5E7EB",
+  primary: "#2761FF", // primary/500
+  text: "#15171C", // gray/900 (Figma)
+  muted: "#6B7280", // gray/600
+  subtle: "#A6ACB7", // placeholder
+  border: "#E1E4E9", // border/default
   danger: "#DC2626",
   bg: "#FFFFFF",
 };
@@ -145,30 +145,30 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500", // Figma: Inter Medium
   },
   content: {
-    gap: 18,
-    paddingHorizontal: 31,
-    paddingTop: 30,
+    gap: 20, // Figma body gap
+    paddingHorizontal: 20,
+    paddingTop: 24,
   },
   field: {
-    gap: 10,
+    gap: 6, // Figma label→input gap
   },
   label: {
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "500", // Figma: Inter Medium
   },
   input: {
-    height: 52,
+    height: 48,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "400", // Figma: Inter Regular
     paddingHorizontal: 16,
   },
   inputError: {
@@ -176,12 +176,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF5F5",
   },
   primaryButton: {
-    height: 54,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: COLORS.primary,
-    marginTop: 3,
   },
   errorRow: {
     flexDirection: "row",
@@ -192,7 +191,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: COLORS.danger,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "500",
   },
   disabledButton: {
     opacity: 0.55,
@@ -200,18 +199,17 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "500", // Figma: Inter Medium
   },
   links: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
-    marginTop: 4,
+    gap: 12,
   },
   linkText: {
     color: COLORS.muted,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "500", // Figma: Inter Medium
   },
 });

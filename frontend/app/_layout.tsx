@@ -1,3 +1,4 @@
+import { useFonts } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
@@ -5,10 +6,15 @@ import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import NotificationBootstrap from "../components/NotificationBootstrap";
 import { useUserStore } from "../stores/userStore";
+import { INTER_FONTS, patchDefaultFontFamily } from "../utils/fonts";
+
+// Route every <Text>/<TextInput> through the matching Inter face (design uses Inter).
+patchDefaultFontFamily();
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
   const { width } = useWindowDimensions();
+  const [fontsLoaded] = useFonts(INTER_FONTS);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const hasHydrated = useUserStore((state) => state.hasHydrated);
   const hydrateSession = useUserStore((state) => state.hydrateSession);
@@ -21,7 +27,7 @@ export default function RootLayout() {
     void hydrateSession();
   }, [hydrateSession]);
 
-  if (!hasHydrated) {
+  if (!hasHydrated || !fontsLoaded) {
     return <View style={styles.viewport} />;
   }
 
