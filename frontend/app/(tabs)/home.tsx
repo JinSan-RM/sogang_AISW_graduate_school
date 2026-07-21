@@ -36,9 +36,9 @@ const COLORS = {
   bg: "#FFFFFF",
   surface: "#FFFFFF",
   border: "#E1E4E9",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
-  subtle: "#8A919C",
+  subtle: "#A6ACB7",
 };
 
 const CARD_ELEVATION = {
@@ -62,9 +62,9 @@ const POPULAR_BOARD_SLUGS = ["community-major", "free-board", "lecture-reviews",
 const ALBUM_BOARD_SLUGS = ["activity-history", "event-album", "photo-album", "student-council"];
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MOBILE_WEB_WIDTH = 405;
-const HORIZONTAL_PADDING = 24;
-const ALBUM_CARD_WIDTH = 127;
-const ALBUM_CARD_GAP = 12;
+const HORIZONTAL_PADDING = 20;
+const ALBUM_CARD_WIDTH = 120;
+const ALBUM_CARD_GAP = 10;
 const HOME_ALBUM_LIMIT = 10;
 const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#2761FF", "#8EC9FF"],
@@ -258,7 +258,7 @@ function SectionHeader({ title, actionLabel = "더보기", onPress }: { title: s
       {onPress ? (
         <Pressable onPress={onPress} style={styles.moreButton}>
           <Text style={styles.moreText}>{actionLabel}</Text>
-          <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+          <Ionicons name="chevron-forward" size={14} color={COLORS.muted} />
         </Pressable>
       ) : null}
     </View>
@@ -286,7 +286,7 @@ function HomeEmptyState({ type }: { type: "notices" | "popular" | "album" }) {
 
   return (
     <View style={styles.emptyState}>
-      <Ionicons name={content.icon} size={30} color="#AAB2BF" />
+      <Ionicons name={content.icon} size={32} color="#AAB2BF" />
       <Text style={styles.emptyStateTitle}>{content.title}</Text>
       <Text style={styles.emptyStateDescription}>{content.description}</Text>
     </View>
@@ -348,7 +348,7 @@ function HomeBanner({
       <View style={styles.bannerTopRow}>
         {badge ? (
           <View style={styles.bannerBadge}>
-            <Ionicons name="location-outline" size={16} color={theme.badge} />
+            <Ionicons name="location-outline" size={13} color={theme.badge} />
             <Text style={[styles.bannerBadgeText, { color: theme.badge }]} numberOfLines={1}>
               {badge}
             </Text>
@@ -574,7 +574,7 @@ function CalendarCard({ events, month }: { events: EventItem[]; month: Date }) {
           >
             {cell.day ? (
               <View style={[styles.dayBadge, cell.active ? styles.dayBadgeActive : cell.marked ? styles.dayBadgeMarked : null]}>
-                <Text style={[styles.dayText, cell.active ? styles.dayTextActive : null]}>{cell.day}</Text>
+                <Text style={[styles.dayText, cell.active ? styles.dayTextActive : cell.marked ? styles.dayTextMarked : null]}>{cell.day}</Text>
               </View>
             ) : null}
           </Pressable>
@@ -615,9 +615,9 @@ function PopularPosts({ posts, compact }: { posts: PostListItem[]; compact: bool
             {post.title}
           </Text>
           <View style={styles.postStats}>
-            <Ionicons name="chatbubble-outline" size={15} color={COLORS.subtle} />
+            <Ionicons name="chatbubble-outline" size={13} color={COLORS.muted} />
             <Text style={styles.statText}>{post.comment_count}</Text>
-            <Ionicons name="heart" size={15} color={COLORS.subtle} />
+            <Ionicons name="heart" size={13} color={COLORS.muted} />
             <Text style={styles.statText}>{post.like_count}</Text>
           </View>
         </Pressable>
@@ -657,7 +657,7 @@ function AlbumStrip({ posts }: { posts: PostListItem[] }) {
                 end={{ x: 1, y: 1 }}
                 style={styles.albumFallback}
               >
-                <Ionicons name="camera-outline" size={31} color="#DDE7FF" />
+                <Ionicons name="camera-outline" size={26} color="#DDE7FF" />
               </LinearGradient>
             )}
             <Text style={styles.albumTitle} numberOfLines={2}>
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingTop: 21,
     paddingBottom: 28,
   },
@@ -784,8 +784,8 @@ const styles = StyleSheet.create({
   },
   greeting: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: "500",
     lineHeight: 24,
   },
   headerActions: {
@@ -793,7 +793,7 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     flexDirection: "row",
-    gap: 20,
+    gap: 16,
   },
   iconButton: {
     position: "relative",
@@ -823,8 +823,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   banner: {
-    minHeight: 214,
-    borderRadius: 14,
+    minHeight: 200,
+    borderRadius: 16,
     borderWidth: 0,
     overflow: "hidden",
     ...CARD_ELEVATION,
@@ -833,7 +833,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   bannerImage: {
-    borderRadius: 14,
+    borderRadius: 16,
   },
   bannerImageOverlay: {
     backgroundColor: "rgba(11,31,86,0.62)",
@@ -847,9 +847,11 @@ const styles = StyleSheet.create({
   },
   bannerContent: {
     flex: 1,
-    minHeight: 214,
+    minHeight: 200,
     justifyContent: "flex-start",
-    padding: 24,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 20,
   },
   bannerTopRow: {
     flexDirection: "row",
@@ -864,22 +866,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bannerBadgeText: {
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 13,
+    fontWeight: "500",
   },
   bannerPager: {
-    minWidth: 45,
-    height: 28,
-    borderRadius: 14,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.18)",
     paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   bannerPagerText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 12,
+    fontWeight: "400",
   },
   plainBannerPager: {
     borderWidth: 1,
@@ -890,32 +891,32 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
   },
   bannerTextBlock: {
-    marginTop: 16,
+    marginTop: 8,
   },
   bannerTitle: {
-    fontSize: 23,
-    fontWeight: "900",
-    lineHeight: 31,
+    fontSize: 19,
+    fontWeight: "500",
+    lineHeight: 27,
   },
   bannerSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 13,
-    fontWeight: "800",
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 8,
+    fontWeight: "400",
   },
   bannerBottomRow: {
     position: "absolute",
-    left: 24,
-    right: 23,
-    bottom: 28,
+    left: 20,
+    right: 20,
+    bottom: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
   },
   bannerDate: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "400",
   },
   bannerCta: {
     borderRadius: 6,
@@ -929,16 +930,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   sectionHeader: {
-    marginTop: 27,
-    marginBottom: 18,
+    marginTop: 24,
+    marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   sectionTitle: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "500",
   },
   moreButton: {
     flexDirection: "row",
@@ -947,9 +948,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   moreText: {
-    color: COLORS.subtle,
-    fontSize: 14,
-    fontWeight: "800",
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "400",
   },
   loadingBox: {
     minHeight: 126,
@@ -975,22 +976,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   emptyState: {
-    minHeight: 132,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 20,
+    padding: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
   },
   emptyStateTitle: {
-    color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "900",
-    marginTop: 10,
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 8,
   },
   emptyStateDescription: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 7,
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 8,
   },
   noticeList: {
     borderRadius: 0,
@@ -1023,15 +1027,15 @@ const styles = StyleSheet.create({
   },
   noticeTitle: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "800",
-    lineHeight: 21,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 20,
   },
   noticeMeta: {
     color: COLORS.muted,
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 2,
+    fontSize: 12,
+    fontWeight: "400",
+    marginTop: 4,
   },
   calendarCard: {
     borderRadius: 12,
@@ -1056,8 +1060,8 @@ const styles = StyleSheet.create({
   },
   calendarMonth: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "500",
   },
   calendarLink: {
     flexDirection: "row",
@@ -1080,13 +1084,13 @@ const styles = StyleSheet.create({
   weekday: {
     width: "14.285%",
     color: COLORS.subtle,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "400",
     textAlign: "center",
     marginBottom: 12,
   },
   weekdaySunday: {
-    color: "#D75D76",
+    color: "#993556",
   },
   dayCell: {
     width: "14.285%",
@@ -1095,9 +1099,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dayBadge: {
-    width: 31,
-    height: 31,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1105,15 +1109,20 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   dayBadgeMarked: {
-    backgroundColor: COLORS.primary50,
+    backgroundColor: "#E6F1FB",
   },
   dayText: {
-    color: "#333A45",
-    fontSize: 16,
-    fontWeight: "500",
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
   },
   dayTextActive: {
     color: "#FFFFFF",
+    fontWeight: "500",
+  },
+  dayTextMarked: {
+    color: "#0C447C",
+    fontWeight: "500",
   },
   nextEvent: {
     marginTop: 10,
@@ -1135,13 +1144,13 @@ const styles = StyleSheet.create({
   },
   nextEventTitle: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 13,
+    fontWeight: "400",
   },
   nextEventDday: {
     color: COLORS.primary,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   nextEventMeta: {
     color: COLORS.muted,
@@ -1151,39 +1160,39 @@ const styles = StyleSheet.create({
   },
   popularGrid: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   popularGridCompact: {
     flexDirection: "column",
   },
   popularCard: {
     flex: 1,
-    minHeight: 116,
-    borderRadius: 7,
+    minHeight: 110,
+    borderRadius: 8,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
+    padding: 12,
   },
   categoryPill: {
     alignSelf: "flex-start",
     maxWidth: "100%",
-    borderRadius: 5,
-    backgroundColor: COLORS.primary50,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: "#E6F1FB",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   categoryPillText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: "900",
+    color: "#0C447C",
+    fontSize: 11,
+    fontWeight: "400",
   },
   popularTitle: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 22,
-    marginTop: 12,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 8,
   },
   popularPreview: {
     color: COLORS.muted,
@@ -1199,44 +1208,44 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   statText: {
-    color: COLORS.subtle,
-    fontSize: 13,
-    fontWeight: "700",
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "400",
     marginRight: 8,
   },
   albumContent: {
-    gap: 12,
-    paddingRight: 18,
+    gap: 10,
+    paddingRight: 20,
   },
   albumCard: {
     width: ALBUM_CARD_WIDTH,
   },
   albumImageBox: {
-    height: 128,
-    borderRadius: 7,
+    height: 120,
+    borderRadius: 8,
     overflow: "hidden",
     backgroundColor: COLORS.primary100,
   },
   albumImage: {
-    borderRadius: 7,
+    borderRadius: 8,
   },
   albumFallback: {
-    height: 128,
-    borderRadius: 7,
+    height: 120,
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   albumTitle: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "700",
-    lineHeight: 19,
-    marginTop: 9,
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 16,
+    marginTop: 6,
   },
   albumMeta: {
     color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 5,
+    fontSize: 11,
+    fontWeight: "400",
+    marginTop: 4,
   },
 });

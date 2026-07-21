@@ -27,7 +27,7 @@ import { formatCohortName } from "../../../utils/userLabel";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
   divider: "#EEF0F3",
@@ -102,12 +102,13 @@ function categoryLabel(value?: string | null, fallback = "게시글") {
 }
 
 function categoryTone(label: string) {
-  if (label.includes("반려")) return { bg: COLORS.pink50, fg: COLORS.pink700 };
-  if (label.includes("행사") || label.includes("시험")) return { bg: COLORS.pink50, fg: COLORS.pink700 };
+  if (label.includes("반려")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("행사") || label.includes("시험") || label.includes("족보")) return { bg: "#FBEAF0", fg: "#993556" };
   if (label.includes("인증") || label.includes("완료")) return { bg: COLORS.green50, fg: COLORS.green700 };
   if (label.includes("대기")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
   if (label.includes("건의") || label.includes("답변")) return { bg: COLORS.cyan50, fg: COLORS.cyan700 };
-  return { bg: COLORS.primary50, fg: COLORS.primary };
+  if (label.includes("후기")) return { bg: "#EEEDFE", fg: "#3C3489" };
+  return { bg: "#E6F1FB", fg: "#0C447C" };
 }
 
 function fileUrl(value?: string | null) {
@@ -509,8 +510,8 @@ export default function PostDetailScreen() {
               <Text style={[styles.categoryText, { color: tone.fg }]}>{label}</Text>
             </View>
 
-            <Text style={styles.title}>{post.title}</Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : null]}>{post.title}</Text>
+            <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : null]}>
               {board?.board_type === "notice"
                 ? `${shortDate(post.created_at)} · 조회 ${post.view_count}`
                 : isMutualAidRequest
@@ -571,11 +572,11 @@ export default function PostDetailScreen() {
                   {isImage && url ? <Image source={{ uri: url }} style={styles.attachmentImage} /> : null}
                   {!isImage || !url ? (
                     <>
-                      <Ionicons name="document-outline" size={19} color={COLORS.subtle} />
+                      <Ionicons name="document-outline" size={18} color={COLORS.subtle} />
                       <Text numberOfLines={1} style={styles.fileName}>
                         {attachment.original_filename}
                       </Text>
-                      <Ionicons name="download-outline" size={19} color={COLORS.primary} />
+                      <Ionicons name="download-outline" size={18} color={COLORS.primary} />
                     </>
                   ) : null}
                 </Pressable>
@@ -704,12 +705,12 @@ export default function PostDetailScreen() {
         {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest ? (
           <View style={styles.actionRow}>
             <Pressable disabled={likeMutation.isPending} onPress={handleLike} style={styles.iconAction}>
-              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={18} color={isLiked ? COLORS.primary : COLORS.muted} />
+              <Ionicons name={isLiked ? "heart" : "heart-outline"} size={16} color={isLiked ? COLORS.primary : COLORS.muted} />
               <Text style={styles.actionText}>추천 {likeCount}</Text>
             </Pressable>
             {!commentsDisabled ? (
               <View style={styles.iconAction}>
-                <Ionicons name="chatbubble-outline" size={17} color={COLORS.muted} />
+                <Ionicons name="chatbubble-outline" size={16} color={COLORS.muted} />
                 <Text style={styles.actionText}>댓글 {post.comment_count}</Text>
               </View>
             ) : null}
@@ -756,11 +757,11 @@ export default function PostDetailScreen() {
               value={commentText}
               onChangeText={setCommentText}
               placeholder="댓글을 남겨보세요"
-              placeholderTextColor={COLORS.subtle}
+              placeholderTextColor="#A6ACB7"
               style={styles.commentInput}
             />
             <Pressable disabled={createCommentMutation.isPending} onPress={handleCreateComment} style={styles.sendButton}>
-              <Ionicons name="send" size={18} color="#FFFFFF" />
+              <Ionicons name="send" size={17} color="#FFFFFF" />
             </Pressable>
           </View>
         </View>
@@ -838,7 +839,7 @@ export default function PostDetailScreen() {
                     <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
                       {selected ? <View style={styles.radioInner} /> : null}
                     </View>
-                    <Text style={styles.reportReasonText}>{reason.label}</Text>
+                    <Text style={[styles.reportReasonText, selected ? styles.reportReasonTextSelected : null]}>{reason.label}</Text>
                   </Pressable>
                 );
               })}
@@ -897,10 +898,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -917,7 +916,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   appBarActions: {
     flexDirection: "row",
@@ -939,11 +938,11 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
   },
   sheetHandle: {
-    width: 34,
+    width: 36,
     height: 4,
     alignSelf: "center",
     borderRadius: 2,
-    backgroundColor: "#CDD2DA",
+    backgroundColor: "#E1E4E9",
     marginBottom: 8,
   },
   sheetMenuItem: {
@@ -966,24 +965,25 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 480,
     alignSelf: "center",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     backgroundColor: COLORS.surface,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
   reportSheetTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "600",
     marginTop: 6,
   },
   reportSheetSubtitle: {
-    color: COLORS.muted,
-    fontSize: 12,
+    color: "#6B727D",
+    fontSize: 13,
+    fontWeight: "400",
     marginTop: 4,
-    marginBottom: 6,
+    marginBottom: 12,
   },
   reportReasonList: {
     marginTop: 4,
@@ -992,9 +992,9 @@ const styles = StyleSheet.create({
     minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: "#EAECEF",
   },
   radioOuter: {
     width: 18,
@@ -1018,7 +1018,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "400",
+  },
+  reportReasonTextSelected: {
+    fontWeight: "500",
   },
   reportDetailInput: {
     minHeight: 88,
@@ -1034,14 +1037,15 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
+    paddingVertical: 14,
     marginTop: 16,
   },
   reportPrimaryButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   buttonDisabled: {
     opacity: 0.55,
@@ -1058,59 +1062,61 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     borderRadius: 16,
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 18,
-    shadowColor: "#111827",
+    padding: 20,
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 12,
   },
   confirmTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
+    lineHeight: 26,
     textAlign: "center",
   },
   confirmBody: {
-    color: COLORS.muted,
-    fontSize: 13,
-    lineHeight: 20,
+    color: "#4B5160",
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 22,
     textAlign: "center",
-    marginTop: 10,
+    marginTop: 16,
   },
   confirmActions: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 8,
-    marginTop: 20,
+    marginTop: 16,
   },
   confirmCancelButton: {
-    minWidth: 76,
-    minHeight: 42,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E1E4E9",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
   },
   confirmCancelText: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "800",
+    color: "#4B5160",
+    fontSize: 16,
+    fontWeight: "500",
   },
   confirmDeleteButton: {
-    minWidth: 76,
-    minHeight: 42,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#D64545",
+    paddingHorizontal: 14,
   },
   confirmDeleteText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "500",
   },
   postMenu: {
     position: "absolute",
@@ -1144,8 +1150,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
+    paddingHorizontal: 20,
+    paddingTop: 8,
     paddingBottom: 116,
   },
   contentWithoutCommentBar: {
@@ -1153,18 +1159,18 @@ const styles = StyleSheet.create({
   },
   categoryPill: {
     alignSelf: "flex-start",
-    height: 24,
     justifyContent: "center",
-    borderRadius: 6,
-    paddingHorizontal: 9,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   categoryText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   visualHeroBlock: {
-    marginHorizontal: -24,
-    marginTop: -18,
+    marginHorizontal: -20,
+    marginTop: -8,
     marginBottom: 18,
   },
   visualHero: {
@@ -1236,28 +1242,37 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.text,
-    fontSize: 23,
-    fontWeight: "900",
-    lineHeight: 31,
+    fontSize: 19,
+    fontWeight: "400",
+    lineHeight: 27,
     marginTop: 12,
   },
+  titleNotice: {
+    fontSize: 20,
+    fontWeight: "500",
+    lineHeight: 28,
+  },
   meta: {
-    color: COLORS.subtle,
-    fontSize: 13,
-    fontWeight: "700",
+    color: "#A6ACB7",
+    fontSize: 12,
+    fontWeight: "400",
     marginTop: 8,
+  },
+  metaNotice: {
+    color: COLORS.muted,
+    fontSize: 13,
   },
   bodyDivider: {
     height: 1,
-    backgroundColor: COLORS.divider,
-    marginTop: 22,
-    marginBottom: 22,
+    backgroundColor: "#E1E4E9",
+    marginTop: 16,
+    marginBottom: 16,
   },
   body: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 25,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 23,
   },
   externalLinkButton: {
     minHeight: 48,
@@ -1322,10 +1337,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
     borderRadius: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   imageAttachment: {
     borderRadius: 8,
@@ -1340,7 +1356,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.text,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   suggestionBox: {
     borderRadius: 8,
@@ -1422,12 +1438,11 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 14,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.divider,
-    paddingVertical: 14,
-    marginTop: 24,
+    gap: 16,
+    borderBottomWidth: 0.5,
+    borderColor: "#E1E4E9",
+    paddingBottom: 16,
+    marginTop: 20,
   },
   iconAction: {
     flexDirection: "row",
@@ -1437,7 +1452,7 @@ const styles = StyleSheet.create({
   actionText: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   ownerActions: {
     flexDirection: "row",
@@ -1536,12 +1551,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   commentSection: {
-    marginTop: 24,
+    marginTop: 16,
   },
   commentTitle: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "500",
   },
   emptyComment: {
     color: COLORS.muted,
@@ -1550,10 +1565,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   commentBar: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopWidth: 0.5,
+    borderTopColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingTop: 10,
   },
   replyNotice: {
@@ -1574,25 +1589,25 @@ const styles = StyleSheet.create({
   commentInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
   },
   commentInput: {
     flex: 1,
     height: 38,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
-    borderRadius: 19,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    borderRadius: 999,
     color: COLORS.text,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "400",
     paddingHorizontal: 14,
   },
   sendButton: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
+    borderRadius: 18,
     backgroundColor: COLORS.primary,
   },
 });

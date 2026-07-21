@@ -15,7 +15,7 @@ import type { Board, PostListItem } from "../../types";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
   divider: "#EEF0F3",
@@ -947,43 +947,51 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
-        {isTabRoot ? (
-          <View style={styles.iconButton} />
+        {showSearch ? (
+          <>
+            <IconButton
+              icon="chevron-back"
+              label="검색 닫기"
+              onPress={() => {
+                setShowSearch(false);
+                setQuery("");
+                setQueryInput("");
+              }}
+            />
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={18} color="#A6ACB7" />
+              <TextInput
+                autoFocus
+                value={queryInput}
+                onChangeText={setQueryInput}
+                onSubmitEditing={() => setQuery(queryInput.trim())}
+                returnKeyType="search"
+                placeholder="검색어를 입력하세요"
+                placeholderTextColor="#A6ACB7"
+                style={styles.searchBarInput}
+              />
+            </View>
+          </>
         ) : (
-          <IconButton
-            icon="chevron-back"
-            label="뒤로"
-            onPress={exitBoardDepth}
-          />
+          <>
+            {isTabRoot ? (
+              <View style={styles.iconButton} />
+            ) : (
+              <IconButton icon="chevron-back" label="뒤로" onPress={exitBoardDepth} />
+            )}
+            <Text style={styles.appBarTitle}>{display.name}</Text>
+            <IconButton icon="search-outline" label="검색" onPress={() => setShowSearch(true)} />
+          </>
         )}
-        <Text style={styles.appBarTitle}>{display.name}</Text>
-        <IconButton icon="search-outline" label="검색" onPress={() => setShowSearch((value) => !value)} />
       </View>
 
-      {tabs.length > 0 ? (
+      {!showSearch && tabs.length > 0 ? (
         <View style={styles.sectionTabs}>
           {tabs.map((item) => (
             <Pressable key={item.label} onPress={() => navigateToBoard(item.target)} style={[styles.sectionTab, item.active ? styles.sectionTabActive : null]}>
               <Text style={[styles.sectionTabText, item.active ? styles.sectionTabTextActive : null]}>{item.label}</Text>
             </Pressable>
           ))}
-        </View>
-      ) : null}
-
-      {showSearch ? (
-        <View style={styles.searchWrap}>
-          <TextInput
-            value={queryInput}
-            onChangeText={setQueryInput}
-            onSubmitEditing={() => setQuery(queryInput.trim())}
-            returnKeyType="search"
-            placeholder="게시글 검색"
-            placeholderTextColor={COLORS.subtle}
-            style={styles.searchInput}
-          />
-          <Pressable onPress={() => setQuery(queryInput.trim())} style={styles.searchButton}>
-            <Ionicons name="search" size={18} color="#FFFFFF" />
-          </Pressable>
         </View>
       ) : null}
 
@@ -1030,13 +1038,13 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
               </Pressable>
             ) : (
               <View style={styles.emptyBox}>
-                {isMutualAid || isSuggestion ? <Ionicons name="calendar-outline" size={30} color={COLORS.subtle} /> : null}
+                <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
                 <Text style={styles.emptyText}>
-                  {isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : "게시글이 없습니다."}
+                  {query ? "검색 결과가 없어요" : isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : isAlbum ? "등록된 사진이 없어요" : "아직 게시물이 없어요"}
                 </Text>
-                {isMutualAid || isSuggestion ? (
-                  <Text style={styles.emptySubText}>{isMutualAid ? "경조사 발생 시 신청해보세요" : "원우회에 건의하고 싶은 내용을 남겨보세요"}</Text>
-                ) : null}
+                <Text style={styles.emptySubText}>
+                  {query ? "다른 검색어로 다시 시도해보세요" : isMutualAid ? "경조사 발생 시 신청해보세요" : isSuggestion ? "원우회에 건의하고 싶은 내용을 남겨보세요" : isAlbum ? "행사 사진이 등록되면 알려드릴게요" : "첫 게시글을 남겨보세요"}
+                </Text>
               </View>
             )
           }
@@ -1082,7 +1090,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -1095,44 +1103,34 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
-  searchWrap: {
-    flexDirection: "row",
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-  },
-  searchInput: {
+  searchBar: {
     flex: 1,
-    height: 42,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
-    borderRadius: 8,
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F7F8FA",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    marginLeft: 4,
+  },
+  searchBarInput: {
+    flex: 1,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "700",
-    paddingHorizontal: 12,
-  },
-  searchButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
+    fontWeight: "400",
+    lineHeight: 22,
   },
   sectionTabs: {
     height: 46,
     flexDirection: "row",
     alignItems: "flex-end",
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
   sectionTab: {
     flex: 1,
@@ -1146,12 +1144,13 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.text,
   },
   sectionTabText: {
-    color: COLORS.subtle,
-    fontSize: 13,
-    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: "400",
   },
   sectionTabTextActive: {
     color: COLORS.text,
+    fontWeight: "500",
   },
   filterWrap: {
     height: 56,
@@ -1172,24 +1171,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   filterChip: {
-    minWidth: 52,
-    height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
+    borderRadius: 999,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
   filterChipActive: {
-    borderColor: COLORS.text,
-    backgroundColor: COLORS.text,
+    borderColor: "#15171C",
+    backgroundColor: "#15171C",
   },
   filterText: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   filterTextActive: {
     color: "#FFFFFF",
@@ -1198,28 +1196,28 @@ const styles = StyleSheet.create({
     paddingBottom: 92,
   },
   albumContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 92,
   },
   albumRow: {
-    gap: 12,
+    gap: 10,
   },
   albumTile: {
     flex: 1,
     maxWidth: "50%",
-    marginBottom: 18,
+    marginBottom: 12,
   },
   albumThumb: {
     position: "relative",
     aspectRatio: 1.05,
     justifyContent: "flex-end",
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: "hidden",
     padding: 10,
   },
   albumImage: {
-    borderRadius: 8,
+    borderRadius: 10,
   },
   albumScrim: {
     ...StyleSheet.absoluteFillObject,
@@ -1227,27 +1225,27 @@ const styles = StyleSheet.create({
   },
   albumCountPill: {
     alignSelf: "flex-start",
-    borderRadius: 11,
-    backgroundColor: "rgba(255,255,255,0.82)",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.85)",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   albumCountText: {
     color: COLORS.text,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   albumTitle: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 13,
+    fontWeight: "500",
     marginTop: 8,
   },
   albumDate: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 5,
+    color: "#A6ACB7",
+    fontSize: 11,
+    fontWeight: "400",
+    marginTop: 4,
   },
   cardContent: {
     paddingHorizontal: 24,
@@ -1592,16 +1590,18 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   emptyText: {
-    color: COLORS.muted,
-    fontSize: 14,
-    fontWeight: "900",
-    marginTop: 12,
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 8,
   },
   emptySubText: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 6,
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 8,
   },
   errorBox: {
     margin: 24,

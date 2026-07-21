@@ -9,10 +9,10 @@ import type { EventItem } from "../../../types";
 
 const COLORS = {
   primary: "#2761FF",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
-  border: "#EEF0F3",
+  border: "#EAECEF",
   bg: "#FFFFFF",
 };
 
@@ -28,9 +28,9 @@ const EVENT_CATEGORY_LABELS: Record<string, string> = {
 };
 
 const EVENT_CATEGORY_COLORS: Record<string, { backgroundColor: string; color: string }> = {
-  academic: { backgroundColor: "#EAF4FF", color: "#3478B8" },
+  academic: { backgroundColor: "#E6F1FB", color: "#0C447C" },
   council: { backgroundColor: "#F1EAFE", color: "#6C4FCB" },
-  event: { backgroundColor: "#FFF0F4", color: "#D65B7C" },
+  event: { backgroundColor: "#FBEAF0", color: "#993556" },
   exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
   external: { backgroundColor: "#EAF8F4", color: "#20856D" },
   other: { backgroundColor: "#F1F3F6", color: "#667085" },
@@ -126,7 +126,7 @@ export default function EventDayScreen() {
           ListHeaderComponent={events.length ? <Text style={styles.dateLabel}>{selectedDateLabel(selectedDate.date)}</Text> : null}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Ionicons name="calendar-outline" size={34} color="#AAB2BF" />
+              <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
               <Text style={styles.emptyTitle}>이 날은 등록된 일정이 없어요</Text>
               <Text style={styles.emptyDescription}>다른 날짜를 선택해보세요</Text>
             </View>
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   center: {
     flex: 1,
@@ -169,24 +169,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   listContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingBottom: 32,
   },
   emptyContent: {
     flexGrow: 1,
   },
   dateLabel: {
-    color: COLORS.subtle,
+    color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "400",
     paddingTop: 4,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   eventRow: {
-    minHeight: 86,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    paddingVertical: 14,
+    paddingVertical: 16,
   },
   eventTopRow: {
     flexDirection: "row",
@@ -194,25 +193,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   categoryPill: {
-    borderRadius: 5,
+    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   categoryText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   eventTime: {
-    color: COLORS.subtle,
+    color: "#A6ACB7",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
   },
   eventTitle: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "800",
-    lineHeight: 22,
-    marginTop: 8,
+    fontSize: 15,
+    fontWeight: "400",
+    lineHeight: 20,
+    marginTop: 6,
   },
   emptyBox: {
     flex: 1,
@@ -221,16 +220,18 @@ const styles = StyleSheet.create({
     paddingBottom: 70,
   },
   emptyTitle: {
-    color: COLORS.text,
-    fontSize: 17,
-    fontWeight: "900",
-    marginTop: 14,
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 8,
   },
   emptyDescription: {
-    color: COLORS.subtle,
+    color: "#8A919C",
     fontSize: 13,
-    fontWeight: "600",
-    marginTop: 7,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 8,
   },
   retryButton: {
     borderRadius: 7,

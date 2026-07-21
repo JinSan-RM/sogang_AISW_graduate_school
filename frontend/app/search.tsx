@@ -53,11 +53,9 @@ function noticeCategoryLabel(item: SearchResult) {
 function NoticeEmptyState({ searched }: { searched: boolean }) {
   return (
     <View style={styles.noticeEmptyState}>
-      <Ionicons name="calendar-outline" size={34} color="#AAB2BF" />
-      <Text style={styles.noticeEmptyTitle}>{searched ? "검색 결과가 없어요" : "공지사항을 검색해보세요"}</Text>
-      <Text style={styles.noticeEmptyDescription}>
-        {searched ? "다른 검색어로 다시 시도해보세요" : "제목이나 내용의 검색어를 입력해주세요"}
-      </Text>
+      <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
+      <Text style={styles.noticeEmptyTitle}>검색 결과가 없어요</Text>
+      <Text style={styles.noticeEmptyDescription}>다른 검색어로 다시 시도해보세요</Text>
     </View>
   );
 }
@@ -123,7 +121,7 @@ export default function SearchScreen() {
 
   const searchInput = (
     <View style={[styles.inputWrap, isNoticeSearch ? styles.noticeInputWrap : null]}>
-      <Ionicons name="search-outline" size={19} color={COLORS.subtle} />
+      <Ionicons name="search-outline" size={18} color={COLORS.subtle} />
       <TextInput
         onChangeText={(value) => {
           setQuery(value);
@@ -257,17 +255,17 @@ const styles = StyleSheet.create({
   appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingBottom: 10 },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
-  noticeSearchHeader: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingBottom: 10 },
+  noticeSearchHeader: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingBottom: 14 },
   searchRow: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingBottom: 12 },
   inputWrap: { flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: COLORS.border, borderRadius: 9, paddingHorizontal: 13 },
-  noticeInputWrap: { minHeight: 42, borderWidth: 0, borderRadius: 21, backgroundColor: "#F5F6F8" },
-  input: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: "700" },
+  noticeInputWrap: { minHeight: 44, borderWidth: 0, borderRadius: 22, backgroundColor: "#F7F8FA" },
+  input: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 22 },
   searchButton: { minWidth: 58, alignItems: "center", justifyContent: "center", borderRadius: 9, backgroundColor: COLORS.primary },
   searchButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
-  noticeFilters: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
-  noticeFilter: { minWidth: 68, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12 },
-  noticeFilterActive: { borderColor: COLORS.text, backgroundColor: COLORS.text },
-  noticeFilterText: { color: COLORS.muted, fontSize: 12, fontWeight: "800" },
+  noticeFilters: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 },
+  noticeFilter: { alignItems: "center", justifyContent: "center", borderRadius: 999, borderWidth: 0.5, borderColor: "#E1E4E9", paddingHorizontal: 14, paddingVertical: 8 },
+  noticeFilterActive: { borderColor: "#15171C", backgroundColor: "#15171C" },
+  noticeFilterText: { color: COLORS.muted, fontSize: 13, fontWeight: "400" },
   noticeFilterTextActive: { color: "#FFFFFF" },
   errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "800", paddingHorizontal: 20, paddingBottom: 8 },
   recentSection: { paddingHorizontal: 20, paddingTop: 12 },
@@ -278,8 +276,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   emptyText: { color: COLORS.muted, fontSize: 13, fontWeight: "700" },
   noticeEmptyState: { flex: 1, minHeight: 300, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, paddingBottom: 70 },
-  noticeEmptyTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900", marginTop: 14 },
-  noticeEmptyDescription: { color: COLORS.subtle, fontSize: 13, fontWeight: "600", marginTop: 7 },
+  noticeEmptyTitle: { color: "#2C3038", fontSize: 18, fontWeight: "500", lineHeight: 26, marginTop: 8 },
+  noticeEmptyDescription: { color: "#8A919C", fontSize: 13, fontWeight: "400", lineHeight: 18, marginTop: 8 },
   listContent: { paddingBottom: 32 },
   emptyContent: { flexGrow: 1 },
   noticeResultRow: { borderBottomWidth: 1, borderBottomColor: COLORS.divider, paddingHorizontal: 24, paddingVertical: 14 },

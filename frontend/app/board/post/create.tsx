@@ -18,7 +18,7 @@ const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
   primary100: "#D5E0FE",
-  text: "#111827",
+  text: "#15171C",
   navy: "#0B1F56",
   muted: "#6B7280",
   subtle: "#8A919C",
@@ -546,7 +546,7 @@ export default function PostCreateScreen() {
                   multiline
                   onChangeText={field.onChange}
                   placeholder="활동에 대한 소감을 남겨주세요"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={[styles.input, styles.activityFeedbackInput, fieldState.error ? styles.inputError : null]}
                   textAlignVertical="top"
                   value={field.value}
@@ -562,7 +562,7 @@ export default function PostCreateScreen() {
                   <TextInput
                     onChangeText={field.onChange}
                     placeholder="YYYY.MM.DD"
-                    placeholderTextColor={COLORS.subtle}
+                    placeholderTextColor="#A6ACB7"
                     style={styles.activityInlineInput}
                     value={field.value}
                   />
@@ -580,7 +580,7 @@ export default function PostCreateScreen() {
                   <TextInput
                     onChangeText={field.onChange}
                     placeholder="은행 / 계좌번호를 입력하세요"
-                    placeholderTextColor={COLORS.subtle}
+                    placeholderTextColor="#A6ACB7"
                     style={styles.input}
                     value={field.value}
                   />
@@ -605,7 +605,7 @@ export default function PostCreateScreen() {
                         <TextInput
                           onChangeText={setParticipantQuery}
                           placeholder="이름으로 검색"
-                          placeholderTextColor={COLORS.subtle}
+                          placeholderTextColor="#A6ACB7"
                           style={styles.activityInlineInput}
                           value={participantQuery}
                         />
@@ -660,13 +660,6 @@ export default function PostCreateScreen() {
           </>
         ) : (
           <>
-        <View style={styles.selectLike}>
-          <Text style={styles.selectText} numberOfLines={1}>
-            {board?.name ?? "게시판을 선택하세요"}
-          </Text>
-          <Ionicons name="chevron-down" size={18} color={COLORS.subtle} />
-        </View>
-
         {guide ? (
           <View style={styles.guideBox}>
             <Ionicons name={guide.icon} size={17} color={COLORS.primary} />
@@ -683,7 +676,7 @@ export default function PostCreateScreen() {
               <TextInput
                 onChangeText={field.onChange}
                 placeholder={labels.titlePlaceholder}
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={[styles.input, fieldState.error ? styles.inputError : null]}
                 value={field.value}
               />
@@ -719,7 +712,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder={labels.categoryPlaceholder}
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -739,7 +732,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder="YYYY.MM.DD"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -754,7 +747,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder="예: 홍길동, 김서강"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -769,7 +762,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder="예: 신한 110-000-000000 홍길동"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -791,7 +784,7 @@ export default function PostCreateScreen() {
                     keyboardType="numbers-and-punctuation"
                     onChangeText={field.onChange}
                     placeholder="YYYY.MM.DD"
-                    placeholderTextColor={COLORS.subtle}
+                    placeholderTextColor="#A6ACB7"
                     style={styles.activityInlineInput}
                     value={field.value}
                   />
@@ -827,7 +820,7 @@ export default function PostCreateScreen() {
                 multiline
                 onChangeText={field.onChange}
                 placeholder={labels.contentPlaceholder}
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={[styles.input, styles.textArea, fieldState.error ? styles.inputError : null]}
                 textAlignVertical="top"
                 value={field.value ?? ""}
@@ -846,7 +839,7 @@ export default function PostCreateScreen() {
               <TextInput
                 onChangeText={field.onChange}
                 placeholder="스터디원들과 연락할 수단"
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={styles.input}
                 value={field.value}
               />
@@ -867,7 +860,7 @@ export default function PostCreateScreen() {
                 keyboardType="url"
                 onChangeText={field.onChange}
                 placeholder="https://forms.gle/..."
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={styles.input}
                 value={field.value}
               />
@@ -887,22 +880,47 @@ export default function PostCreateScreen() {
             </View>
           ) : null}
           <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
-            <Ionicons name="image-outline" size={17} color={COLORS.muted} />
+            <Ionicons name="image-outline" size={16} color={COLORS.muted} />
             <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : isAdminParticipationPost ? "대표 사진 첨부" : "이미지 첨부"}</Text>
           </Pressable>
           {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
-          {attachments.length > 0 ? (
+          {imageAttachments.length > 0 ? (
+            <View style={styles.writeImageGrid}>
+              {imageAttachments.map((attachment) => {
+                const previewUrl = mediaUrl(attachment.url);
+                return (
+                  <ImageBackground
+                    key={attachment.id}
+                    source={previewUrl ? { uri: previewUrl } : undefined}
+                    imageStyle={styles.writeImageThumbImage}
+                    style={styles.writeImageThumb}
+                  >
+                    <Pressable
+                      hitSlop={6}
+                      onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                      style={styles.writeImageRemove}
+                    >
+                      <Ionicons name="close" size={12} color="#FFFFFF" />
+                    </Pressable>
+                  </ImageBackground>
+                );
+              })}
+            </View>
+          ) : null}
+          {attachments.some((item) => !item.content_type.startsWith("image/")) ? (
             <View style={styles.compactAttachmentList}>
-              {attachments.map((attachment) => (
-                <View key={attachment.id} style={styles.compactAttachmentItem}>
-                  <Text numberOfLines={1} style={styles.compactAttachmentName}>
-                    {attachment.original_filename}
-                  </Text>
-                  <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                    <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
-                  </Pressable>
-                </View>
-              ))}
+              {attachments
+                .filter((item) => !item.content_type.startsWith("image/"))
+                .map((attachment) => (
+                  <View key={attachment.id} style={styles.compactAttachmentItem}>
+                    <Text numberOfLines={1} style={styles.compactAttachmentName}>
+                      {attachment.original_filename}
+                    </Text>
+                    <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
+                    </Pressable>
+                  </View>
+                ))}
             </View>
           ) : null}
         </View>
@@ -1057,7 +1075,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -1070,15 +1088,15 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   formScroller: {
     flex: 1,
   },
   content: {
-    gap: 16,
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   activityContent: {
@@ -1447,7 +1465,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
@@ -1455,9 +1473,12 @@ const styles = StyleSheet.create({
   },
   selectText: {
     flex: 1,
-    color: COLORS.subtle,
+    color: COLORS.text,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
+  },
+  selectPlaceholder: {
+    color: "#A6ACB7",
   },
   guideBox: {
     flexDirection: "row",
@@ -1502,15 +1523,15 @@ const styles = StyleSheet.create({
   input: {
     width: "100%",
     minHeight: 52,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "700",
-    paddingHorizontal: 15,
-    paddingVertical: 13,
+    fontWeight: "400",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   inputError: {
     borderColor: COLORS.danger,
@@ -1628,20 +1649,46 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   compactAttachButton: {
-    height: 38,
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    borderWidth: 1,
+    gap: 6,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   compactAttachText: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "400",
+  },
+  writeImageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  writeImageThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#E1E4E9",
+  },
+  writeImageThumbImage: {
+    borderRadius: 8,
+  },
+  writeImageRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(17,24,39,0.55)",
   },
   compactAttachmentList: {
     width: "100%",
@@ -1663,7 +1710,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   submitButton: {
-    height: 54,
+    height: 48,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
@@ -1679,8 +1726,8 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "500",
   },
   activitySubmitText: {
     fontSize: 14,
