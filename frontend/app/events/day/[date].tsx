@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   },
   appBarTitle: {
     color: COLORS.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "500",
   },
   center: {

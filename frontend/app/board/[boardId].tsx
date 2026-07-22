@@ -812,7 +812,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   const isParticipationGuideCards = Boolean(participationGroupKey(board)) && !isActivityCards;
   const tabs = sectionTabs(board, boards);
   const canWriteBoard = !board || board.write_permission !== "admin" || user?.role === "admin";
-  const canShowCreateButton = canWriteBoard && (!isParticipationGuideCards || board?.slug === "study-recruit" || user?.role === "admin");
+  const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit" || user?.role === "admin");
   const isResourceAll = board?.board_type === "resource" && selectedFilter === "전체";
   const isCouncilActivityHistory = board?.slug === "council-activity" || board?.slug === "gsa-activity";
   const resourceBoardIds = useMemo(
@@ -968,7 +968,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
                 returnKeyType="search"
                 placeholder="검색어를 입력하세요"
                 placeholderTextColor="#A6ACB7"
-                style={styles.searchBarInput}
+                style={[styles.searchBarInput, { outlineStyle: "none" } as never]}
               />
             </View>
           </>

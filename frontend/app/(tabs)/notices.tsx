@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -165,7 +165,7 @@ function NoticeRow({ item }: { item: NoticeRowModel }) {
     <Pressable disabled={!handlePress} onPress={handlePress} style={[styles.noticeRow, item.isPinned ? styles.noticeRowPinned : null]}>
       <View style={styles.noticeMain}>
         <View style={styles.metaRow}>
-          {item.isPinned ? <Ionicons name="pin" size={11} color="#5A4C8B" /> : null}
+          {item.isPinned ? <FontAwesome5 name="thumbtack" size={10} color={COLORS.primary} /> : null}
           <View style={[styles.categoryPill, { backgroundColor: tone.backgroundColor }]}>
             <Text style={[styles.categoryText, { color: tone.color }]}>{item.category}</Text>
           </View>
@@ -188,11 +188,12 @@ function LoadingRows() {
   );
 }
 
-function EmptyState({ title }: { title: string }) {
+function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
     <View style={styles.emptyState}>
-      <Ionicons name="document-text-outline" size={24} color={COLORS.subtle} />
+      <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
       <Text style={styles.emptyTitle}>{title}</Text>
+      {description ? <Text style={styles.emptyDescription}>{description}</Text> : null}
     </View>
   );
 }
@@ -292,7 +293,10 @@ export default function NoticesScreen() {
           </View>
         ) : null}
         {!isLoading && visibleRows.length === 0 ? (
-          <EmptyState title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지가 없습니다."} />
+          <EmptyState
+            title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지가 없어요"}
+            description={isOfflinePreview ? "잠시 후 다시 시도해주세요" : "새로운 공지가 등록되면 알려드릴게요"}
+          />
         ) : null}
       </ScrollView>
 
@@ -453,12 +457,20 @@ const styles = StyleSheet.create({
     minHeight: 170,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 8,
+    padding: 24,
   },
   emptyTitle: {
-    color: COLORS.muted,
-    fontSize: 14,
-    fontWeight: "900",
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+  },
+  emptyDescription: {
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
   },
   refreshIndicator: {
     position: "absolute",

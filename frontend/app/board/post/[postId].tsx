@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
@@ -52,7 +52,7 @@ const ALBUM_FALLBACK_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#B94A2F", "#F39A7D"],
 ];
 
-const NO_COMMENT_RESOURCE_SLUGS = new Set(["lecture-reviews", "exam-archive"]);
+const NO_COMMENT_RESOURCE_SLUGS = new Set(["lecture-reviews"]);
 
 type ReportTarget = {
   type: "post" | "comment";
@@ -124,10 +124,10 @@ function firstUrlFromText(value: string) {
   return value.match(/https?:\/\/[^\s)]+/)?.[0];
 }
 
-function IconButton({ icon, onPress, label }: { icon: IconName; onPress: () => void; label: string }) {
+function IconButton({ icon, onPress, label, size = 24, color = COLORS.text }: { icon: IconName; onPress: () => void; label: string; size?: number; color?: string }) {
   return (
     <Pressable accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
-      <Ionicons name={icon} size={24} color={COLORS.text} />
+      <Ionicons name={icon} size={size} color={color} />
     </Pressable>
   );
 }
@@ -147,7 +147,9 @@ export default function PostDetailScreen() {
   const board = boards.find((item) => item.id === post?.board_id);
   const isMutualAidRequest = board?.board_type === "mutual_aid";
   const isSuggestionRequest = board?.board_type === "suggestion";
-  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
+  const isNotice = board?.board_type === "notice";
+  const isResource = board?.board_type === "resource";
+  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || isNotice || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
   const { data: commentRes } = usePostComments(postId, Boolean(board) && !commentsDisabled);
   const comments = commentRes?.data ?? [];
 
@@ -218,6 +220,10 @@ export default function PostDetailScreen() {
   const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
   const contentUrl = firstUrlFromText(post.content);
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
+  const canEditOwn = isMine && !hasLockedSuggestion && !isNotice;
+  const showReportItem = !isMine;
+  const showBlockItem = !isMine && !canManagePost;
+  const hasPostMenu = canEditOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
     post.suggestion?.status ??
@@ -425,23 +431,20 @@ export default function PostDetailScreen() {
         <Text numberOfLines={1} style={styles.appBarTitle}>
           {appBarTitle}
         </Text>
-        <View style={styles.appBarActions}>
-          <IconButton
-            icon={board?.board_type === "album" ? "download-outline" : isBookmarked ? "bookmark" : "bookmark-outline"}
-            label={board?.board_type === "album" ? "다운로드" : "북마크"}
-            onPress={() => {
-              const downloadUrl = board?.board_type === "album" ? selectedImageUrl : firstImageUrl;
-              if (board?.board_type === "album" && downloadUrl) {
-                Linking.openURL(downloadUrl);
-                return;
-              }
-              handleBookmark();
-            }}
-          />
-          {!isPhotoAlbum || canManagePost ? (
-            <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} />
-          ) : null}
-        </View>
+        {isPhotoAlbum ? (
+          <View style={styles.iconButton} />
+        ) : (
+          <View style={styles.appBarActions}>
+            <IconButton
+              icon={isBookmarked ? "bookmark" : "bookmark-outline"}
+              label="북마크"
+              size={20}
+              color={isBookmarked ? COLORS.primary : COLORS.text}
+              onPress={handleBookmark}
+            />
+            {hasPostMenu ? <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} /> : null}
+          </View>
+        )}
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
@@ -517,8 +520,10 @@ export default function PostDetailScreen() {
                 : isMutualAidRequest
                   ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
                 : commentsDisabled
-                  ? `${shortDate(post.created_at)}${post.view_count ? ` · 조회 ${post.view_count}` : ""}`
-                : `${post.author_nickname} · ${shortDate(post.created_at)}${post.view_count ? ` · 조회 ${post.view_count}` : ""}`}
+                  ? shortDate(post.created_at)
+                : isResource
+                  ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
+                : `${post.author_nickname} · ${shortDate(post.created_at)}`}
             </Text>
 
             <View style={styles.bodyDivider} />
@@ -702,7 +707,7 @@ export default function PostDetailScreen() {
           </View>
         ) : null}
 
-        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest ? (
+        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest && !isNotice ? (
           <View style={styles.actionRow}>
             <Pressable disabled={likeMutation.isPending} onPress={handleLike} style={styles.iconAction}>
               <Ionicons name={isLiked ? "heart" : "heart-outline"} size={16} color={isLiked ? COLORS.primary : COLORS.muted} />
@@ -720,7 +725,7 @@ export default function PostDetailScreen() {
         {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !commentsDisabled ? (
           <View style={styles.commentSection}>
             <Text style={styles.commentTitle}>댓글 {post.comment_count}</Text>
-            {comments.length === 0 ? <Text style={styles.emptyComment}>등록된 댓글이 없습니다.</Text> : null}
+            {comments.length === 0 ? <Text style={styles.emptyComment}>아직 댓글이 없어요. 첫 댓글을 남겨보세요!</Text> : null}
             {comments.map((comment) => (
               <CommentItem
                 key={comment.id}
@@ -758,7 +763,7 @@ export default function PostDetailScreen() {
               onChangeText={setCommentText}
               placeholder="댓글을 남겨보세요"
               placeholderTextColor="#A6ACB7"
-              style={styles.commentInput}
+              style={[styles.commentInput, { outlineStyle: "none" } as never]}
             />
             <Pressable disabled={createCommentMutation.isPending} onPress={handleCreateComment} style={styles.sendButton}>
               <Ionicons name="send" size={17} color="#FFFFFF" />
@@ -767,65 +772,71 @@ export default function PostDetailScreen() {
         </View>
       ) : null}
 
-      <Modal animationType="slide" transparent visible={showPostMenu} onRequestClose={() => setShowPostMenu(false)}>
-        <Pressable accessibilityLabel="더보기 메뉴 닫기" onPress={() => setShowPostMenu(false)} style={styles.modalBackdrop}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.menuSheet}>
-            <View style={styles.sheetHandle} />
-            {canManagePost && !hasLockedSuggestion && board?.board_type !== "notice" ? (
+      {showPostMenu ? (
+        <Pressable accessibilityLabel="더보기 메뉴 닫기" onPress={() => setShowPostMenu(false)} style={styles.menuOverlay}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.menuCard, { marginTop: Math.max(insets.top, 10) + 44 }]}>
+            {canEditOwn ? (
               <>
                 <Pressable
                   onPress={() => {
                     setShowPostMenu(false);
                     router.push(`/board/post/edit/${post.id}`);
                   }}
-                  style={styles.sheetMenuItem}
+                  style={styles.menuItem}
                 >
                   <Ionicons name="create-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.sheetMenuText}>수정</Text>
+                  <Text style={styles.menuItemText}>수정</Text>
                 </Pressable>
+                <View style={styles.menuDivider} />
                 <Pressable
                   onPress={() => {
                     setShowPostMenu(false);
                     handleDeletePost();
                   }}
-                  style={styles.sheetMenuItem}
+                  style={styles.menuItem}
                 >
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                  <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
+                  <Ionicons name="trash-outline" size={20} color="#D64545" />
+                  <Text style={[styles.menuItemText, styles.menuItemDanger]}>삭제</Text>
                 </Pressable>
               </>
             ) : null}
-            {!isMine ? (
-              <Pressable
-                disabled={reportedTargets[`post:${post.id}`]}
-                onPress={() => {
-                  setShowPostMenu(false);
-                  startReport({ type: "post", id: post.id, label: "게시글" });
-                }}
-                style={styles.sheetMenuItem}
-              >
-                <Ionicons name="flag-outline" size={20} color={COLORS.text} />
-                <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
-              </Pressable>
+            {showReportItem ? (
+              <>
+                {canEditOwn ? <View style={styles.menuDivider} /> : null}
+                <Pressable
+                  disabled={reportedTargets[`post:${post.id}`]}
+                  onPress={() => {
+                    setShowPostMenu(false);
+                    startReport({ type: "post", id: post.id, label: "게시글" });
+                  }}
+                  style={styles.menuItem}
+                >
+                  <Ionicons name="flag-outline" size={20} color={COLORS.text} />
+                  <Text style={styles.menuItemText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
+                </Pressable>
+              </>
             ) : null}
-            {!isMine && !canManagePost ? (
+            {showBlockItem ? (
+              <>
+                {canEditOwn || showReportItem ? <View style={styles.menuDivider} /> : null}
                 <Pressable
                   disabled={isBlockingAuthor}
                   onPress={() => {
                     setShowPostMenu(false);
                     handleBlockAuthor();
                   }}
-                  style={styles.sheetMenuItem}
+                  style={styles.menuItem}
                 >
                   <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.sheetMenuText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
+                  <Text style={styles.menuItemText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
                 </Pressable>
+              </>
             ) : null}
           </Pressable>
         </Pressable>
-      </Modal>
+      ) : null}
 
-      <Modal animationType="slide" transparent visible={Boolean(reportTarget)} onRequestClose={() => setReportTarget(null)}>
+      {reportTarget ? (
         <Pressable accessibilityLabel="신고하기 닫기" onPress={() => setReportTarget(null)} style={styles.modalBackdrop}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportSheet}>
             <View style={styles.sheetHandle} />
@@ -860,9 +871,9 @@ export default function PostDetailScreen() {
             </Pressable>
           </Pressable>
         </Pressable>
-      </Modal>
+      ) : null}
 
-      <Modal animationType="fade" transparent visible={showDeleteConfirm} onRequestClose={() => setShowDeleteConfirm(false)}>
+      {showDeleteConfirm ? (
         <Pressable accessibilityLabel="게시물 삭제 닫기" onPress={() => setShowDeleteConfirm(false)} style={styles.confirmBackdrop}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>게시물 삭제</Text>
@@ -877,7 +888,7 @@ export default function PostDetailScreen() {
             </View>
           </Pressable>
         </Pressable>
-      </Modal>
+      ) : null}
     </View>
   );
 }
@@ -922,9 +933,48 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   modalBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
     backgroundColor: "rgba(17, 24, 39, 0.38)",
+    zIndex: 50,
+  },
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "flex-end",
+    backgroundColor: "rgba(17, 24, 39, 0.15)",
+    zIndex: 50,
+  },
+  menuCard: {
+    minWidth: 190,
+    marginRight: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    paddingVertical: 4,
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  menuItem: {
+    height: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  menuItemDanger: {
+    color: "#D64545",
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: "#EAECEF",
   },
   menuSheet: {
     width: "100%",
@@ -1051,11 +1101,12 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   confirmBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(17, 24, 39, 0.38)",
     paddingHorizontal: 28,
+    zIndex: 60,
   },
   confirmCard: {
     width: "100%",
@@ -1559,10 +1610,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   emptyComment: {
-    color: COLORS.muted,
+    color: "#A6ACB7",
     fontSize: 13,
-    fontWeight: "700",
-    marginTop: 12,
+    fontWeight: "400",
+    textAlign: "center",
+    paddingVertical: 24,
   },
   commentBar: {
     borderTopWidth: 0.5,

@@ -103,6 +103,7 @@ function SelectionSheet({
   title,
   options,
   emptyText,
+  selectedKey,
   onClose,
   onSelect,
 }: {
@@ -110,6 +111,7 @@ function SelectionSheet({
   title: string;
   options: SelectionOption[];
   emptyText: string;
+  selectedKey?: string;
   onClose: () => void;
   onSelect: (option: SelectionOption) => void;
 }) {
@@ -121,12 +123,15 @@ function SelectionSheet({
           <Text style={styles.sheetTitle}>{title}</Text>
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
             {options.length === 0 ? <Text style={styles.sheetEmpty}>{emptyText}</Text> : null}
-            {options.map((option) => (
-              <Pressable key={option.key} onPress={() => onSelect(option)} style={styles.sheetOption}>
-                <Text style={styles.sheetOptionText}>{option.label}</Text>
-                <Ionicons name="chevron-forward" size={17} color={COLORS.subtle} />
-              </Pressable>
-            ))}
+            {options.map((option) => {
+              const active = option.key === selectedKey;
+              return (
+                <Pressable key={option.key} onPress={() => onSelect(option)} style={styles.sheetOption}>
+                  <Text style={[styles.sheetOptionText, active ? styles.sheetOptionTextActive : null]}>{option.label}</Text>
+                  {active ? <Ionicons name="checkmark" size={16} color={COLORS.primary} /> : null}
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -144,7 +149,7 @@ export default function PostCreateScreen() {
     content?: string;
   }>();
 
-  const boardId = Number(params.boardId);
+  const [boardId, setBoardId] = useState(() => Number(params.boardId));
   const postId = params.postId ? Number(params.postId) : null;
 
   const createMutation = useCreatePost(boardId);
@@ -155,7 +160,7 @@ export default function PostCreateScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [participantQuery, setParticipantQuery] = useState("");
   const [selectedParticipants, setSelectedParticipants] = useState<UserSearchItem[]>([]);
-  const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | null>(null);
+  const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | "board" | null>(null);
   const [activitySourcePostId, setActivitySourcePostId] = useState<number | null>(null);
   const [createdPostId, setCreatedPostId] = useState<number | null>(null);
   const boards = useMemo(() => boardsRes?.data.flatMap((group) => group.boards) ?? [], [boardsRes?.data]);
@@ -180,6 +185,12 @@ export default function PostCreateScreen() {
   const isAdminParticipationPost = board?.slug === "club-promo" || isNetworkingProgram;
   const compactCreate = !isActivity && !isMutualAid;
   const requiresAttachment = isActivity || isMutualAid || isAlbum || isAdminParticipationPost;
+  const canPickBoard =
+    !postId && compactCreate && !isAlbum && !isSuggestion && !isStudyRecruit && !isNetworkingProgram && !isAdminParticipationPost;
+  const selectableBoards = useMemo(() => {
+    const group = boardsRes?.data.find((entry) => entry.boards.some((item) => item.id === boardId));
+    return group?.boards ?? [];
+  }, [boardsRes?.data, boardId]);
   const trimmedParticipantQuery = participantQuery.trim();
   const participantSearch = useQuery({
     queryKey: ["user-search", trimmedParticipantQuery],
@@ -660,6 +671,45 @@ export default function PostCreateScreen() {
           </>
         ) : (
           <>
+        {canPickBoard ? (
+          <View style={styles.boardSelectWrap}>
+            <Pressable
+              onPress={() => setSelectionSheet(selectionSheet === "board" ? null : "board")}
+              style={styles.selectLike}
+            >
+              <Text style={[styles.selectText, !board ? styles.selectPlaceholder : null]} numberOfLines={1}>
+                {board?.name ?? "게시판을 선택하세요"}
+              </Text>
+              <Ionicons name={selectionSheet === "board" ? "chevron-up" : "chevron-down"} size={18} color={COLORS.subtle} />
+            </Pressable>
+            {selectionSheet === "board" ? (
+              <View style={styles.boardDropdown}>
+                <Text style={styles.boardDropdownTitle}>게시판을 선택하세요</Text>
+                {selectableBoards.length === 0 ? (
+                  <Text style={styles.boardDropdownEmpty}>선택할 수 있는 게시판이 없습니다.</Text>
+                ) : (
+                  selectableBoards.map((item, index) => {
+                    const active = item.id === boardId;
+                    return (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => {
+                          setBoardId(item.id);
+                          setSelectionSheet(null);
+                        }}
+                        style={[styles.boardDropdownItem, index > 0 ? styles.boardDropdownDivider : null]}
+                      >
+                        <Text style={[styles.boardDropdownText, active ? styles.boardDropdownTextActive : null]}>{item.name}</Text>
+                        {active ? <Ionicons name="checkmark" size={16} color={COLORS.primary} /> : null}
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {guide ? (
           <View style={styles.guideBox}>
             <Ionicons name={guide.icon} size={17} color={COLORS.primary} />
@@ -685,7 +735,7 @@ export default function PostCreateScreen() {
         />
       ) : null}
 
-      {!isAlbum ? (
+      {!isAlbum && (isMutualAid || isStudyRecruit || isSuggestion) ? (
         <Controller
           control={control}
           name="category"
@@ -1196,13 +1246,13 @@ const styles = StyleSheet.create({
     height: 4,
     alignSelf: "center",
     borderRadius: 2,
-    backgroundColor: "#D1D5DB",
-    marginBottom: 18,
+    backgroundColor: "#C7CCD4",
+    marginBottom: 16,
   },
   sheetTitle: {
     color: COLORS.text,
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "500",
     marginBottom: 8,
   },
   sheetEmpty: {
@@ -1212,19 +1262,24 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   sheetOption: {
-    minHeight: 52,
+    minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: "#EAECEF",
   },
   sheetOptionText: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "400",
+  },
+  sheetOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: "500",
   },
   activityPhotoBox: {
     height: 148,
@@ -1479,6 +1534,54 @@ const styles = StyleSheet.create({
   },
   selectPlaceholder: {
     color: "#A6ACB7",
+  },
+  boardSelectWrap: {
+    width: "100%",
+    position: "relative",
+    zIndex: 10,
+  },
+  boardDropdown: {
+    marginTop: 6,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  boardDropdownTitle: {
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: "500",
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  boardDropdownItem: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  boardDropdownDivider: {
+    borderTopWidth: 1,
+    borderTopColor: "#EAECEF",
+  },
+  boardDropdownText: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "400",
+  },
+  boardDropdownTextActive: {
+    color: COLORS.primary,
+    fontWeight: "500",
+  },
+  boardDropdownEmpty: {
+    color: COLORS.subtle,
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
   },
   guideBox: {
     flexDirection: "row",
