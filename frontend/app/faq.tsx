@@ -9,12 +9,12 @@ import type { FAQItem } from "../types";
 
 const COLORS = {
   primary: "#2761FF",
-  primary50: "#EDF2FE",
-  answerBg: "#F3F4F6",
+  qBadgeBg: "#E6F1FB", // Figma 62:77 Q badge
+  qBadgeText: "#0C447C",
   bg: "#FFFFFF",
-  border: "#EEF0F3",
-  text: "#111827",
-  muted: "#8A919C",
+  border: "#E1E4E9",
+  text: "#15171C",
+  muted: "#6B7280",
 };
 
 export default function FAQScreen() {
@@ -57,28 +57,28 @@ export default function FAQScreen() {
           {visibleFAQs.map((item) => {
             const expanded = expandedFaqId === item.id;
             return (
-            <View key={item.id} style={styles.faqItem}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ expanded }}
-                onPress={() => setExpandedFaqId((current) => current === item.id ? null : item.id)}
-                style={styles.questionButton}
-              >
-                <View style={styles.questionBadge}>
-                  <Text style={styles.questionBadgeText}>Q</Text>
-                </View>
-                <Text style={styles.questionText}>{item.question}</Text>
-                <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color={COLORS.muted} />
-              </Pressable>
-              {expanded ? (
-                <View style={[styles.qaLine, styles.answerLine]}>
-                  <View style={styles.answerBadge}>
-                    <Text style={styles.answerBadgeText}>A</Text>
+              <View key={item.id} style={styles.faqItem}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded }}
+                  onPress={() => setExpandedFaqId((current) => (current === item.id ? null : item.id))}
+                  style={styles.questionRow}
+                >
+                  <View style={styles.questionBadge}>
+                    <Text style={styles.questionBadgeText}>Q</Text>
                   </View>
-                  <Text style={styles.answerText}>{item.answer}</Text>
-                </View>
-              ) : null}
-            </View>
+                  <Text style={styles.questionText}>{item.question}</Text>
+                  <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#A6ACB7" />
+                </Pressable>
+                {expanded ? (
+                  <View style={styles.answerRow}>
+                    <View style={styles.answerBadge}>
+                      <Text style={styles.answerBadgeText}>A</Text>
+                    </View>
+                    <Text style={styles.answerText}>{item.answer}</Text>
+                  </View>
+                ) : null}
+              </View>
             );
           })}
         </ScrollView>
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   },
   appBarTitle: {
     color: COLORS.text,
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: 18,
+    fontWeight: "500", // Figma: Inter Medium
   },
   scroller: {
     flex: 1,
@@ -126,68 +126,62 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   faqItem: {
+    gap: 8,
+    paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  questionButton: {
-    minHeight: 46,
+  questionRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
+    gap: 8,
   },
-  qaLine: {
+  answerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-  },
-  answerLine: {
-    borderRadius: 7,
-    backgroundColor: "#F8FAFC",
-    padding: 10,
-    marginBottom: 10,
+    gap: 8,
   },
   questionBadge: {
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 4,
-    backgroundColor: COLORS.primary50,
-    marginRight: 8,
-    marginTop: 1,
+    borderRadius: 6,
+    backgroundColor: COLORS.qBadgeBg,
   },
   questionBadgeText: {
-    color: COLORS.primary,
-    fontSize: 10,
-    fontWeight: "900",
+    color: COLORS.qBadgeText,
+    fontSize: 11,
+    fontWeight: "500",
   },
   answerBadge: {
-    width: 18,
-    height: 18,
+    width: 20,
+    height: 20,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 4,
-    backgroundColor: COLORS.answerBg,
-    marginRight: 8,
-    marginTop: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.bg,
   },
   answerBadgeText: {
     color: COLORS.muted,
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "500",
   },
   questionText: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "500", // Figma: Medium
     lineHeight: 20,
   },
   answerText: {
     flex: 1,
     color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 19,
+    fontSize: 13,
+    fontWeight: "400", // Figma: Regular
+    lineHeight: 20,
   },
   emptyBox: {
     alignItems: "center",

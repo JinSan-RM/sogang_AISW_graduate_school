@@ -69,6 +69,7 @@ export default function RootLayout() {
               <Stack.Screen name="board/post/[postId]" options={{ headerShown: false }} />
               <Stack.Screen name="board/post/create" options={{ headerShown: false }} />
               <Stack.Screen name="board/post/edit/[postId]" options={{ headerShown: false }} />
+              <Stack.Screen name="council/mutual-aid-complete" options={{ headerShown: false }} />
             </Stack.Protected>
             <Stack.Protected guard={isAdmin}>
               <Stack.Screen name="admin/index" options={{ title: "관리자" }} />

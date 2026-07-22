@@ -43,12 +43,15 @@ const TYPE_LABELS: Record<string, string> = {
   mutual_aid: "상조회",
 };
 
-function shortDate(value: string) {
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function shortDate(value: string, withWeekday = false) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value.slice(2, 10).replace(/-/g, ".");
   }
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return withWeekday ? `${base}(${WEEKDAYS[date.getDay()]})` : base;
 }
 
 function normalizeCategory(post: PostListItem, boardType?: string) {
@@ -132,7 +135,7 @@ export default function PostCard({ post, onPress, boardType, boardSlug }: Props)
               ? formatCohortName(post.author_cohort, post.author_nickname)
               : post.author_nickname
             : null,
-          shortDate(post.created_at),
+          shortDate(post.created_at, isSuggestion || isMutualAid),
           !isAnonymousNoCommentBoard && !isWorkflowRequest ? `댓글 ${post.comment_count}` : null,
           !isWorkflowRequest ? `추천 ${post.like_count}` : null,
           !isWorkflowRequest && post.attachment_count ? `첨부 ${post.attachment_count}` : null,

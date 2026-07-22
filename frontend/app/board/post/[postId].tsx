@@ -655,12 +655,9 @@ export default function PostDetailScreen() {
         ) : null}
 
         {post.suggestion?.admin_reply ? (
-          <View style={styles.suggestionBox}>
-            <View style={styles.officialReplyHeader}>
-              <Ionicons name="chatbubble-ellipses-outline" size={15} color={COLORS.cyan700} />
-              <Text style={styles.suggestionTitle}>원우회 답변</Text>
-            </View>
-            <Text style={styles.suggestionBody}>{post.suggestion.admin_reply}</Text>
+          <View style={styles.officialReplyBox}>
+            <Text style={styles.officialReplyTitle}>💬 원우회 답변</Text>
+            <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
             {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{shortDate(post.suggestion.replied_at)}</Text> : null}
           </View>
         ) : null}
@@ -1534,11 +1531,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  officialReplyBox: {
+    borderRadius: 12,
+    backgroundColor: "#F7F8FA", // Figma 236:39
+    padding: 16,
+    marginTop: 24,
+    gap: 8,
+  },
+  officialReplyTitle: {
+    color: "#2761FF",
+    fontSize: 13,
+    fontWeight: "500", // Figma: Medium
+  },
+  officialReplyBody: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "400", // Figma: Regular
+    lineHeight: 23,
+  },
   officialReplyDate: {
-    color: COLORS.subtle,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 9,
+    color: "#A6ACB7",
+    fontSize: 12,
+    fontWeight: "400",
   },
   suggestionStatus: {
     color: COLORS.text,

@@ -114,7 +114,7 @@ type PastCouncilSummary = {
   bannerImageUrl?: string;
   presidentImageUrl?: string;
   vicePresidentImageUrl?: string;
-  activities: string[];
+  activities: { date?: string; title: string }[];
 };
 
 function flattenBoards(groups?: { boards: Board[] }[]) {
@@ -456,7 +456,7 @@ function CohortLeaderScreen({
                 <Text style={styles.cohortBadgeText}>{item.cohort}</Text>
               </View>
               <View style={styles.executiveText}>
-                <Text style={styles.executiveRole}>{item.cohort} 기장</Text>
+                <Text style={styles.executiveRole}>기장</Text>
                 <Text style={styles.executiveName}>{item.captain}{item.viceCaptain ? " 외 1명" : ""}</Text>
               </View>
             </Pressable>
@@ -488,7 +488,18 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
       bannerImageUrl: value("banner_image_url") || undefined,
       presidentImageUrl: value("president_image_url") || undefined,
       vicePresidentImageUrl: value("vice_president_image_url") || undefined,
-      activities: Array.isArray(record.activities) ? record.activities.filter((activity): activity is string => typeof activity === "string" && Boolean(activity.trim())) : [],
+      activities: Array.isArray(record.activities)
+        ? record.activities.flatMap((activity): { date?: string; title: string }[] => {
+            if (typeof activity === "string" && activity.trim()) return [{ title: activity.trim() }];
+            if (activity && typeof activity === "object") {
+              const r = activity as Record<string, unknown>;
+              const title = typeof r.title === "string" ? r.title.trim() : "";
+              if (!title) return [];
+              return [{ title, date: typeof r.date === "string" && r.date.trim() ? r.date.trim() : undefined }];
+            }
+            return [];
+          })
+        : [],
     }];
   }).sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
 }
@@ -525,10 +536,11 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
             </>
           ) : (
             <>
-              {imageUrl(selected.bannerImageUrl) ? <Image source={{ uri: imageUrl(selected.bannerImageUrl) as string }} style={styles.cohortBanner} /> : <View style={styles.cohortBannerFallback} />}
-              <Text style={styles.cohortIntroText}>{selected.intro || "등록된 소개글이 없습니다."}</Text>
               {selected.activities.length > 0 ? selected.activities.map((activity, index) => (
-                <View key={`${activity}-${index}`} style={styles.councilActivityRow}><Text style={styles.councilActivityTitle}>{activity}</Text></View>
+                <View key={`${activity.title}-${index}`} style={styles.pastActivityItem}>
+                  {activity.date ? <Text style={styles.pastActivityDate}>{activity.date}</Text> : null}
+                  <Text style={styles.pastActivityTitle}>{activity.title}</Text>
+                </View>
               )) : <View style={styles.emptyBox}><Text style={styles.emptyText}>등록된 활동내역이 없습니다.</Text></View>}
             </>
           )}
@@ -1433,7 +1445,7 @@ const styles = StyleSheet.create({
   executiveCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
     borderRadius: 10,
     borderWidth: 0.5,
     borderColor: "#E1E4E9",
@@ -1442,20 +1454,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   executiveAvatar: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 21,
+    borderRadius: 24,
     backgroundColor: "#E8F5FF",
-    marginRight: 14,
   },
   executiveAvatarImage: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#E8F5FF",
-    marginRight: 14,
   },
   executiveText: {
     flex: 1,
@@ -1463,12 +1473,12 @@ const styles = StyleSheet.create({
   },
   executiveName: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "500", // Figma 229:11
   },
   executiveRole: {
     color: COLORS.muted,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "400",
     marginTop: 2,
   },
@@ -1519,30 +1529,30 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cohortCard: {
-    minHeight: 76,
+    minHeight: 68,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 10, // Figma 62:46 card
     borderWidth: 1,
-    borderColor: COLORS.divider,
+    borderColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 10,
   },
   cohortBadge: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: COLORS.primary50,
-    marginRight: 14,
+    backgroundColor: "#E6F1FB", // Figma 62:46 badge
+    marginRight: 12,
   },
   cohortBadgeText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: "900",
+    color: "#0C447C",
+    fontSize: 13,
+    fontWeight: "500", // Figma: Medium
   },
   cohortDetailContent: {
     paddingHorizontal: 20,
@@ -1550,18 +1560,18 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   cohortBanner: {
-    width: "100%",
-    aspectRatio: 2.2,
-    borderRadius: 8,
+    marginHorizontal: -20, // full-bleed (cancel content padding)
+    marginTop: -14,
+    height: 180, // Figma 134:28 대표 사진
     backgroundColor: COLORS.primary50,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   cohortBannerFallback: {
-    width: "100%",
-    aspectRatio: 2.2,
-    borderRadius: 8,
-    backgroundColor: "#7FB4E8",
-    marginBottom: 18,
+    marginHorizontal: -20,
+    marginTop: -14,
+    height: 180,
+    backgroundColor: "#85B7EB", // Figma 대표 사진 placeholder
+    marginBottom: 16,
   },
   pastCouncilTabs: {
     flexDirection: "row",
@@ -1577,21 +1587,24 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   pastCouncilTabActive: { borderBottomColor: COLORS.text },
-  pastCouncilTabText: { color: COLORS.subtle, fontSize: 11, fontWeight: "900" },
-  pastCouncilTabTextActive: { color: COLORS.text },
+  pastCouncilTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "400" }, // Figma 232 서브탭
+  pastCouncilTabTextActive: { color: COLORS.text, fontWeight: "500" },
+  pastActivityItem: { gap: 4, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#EAECEF", width: "100%" }, // Figma 232:40
+  pastActivityDate: { color: "#A6ACB7", fontSize: 12, fontWeight: "400" },
+  pastActivityTitle: { color: COLORS.text, fontSize: 15, fontWeight: "400" },
   cohortGreeting: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 21,
+    fontSize: 14,
+    fontWeight: "400", // Figma: Regular
+    lineHeight: 23,
   },
   cohortIntroText: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 22,
-    marginTop: 22,
-    marginBottom: 18,
+    fontSize: 14,
+    fontWeight: "400", // Figma: Regular
+    lineHeight: 23,
+    marginTop: 14,
+    marginBottom: 4,
   },
   emptyContent: {
     flexGrow: 1,

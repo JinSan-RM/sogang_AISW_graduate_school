@@ -274,6 +274,14 @@ LEGACY_COMMUNITY_BOARD_SEED_DATA = [
         "description": "기수별 기장단 소개와 인사말을 확인합니다.",
         "sort_order": 79,
         "write_permission": "admin",
+        "metadata": {
+            "cohort_leaders": [
+                {"cohort": "75", "captain_name": "정도현", "vice_captain_name": "김서연", "greeting": "안녕하세요, 75기 기장 정도현입니다!", "intro": "75기 동기들이 즐겁게 학교 생활을 할 수 있도록 다양한 모임과 행사를 기획하고 있어요."},
+                {"cohort": "74", "captain_name": "이지훈", "vice_captain_name": "박민지", "greeting": "안녕하세요, 74기 기장 이지훈입니다!", "intro": "74기 원우들의 소통과 교류를 위해 힘쓰고 있습니다."},
+                {"cohort": "73", "captain_name": "최유나", "vice_captain_name": "정우성", "greeting": "안녕하세요, 73기 기장 최유나입니다!", "intro": "73기 동기 여러분의 학업과 네트워킹을 지원합니다."},
+                {"cohort": "72", "captain_name": "박준영", "vice_captain_name": "김하늘", "greeting": "안녕하세요, 72기 기장 박준영입니다!", "intro": "72기 원우회 활동에 많은 관심 부탁드립니다."},
+            ],
+        },
     },
     {
         "name": "역대 원우회",
@@ -283,6 +291,14 @@ LEGACY_COMMUNITY_BOARD_SEED_DATA = [
         "description": "역대 원우회 임원진과 활동내역을 확인합니다.",
         "sort_order": 80,
         "write_permission": "admin",
+        "metadata": {
+            "past_councils": [
+                {"cohort": "29", "president_name": "박승권", "president_cohort": "70기", "vice_president_name": "이수민", "vice_president_cohort": "70기", "intro": "29대 원우회는 원우 복지와 학술 교류 강화에 힘썼습니다.", "activities": [{"date": "25.05.05(금)", "title": "74기 원우회 이임식"}, {"date": "24.10.18(금)", "title": "가을 체육대회 개최"}, {"date": "24.03.04(월)", "title": "2024학년도 신입생 환영회"}]},
+                {"cohort": "28", "president_name": "김도윤", "president_cohort": "69기", "vice_president_name": "한지우", "vice_president_cohort": "69기", "intro": "28대 원우회 활동 소개입니다.", "activities": [{"date": "24.02.16(금)", "title": "취업 멘토링 프로그램 운영"}, {"date": "23.09.22(금)", "title": "가을 체육대회 개최"}]},
+                {"cohort": "27", "president_name": "이하은", "president_cohort": "68기", "intro": "27대 원우회 활동 소개입니다.", "activities": [{"date": "23.03.10(금)", "title": "동아리 지원금 확대 시행"}]},
+                {"cohort": "26", "president_name": "정민재", "president_cohort": "67기", "intro": "26대 원우회 활동 소개입니다.", "activities": []},
+            ],
+        },
     },
     {
         "name": "건의사항 피드백",
