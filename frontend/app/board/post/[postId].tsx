@@ -160,7 +160,7 @@ export default function PostDetailScreen() {
   const isSuggestionRequest = board?.board_type === "suggestion";
   const isNotice = board?.board_type === "notice";
   const isResource = board?.board_type === "resource";
-  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || isNotice || board?.board_type === "activity_certification" || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
+  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || isNotice || board?.board_type === "activity_certification" || board?.board_type === "activity_history" || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
   const { data: commentRes } = usePostComments(postId, Boolean(board) && !commentsDisabled);
   const comments = commentRes?.data ?? [];
 
@@ -266,6 +266,7 @@ export default function PostDetailScreen() {
   const isActivityCertification = board?.board_type === "activity_certification";
   const isStudyRecruit = board?.slug === "study-recruit";
   const isStudyActivity = board?.slug === "study-activity";
+  const isCouncilActivity = board?.board_type === "activity_history";
   const heroImageUrl = board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? selectedImageUrl : firstImageUrl;
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
@@ -450,7 +451,7 @@ export default function PostDetailScreen() {
           <View style={styles.iconButton} />
         ) : (
           <View style={styles.appBarActions}>
-            {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit ? (
+            {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit && !isCouncilActivity ? (
               <IconButton
                 icon={isBookmarked ? "bookmark" : "bookmark-outline"}
                 label="북마크"
@@ -459,7 +460,7 @@ export default function PostDetailScreen() {
                 onPress={handleBookmark}
               />
             ) : null}
-            {hasPostMenu ? <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} /> : null}
+            {hasPostMenu && !isCouncilActivity ? <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} /> : null}
           </View>
         )}
       </View>
@@ -528,16 +529,16 @@ export default function PostDetailScreen() {
           <>
             {isActivityCertification && isStudyActivity ? (
               <Text style={styles.activityStudyTitle}>{label}</Text>
-            ) : (
+            ) : isCouncilActivity ? null : (
               <View style={[styles.categoryPill, { backgroundColor: tone.bg }]}>
                 <Text style={[styles.categoryText, { color: tone.fg }]}>{label}</Text>
               </View>
             )}
 
             {!isActivityCertification ? (
-              <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : (isAdminParticipationGuide || isStudyRecruit) ? styles.titleGuide : null]}>{post.title}</Text>
+              <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : (isAdminParticipationGuide || isStudyRecruit || isCouncilActivity) ? styles.titleGuide : null]}>{post.title}</Text>
             ) : null}
-            {!isAdminParticipationGuide && !isActivityCertification ? (
+            {!isAdminParticipationGuide && !isActivityCertification && !isCouncilActivity ? (
               <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : null]}>
                 {board?.board_type === "notice"
                   ? `${shortDate(post.created_at)} · 조회 ${post.view_count}`
@@ -764,7 +765,7 @@ export default function PostDetailScreen() {
           </View>
         ) : null}
 
-        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest && !isNotice && !isActivityCertification && !isStudyRecruit ? (
+        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest && !isNotice && !isActivityCertification && !isStudyRecruit && !isCouncilActivity ? (
           <View style={styles.actionRow}>
             <Pressable disabled={likeMutation.isPending} onPress={handleLike} style={styles.iconAction}>
               <Ionicons name={isLiked ? "heart" : "heart-outline"} size={16} color={isLiked ? COLORS.primary : COLORS.muted} />

@@ -680,9 +680,9 @@ function AccountingExternalScreen({ board, topInset, onBack }: { board?: Board |
         <View style={styles.accountingIcon}>
           <Ionicons name="card-outline" size={28} color={COLORS.subtle} />
         </View>
-        <Text style={styles.accountingTitle}>회계장부는 Google Sheets에서 관리하고 있어요</Text>
+        <Text style={styles.accountingTitle}>회계장부는 외부 페이지에서 관리하고 있어요</Text>
         <Text style={styles.accountingDescription}>
-          원우회 회비 입출금 내역을 투명하게 공개하고 있습니다. 아래 버튼을 누르면 외부 회계장부 시트로 이동합니다.
+          {"원우회 회비 입출금 내역을 투명하게 공개하고 있어요.\n아래 버튼을 누르면 외부 회계장부 페이지로 연결돼요."}
         </Text>
         <Pressable onPress={openAccounting} style={styles.accountingButton}>
           <Text style={styles.accountingButtonText}>회계장부 보러가기</Text>
@@ -1002,6 +1002,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
         </View>
       ) : null}
 
+      {filters.length > 1 ? (
       <View style={styles.filterWrap}>
         <ScrollView
           horizontal
@@ -1020,6 +1021,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
           })}
         </ScrollView>
       </View>
+      ) : null}
 
       {isLoading ? (
         <View style={styles.center}>
@@ -1394,14 +1396,14 @@ const styles = StyleSheet.create({
   accountingTitle: {
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "500",
     textAlign: "center",
   },
   accountingDescription: {
     color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 19,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 21,
     textAlign: "center",
     marginTop: 14,
   },
@@ -1417,8 +1419,8 @@ const styles = StyleSheet.create({
   },
   accountingButtonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "500",
   },
   executiveScroller: {
     flex: 1,
@@ -1429,15 +1431,14 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   executiveCard: {
-    minHeight: 78,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
+    gap: 12,
+    borderRadius: 10,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 14,
     marginBottom: 10,
   },
   executiveAvatar: {
@@ -1462,14 +1463,14 @@ const styles = StyleSheet.create({
   },
   executiveName: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "500",
   },
   executiveRole: {
     color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "400",
+    marginTop: 2,
   },
   councilActivityContent: {
     paddingHorizontal: 20,
@@ -1500,20 +1501,21 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   councilActivityDate: {
-    color: COLORS.subtle,
+    color: "#A6ACB7",
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "400",
     marginBottom: 4,
   },
   councilActivityTitle: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "500",
   },
   councilActivityPreview: {
     color: COLORS.muted,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
     marginTop: 4,
   },
   cohortCard: {
