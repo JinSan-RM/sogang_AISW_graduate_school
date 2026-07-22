@@ -20,12 +20,22 @@ type Props = {
   reportedTargets?: Record<string, boolean>;
 };
 
+function relativeTime(date: Date) {
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 60) return "방금 전";
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}시간 전`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}일 전`;
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 function formatCommentDate(value: string) {
   const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
   const date = new Date(value.includes("T") && !hasTimezone ? `${value}Z` : value);
   if (Number.isNaN(date.getTime())) return value.slice(2, 10).replace(/-/g, ".");
   const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
+  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
+  return `${base} · ${relativeTime(date)}`;
 }
 
 export default function CommentItem({
@@ -43,7 +53,7 @@ export default function CommentItem({
   const isMine = currentUserId === comment.author_id;
   const isReported = reportedTargets[`comment:${comment.id}`];
   const canReport = !isMine && Boolean(onReport) && !isReported;
-  const hasActionRow = (depth === 0 && Boolean(onReply)) || isMine;
+  const hasActionRow = isMine;
 
   return (
     <View
@@ -81,12 +91,6 @@ export default function CommentItem({
 
       {hasActionRow ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 8 }}>
-          {depth === 0 && onReply ? (
-            <Pressable onPress={() => onReply(comment.id)}>
-              <Text style={{ color: "#2761FF", fontSize: 12, fontWeight: "500" }}>답글</Text>
-            </Pressable>
-          ) : null}
-
           {isMine && isEditing ? (
             <>
               <Pressable
@@ -123,20 +127,6 @@ export default function CommentItem({
           ) : null}
         </View>
       ) : null}
-
-      {comment.children.map((child) => (
-        <CommentItem
-          key={child.id}
-          comment={child}
-          currentUserId={currentUserId}
-          depth={depth + 1}
-          onDelete={onDelete}
-          onEdit={onEdit}
-          onReport={onReport}
-          reportedTargets={reportedTargets}
-          onReply={onReply}
-        />
-      ))}
     </View>
   );
 }

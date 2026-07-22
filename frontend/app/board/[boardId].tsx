@@ -724,10 +724,18 @@ function AlbumTile({ post, index, onPress }: { post: PostListItem; index: number
   );
 }
 
+function guideBadgeTone(label: string) {
+  if (label.includes("상시")) return { bg: "#EEEDFE", fg: "#3C3489" };
+  if (label.includes("마감")) return { bg: "#F0F0EE", fg: "#5B5B57" };
+  return { bg: "#E6F1FB", fg: "#0C447C" };
+}
+
 function ParticipationGuideTile({ post, board, index, onPress }: { post: PostListItem; board?: Board | null; index: number; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
   const thumbnailUrl = imageUrl(post.thumbnail_url);
   const preview = compactPreview(post);
+  const badge = participationBadgeLabel(post, board);
+  const tone = guideBadgeTone(badge);
 
   return (
     <Pressable onPress={() => onPress(post.id)} style={styles.guideCard}>
@@ -739,8 +747,8 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.guideThumb} />
       )}
       <View style={styles.guideBody}>
-        <View style={styles.guidePill}>
-          <Text style={styles.guidePillText}>{participationBadgeLabel(post, board)}</Text>
+        <View style={[styles.guidePill, { backgroundColor: tone.bg }]}>
+          <Text style={[styles.guidePillText, { color: tone.fg }]}>{badge}</Text>
         </View>
         <Text numberOfLines={2} style={styles.guideTitle}>
           {post.title}
@@ -773,15 +781,14 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
         <View style={styles.activityPill}>
           <Text style={styles.activityPillText}>{post.category || "활동 인증"}</Text>
         </View>
-        <Text numberOfLines={2} style={styles.activityTitle}>
-          {post.title}
-        </Text>
         {preview ? (
           <Text numberOfLines={2} style={styles.activityPreview}>
             {preview}
           </Text>
         ) : null}
-        <Text style={styles.activityDate}>{shortDate(post.created_at)}</Text>
+        <Text style={styles.activityDate}>
+          {`${post.author_cohort ? `${post.author_cohort}기 ` : ""}${post.author_nickname} · ${shortDate(post.created_at)}`}
+        </Text>
       </View>
     </Pressable>
   );
@@ -812,7 +819,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   const isParticipationGuideCards = Boolean(participationGroupKey(board)) && !isActivityCards;
   const tabs = sectionTabs(board, boards);
   const canWriteBoard = !board || board.write_permission !== "admin" || user?.role === "admin";
-  const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit" || user?.role === "admin");
+  const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit");
   const isResourceAll = board?.board_type === "resource" && selectedFilter === "전체";
   const isCouncilActivityHistory = board?.slug === "council-activity" || board?.slug === "gsa-activity";
   const resourceBoardIds = useMemo(
@@ -1026,7 +1033,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
           data={posts}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={[
-            isAlbum ? styles.albumContent : isParticipationGuideCards || isActivityCards ? styles.cardContent : styles.listContent,
+            isAlbum ? styles.albumContent : isParticipationGuideCards ? styles.guideContent : isActivityCards ? styles.cardContent : styles.listContent,
             posts.length === 0 ? styles.emptyContent : null,
           ]}
           columnWrapperStyle={isAlbum ? styles.albumRow : undefined}
@@ -1040,10 +1047,10 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
               <View style={styles.emptyBox}>
                 <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
                 <Text style={styles.emptyText}>
-                  {query ? "검색 결과가 없어요" : isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : isAlbum ? "등록된 사진이 없어요" : "아직 게시물이 없어요"}
+                  {query ? "검색 결과가 없어요" : isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : board?.slug === "study-recruit" ? "모집 중인 스터디가 없어요" : isParticipationGuideCards ? (participationGroupKey(board) === "networking" ? "등록된 네트워킹이 없어요" : "등록된 동아리가 없어요") : isAlbum ? "등록된 사진이 없어요" : "아직 게시물이 없어요"}
                 </Text>
                 <Text style={styles.emptySubText}>
-                  {query ? "다른 검색어로 다시 시도해보세요" : isMutualAid ? "경조사 발생 시 신청해보세요" : isSuggestion ? "원우회에 건의하고 싶은 내용을 남겨보세요" : isAlbum ? "행사 사진이 등록되면 알려드릴게요" : "첫 게시글을 남겨보세요"}
+                  {query ? "다른 검색어로 다시 시도해보세요" : isMutualAid ? "경조사 발생 시 신청해보세요" : isSuggestion ? "원우회에 건의하고 싶은 내용을 남겨보세요" : board?.slug === "study-recruit" ? "첫 스터디를 모집해보세요" : isParticipationGuideCards ? (participationGroupKey(board) === "networking" ? "새로운 네트워킹이 등록되면 알려드릴게요" : "새로운 동아리가 등록되면 알려드릴게요") : isAlbum ? "행사 사진이 등록되면 알려드릴게요" : "첫 게시글을 남겨보세요"}
                 </Text>
               </View>
             )
@@ -1248,91 +1255,95 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cardContent: {
-    paddingHorizontal: 24,
-    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 92,
+  },
+  guideContent: {
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   guideCard: {
     overflow: "hidden",
-    borderRadius: 8,
     backgroundColor: "#FFFFFF",
-    marginBottom: 22,
+    paddingBottom: 20,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
   },
   guideThumb: {
     position: "relative",
-    aspectRatio: 1.96,
+    width: "100%",
+    aspectRatio: 1.565,
     overflow: "hidden",
   },
-  guideImage: {
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-  },
+  guideImage: {},
   guideScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(17,24,39,0.06)",
   },
   guideBody: {
-    paddingTop: 9,
+    paddingTop: 10,
+    paddingHorizontal: 20,
   },
   guidePill: {
     alignSelf: "flex-start",
-    borderRadius: 5,
+    borderRadius: 8,
     backgroundColor: COLORS.primary50,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   guidePillText: {
     color: COLORS.primary,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   guideTitle: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "900",
-    lineHeight: 21,
-    marginTop: 7,
+    fontSize: 16,
+    fontWeight: "500",
+    lineHeight: 22,
+    marginTop: 8,
   },
   guidePreview: {
     color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 20,
+    marginTop: 8,
   },
   activityCard: {
-    overflow: "hidden",
-    borderRadius: 8,
     backgroundColor: "#FFFFFF",
-    marginBottom: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
   },
   activityThumb: {
     position: "relative",
-    aspectRatio: 1.96,
+    aspectRatio: 2.05,
+    borderRadius: 8,
     overflow: "hidden",
   },
   activityImage: {
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderRadius: 8,
   },
   activityScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(17,24,39,0.06)",
   },
   activityBody: {
-    paddingTop: 9,
+    paddingTop: 8,
   },
   activityPill: {
     alignSelf: "flex-start",
-    borderRadius: 5,
-    backgroundColor: COLORS.primary50,
+    borderRadius: 8,
+    backgroundColor: "#E6F1FB",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   activityPillText: {
-    color: COLORS.primary,
+    color: "#0C447C",
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   activityTitle: {
     color: COLORS.text,
@@ -1342,17 +1353,17 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   activityPreview: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 4,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 20,
+    marginTop: 8,
   },
   activityDate: {
-    color: COLORS.subtle,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 7,
+    color: "#A6ACB7",
+    fontSize: 12,
+    fontWeight: "400",
+    marginTop: 8,
   },
   center: {
     flex: 1,

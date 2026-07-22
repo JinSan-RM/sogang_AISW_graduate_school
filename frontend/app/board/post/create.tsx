@@ -233,7 +233,13 @@ export default function PostCreateScreen() {
     if (isStudyRecruit && (!params.category || params.category === "모집")) {
       setValue("category", "진행중");
     }
-  }, [isStudyRecruit, params.category, setValue]);
+    if (board?.slug === "club-promo" && !params.category) {
+      setValue("category", "모집중");
+    }
+    if (isActivity && (params.category === "활동 인증" || params.category === "안내")) {
+      setValue("category", "");
+    }
+  }, [isStudyRecruit, isActivity, board?.slug, params.category, setValue]);
 
   useEffect(() => {
     if (isAdminParticipationPost && !params.category) {
@@ -268,6 +274,8 @@ export default function PostCreateScreen() {
         ? "활동명을 입력하세요"
         : isSuggestion
           ? "건의 내용을 한 줄로 요약해 주세요"
+        : isStudyRecruit
+          ? "스터디 제목을 입력하세요"
           : "제목을 입력하세요",
     category: isMutualAid ? "경조사 종류" : isActivity ? "소속 그룹" : isStudyRecruit ? "모집 상태" : "분류",
     categoryPlaceholder: isMutualAid ? "결혼 / 상(喪) 중 선택" : isActivity ? "활동 대상을 선택하세요" : isStudyRecruit ? "진행중 / 마감" : "선택 입력",
@@ -278,6 +286,8 @@ export default function PostCreateScreen() {
         ? "활동 내용과 소감을 적어주세요"
         : isSuggestion
           ? "건의 내용을 자세히 적어주세요"
+        : isStudyRecruit
+          ? "스터디 내용, 진행 요일/시간 등을 입력하세요"
           : "내용을 입력하세요",
     attachment: isAlbum ? "사진" : isMutualAid ? "증빙서류" : isActivity ? "활동 사진" : isAdminParticipationPost ? "대표 사진" : "첨부파일",
     attachmentHelp: isAlbum ? "행사 사진 1장 이상 · 이미지 파일만 가능" : isMutualAid ? "청첩장, 부고장 등 증빙 파일" : isActivity ? "활동 사진 1장 이상" : isAdminParticipationPost ? "목록과 상세 상단에 표시할 사진을 1장 이상 첨부하세요." : "이미지, PDF, 문서 파일",
@@ -464,7 +474,7 @@ export default function PostCreateScreen() {
       <View style={styles.successScreen}>
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
-            <Ionicons name="checkmark" size={30} color="#16A34A" />
+            <Ionicons name="checkmark" size={38} color="#22C55E" />
           </View>
           <Text style={styles.successTitle}>
             {isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
@@ -599,7 +609,7 @@ export default function PostCreateScreen() {
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
-                <Text style={styles.activityWarningText}>계좌는 본인 명의로 된 통장 가능해요</Text>
+                <Text style={styles.activityWarningText}>계좌는 본인 명의로만 등록 가능해요</Text>
               </View>
             </View>
 
@@ -665,7 +675,7 @@ export default function PostCreateScreen() {
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
-                <Text style={styles.activityWarningText}>원우회비 미납자, 휴학자는 검색되지 않아요</Text>
+                <Text style={styles.activityWarningText}>원우회비 미납자, 졸업자는 검색되지 않아요</Text>
               </View>
             </View>
           </>
@@ -717,6 +727,29 @@ export default function PostCreateScreen() {
           </View>
         ) : null}
 
+      {isStudyRecruit ? (
+        <Controller
+          control={control}
+          name="category"
+          render={({ field }) => (
+            <View style={styles.studyStatusWrap}>
+              <Text style={styles.label}>모집 상태</Text>
+              <View style={styles.recruitmentStatusRow}>
+                {["진행중", "마감"].map((status) => (
+                  <Pressable
+                    key={status}
+                    onPress={() => field.onChange(status)}
+                    style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
+                  >
+                    <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+        />
+      ) : null}
+
       {!isMutualAid ? (
         <Controller
           control={control}
@@ -735,7 +768,7 @@ export default function PostCreateScreen() {
         />
       ) : null}
 
-      {!isAlbum && (isMutualAid || isStudyRecruit || isSuggestion) ? (
+      {!isAlbum && (isMutualAid || isSuggestion || board?.slug === "club-promo") ? (
         <Controller
           control={control}
           name="category"
@@ -749,6 +782,18 @@ export default function PostCreateScreen() {
               ) : isStudyRecruit ? (
                 <View style={styles.recruitmentStatusRow}>
                   {["진행중", "마감"].map((status) => (
+                    <Pressable
+                      key={status}
+                      onPress={() => field.onChange(status)}
+                      style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
+                    >
+                      <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : board?.slug === "club-promo" ? (
+                <View style={styles.recruitmentStatusRow}>
+                  {["모집중", "상시", "마감"].map((status) => (
                     <Pressable
                       key={status}
                       onPress={() => field.onChange(status)}
@@ -885,12 +930,14 @@ export default function PostCreateScreen() {
           control={control}
           name="contact"
           render={({ field }) => (
-            <FormField label="스터디장 연락수단" required helper="이메일, 카카오톡 ID, 휴대폰 번호 등을 입력해주세요.">
+            <FormField label="스터디장 연락수단">
               <TextInput
+                multiline
                 onChangeText={field.onChange}
-                placeholder="스터디원들과 연락할 수단"
+                placeholder={"스터디원들과 연락할 수단을 입력해주세요.\n(이메일, 카카오톡 ID, 휴대폰번호 등)"}
                 placeholderTextColor="#A6ACB7"
-                style={styles.input}
+                style={[styles.input, styles.contactInput]}
+                textAlignVertical="top"
                 value={field.value}
               />
             </FormField>
@@ -919,7 +966,7 @@ export default function PostCreateScreen() {
         />
       ) : null}
 
-      {compactCreate ? (
+      {isStudyRecruit ? null : compactCreate ? (
         <View style={styles.compactAttachWrap}>
           {isAdminParticipationPost ? (
             <View style={styles.labelRow}>
@@ -1082,36 +1129,36 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 360,
     alignItems: "center",
+    gap: 16,
   },
   successIcon: {
-    width: 48,
-    height: 48,
+    width: 64,
+    height: 64,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "#22C55E",
-    borderRadius: 24,
-    marginBottom: 20,
+    borderRadius: 32,
   },
   successTitle: {
     color: COLORS.text,
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: 24,
+    fontWeight: "500",
+    lineHeight: 32,
     textAlign: "center",
   },
   successButton: {
-    width: "100%",
-    height: 50,
+    width: 280,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 7,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
-    marginTop: 28,
   },
   successButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "500",
   },
   screen: {
     flex: 1,
@@ -1154,31 +1201,31 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   activitySelect: {
-    height: 42,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   activitySelectInput: {
     flex: 1,
     height: 40,
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "400",
     paddingVertical: 0,
   },
   activitySelectValue: {
     flex: 1,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   activitySelectPlaceholder: {
-    color: COLORS.subtle,
+    color: "#A6ACB7",
   },
   selectionField: {
     minHeight: 52,
@@ -1203,26 +1250,31 @@ const styles = StyleSheet.create({
   },
   recruitmentStatusRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
+    width: "100%",
+    backgroundColor: "#F0F0EE",
+    padding: 4,
+    borderRadius: 10,
   },
   recruitmentStatusButton: {
     flex: 1,
-    height: 44,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: 8,
-    backgroundColor: COLORS.bg,
   },
   recruitmentStatusButtonActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary50,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   recruitmentStatusText: {
     color: COLORS.muted,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   recruitmentStatusTextActive: {
     color: COLORS.primary,
@@ -1375,9 +1427,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   activityPhotoText: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "800",
+    color: "#A6ACB7",
+    fontSize: 13,
+    fontWeight: "400",
   },
   activityAttachmentList: {
     gap: 6,
@@ -1405,7 +1457,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
@@ -1415,8 +1467,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 42,
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "400",
     paddingVertical: 0,
   },
   participantResultBox: {
@@ -1459,12 +1511,12 @@ const styles = StyleSheet.create({
   participantName: {
     color: COLORS.text,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   participantMeta: {
     color: COLORS.subtle,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "400",
     marginTop: 2,
   },
   participantEmptyText: {
@@ -1478,23 +1530,24 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   activityFieldTitle: {
-    color: COLORS.text,
-    fontSize: 12,
-    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "500",
   },
   activityWarning: {
-    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderRadius: 7,
-    backgroundColor: "#FEF1D9",
-    paddingHorizontal: 10,
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#FAEEDA",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   activityWarningText: {
-    color: "#9A6B00",
-    fontSize: 11,
-    fontWeight: "800",
+    color: "#854F0B",
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 17,
   },
   activityChipRow: {
     flexDirection: "row",
@@ -1505,15 +1558,18 @@ const styles = StyleSheet.create({
     minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderRadius: 14,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 9,
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   activityMemberChipText: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: "800",
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
   },
   selectLike: {
     height: 48,
@@ -1608,9 +1664,9 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   label: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "500",
   },
   requiredPill: {
     borderRadius: 4,
@@ -1642,10 +1698,17 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 132,
   },
+  contactInput: {
+    minHeight: 60,
+  },
+  studyStatusWrap: {
+    width: "100%",
+    gap: 6,
+  },
   helperText: {
     color: COLORS.muted,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
     lineHeight: 17,
   },
   errorText: {
@@ -1820,8 +1883,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   activitySubmitButton: {
-    height: 46,
-    borderRadius: 7,
+    height: 48,
+    borderRadius: 8,
     marginTop: 2,
   },
   submitButtonDisabled: {

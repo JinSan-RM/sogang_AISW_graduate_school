@@ -90,6 +90,17 @@ function shortDate(value: string) {
   return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
 }
 
+function formatDotDate(value: string) {
+  const parts = value.trim().split(".").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 3) return value;
+  const [rawYear, rawMonth, rawDay] = parts;
+  const year = rawYear.length === 2 ? Number(`20${rawYear}`) : Number(rawYear);
+  const date = new Date(year, Number(rawMonth) - 1, Number(rawDay));
+  if (Number.isNaN(date.getTime())) return value;
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
+}
+
 function categoryLabel(value?: string | null, fallback = "게시글") {
   const raw = value?.trim();
   if (!raw) return fallback;
@@ -149,7 +160,7 @@ export default function PostDetailScreen() {
   const isSuggestionRequest = board?.board_type === "suggestion";
   const isNotice = board?.board_type === "notice";
   const isResource = board?.board_type === "resource";
-  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || isNotice || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
+  const commentsDisabled = isMutualAidRequest || isSuggestionRequest || isNotice || board?.board_type === "activity_certification" || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
   const { data: commentRes } = usePostComments(postId, Boolean(board) && !commentsDisabled);
   const comments = commentRes?.data ?? [];
 
@@ -215,6 +226,8 @@ export default function PostDetailScreen() {
     ? MUTUAL_AID_STATUSES.find((status) => status.value === post.mutual_aid?.status)?.label ?? "처리중"
     : isSuggestionRequest
       ? SUGGESTION_STATUSES.find((status) => status.value === post.suggestion?.status)?.label ?? "대기중"
+      : board?.board_type === "activity_certification"
+        ? (post.category?.trim() || board?.name || "활동")
       : categoryLabel(post.category, isAdminParticipationGuide ? "모집중" : board?.board_type === "notice" ? "공지" : board?.name ?? "게시글");
   const tone = categoryTone(label);
   const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
@@ -251,6 +264,8 @@ export default function PostDetailScreen() {
   const normalizedGalleryIndex = Math.min(galleryIndex, Math.max(imageAttachments.length - 1, 0));
   const selectedImageUrl = fileUrl(imageAttachments[normalizedGalleryIndex]?.url);
   const isActivityCertification = board?.board_type === "activity_certification";
+  const isStudyRecruit = board?.slug === "study-recruit";
+  const isStudyActivity = board?.slug === "study-activity";
   const heroImageUrl = board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? selectedImageUrl : firstImageUrl;
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
@@ -435,13 +450,15 @@ export default function PostDetailScreen() {
           <View style={styles.iconButton} />
         ) : (
           <View style={styles.appBarActions}>
-            <IconButton
-              icon={isBookmarked ? "bookmark" : "bookmark-outline"}
-              label="북마크"
-              size={20}
-              color={isBookmarked ? COLORS.primary : COLORS.text}
-              onPress={handleBookmark}
-            />
+            {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit ? (
+              <IconButton
+                icon={isBookmarked ? "bookmark" : "bookmark-outline"}
+                label="북마크"
+                size={20}
+                color={isBookmarked ? COLORS.primary : COLORS.text}
+                onPress={handleBookmark}
+              />
+            ) : null}
             {hasPostMenu ? <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} /> : null}
           </View>
         )}
@@ -509,27 +526,35 @@ export default function PostDetailScreen() {
 
         {board?.board_type !== "album" ? (
           <>
-            <View style={[styles.categoryPill, { backgroundColor: tone.bg }]}>
-              <Text style={[styles.categoryText, { color: tone.fg }]}>{label}</Text>
-            </View>
+            {isActivityCertification && isStudyActivity ? (
+              <Text style={styles.activityStudyTitle}>{label}</Text>
+            ) : (
+              <View style={[styles.categoryPill, { backgroundColor: tone.bg }]}>
+                <Text style={[styles.categoryText, { color: tone.fg }]}>{label}</Text>
+              </View>
+            )}
 
-            <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : null]}>{post.title}</Text>
-            <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : null]}>
-              {board?.board_type === "notice"
-                ? `${shortDate(post.created_at)} · 조회 ${post.view_count}`
-                : isMutualAidRequest
-                  ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
-                : commentsDisabled
-                  ? shortDate(post.created_at)
-                : isResource
-                  ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
-                : `${post.author_nickname} · ${shortDate(post.created_at)}`}
-            </Text>
+            {!isActivityCertification ? (
+              <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : (isAdminParticipationGuide || isStudyRecruit) ? styles.titleGuide : null]}>{post.title}</Text>
+            ) : null}
+            {!isAdminParticipationGuide && !isActivityCertification ? (
+              <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : null]}>
+                {board?.board_type === "notice"
+                  ? `${shortDate(post.created_at)} · 조회 ${post.view_count}`
+                  : isMutualAidRequest
+                    ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
+                  : commentsDisabled
+                    ? shortDate(post.created_at)
+                  : isResource || isStudyRecruit
+                    ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
+                  : `${post.author_nickname} · ${shortDate(post.created_at)}`}
+              </Text>
+            ) : null}
 
-            <View style={styles.bodyDivider} />
+            {!isAdminParticipationGuide && !isActivityCertification ? <View style={styles.bodyDivider} /> : null}
           </>
         ) : null}
-        {!isPhotoAlbum && post.content.trim() ? <Text style={styles.body}>{post.content}</Text> : null}
+        {!isPhotoAlbum && post.content.trim() ? <Text style={[styles.body, isAdminParticipationGuide || isActivityCertification ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
 
         {board?.board_type === "notice" && contentUrl ? (
           <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.externalLinkButton}>
@@ -539,7 +564,39 @@ export default function PostDetailScreen() {
           </Pressable>
         ) : null}
 
-        {detailRows.length > 0 ? (
+        {isActivityCertification ? (
+          <>
+            {typeof metadata.activity_date === "string" && metadata.activity_date.trim() ? (
+              <View style={styles.certDateRow}>
+                <Ionicons name="calendar-outline" size={16} color={COLORS.muted} />
+                <Text style={styles.certDateText}>{formatDotDate(metadata.activity_date)}</Text>
+              </View>
+            ) : null}
+            {typeof metadata.participants === "string" && metadata.participants.trim() ? (
+              <>
+                <Text style={styles.certParticipantLabel}>참가자</Text>
+                <View style={styles.certParticipantList}>
+                  {metadata.participants
+                    .split(",")
+                    .map((name) => name.trim())
+                    .filter(Boolean)
+                    .map((name, index) => (
+                      <View key={`${name}-${index}`} style={styles.certParticipantChip}>
+                        <Text style={styles.certParticipantChipText}>{name}</Text>
+                      </View>
+                    ))}
+                </View>
+              </>
+            ) : null}
+          </>
+        ) : isStudyRecruit ? (
+          typeof metadata.contact === "string" && metadata.contact.trim() ? (
+            <View style={styles.certDateRow}>
+              <Ionicons name="call-outline" size={15} color={COLORS.muted} />
+              <Text style={styles.certDateText}>스터디장 연락수단 {metadata.contact}</Text>
+            </View>
+          ) : null
+        ) : detailRows.length > 0 ? (
           <View style={styles.infoBox}>
             {detailRows
               .filter((row): row is [string, string] => typeof row[1] === "string" && row[1].trim().length > 0)
@@ -707,7 +764,7 @@ export default function PostDetailScreen() {
           </View>
         ) : null}
 
-        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest && !isNotice ? (
+        {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !isMutualAidRequest && !isSuggestionRequest && !isNotice && !isActivityCertification && !isStudyRecruit ? (
           <View style={styles.actionRow}>
             <Pressable disabled={likeMutation.isPending} onPress={handleLike} style={styles.iconAction}>
               <Ionicons name={isLiked ? "heart" : "heart-outline"} size={16} color={isLiked ? COLORS.primary : COLORS.muted} />
@@ -1303,6 +1360,9 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 28,
   },
+  titleGuide: {
+    fontWeight: "500",
+  },
   meta: {
     color: "#A6ACB7",
     fontSize: 12,
@@ -1324,6 +1384,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "400",
     lineHeight: 23,
+  },
+  bodyTopGap: {
+    marginTop: 16,
+  },
+  activityStudyTitle: {
+    width: "100%",
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: "500",
+    lineHeight: 24,
+  },
+  certDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
+    paddingBottom: 16,
+    marginTop: 16,
+  },
+  certDateText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "400",
+  },
+  certParticipantLabel: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "500",
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  certParticipantList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  certParticipantChip: {
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  certParticipantChipText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
   },
   externalLinkButton: {
     minHeight: 48,
@@ -1350,14 +1458,14 @@ const styles = StyleSheet.create({
     height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 7,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
-    marginTop: 26,
+    marginTop: 20,
   },
   joinButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   infoBox: {
     borderTopWidth: 1,
