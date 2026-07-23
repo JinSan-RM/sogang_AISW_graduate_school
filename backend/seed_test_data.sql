@@ -227,3 +227,9 @@ INSERT INTO bookmarks (user_id, post_id, created_at) VALUES
   (2, 19, '2026-06-20 14:30:00'),
   (2, 20, '2026-06-15 09:10:00')
 ON CONFLICT (user_id, post_id) DO NOTHING;
+
+--
+-- Privacy consent dates for test users (개인정보 수집 및 이용 동의)
+--
+UPDATE users SET privacy_consented_at = '2026-03-02 09:00:00', privacy_policy_version = '2026-07-12' WHERE id = 1 AND privacy_consented_at IS NULL;
+UPDATE users SET privacy_consented_at = '2026-03-02 09:15:00', privacy_policy_version = '2026-07-12' WHERE id = 2 AND privacy_consented_at IS NULL;
