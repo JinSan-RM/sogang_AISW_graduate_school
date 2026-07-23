@@ -360,7 +360,7 @@ export default function RegisterScreen() {
                     </View>
                   ) : null}
                 </View>
-                {resendCooldown > 0 && !verificationExpired && !verificationAttemptsLocked ? (
+                {verificationExpired ? null : resendCooldown > 0 && !verificationAttemptsLocked ? (
                   <Text style={styles.timerText}>{formatCountdown(countdown)}</Text>
                 ) : (
                   <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
@@ -368,13 +368,23 @@ export default function RegisterScreen() {
                   </Pressable>
                 )}
               </View>
-              <Pressable
-                disabled={isSubmitting || verificationAttemptsLocked}
-                onPress={verifyCode}
-                style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, verificationAttemptsLocked ? styles.validationDisabledButton : null]}
-              >
-                <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
-              </Pressable>
+              {verificationExpired ? (
+                <Pressable
+                  disabled={isSubmitting}
+                  onPress={() => void requestCode(true)}
+                  style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null]}
+                >
+                  <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 재전송"}</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  disabled={isSubmitting || verificationAttemptsLocked}
+                  onPress={verifyCode}
+                  style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, verificationAttemptsLocked ? styles.validationDisabledButton : null]}
+                >
+                  <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
+                </Pressable>
+              )}
             </>
           ) : null}
 
