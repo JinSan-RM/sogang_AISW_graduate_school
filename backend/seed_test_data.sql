@@ -218,3 +218,12 @@ SELECT pg_catalog.setval('public.users_id_seq', 2, true);
 
 \unrestrict v5yPXfTYKPmD7pedOb2maBblOnSfJg0Oq3egpbjLRajJSg9e3VMpT8x7TI5Tv4v
 
+
+--
+-- Test bookmarks (스크랩한 글) for regular test user (id=2)
+--
+INSERT INTO bookmarks (user_id, post_id, created_at) VALUES
+  (2, 18, '2026-06-23 10:00:00'),
+  (2, 19, '2026-06-20 14:30:00'),
+  (2, 20, '2026-06-15 09:10:00')
+ON CONFLICT (user_id, post_id) DO NOTHING;

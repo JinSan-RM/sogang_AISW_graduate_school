@@ -10,13 +10,22 @@ import type { UserActivityItem } from "../../types";
 
 const COLORS = {
   primary: "#2761FF",
-  primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
-  subtle: "#8A919C",
-  border: "#EEF0F3",
+  subtle: "#A6ACB7",
+  border: "#E1E4E9",
   bg: "#FFFFFF",
 };
+
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function categoryTone(label: string) {
+  if (label.includes("종합")) return { bg: "#FAEEDA", fg: "#854F0B" };
+  if (label.includes("행사") || label.includes("시험") || label.includes("족보")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("졸업") || label.includes("논문") || label.includes("인증")) return { bg: "#EAF3DE", fg: "#3B6D11" };
+  if (label.includes("강의") || label.includes("후기") || label.includes("스터디") || label.includes("모집")) return { bg: "#EEEDFE", fg: "#3C3489" };
+  return { bg: "#E6F1FB", fg: "#0C447C" };
+}
 
 const FILTERS = [
   { label: "내가 쓴 글", value: "posts" },
@@ -29,7 +38,8 @@ type FilterValue = (typeof FILTERS)[number]["value"];
 function shortDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10).replace(/-/g, ".");
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return `${base}(${WEEKDAYS[date.getDay()]})`;
 }
 
 function normalizeType(value?: string | string[]): FilterValue {
@@ -100,27 +110,28 @@ export default function ActivityScreen() {
             </View>
           }
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
-          renderItem={({ item }) => (
-            <Pressable onPress={() => router.push(`/board/post/${item.post_id}` as never)} style={styles.row}>
-              <View style={styles.rowText}>
-                <View style={styles.pill}>
-                  <Text style={styles.pillText}>{item.board_name ?? itemLabel(item)}</Text>
-                </View>
-                <Text numberOfLines={2} style={styles.title}>
-                  {item.title}
-                </Text>
-                {item.content_preview ? (
-                  <Text numberOfLines={2} style={styles.preview}>
-                    {item.content_preview}
+          renderItem={({ item }) => {
+            const label = item.board_name ?? itemLabel(item);
+            const tone = categoryTone(label);
+            return (
+              <Pressable onPress={() => router.push(`/board/post/${item.post_id}` as never)} style={styles.row}>
+                <View style={styles.rowText}>
+                  <View style={[styles.pill, { backgroundColor: tone.bg }]}>
+                    <Text style={[styles.pillText, { color: tone.fg }]}>{label}</Text>
+                  </View>
+                  <Text numberOfLines={2} style={styles.title}>
+                    {item.title}
                   </Text>
-                ) : null}
-                <Text style={styles.meta}>
-                  {shortDate(item.created_at)} · 댓글 {item.comment_count ?? 0} · 추천 {item.like_count ?? 0}
-                </Text>
-              </View>
-              {item.type === "bookmark" ? <Ionicons name="bookmark" size={18} color={COLORS.primary} /> : null}
-            </Pressable>
-          )}
+                  <Text style={styles.meta}>
+                    {item.type === "bookmark"
+                      ? shortDate(item.created_at)
+                      : `${shortDate(item.created_at)} · 댓글 ${item.comment_count ?? 0} · 추천 ${item.like_count ?? 0}`}
+                  </Text>
+                </View>
+                {item.type === "bookmark" ? <Ionicons name="bookmark" size={18} color={COLORS.primary} style={styles.bookmark} /> : null}
+              </Pressable>
+            );
+          }}
         />
       )}
     </View>
@@ -138,8 +149,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   iconButton: {
     width: 42,
@@ -150,7 +161,7 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   filterRow: {
     flexDirection: "row",
@@ -200,52 +211,45 @@ const styles = StyleSheet.create({
   emptyText: {
     color: COLORS.muted,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   row: {
-    minHeight: 102,
     flexDirection: "row",
     alignItems: "flex-start",
+    justifyContent: "space-between",
     gap: 10,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   rowText: {
     flex: 1,
     minWidth: 0,
+    gap: 6,
   },
   pill: {
     alignSelf: "flex-start",
-    borderRadius: 6,
-    backgroundColor: COLORS.primary50,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   pillText: {
-    color: COLORS.primary,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   title: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
-    lineHeight: 22,
-    marginTop: 7,
-  },
-  preview: {
-    color: COLORS.muted,
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 19,
-    marginTop: 4,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 20,
   },
   meta: {
     color: COLORS.subtle,
     fontSize: 12,
-    fontWeight: "800",
-    marginTop: 5,
+    fontWeight: "400",
+  },
+  bookmark: {
+    marginTop: 4,
   },
 });

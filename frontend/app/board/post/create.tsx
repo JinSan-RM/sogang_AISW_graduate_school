@@ -1385,9 +1385,12 @@ const styles = StyleSheet.create({
   sheetBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
+    alignItems: "center",
     backgroundColor: "rgba(17, 24, 39, 0.42)",
   },
   sheetCard: {
+    width: "100%",
+    maxWidth: 405,
     maxHeight: "70%",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,

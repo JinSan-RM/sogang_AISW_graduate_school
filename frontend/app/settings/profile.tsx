@@ -11,13 +11,13 @@ import { apiErrorCode, phoneError } from "../../utils/authValidation";
 
 const COLORS = {
   primary: "#2761FF",
-  primary50: "#EDF2FE",
-  text: "#111827",
+  primary50: "#E6F1FB",
+  text: "#15171C",
   muted: "#6B7280",
-  subtle: "#A0A7B2",
-  border: "#E5E7EB",
+  subtle: "#A6ACB7",
+  border: "#E1E4E9",
   bg: "#FFFFFF",
-  danger: "#FF6B6B",
+  danger: "#E24B4A",
 };
 
 type FieldValues = {
@@ -165,7 +165,7 @@ export default function ProfileSettingsScreen() {
             <Text style={styles.fieldLabel}>이름</Text>
             <View style={styles.lockedInput}>
               <Text style={styles.lockedInputText}>{fields.nickname || "-"}</Text>
-              <Ionicons name="lock-closed-outline" size={17} color={COLORS.subtle} />
+              <Ionicons name="lock-closed-outline" size={15} color={COLORS.subtle} />
             </View>
           </View>
 
@@ -173,7 +173,7 @@ export default function ProfileSettingsScreen() {
             <Text style={styles.fieldLabel}>기수</Text>
             <View style={styles.lockedInput}>
               <Text style={styles.lockedInputText}>{cohortLabel}</Text>
-              <Ionicons name="lock-closed-outline" size={17} color={COLORS.subtle} />
+              <Ionicons name="lock-closed-outline" size={15} color={COLORS.subtle} />
             </View>
           </View>
 
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -266,54 +266,54 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   scroller: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 42,
   },
   avatarSection: {
     alignItems: "center",
-    paddingTop: 28,
+    paddingTop: 16,
     paddingBottom: 24,
   },
   avatarButton: {
-    width: 96,
-    height: 96,
+    width: 80,
+    height: 80,
   },
   avatar: {
-    width: 96,
-    height: 96,
+    width: 80,
+    height: 80,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 48,
+    borderRadius: 40,
     backgroundColor: COLORS.primary50,
   },
   avatarImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: COLORS.primary50,
   },
   avatarText: {
     color: COLORS.primary,
-    fontSize: 32,
-    fontWeight: "900",
+    fontSize: 28,
+    fontWeight: "500",
   },
   cameraBadge: {
     position: "absolute",
     right: 2,
-    bottom: 4,
-    width: 28,
-    height: 28,
+    bottom: 2,
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: COLORS.primary,
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: "#FFFFFF",
   },
   uploadText: {
@@ -332,55 +332,58 @@ const styles = StyleSheet.create({
   },
   errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "800", marginTop: 10 },
   form: {
-    gap: 10,
+    gap: 14,
   },
   fieldGroup: {
-    gap: 7,
+    gap: 6,
   },
   fieldLabel: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "500",
   },
   input: {
-    minHeight: 52,
-    borderWidth: 1,
+    minHeight: 44,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
-    paddingHorizontal: 15,
+    fontSize: 14,
+    fontWeight: "400",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   lockedInput: {
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderRadius: 8,
-    backgroundColor: "#F6F7F9",
-    paddingHorizontal: 15,
+    backgroundColor: "#F7F8FA",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   lockedInputText: {
     color: COLORS.muted,
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "400",
   },
   selectInput: {
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   selectInputText: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "400",
   },
   selectPlaceholder: {
     color: COLORS.subtle,
@@ -388,9 +391,12 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
+    alignItems: "center",
     backgroundColor: "rgba(17,24,39,0.38)",
   },
   modalCard: {
+    width: "100%",
+    maxWidth: 405,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     backgroundColor: COLORS.bg,
@@ -408,37 +414,38 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 17,
+    fontWeight: "500",
     marginBottom: 10,
   },
   modalOption: {
-    minHeight: 52,
+    minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEF0F3",
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#EAECEF",
   },
   modalOptionText: {
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "400",
   },
   primaryButton: {
-    height: 52,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: COLORS.primary,
-    marginTop: 18,
+    marginTop: 12,
   },
   disabledButton: {
     opacity: 0.55,
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "500",
   },
 });
