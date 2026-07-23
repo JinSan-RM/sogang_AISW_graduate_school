@@ -233,3 +233,12 @@ ON CONFLICT (user_id, post_id) DO NOTHING;
 --
 UPDATE users SET privacy_consented_at = '2026-03-02 09:00:00', privacy_policy_version = '2026-07-12' WHERE id = 1 AND privacy_consented_at IS NULL;
 UPDATE users SET privacy_consented_at = '2026-03-02 09:15:00', privacy_policy_version = '2026-07-12' WHERE id = 2 AND privacy_consented_at IS NULL;
+
+--
+-- Test notifications (알림) for regular test user (id=2)
+--
+INSERT INTO notifications (user_id, notification_type, message, post_id, event_id, is_read, created_at) VALUES
+  (2, 'notice',  '2026학년도 2학기 등록 안내 공지가 등록되었어요', 6,  NULL, false, date_trunc('day', now()) + interval '9 hour 32 minute'),
+  (2, 'comment', '내 게시글에 새 댓글이 달렸어요: "저도 참여하고 싶어요!"', 22, NULL, false, date_trunc('day', now()) + interval '8 hour 10 minute'),
+  (2, 'event',   '2학기 수강신청 마감이 1일 남았어요', NULL, NULL, false, date_trunc('day', now()) + interval '7 hour'),
+  (2, 'like',    '"이번 학기 스터디 같이 하실 분"에 추천이 달렸어요', 30, NULL, true, now() - interval '4 day');

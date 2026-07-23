@@ -20,35 +20,43 @@ const COLORS = {
 };
 
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
-  notice: { icon: "megaphone-outline", color: "#2761FF", bg: "#EAF2FF" },
-  event: { icon: "calendar-outline", color: "#16A34A", bg: "#EAF8EF" },
-  comment: { icon: "chatbubble-ellipses-outline", color: "#7C3AED", bg: "#F1ECFF" },
-  like: { icon: "heart-outline", color: "#DB2777", bg: "#FDF0F6" },
-  admin_reply: { icon: "person-circle-outline", color: "#0F766E", bg: "#E7F7F4" },
-  report: { icon: "flag-outline", color: "#EA580C", bg: "#FFF4E8" },
-  council: { icon: "people-outline", color: "#0F766E", bg: "#E7F7F4" },
+  notice: { icon: "notifications-outline", color: "#0C447C", bg: "#E6F1FB" },
+  event: { icon: "calendar-outline", color: "#3B6D11", bg: "#EAF3DE" },
+  comment: { icon: "chatbubble-ellipses-outline", color: "#3C3489", bg: "#EEEDFE" },
+  like: { icon: "heart-outline", color: "#993556", bg: "#FBEAF0" },
+  admin_reply: { icon: "person-circle-outline", color: "#0C447C", bg: "#E6F1FB" },
+  report: { icon: "flag-outline", color: "#993556", bg: "#FBEAF0" },
+  council: { icon: "people-outline", color: "#3B6D11", bg: "#EAF3DE" },
 };
 
 function isSameDay(left: Date, right: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
 }
 
+function daysAgo(date: Date) {
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Math.round((startOfToday - startOfDate) / 86400000);
+}
+
 function sectionLabel(value: string) {
   const date = new Date(value);
   const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
   if (isSameDay(date, today)) return "오늘";
-  if (isSameDay(date, yesterday)) return "어제";
+  if (daysAgo(date) <= 7) return "지난 7일";
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function timeLabel(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${minutes}`;
+  if (isSameDay(date, new Date())) {
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${minutes}`;
+  }
+  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function decorateItems(items: NotificationItem[]) {
@@ -136,15 +144,17 @@ export default function NotificationsScreen() {
                 {row.showSection ? <Text style={styles.sectionLabel}>{row.section}</Text> : null}
                 <Pressable onPress={() => openNotification(row.item)} style={styles.notificationRow}>
                   <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
-                    <Ionicons name={meta.icon} size={17} color={meta.color} />
+                    <Ionicons name={meta.icon} size={18} color={meta.color} />
                   </View>
                   <View style={styles.notificationText}>
-                    <Text numberOfLines={2} style={styles.message}>
-                      {row.item.message}
-                    </Text>
+                    <View style={styles.messageRow}>
+                      <Text numberOfLines={2} style={styles.message}>
+                        {row.item.message}
+                      </Text>
+                      {!row.item.is_read ? <View style={styles.unreadDot} /> : null}
+                    </View>
                     <Text style={styles.time}>{timeLabel(row.item.created_at)}</Text>
                   </View>
-                  {!row.item.is_read ? <View style={styles.unreadDot} /> : null}
                 </Pressable>
               </View>
             );
@@ -221,46 +231,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
   notificationRow: {
-    minHeight: 72,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    alignItems: "flex-start",
+    gap: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
+    marginHorizontal: 16,
+    paddingVertical: 12,
   },
   iconCircle: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
+    borderRadius: 18,
   },
   notificationText: {
     flex: 1,
     minWidth: 0,
+    gap: 3,
+  },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
   },
   message: {
+    flex: 1,
     color: COLORS.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: 19,
   },
   time: {
     color: COLORS.subtle,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "400",
-    marginTop: 3,
   },
   unreadDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
+    marginTop: 6,
   },
 });
