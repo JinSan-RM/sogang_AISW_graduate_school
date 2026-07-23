@@ -14,6 +14,9 @@ const COLORS = {
   subtle: "#A6ACB7",
   border: "#E1E4E9",
   bg: "#FFFFFF",
+  emptyIcon: "#A6ACB7",
+  emptyTitle: "#2C3038",
+  emptySub: "#8A919C",
 };
 
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
@@ -114,7 +117,15 @@ export default function NotificationsScreen() {
           contentContainerStyle={[styles.listContent, rows.length === 0 ? styles.emptyContent : null]}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>{isError ? "알림을 불러오지 못했습니다. 당겨서 다시 시도해주세요." : "새 알림이 없습니다."}</Text>
+              {isError ? (
+                <Text style={styles.emptyText}>알림을 불러오지 못했습니다. 당겨서 다시 시도해주세요.</Text>
+              ) : (
+                <>
+                  <Ionicons name="calendar-outline" size={32} color={COLORS.emptyIcon} />
+                  <Text style={styles.emptyTitle}>아직 알림이 없어요</Text>
+                  <Text style={styles.emptySub}>새로운 소식이 있으면 알려드릴게요</Text>
+                </>
+              )}
             </View>
           }
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
@@ -184,12 +195,26 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
     padding: 24,
   },
   emptyText: {
     color: COLORS.subtle,
     fontSize: 14,
     fontWeight: "400",
+  },
+  emptyTitle: {
+    color: COLORS.emptyTitle,
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 2,
+  },
+  emptySub: {
+    color: COLORS.emptySub,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
   },
   sectionLabel: {
     color: COLORS.muted,
