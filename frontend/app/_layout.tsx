@@ -64,6 +64,7 @@ export default function RootLayout() {
               <Stack.Screen name="settings/profile" options={{ headerShown: false }} />
               <Stack.Screen name="settings/account" options={{ headerShown: false }} />
               <Stack.Screen name="settings/password" options={{ headerShown: false }} />
+              <Stack.Screen name="settings/email-verification" options={{ headerShown: false }} />
               <Stack.Screen name="settings/activity" options={{ headerShown: false }} />
               <Stack.Screen name="settings/blocks" options={{ title: "차단 관리" }} />
               <Stack.Screen name="board/[boardId]" options={{ headerShown: false }} />

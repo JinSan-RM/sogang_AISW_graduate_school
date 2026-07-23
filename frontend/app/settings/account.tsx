@@ -1,10 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useState } from "react";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useMeQuery } from "../../hooks/useApi";
 import { userApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import { clearStoredPushToken } from "../../utils/pushTokenStorage";
@@ -21,10 +19,7 @@ const COLORS = {
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { data } = useMeQuery();
   const clearSession = useUserStore((state) => state.clearSession);
-  const me = data?.data;
-  const [emailModalVisible, setEmailModalVisible] = useState(false);
 
   const deactivate = () => {
     Alert.alert("회원 탈퇴", "계정을 비활성화하면 다시 로그인할 수 없습니다.", [
@@ -70,7 +65,7 @@ export default function AccountSettingsScreen() {
             <Text style={styles.menuText}>비밀번호 변경</Text>
             <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
           </Pressable>
-          <Pressable onPress={() => setEmailModalVisible(true)} style={styles.menuRow}>
+          <Pressable onPress={() => router.push("/settings/email-verification")} style={styles.menuRow}>
             <Text style={styles.menuText}>학교 이메일 인증 정보</Text>
             <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
           </Pressable>
@@ -85,23 +80,6 @@ export default function AccountSettingsScreen() {
           </Pressable>
         </View>
       </ScrollView>
-
-      <Modal animationType="slide" transparent visible={emailModalVisible} onRequestClose={() => setEmailModalVisible(false)}>
-        <Pressable onPress={() => setEmailModalVisible(false)} style={styles.modalBackdrop}>
-          <Pressable onPress={() => undefined} style={styles.modalCard}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>학교 이메일 인증 정보</Text>
-            <View style={styles.emailRow}>
-              <Ionicons name="mail-outline" size={18} color={COLORS.subtle} />
-              <Text style={styles.emailText}>{me?.email ?? "이메일 정보를 불러오는 중입니다."}</Text>
-            </View>
-            <View style={styles.verifiedRow}>
-              <Ionicons name="checkmark-circle" size={16} color="#2E9E5B" />
-              <Text style={styles.verifiedText}>인증된 학교 이메일입니다.</Text>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -134,21 +112,4 @@ const styles = StyleSheet.create({
   deactivateWrap: { paddingTop: 8, paddingHorizontal: 16 },
   deactivateRow: { paddingVertical: 13 },
   dangerText: { color: COLORS.danger, fontSize: 14, fontWeight: "400" },
-  modalBackdrop: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(17,24,39,0.38)" },
-  modalCard: {
-    width: "100%",
-    maxWidth: 405,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
-    backgroundColor: COLORS.bg,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 34,
-  },
-  modalHandle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: COLORS.border, marginBottom: 18 },
-  modalTitle: { color: COLORS.text, fontSize: 17, fontWeight: "500", marginBottom: 16 },
-  emailRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  emailText: { color: COLORS.text, fontSize: 15, fontWeight: "400" },
-  verifiedRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
-  verifiedText: { color: "#2E9E5B", fontSize: 13, fontWeight: "400" },
 });
