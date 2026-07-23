@@ -136,7 +136,7 @@ export default function RegisterScreen() {
       setResendCooldown(resendIn);
       setStep(1);
       setVerificationFailureState(null);
-      if (resend) setVerificationMessage({ type: "success", text: "새 인증코드가 발송되었어요." });
+      setVerificationMessage({ type: "success", text: resend ? "새 인증코드가 발송되었어요." : "인증코드가 발송되었어요." });
     } catch (error) {
       const errorCode = apiErrorCode(error);
       const message =
