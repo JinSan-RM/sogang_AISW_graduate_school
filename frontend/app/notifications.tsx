@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -71,6 +71,7 @@ function decorateItems(items: NotificationItem[]) {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { data, isLoading, isError, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["notifications"],
     queryFn: ({ pageParam }) => notificationApi.getNotifications(pageParam, 30),
@@ -82,9 +83,26 @@ export default function NotificationsScreen() {
   });
   const rows = decorateItems(data?.pages.flatMap((page) => page.data) ?? []);
 
+  const markReadInCache = (id: number) => {
+    queryClient.setQueryData<typeof data>(["notifications"], (current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          data: page.data.map((item) => (item.id === id ? { ...item, is_read: true } : item)),
+        })),
+      };
+    });
+  };
+
   const openNotification = async (notification: NotificationItem) => {
     if (!notification.is_read) {
-      notificationApi.markRead(notification.id).catch(() => undefined);
+      markReadInCache(notification.id);
+      notificationApi
+        .markRead(notification.id)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["notifications", "home-badge"] }))
+        .catch(() => undefined);
     }
     if (notification.post_id) {
       router.push(`/board/post/${notification.post_id}` as never);
