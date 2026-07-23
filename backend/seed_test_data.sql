@@ -242,3 +242,8 @@ INSERT INTO notifications (user_id, notification_type, message, post_id, event_i
   (2, 'comment', '내 게시글에 새 댓글이 달렸어요: "저도 참여하고 싶어요!"', 22, NULL, false, date_trunc('day', now()) + interval '8 hour 10 minute'),
   (2, 'event',   '2학기 수강신청 마감이 1일 남았어요', NULL, NULL, false, date_trunc('day', now()) + interval '7 hour'),
   (2, 'like',    '"이번 학기 스터디 같이 하실 분"에 추천이 달렸어요', 30, NULL, true, now() - interval '4 day');
+INSERT INTO notifications (user_id, notification_type, message, post_id, event_id, is_read, created_at) VALUES
+  (2, 'council', '원우회에서 새 소식을 올렸어요: 2026 상반기 정기총회 안내', 35, NULL, false, date_trunc('day', now()) + interval '11 hour 5 minute'),
+  (2, 'comment', '내 게시글에 새 댓글이 달렸어요: "자료 공유 감사합니다!"', 23, NULL, false, date_trunc('day', now()) + interval '10 hour 20 minute'),
+  (2, 'like',    '"딥러닝 기초 기말고사 족보 공유"에 추천이 달렸어요', 18, NULL, false, now() - interval '2 day'),
+  (2, 'notice',  'AISW 졸업논문 사전 심사 일정이 공지되었어요', 7, NULL, false, now() - interval '5 day');
