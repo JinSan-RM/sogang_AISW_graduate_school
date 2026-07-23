@@ -282,8 +282,6 @@ export default function RegisterScreen() {
   const codeError = verificationExpired
     ? "인증 시간이 만료되었어요. 재전송을 눌러주세요."
     : errors.code;
-  // Figma SignUp-Step2-Resent: success message + countdown timer inline (space-between)
-  const showInlineTimer = verificationMessage?.type === "success" && resendCooldown > 0 && !verificationExpired;
 
   return (
     <View style={styles.screen}>
@@ -347,47 +345,36 @@ export default function RegisterScreen() {
                   style={[styles.input, codeError ? styles.inputError : null, verificationAttemptsLocked ? styles.verificationLockedInput : null]}
                   value={code}
                 />
-                <FieldError message={codeError} />
               </View>
-              {verificationMessage ? (
-                <View style={styles.statusRow}>
-                  <View style={verificationMessage.type === "success" ? styles.successRow : styles.errorRow}>
-                    <Ionicons
-                      name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
-                      size={14}
-                      color={verificationMessage.type === "success" ? "#3B6D11" : COLORS.danger}
-                    />
-                    <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>{verificationMessage.text}</Text>
-                  </View>
-                  {showInlineTimer ? <Text style={styles.timerText}>{formatCountdown(resendCooldown)}</Text> : null}
-                </View>
-              ) : null}
-              {verificationExpired ? (
-                <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null]}>
-                  <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 재전송"}</Text>
-                </Pressable>
-              ) : (
-                <>
-                  {!verificationAttemptsLocked && !showInlineTimer ? (
-                    <Pressable
-                      disabled={isSubmitting || resendCooldown > 0}
-                      onPress={() => void requestCode(true)}
-                      style={styles.resendButton}
-                    >
-                      <Text style={[styles.resendText, resendCooldown > 0 ? styles.resendTextDisabled : null]}>
-                        {resendCooldown > 0 ? `재전송 (${formatCountdown(resendCooldown)})` : "인증코드 재전송"}
-                      </Text>
-                    </Pressable>
+              <View style={styles.statusRow}>
+                <View style={styles.statusLeft}>
+                  {codeError ? (
+                    <View style={styles.errorRow}>
+                      <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
+                      <Text style={styles.errorText}>{codeError}</Text>
+                    </View>
+                  ) : verificationMessage?.type === "success" ? (
+                    <View style={styles.successRow}>
+                      <Ionicons name="checkmark-circle-outline" size={14} color="#3B6D11" />
+                      <Text style={styles.successText}>{verificationMessage.text}</Text>
+                    </View>
                   ) : null}
-                  <Pressable
-                    disabled={isSubmitting || verificationAttemptsLocked}
-                    onPress={verifyCode}
-                    style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, verificationAttemptsLocked ? styles.validationDisabledButton : null]}
-                  >
-                    <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
+                </View>
+                {resendCooldown > 0 && !verificationExpired ? (
+                  <Text style={styles.timerText}>{formatCountdown(countdown)}</Text>
+                ) : (
+                  <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
+                    <Text style={styles.resendLink}>{isSubmitting ? "발송 중" : "재전송"}</Text>
                   </Pressable>
-                </>
-              )}
+                )}
+              </View>
+              <Pressable
+                disabled={isSubmitting || verificationAttemptsLocked}
+                onPress={verifyCode}
+                style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, verificationAttemptsLocked ? styles.validationDisabledButton : null]}
+              >
+                <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
+              </Pressable>
             </>
           ) : null}
 
@@ -479,13 +466,15 @@ const styles = StyleSheet.create({
   helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, gray/500
   field: { gap: 6 }, // Figma label→input gap
   label: { color: COLORS.text, fontSize: 14, fontWeight: "500" }, // Figma: Inter Medium
-  input: { minHeight: 48, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 15 }, // Figma: 48h, Regular
+  input: { minHeight: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 14, paddingVertical: 12 }, // Figma: 44h, border 0.5, Regular
   inputError: { borderColor: COLORS.danger },
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
   errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8 },
+  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, marginTop: -12 },
+  statusLeft: { flexShrink: 1, minWidth: 0 },
   timerText: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular 12
   successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
