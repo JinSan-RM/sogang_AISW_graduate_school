@@ -1,13 +1,26 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { notificationApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { NotificationSettings } from "../../types";
-import { getWebNotificationPermission, requestWebNotificationPermission, showWebNotification, type WebNotificationPermission } from "../../utils/webNotifications";
+
+function Toggle({ value, disabled, onValueChange }: { value: boolean; disabled?: boolean; onValueChange: (next: boolean) => void }) {
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      style={[styles.toggleTrack, value ? styles.toggleTrackOn : styles.toggleTrackOff, disabled ? styles.toggleDisabled : null]}
+    >
+      <View style={styles.toggleThumb} />
+    </Pressable>
+  );
+}
 
 const COLORS = {
   primary: "#2761FF",
@@ -39,7 +52,6 @@ export default function NotificationSettingsScreen() {
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<keyof NotificationSettings | null>(null);
-  const [webPermission, setWebPermission] = useState<WebNotificationPermission>(() => getWebNotificationPermission());
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -68,13 +80,6 @@ export default function NotificationSettingsScreen() {
     }
   };
 
-  const enableWebNotifications = async () => {
-    const permission = await requestWebNotificationPermission();
-    setWebPermission(permission);
-    if (permission === "granted") showWebNotification("Sogang AI-SW", "웹 브라우저 알림이 켜졌어요.", () => undefined);
-    if (permission === "denied") Alert.alert("브라우저 알림 차단됨", "브라우저 사이트 설정에서 알림 권한을 허용해주세요.");
-  };
-
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
@@ -98,27 +103,12 @@ export default function NotificationSettingsScreen() {
         </View>
       ) : (
         <View style={styles.list}>
-          {Platform.OS === "web" ? (
-            <View style={styles.webPermissionRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowText}>웹 브라우저 알림</Text>
-                <Text style={styles.permissionHelp}>
-                  {webPermission === "granted" ? "브라우저 시스템 알림이 허용되어 있어요." : webPermission === "denied" ? "브라우저 설정에서 권한을 허용해주세요." : webPermission === "unsupported" ? "이 브라우저는 시스템 알림을 지원하지 않아요." : "사이트가 열려 있을 때 시스템 알림을 받을 수 있어요."}
-                </Text>
-              </View>
-              <Pressable disabled={webPermission === "granted" || webPermission === "unsupported"} onPress={() => void enableWebNotifications()} style={[styles.permissionButton, webPermission === "granted" ? styles.permissionButtonActive : null]}>
-                <Text style={[styles.permissionButtonText, webPermission === "granted" ? styles.permissionButtonTextActive : null]}>{webPermission === "granted" ? "허용됨" : "허용"}</Text>
-              </Pressable>
-            </View>
-          ) : null}
           {SETTING_ROWS.map((row) => (
             <View key={row.key} style={styles.row}>
               <Text style={styles.rowText}>{row.label}</Text>
-              <Switch
+              <Toggle
                 disabled={!isAuthenticated || savingKey === row.key}
                 onValueChange={(value) => updateSetting(row.key, value)}
-                thumbColor="#FFFFFF"
-                trackColor={{ false: "#D1D5DB", true: COLORS.primary }}
                 value={settings[row.key]}
               />
             </View>
@@ -181,19 +171,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "400",
   },
-  webPermissionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-    paddingVertical: 13,
+  toggleTrack: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    padding: 2,
+    justifyContent: "center",
   },
-  permissionHelp: { color: COLORS.subtle, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  permissionButton: { borderRadius: 8, borderWidth: 1, borderColor: COLORS.primary, paddingHorizontal: 12, paddingVertical: 8 },
-  permissionButtonActive: { backgroundColor: COLORS.primary },
-  permissionButtonText: { color: COLORS.primary, fontSize: 12, fontWeight: "500" },
-  permissionButtonTextActive: { color: "#FFFFFF" },
+  toggleTrackOn: { backgroundColor: COLORS.primary, alignItems: "flex-end" },
+  toggleTrackOff: { backgroundColor: "#D1D5DB", alignItems: "flex-start" },
+  toggleDisabled: { opacity: 0.5 },
+  toggleThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
   loginButton: {
     height: 48,
     alignItems: "center",

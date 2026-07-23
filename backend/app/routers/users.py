@@ -258,9 +258,10 @@ def get_my_activity(
             or 0
         )
         bookmarks = db.execute(
-            select(Bookmark, Post, Board.name)
+            select(Bookmark, Post, Board.name, User.nickname, User.cohort)
             .join(Post, Post.id == Bookmark.post_id)
             .join(Board, Board.id == Post.board_id)
+            .join(User, User.id == Post.author_id)
             .where(Bookmark.user_id == user.id, Post.deleted_at.is_(None))
             .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
             .offset(offset)
@@ -278,9 +279,11 @@ def get_my_activity(
                 "category": post.category,
                 "comment_count": post.comment_count,
                 "like_count": post.like_count,
+                "author_nickname": author_nickname,
+                "author_cohort": author_cohort,
                 "created_at": bookmark.created_at,
             }
-            for bookmark, post, board_name in bookmarks
+            for bookmark, post, board_name, author_nickname, author_cohort in bookmarks
         ]
     else:
         filters = [Post.author_id == user.id, Post.deleted_at.is_(None)]

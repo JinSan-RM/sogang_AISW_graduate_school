@@ -258,6 +258,8 @@ export type UserActivityItem = {
   category?: string | null;
   comment_count?: number;
   like_count?: number;
+  author_nickname?: string | null;
+  author_cohort?: string | null;
   created_at: string;
 };
 

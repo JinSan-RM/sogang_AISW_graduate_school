@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { userApi } from "../../services/api";
 import type { UserActivityItem } from "../../types";
+import { formatCohortName } from "../../utils/userLabel";
 
 const COLORS = {
   primary: "#2761FF",
@@ -124,7 +125,7 @@ export default function ActivityScreen() {
                   </Text>
                   <Text style={styles.meta}>
                     {item.type === "bookmark"
-                      ? shortDate(item.created_at)
+                      ? [formatCohortName(item.author_cohort, item.author_nickname), shortDate(item.created_at)].filter(Boolean).join(" · ")
                       : `${shortDate(item.created_at)} · 댓글 ${item.comment_count ?? 0} · 추천 ${item.like_count ?? 0}`}
                   </Text>
                 </View>
