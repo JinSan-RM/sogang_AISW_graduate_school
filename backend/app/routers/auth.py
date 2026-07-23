@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request
@@ -41,6 +42,7 @@ from app.security import (
 from app.user_validation import ensure_nickname_available
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 MAX_VERIFICATION_ATTEMPTS = 5
 
 
@@ -160,6 +162,18 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
         "expires_in": settings.email_verification_expire_minutes * 60,
         "resend_in": settings.email_verification_resend_cooldown_seconds,
     }
+    # 개발 편의: SMTP가 설정되지 않은 로컬 환경에서는 실제 발송 대신 코드를 서버 로그로 남기고
+    # 가입 플로우가 진행되도록 한다(운영에서는 SMTP가 설정되어 이 분기를 타지 않음).
+    if not is_email_configured():
+        logger.warning("[DEV] 회원가입 인증 코드 for %s = %s (SMTP 미설정)", email, code)
+        consumed_at = utc_now()
+        for previous in previous_tokens:
+            previous.consumed_at = consumed_at
+        db.commit()
+        data["email_sent"] = True
+        data["dev_mode"] = True
+        return success_response(data)
+
     plain_body, html_body = verification_email(code, settings.email_verification_expire_minutes)
     try:
         email_sent = send_email(
