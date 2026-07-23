@@ -136,7 +136,7 @@ export default function PasswordResetScreen() {
       const errorCode = apiErrorCode(error);
       const isRateLimited = errorCode === "RATE_LIMITED" || errorCode === "VERIFICATION_RESEND_COOLDOWN";
       const message = isRateLimited
-        ? "인증 시도 횟수를 초과했어요. 잠시 후 다시 시도해주세요."
+        ? "인증 시도 횟수를 초과했어요.\n잠시 후 다시 시도해주세요."
         : "인증코드를 발송하지 못했어요. 이메일을 확인해주세요.";
       if (resend) setVerificationMessage({ type: "error", text: message });
       else {
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: COLORS.danger },
   inputErrorBackground: { borderColor: COLORS.danger, backgroundColor: COLORS.errorBg },
-  messageRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  messageRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular
   successText: { flexShrink: 1, color: COLORS.successText, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: green Regular
   verificationStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: -12 },
