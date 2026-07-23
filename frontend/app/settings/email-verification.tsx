@@ -8,16 +8,27 @@ import { useMeQuery } from "../../hooks/useApi";
 const COLORS = {
   text: "#15171C",
   label: "#6B7280",
-  border: "#E1E4E9",
-  fieldBg: "#F7F8FA",
+  subtle: "#A6ACB7",
+  cardBg: "#F7F8FA",
   green: "#2E9E5B",
   bg: "#FFFFFF",
 };
+
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function formatDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return `${base}(${WEEKDAYS[date.getDay()]})`;
+}
 
 export default function EmailVerificationScreen() {
   const insets = useSafeAreaInsets();
   const { data } = useMeQuery();
   const me = data?.data;
+  const verifiedDate = formatDate(me?.created_at);
 
   return (
     <View style={styles.screen}>
@@ -37,18 +48,15 @@ export default function EmailVerificationScreen() {
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>학교 이메일</Text>
-          <View style={styles.field}>
-            <Ionicons name="mail-outline" size={18} color={COLORS.label} />
-            <Text style={styles.fieldText}>{me?.email ?? "이메일 정보를 불러오는 중입니다."}</Text>
+        <View style={styles.card}>
+          <View style={styles.verifiedRow}>
+            <Ionicons name="checkmark-circle" size={16} color={COLORS.green} />
+            <Text style={styles.verifiedText}>인증된 학교 이메일이에요</Text>
           </View>
+          <Text style={styles.email}>{me?.email ?? "-"}</Text>
+          {verifiedDate ? <Text style={styles.verifiedDate}>인증일 {verifiedDate}</Text> : null}
         </View>
-
-        <View style={styles.verifiedRow}>
-          <Ionicons name="checkmark-circle" size={16} color={COLORS.green} />
-          <Text style={styles.verifiedText}>인증된 학교 이메일입니다.</Text>
-        </View>
+        <Text style={styles.notice}>이메일이 변경되었거나 인증에 문제가 있다면 학과 행정실로 문의해주세요.</Text>
       </ScrollView>
     </View>
   );
@@ -66,24 +74,19 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" },
+  appBarTitle: { color: COLORS.text, fontSize: 17, fontWeight: "500" },
   scroller: { flex: 1 },
-  content: { paddingTop: 12, paddingHorizontal: 16, gap: 12 },
-  fieldGroup: { gap: 8 },
-  label: { color: COLORS.label, fontSize: 13, fontWeight: "400" },
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
+  content: { paddingTop: 12, paddingHorizontal: 16, gap: 16 },
+  card: {
     gap: 8,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    backgroundColor: COLORS.fieldBg,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.cardBg,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
-  fieldText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
   verifiedRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  verifiedText: { color: COLORS.green, fontSize: 13, fontWeight: "400" },
+  verifiedText: { color: COLORS.green, fontSize: 14, fontWeight: "500" },
+  email: { color: COLORS.text, fontSize: 17, fontWeight: "500" },
+  verifiedDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400" },
+  notice: { color: COLORS.label, fontSize: 13, fontWeight: "400", lineHeight: 19 },
 });

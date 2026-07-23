@@ -52,6 +52,7 @@ def get_me(user: User = Depends(get_current_user)):
             "profile_image_url": user.profile_image_url,
             "email": user.email,
             "role": user.role,
+            "created_at": user.created_at,
             "privacy_policy_version": user.privacy_policy_version,
             "privacy_consented_at": user.privacy_consented_at,
         }

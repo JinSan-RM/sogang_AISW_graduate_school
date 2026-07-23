@@ -401,6 +401,7 @@ export type UserMe = {
   profile_image_url?: string | null;
   email: string;
   role: string;
+  created_at?: string | null;
   privacy_policy_version?: string | null;
   privacy_consented_at?: string | null;
 };
