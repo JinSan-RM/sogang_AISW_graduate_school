@@ -274,9 +274,11 @@ export default function RegisterScreen() {
     password === passwordConfirm &&
     consented &&
     Boolean(privacyPolicy);
-  // 입력이 완료/유효하면 파란 활성, 미입력·오류가 있으면 회색으로 실시간 전환.
-  // 회색이어도 탭은 가능해 부족한 항목의 오류 문구를 볼 수 있다(제출 중에만 비활성).
-  const registerBlocked = isSubmitting || !isProfileFormValid || Boolean(errors.form) || Boolean(errors.nickname);
+  // 처음엔 파란 활성 버튼. 한 번 눌러 미입력·오류가 확인되면 회색으로 전환.
+  // 회색이어도 탭은 가능해 부족한 항목의 오류 문구를 다시 볼 수 있다(제출 중에만 비활성).
+  const registerBlocked =
+    isSubmitting ||
+    (profileValidationAttempted && (!isProfileFormValid || Boolean(errors.form) || Boolean(errors.nickname)));
   const verificationExpired =
     step === 1 && verificationExpiresAtRef.current > 0 && countdown <= 0;
   const verificationAttemptsLocked = verificationFailureState === "attempts" && !verificationExpired;
