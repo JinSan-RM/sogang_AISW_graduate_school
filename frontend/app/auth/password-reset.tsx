@@ -322,7 +322,6 @@ export default function PasswordResetScreen() {
                       {verificationMessage.text}
                     </Text>
                   </View>
-                  <Text style={styles.timer}>{formatCountdown(countdown)}</Text>
                 </View>
               ) : null}
 
