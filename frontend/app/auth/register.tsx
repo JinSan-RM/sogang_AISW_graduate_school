@@ -274,9 +274,9 @@ export default function RegisterScreen() {
     password === passwordConfirm &&
     consented &&
     Boolean(privacyPolicy);
-  const registerDisabled =
-    isSubmitting ||
-    (profileValidationAttempted && (!isProfileFormValid || Boolean(errors.form) || Boolean(errors.nickname)));
+  // 입력이 완료/유효하면 파란 활성, 미입력·오류가 있으면 회색으로 실시간 전환.
+  // 회색이어도 탭은 가능해 부족한 항목의 오류 문구를 볼 수 있다(제출 중에만 비활성).
+  const registerBlocked = isSubmitting || !isProfileFormValid || Boolean(errors.form) || Boolean(errors.nickname);
   const verificationExpired =
     step === 1 && verificationExpiresAtRef.current > 0 && countdown <= 0;
   const verificationAttemptsLocked = verificationFailureState === "attempts" && !verificationExpired;
@@ -431,7 +431,7 @@ export default function RegisterScreen() {
               </Pressable>
               <FieldError message={errors.consent} />
               <FieldError message={errors.form} />
-              <Pressable disabled={registerDisabled} onPress={register} style={[styles.primaryButton, registerDisabled ? styles.validationDisabledButton : null]}>
+              <Pressable disabled={isSubmitting} onPress={register} style={[styles.primaryButton, registerBlocked ? styles.validationDisabledButton : null]}>
                 <Text style={styles.primaryButtonText}>{isSubmitting ? "가입 중" : "가입하기"}</Text>
               </Pressable>
             </>
