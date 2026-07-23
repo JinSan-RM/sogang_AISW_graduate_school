@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   policyMeta: { gap: 4 },
   consentRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   consentText: { color: "#2E9E5B", fontSize: 13, fontWeight: "500" },
-  section: { gap: 4 },
-  sectionTitle: { color: "#15171C", fontSize: 13, fontWeight: "700" },
-  body: { color: "#15171C", fontSize: 13, fontWeight: "400", lineHeight: 20 },
+  section: { gap: 3 },
+  sectionTitle: { color: "#15171C", fontSize: 13, fontWeight: "700", lineHeight: 18 },
+  body: { color: "#15171C", fontSize: 13, fontWeight: "400", lineHeight: 19 },
 });
