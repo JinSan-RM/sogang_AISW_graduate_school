@@ -11,7 +11,7 @@ export default function LegalDocumentScreen({ title, effectiveDate, version, sec
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/auth/login"))} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={24} color="#111827" />
+          <Ionicons name="chevron-back" size={24} color="#15171C" />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
         <View style={styles.iconButton} />
@@ -34,13 +34,13 @@ export default function LegalDocumentScreen({ title, effectiveDate, version, sec
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
-  header: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#EEF0F3", paddingHorizontal: 18, paddingBottom: 10 },
+  header: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 14 },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  headerTitle: { color: "#111827", fontSize: 18, fontWeight: "900" },
-  content: { padding: 24, paddingBottom: 48, gap: 24 },
-  effective: { color: "#6B7280", fontSize: 13 },
+  headerTitle: { color: "#15171C", fontSize: 17, fontWeight: "500" },
+  content: { paddingTop: 12, paddingHorizontal: 16, paddingBottom: 48, gap: 16 },
+  effective: { color: "#6B7280", fontSize: 13, fontWeight: "400" },
   policyMeta: { gap: 4 },
-  section: { gap: 8 },
-  sectionTitle: { color: "#111827", fontSize: 16, fontWeight: "900" },
-  body: { color: "#4B5563", fontSize: 14, lineHeight: 23 },
+  section: { gap: 4 },
+  sectionTitle: { color: "#15171C", fontSize: 13, fontWeight: "700" },
+  body: { color: "#15171C", fontSize: 13, fontWeight: "400", lineHeight: 20 },
 });

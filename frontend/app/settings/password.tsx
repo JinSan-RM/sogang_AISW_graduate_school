@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { userApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
-import { apiErrorCode, passwordError } from "../../utils/authValidation";
+import { apiErrorCode, apiErrorStatus, passwordError } from "../../utils/authValidation";
 import { clearStoredPushToken } from "../../utils/pushTokenStorage";
 
 const COLORS = {
@@ -16,35 +16,49 @@ const COLORS = {
   placeholder: "#A6ACB7",
   border: "#E1E4E9",
   bg: "#FFFFFF",
-  danger: "#E24B4A",
+  danger: "#D64545",
+  dangerBg: "#FFF5F5",
+  disabled: "#D1D5DB",
 };
+
+function ErrorRow({ message }: { message: string }) {
+  return (
+    <View style={styles.errorRow}>
+      <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
+      <Text style={styles.errorText}>{message}</Text>
+    </View>
+  );
+}
 
 export default function PasswordChangeScreen() {
   const insets = useSafeAreaInsets();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [currentError, setCurrentError] = useState<string | null>(null);
+  const [newError, setNewError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const clearSession = useUserStore((state) => state.clearSession);
 
+  const canSubmit = Boolean(currentPassword && newPassword && confirmPassword) && !isSubmitting;
+
   const changePassword = async () => {
-    setMessage(null);
-    if (!currentPassword) {
-      setMessage("현재 비밀번호를 입력해주세요.");
-      return;
-    }
+    setCurrentError(null);
+    setNewError(null);
+    setConfirmError(null);
+
     const validationMessage = passwordError(newPassword);
     if (validationMessage) {
-      setMessage(validationMessage);
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setMessage("새 비밀번호가 서로 일치하지 않아요.");
+      setNewError(validationMessage);
       return;
     }
     if (currentPassword === newPassword) {
-      setMessage("현재 비밀번호와 다른 비밀번호를 입력해주세요.");
+      setNewError("현재 비밀번호와 다른 비밀번호를 입력해주세요.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setConfirmError("새 비밀번호가 일치하지 않아요.");
       return;
     }
 
@@ -56,11 +70,11 @@ export default function PasswordChangeScreen() {
       Alert.alert("비밀번호 변경 완료", "보안을 위해 저장된 로그인 세션을 종료했습니다. 새 비밀번호로 다시 로그인해주세요.");
       router.replace("/auth/login");
     } catch (error) {
-      setMessage(
-        apiErrorCode(error) === "FORBIDDEN"
-          ? "현재 비밀번호가 올바르지 않아요."
-          : "비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해주세요."
-      );
+      if (apiErrorCode(error) === "FORBIDDEN" || apiErrorStatus(error) === 403) {
+        setCurrentError("현재 비밀번호가 일치하지 않아요.");
+      } else {
+        Alert.alert("비밀번호 변경 실패", "비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해주세요.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -87,40 +101,50 @@ export default function PasswordChangeScreen() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>현재 비밀번호</Text>
           <TextInput
-            onChangeText={setCurrentPassword}
+            onChangeText={(value) => {
+              setCurrentPassword(value);
+              if (currentError) setCurrentError(null);
+            }}
             placeholder="현재 비밀번호를 입력하세요"
             placeholderTextColor={COLORS.placeholder}
             secureTextEntry
-            style={styles.input}
+            style={[styles.input, currentError ? styles.inputError : null]}
             value={currentPassword}
           />
+          {currentError ? <ErrorRow message={currentError} /> : null}
         </View>
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>새 비밀번호</Text>
           <TextInput
-            onChangeText={setNewPassword}
+            onChangeText={(value) => {
+              setNewPassword(value);
+              if (newError) setNewError(null);
+            }}
             placeholder="영문, 숫자, 특수문자 포함 8자 이상"
             placeholderTextColor={COLORS.placeholder}
             secureTextEntry
-            style={styles.input}
+            style={[styles.input, newError ? styles.inputError : null]}
             value={newPassword}
           />
+          {newError ? <ErrorRow message={newError} /> : null}
         </View>
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>새 비밀번호 확인</Text>
           <TextInput
-            onChangeText={setConfirmPassword}
+            onChangeText={(value) => {
+              setConfirmPassword(value);
+              if (confirmError) setConfirmError(null);
+            }}
             placeholder="새 비밀번호를 다시 입력하세요"
             placeholderTextColor={COLORS.placeholder}
             secureTextEntry
-            style={styles.input}
+            style={[styles.input, confirmError ? styles.inputError : null]}
             value={confirmPassword}
           />
+          {confirmError ? <ErrorRow message={confirmError} /> : null}
         </View>
 
-        {message ? <Text style={styles.errorText}>{message}</Text> : null}
-
-        <Pressable disabled={isSubmitting} onPress={changePassword} style={[styles.primaryButton, isSubmitting && styles.disabled]}>
+        <Pressable disabled={!canSubmit} onPress={changePassword} style={[styles.primaryButton, canSubmit ? null : styles.primaryButtonDisabled]}>
           <Text style={styles.primaryButtonText}>{isSubmitting ? "변경 중" : "변경 완료"}</Text>
         </Pressable>
       </ScrollView>
@@ -156,7 +180,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  errorText: { color: COLORS.danger, fontSize: 13, fontWeight: "400", lineHeight: 19, marginTop: -8 },
+  inputError: { borderColor: COLORS.danger, backgroundColor: COLORS.dangerBg },
+  errorRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -2 },
+  errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "400" },
   primaryButton: {
     alignItems: "center",
     justifyContent: "center",
@@ -164,6 +190,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingVertical: 14,
   },
-  disabled: { opacity: 0.55 },
+  primaryButtonDisabled: { backgroundColor: COLORS.disabled },
   primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "500" },
 });

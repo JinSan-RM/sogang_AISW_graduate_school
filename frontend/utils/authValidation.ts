@@ -36,3 +36,8 @@ export function apiErrorCode(error: unknown) {
   if (!axios.isAxiosError(error)) return undefined;
   return error.response?.data?.code as string | undefined;
 }
+
+export function apiErrorStatus(error: unknown) {
+  if (!axios.isAxiosError(error)) return undefined;
+  return error.response?.status;
+}
