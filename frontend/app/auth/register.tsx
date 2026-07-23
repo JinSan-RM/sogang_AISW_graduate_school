@@ -360,7 +360,7 @@ export default function RegisterScreen() {
                     </View>
                   ) : null}
                 </View>
-                {resendCooldown > 0 && !verificationExpired ? (
+                {resendCooldown > 0 && !verificationExpired && !verificationAttemptsLocked ? (
                   <Text style={styles.timerText}>{formatCountdown(countdown)}</Text>
                 ) : (
                   <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
