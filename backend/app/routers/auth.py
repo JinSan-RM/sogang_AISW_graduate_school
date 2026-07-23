@@ -363,7 +363,8 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, db: 
                 # Keep the response indistinguishable from an unknown account.
                 # The frontend prevents ordinary users from retrying before the
                 # cooldown, while the backend simply refuses to issue a new code.
-                data["email_sent"] = is_email_configured()
+                # 개발(SMTP 미설정)에서는 직전 코드가 아직 유효하므로 흐름을 진행시킨다.
+                data["email_sent"] = True if not is_email_configured() else is_email_configured()
                 return success_response(data)
 
         reset_token = generate_verification_code()

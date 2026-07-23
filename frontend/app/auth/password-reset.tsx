@@ -127,7 +127,7 @@ export default function PasswordResetScreen() {
       setVerificationFailureState(null);
       setVerificationMessage({
         type: "success",
-        text: resend ? "새 인증코드가 발송되었어요." : "인증코드가 발송되었어요.",
+        text: "새 인증코드가 발송되었어요.",
       });
       setMode("code");
     } catch (error) {
