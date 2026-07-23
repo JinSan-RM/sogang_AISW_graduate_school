@@ -182,6 +182,7 @@ export default function RegisterScreen() {
             ? "인증 시도 횟수를 초과했어요. 잠시 후 다시 시도해주세요."
             : "인증코드가 일치하지 않아요.";
       setErrors({ code: message });
+      setVerificationMessage(null);
       setVerificationFailureState(
         errorCode === "VERIFICATION_EXPIRED"
           ? "expired"
