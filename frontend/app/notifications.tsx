@@ -9,10 +9,10 @@ import type { NotificationItem } from "../types";
 
 const COLORS = {
   primary: "#2761FF",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
-  subtle: "#9AA3B2",
-  border: "#EEF0F3",
+  subtle: "#A6ACB7",
+  border: "#E1E4E9",
   bg: "#FFFFFF",
 };
 
@@ -155,8 +155,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   iconButton: {
     width: 42,
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   center: {
     flex: 1,
@@ -187,15 +187,15 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   emptyText: {
-    color: COLORS.muted,
+    color: COLORS.subtle,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   sectionLabel: {
-    color: COLORS.subtle,
+    color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
-    paddingHorizontal: 24,
+    fontWeight: "500",
+    paddingHorizontal: 16,
     paddingTop: 18,
     paddingBottom: 8,
   },
@@ -204,10 +204,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   iconCircle: {
     width: 38,
@@ -223,13 +223,13 @@ const styles = StyleSheet.create({
   message: {
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
     lineHeight: 20,
   },
   time: {
     color: COLORS.subtle,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "400",
     marginTop: 3,
   },
   unreadDot: {
