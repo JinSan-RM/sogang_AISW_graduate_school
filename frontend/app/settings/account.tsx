@@ -75,12 +75,8 @@ export default function AccountSettingsScreen() {
             <Text style={styles.menuText}>학교 이메일 인증 정보</Text>
             <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
           </Pressable>
-          <Pressable onPress={() => router.push("/legal/terms")} style={styles.menuRow}>
-            <Text style={styles.menuText}>이용약관</Text>
-            <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
-          </Pressable>
           <Pressable onPress={() => router.push("/legal/privacy")} style={styles.menuRow}>
-            <Text style={styles.menuText}>개인정보 처리방침</Text>
+            <Text style={styles.menuText}>개인정보 수집 및 이용 동의</Text>
             <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
           </Pressable>
         </View>
