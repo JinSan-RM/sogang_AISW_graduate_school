@@ -48,22 +48,26 @@ export default function PasswordChangeScreen() {
     setNewError(null);
     setConfirmError(null);
 
-    const validationMessage = passwordError(newPassword);
-    if (validationMessage) {
-      setNewError(validationMessage);
-      return;
+    // 클라이언트 검증(새 비밀번호 형식/확인 일치)과 현재 비밀번호 서버 검증을 함께 수행해
+    // 각 항목의 에러가 동시에 표시되도록 한다.
+    let newMessage: string | null = null;
+    if (passwordError(newPassword)) {
+      newMessage = passwordError(newPassword);
+    } else if (currentPassword === newPassword) {
+      newMessage = "현재 비밀번호와 다른 비밀번호를 입력해주세요.";
     }
-    if (currentPassword === newPassword) {
-      setNewError("현재 비밀번호와 다른 비밀번호를 입력해주세요.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setConfirmError("새 비밀번호가 일치하지 않아요.");
-      return;
-    }
+    const confirmMessage = newPassword !== confirmPassword ? "새 비밀번호가 일치하지 않아요." : null;
 
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
+      const { data: verify } = await userApi.verifyPassword({ current_password: currentPassword });
+      const currentMessage = verify.valid ? null : "현재 비밀번호가 일치하지 않아요.";
+
+      setCurrentError(currentMessage);
+      setNewError(newMessage);
+      setConfirmError(confirmMessage);
+      if (currentMessage || newMessage || confirmMessage) return;
+
       await userApi.updatePassword({ current_password: currentPassword, new_password: newPassword });
       await clearStoredPushToken().catch(() => undefined);
       clearSession();

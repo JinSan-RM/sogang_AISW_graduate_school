@@ -14,7 +14,7 @@ from app.models.registration import MajorOption
 from app.models.user import User
 from app.models.user_block import UserBlock
 from app.response import success_response
-from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeactivateRequest, UserMeUpdate, UserPasswordUpdate
+from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeactivateRequest, UserMeUpdate, UserPasswordUpdate, UserPasswordVerify
 from app.security import ensure_password_policy, hash_password, utc_now, verify_password
 from app.user_validation import nickname_is_taken, normalize_nickname
 from app.audit import log_admin_action
@@ -384,6 +384,11 @@ def unblock_user(blocked_user_id: int, db: Session = Depends(get_db), user: User
         db.commit()
 
     return success_response({"blocked_user_id": blocked_user_id, "blocked": False})
+
+
+@router.post('/me/password/verify')
+def verify_current_password(payload: UserPasswordVerify, user: User = Depends(get_current_user)):
+    return success_response({"valid": verify_password(payload.current_password, user.password_hash)})
 
 
 @router.put('/me/password')
