@@ -199,7 +199,7 @@ export default function RegisterScreen() {
     setProfileValidationAttempted(true);
     const nextErrors: FieldErrors = {};
     if (!nickname.trim()) nextErrors.nickname = "이름을 입력해주세요.";
-    if (!/^\d{1,3}$/.test(cohort)) nextErrors.cohort = "기수는 숫자만 입력해주세요.";
+    if (!/^\d{1,3}$/.test(cohort)) nextErrors.cohort = "숫자만 입력해주세요.";
     if (!major) nextErrors.major = "전공을 선택해주세요.";
     const nextPhoneError = phoneError(phone);
     if (nextPhoneError) nextErrors.phone = nextPhoneError;
@@ -343,7 +343,7 @@ export default function RegisterScreen() {
                   }}
                   placeholder="인증코드 6자리"
                   placeholderTextColor={COLORS.tertiary}
-                  style={[styles.input, codeError ? styles.inputError : null, verificationAttemptsLocked ? styles.verificationLockedInput : null]}
+                  style={[styles.codeInput, codeError ? styles.inputError : null, verificationAttemptsLocked ? styles.verificationLockedInput : null]}
                   value={code}
                 />
               </View>
@@ -426,13 +426,9 @@ export default function RegisterScreen() {
                 <FieldError message={errors.passwordConfirm} />
               </View>
               <Pressable disabled={!privacyPolicy} onPress={() => { setConsented((value) => !value); setErrors((current) => ({ ...current, consent: undefined })); }} style={styles.consentRow}>
-                <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}>{consented ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}</View>
-                <Text style={styles.consentText}>개인정보 수집 및 이용 동의 (필수){privacyPolicy ? ` · v${privacyPolicy.version}` : ""}</Text>
+                <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><Ionicons name="checkmark" size={13} color="#FFFFFF" /></View>
+                <Text style={styles.consentText}>개인정보 수집 및 이용 동의 (필수)</Text>
               </Pressable>
-              <View style={styles.legalLinks}>
-                <Pressable onPress={() => router.push("/legal/terms")}><Text style={styles.legalLinkText}>이용약관 보기</Text></Pressable>
-                <Pressable onPress={() => router.push("/legal/privacy")}><Text style={styles.legalLinkText}>개인정보 처리방침 보기</Text></Pressable>
-              </View>
               <FieldError message={errors.consent} />
               <FieldError message={errors.form} />
               <Pressable disabled={registerDisabled} onPress={register} style={[styles.primaryButton, registerDisabled ? styles.validationDisabledButton : null]}>
@@ -476,8 +472,9 @@ const styles = StyleSheet.create({
   heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
   helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, gray/500
   field: { gap: 6 }, // Figma label→input gap
-  label: { color: COLORS.text, fontSize: 14, fontWeight: "500" }, // Figma: Inter Medium
-  input: { minHeight: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 14, paddingVertical: 12 }, // Figma: 44h, border 0.5, Regular
+  label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
+  input: { minHeight: 48, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, border 1, px16, Regular 14
+  codeInput: { minHeight: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 14, paddingVertical: 12 }, // Figma SignUp-Step2: 44h, border 0.5
   inputError: { borderColor: COLORS.danger },
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
@@ -490,19 +487,19 @@ const styles = StyleSheet.create({
   successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
-  selectField: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 15 },
-  selectText: { color: COLORS.text, fontSize: 15, fontWeight: "700" },
-  selectPlaceholder: { color: COLORS.subtle },
+  selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: border 0.5, px14 py12
+  selectText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
+  selectPlaceholder: { color: COLORS.tertiary },
   primaryButton: { height: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary }, // Figma: 48h
   disabledButton: { opacity: 0.55 },
   validationDisabledButton: { backgroundColor: "#D1D5DB" },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500" }, // Figma: Inter Medium
+  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "500" }, // Figma: Inter Medium ~14-15
   resendButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 8 },
   resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, primary/500
   resendTextDisabled: { color: COLORS.subtle },
   consentRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  checkBox: { width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 5, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.bg }, // Figma: 20, radius 5
-  checkBoxActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
+  checkBox: { width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 5, backgroundColor: "#C7CCD4" }, // Figma: 20, radius 5, gray/300 unchecked
+  checkBoxActive: { backgroundColor: COLORS.primary }, // Figma: primary/500 checked
   consentText: { color: COLORS.text, fontSize: 14, fontWeight: "400" }, // Figma: Regular 14
   legalLinks: { flexDirection: "row", flexWrap: "wrap", gap: 14, paddingLeft: 30, marginTop: -4 },
   legalLinkText: { color: COLORS.primary, fontSize: 12, fontWeight: "800", textDecorationLine: "underline" },
