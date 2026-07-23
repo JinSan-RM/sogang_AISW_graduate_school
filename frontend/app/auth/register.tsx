@@ -454,11 +454,11 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#F1F2F4", backgroundColor: COLORS.bg, paddingHorizontal: 18, paddingBottom: 10 },
+  appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.bg, paddingHorizontal: 16, paddingBottom: 12 },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" }, // Figma: Inter Medium
   scroller: { flex: 1 },
-  content: { gap: 20, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 }, // Figma body
+  content: { gap: 20, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 }, // Figma body: pt28 pb24
   stepDots: { flexDirection: "row", gap: 8 },
   stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#DDE2EA" },
   stepDotActive: { backgroundColor: COLORS.primary },
