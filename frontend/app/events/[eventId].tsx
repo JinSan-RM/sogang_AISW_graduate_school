@@ -10,10 +10,10 @@ import { useUserStore } from "../../stores/userStore";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
-  border: "#EEF0F3",
+  border: "#E1E4E9",
   bg: "#FFFFFF",
   danger: "#B91C1C",
 };
@@ -28,7 +28,7 @@ const EVENT_CATEGORY_LABELS: Record<string, string> = {
 };
 
 const EVENT_CATEGORY_TONES: Record<string, { backgroundColor: string; color: string }> = {
-  academic: { backgroundColor: "#EAF4FF", color: "#3478B8" },
+  academic: { backgroundColor: "#E6F1FB", color: "#0C447C" },
   council: { backgroundColor: "#F1EAFE", color: "#6C4FCB" },
   event: { backgroundColor: "#FFF0F4", color: "#D65B7C" },
   exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
@@ -99,7 +99,7 @@ export default function EventDetailScreen() {
         </View>
 
         <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={16} color={COLORS.subtle} />
+          <Ionicons name="calendar-outline" size={15} color={COLORS.muted} />
           <Text style={styles.metaText}>{formatDateTime(event.start_at)}</Text>
         </View>
 
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   scroller: {
     flex: 1,
@@ -166,45 +166,45 @@ const styles = StyleSheet.create({
   },
   categoryPill: {
     alignSelf: "flex-start",
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: COLORS.primary50,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   categoryText: {
     color: COLORS.primary,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    marginTop: 16,
+    gap: 6,
+    marginTop: 12,
   },
   metaText: {
-    color: COLORS.subtle,
+    color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   title: {
     color: COLORS.text,
-    fontSize: 22,
-    fontWeight: "900",
-    lineHeight: 30,
-    marginTop: 10,
+    fontSize: 20,
+    fontWeight: "500",
+    lineHeight: 28,
+    marginTop: 8,
   },
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginTop: 22,
-    marginBottom: 22,
+    marginTop: 16,
+    marginBottom: 16,
   },
   body: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
-    lineHeight: 26,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 23,
     marginBottom: 16,
   },
   adminActions: {

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,43 +9,54 @@ import type { NotificationItem } from "../types";
 
 const COLORS = {
   primary: "#2761FF",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
-  subtle: "#9AA3B2",
-  border: "#EEF0F3",
+  subtle: "#A6ACB7",
+  border: "#E1E4E9",
   bg: "#FFFFFF",
+  emptyIcon: "#A6ACB7",
+  emptyTitle: "#2C3038",
+  emptySub: "#8A919C",
 };
 
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
-  notice: { icon: "megaphone-outline", color: "#2761FF", bg: "#EAF2FF" },
-  event: { icon: "calendar-outline", color: "#16A34A", bg: "#EAF8EF" },
-  comment: { icon: "chatbubble-ellipses-outline", color: "#7C3AED", bg: "#F1ECFF" },
-  like: { icon: "heart-outline", color: "#DB2777", bg: "#FDF0F6" },
-  admin_reply: { icon: "person-circle-outline", color: "#0F766E", bg: "#E7F7F4" },
-  report: { icon: "flag-outline", color: "#EA580C", bg: "#FFF4E8" },
-  council: { icon: "people-outline", color: "#0F766E", bg: "#E7F7F4" },
+  notice: { icon: "notifications-outline", color: "#0C447C", bg: "#E6F1FB" },
+  event: { icon: "calendar-outline", color: "#3B6D11", bg: "#EAF3DE" },
+  comment: { icon: "chatbubble-ellipses-outline", color: "#3C3489", bg: "#EEEDFE" },
+  like: { icon: "heart-outline", color: "#993556", bg: "#FBEAF0" },
+  admin_reply: { icon: "person-circle-outline", color: "#0C447C", bg: "#E6F1FB" },
+  report: { icon: "flag-outline", color: "#993556", bg: "#FBEAF0" },
+  council: { icon: "people-outline", color: "#3B6D11", bg: "#EAF3DE" },
 };
 
 function isSameDay(left: Date, right: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
 }
 
+function daysAgo(date: Date) {
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  return Math.round((startOfToday - startOfDate) / 86400000);
+}
+
 function sectionLabel(value: string) {
   const date = new Date(value);
   const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
   if (isSameDay(date, today)) return "오늘";
-  if (isSameDay(date, yesterday)) return "어제";
+  if (daysAgo(date) <= 7) return "지난 7일";
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function timeLabel(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${minutes}`;
+  if (isSameDay(date, new Date())) {
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${minutes}`;
+  }
+  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function decorateItems(items: NotificationItem[]) {
@@ -60,6 +71,7 @@ function decorateItems(items: NotificationItem[]) {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { data, isLoading, isError, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["notifications"],
     queryFn: ({ pageParam }) => notificationApi.getNotifications(pageParam, 30),
@@ -71,9 +83,26 @@ export default function NotificationsScreen() {
   });
   const rows = decorateItems(data?.pages.flatMap((page) => page.data) ?? []);
 
+  const markReadInCache = (id: number) => {
+    queryClient.setQueryData<typeof data>(["notifications"], (current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          data: page.data.map((item) => (item.id === id ? { ...item, is_read: true } : item)),
+        })),
+      };
+    });
+  };
+
   const openNotification = async (notification: NotificationItem) => {
     if (!notification.is_read) {
-      notificationApi.markRead(notification.id).catch(() => undefined);
+      markReadInCache(notification.id);
+      notificationApi
+        .markRead(notification.id)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["notifications", "home-badge"] }))
+        .catch(() => undefined);
     }
     if (notification.post_id) {
       router.push(`/board/post/${notification.post_id}` as never);
@@ -114,7 +143,15 @@ export default function NotificationsScreen() {
           contentContainerStyle={[styles.listContent, rows.length === 0 ? styles.emptyContent : null]}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>{isError ? "알림을 불러오지 못했습니다. 당겨서 다시 시도해주세요." : "새 알림이 없습니다."}</Text>
+              {isError ? (
+                <Text style={styles.emptyText}>알림을 불러오지 못했습니다. 당겨서 다시 시도해주세요.</Text>
+              ) : (
+                <>
+                  <Ionicons name="calendar-outline" size={32} color={COLORS.emptyIcon} />
+                  <Text style={styles.emptyTitle}>아직 알림이 없어요</Text>
+                  <Text style={styles.emptySub}>새로운 소식이 있으면 알려드릴게요</Text>
+                </>
+              )}
             </View>
           }
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
@@ -125,15 +162,17 @@ export default function NotificationsScreen() {
                 {row.showSection ? <Text style={styles.sectionLabel}>{row.section}</Text> : null}
                 <Pressable onPress={() => openNotification(row.item)} style={styles.notificationRow}>
                   <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
-                    <Ionicons name={meta.icon} size={17} color={meta.color} />
+                    <Ionicons name={meta.icon} size={18} color={meta.color} />
                   </View>
                   <View style={styles.notificationText}>
-                    <Text numberOfLines={2} style={styles.message}>
-                      {row.item.message}
-                    </Text>
+                    <View style={styles.messageRow}>
+                      <Text numberOfLines={2} style={styles.message}>
+                        {row.item.message}
+                      </Text>
+                      {!row.item.is_read ? <View style={styles.unreadDot} /> : null}
+                    </View>
                     <Text style={styles.time}>{timeLabel(row.item.created_at)}</Text>
                   </View>
-                  {!row.item.is_read ? <View style={styles.unreadDot} /> : null}
                 </Pressable>
               </View>
             );
@@ -155,8 +194,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   iconButton: {
     width: 42,
@@ -167,7 +206,7 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   center: {
     flex: 1,
@@ -184,58 +223,78 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
     padding: 24,
   },
   emptyText: {
-    color: COLORS.muted,
+    color: COLORS.subtle,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
+  },
+  emptyTitle: {
+    color: COLORS.emptyTitle,
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 2,
+  },
+  emptySub: {
+    color: COLORS.emptySub,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
   },
   sectionLabel: {
-    color: COLORS.subtle,
+    color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 8,
+    fontWeight: "500",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
   },
   notificationRow: {
-    minHeight: 72,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 1,
+    alignItems: "flex-start",
+    gap: 10,
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
+    marginHorizontal: 16,
     paddingVertical: 12,
   },
   iconCircle: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 19,
+    borderRadius: 18,
   },
   notificationText: {
     flex: 1,
     minWidth: 0,
+    gap: 3,
+  },
+  messageRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
   },
   message: {
+    flex: 1,
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "800",
-    lineHeight: 20,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 19,
   },
   time: {
     color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 3,
+    fontSize: 11,
+    fontWeight: "400",
   },
   unreadDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
+    marginTop: 6,
   },
 });

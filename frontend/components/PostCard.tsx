@@ -14,7 +14,7 @@ type Props = {
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
   divider: "#EEF0F3",
@@ -43,12 +43,15 @@ const TYPE_LABELS: Record<string, string> = {
   mutual_aid: "상조회",
 };
 
-function shortDate(value: string) {
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function shortDate(value: string, withWeekday = false) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value.slice(2, 10).replace(/-/g, ".");
   }
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return withWeekday ? `${base}(${WEEKDAYS[date.getDay()]})` : base;
 }
 
 function normalizeCategory(post: PostListItem, boardType?: string) {
@@ -74,28 +77,14 @@ function normalizeCategory(post: PostListItem, boardType?: string) {
 }
 
 function categoryTone(label: string) {
-  if (label.includes("반려")) {
-    return { bg: COLORS.pink50, fg: COLORS.pink700 };
-  }
-  if (label.includes("완료")) {
-    return { bg: COLORS.green50, fg: COLORS.green700 };
-  }
-  if (label.includes("대기")) {
-    return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
-  }
-  if (label.includes("행사") || label.includes("시험")) {
-    return { bg: COLORS.pink50, fg: COLORS.pink700 };
-  }
-  if (label.includes("종합") || label.includes("모집")) {
-    return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
-  }
-  if (label.includes("졸업") || label.includes("인증")) {
-    return { bg: COLORS.green50, fg: COLORS.green700 };
-  }
-  if (label.includes("강의") || label.includes("스터디")) {
-    return { bg: COLORS.purple50, fg: COLORS.purple700 };
-  }
-  return { bg: COLORS.primary50, fg: COLORS.primary };
+  if (label.includes("반려")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("완료")) return { bg: "#EAF8EF", fg: "#1F7A46" };
+  if (label.includes("대기")) return { bg: "#FFF6DC", fg: "#9A6B00" };
+  if (label.includes("종합")) return { bg: "#FAEEDA", fg: "#854F0B" };
+  if (label.includes("행사") || label.includes("시험")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("졸업") || label.includes("인증")) return { bg: "#EAF3DE", fg: "#3B6D11" };
+  if (label.includes("강의") || label.includes("후기") || label.includes("스터디") || label.includes("모집")) return { bg: "#EEEDFE", fg: "#3C3489" };
+  return { bg: "#E6F1FB", fg: "#0C447C" };
 }
 
 function compactPreview(post: PostListItem) {
@@ -113,7 +102,7 @@ export default function PostCard({ post, onPress, boardType, boardSlug }: Props)
   const label = normalizeCategory(post, boardType);
   const tone = categoryTone(label);
   const preview = compactPreview(post);
-  const isAnonymousNoCommentBoard = boardSlug === "lecture-reviews" || boardSlug === "exam-archive";
+  const isAnonymousNoCommentBoard = boardSlug === "lecture-reviews";
   const isMutualAid = boardType === "mutual_aid";
   const isSuggestion = boardType === "suggestion";
   const isWorkflowRequest = isMutualAid || isSuggestion;
@@ -139,44 +128,47 @@ export default function PostCard({ post, onPress, boardType, boardSlug }: Props)
           {preview}
         </Text>
       ) : null}
-      <View style={styles.footer}>
-        {!isAnonymousNoCommentBoard && !isSuggestion ? (
-          <Text style={styles.footerText} numberOfLines={1}>
-            {isMutualAid ? formatCohortName(post.author_cohort, post.author_nickname) : post.author_nickname}
-          </Text>
-        ) : null}
-        <Text style={styles.footerText}>{shortDate(post.created_at)}</Text>
-        {!isAnonymousNoCommentBoard && !isWorkflowRequest ? <Text style={styles.footerText}>댓글 {post.comment_count}</Text> : null}
-        {!isWorkflowRequest ? <Text style={styles.footerText}>추천 {post.like_count}</Text> : null}
-        {!isWorkflowRequest && post.attachment_count ? <Text style={styles.footerText}>첨부 {post.attachment_count}</Text> : null}
-      </View>
+      <Text style={styles.footerText} numberOfLines={1}>
+        {[
+          !isAnonymousNoCommentBoard && !isSuggestion
+            ? isMutualAid
+              ? formatCohortName(post.author_cohort, post.author_nickname)
+              : post.author_nickname
+            : null,
+          shortDate(post.created_at, isSuggestion || isMutualAid),
+          !isAnonymousNoCommentBoard && !isWorkflowRequest ? `댓글 ${post.comment_count}` : null,
+          !isWorkflowRequest ? `추천 ${post.like_count}` : null,
+          !isWorkflowRequest && post.attachment_count ? `첨부 ${post.attachment_count}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingVertical: 14,
   },
   metaRow: {
-    minHeight: 24,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
   pill: {
-    height: 24,
     justifyContent: "center",
-    borderRadius: 6,
-    paddingHorizontal: 9,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   pillText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   pinPill: {
     height: 24,
@@ -194,28 +186,22 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
-    lineHeight: 22,
-    marginTop: 7,
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 20,
+    marginTop: 6,
   },
   preview: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "400",
     lineHeight: 19,
-    marginTop: 5,
-  },
-  footer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 7,
-    marginTop: 7,
+    marginTop: 6,
   },
   footerText: {
-    color: COLORS.subtle,
+    color: "#A6ACB7",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
+    marginTop: 6,
   },
 });

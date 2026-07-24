@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -12,7 +12,7 @@ const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
   primary100: "#D5E0FE",
-  text: "#111827",
+  text: "#15171C",
   navy: "#0B1F56",
   muted: "#6B7280",
   subtle: "#8A919C",
@@ -138,12 +138,15 @@ function categoryFromPost(post: PostListItem, board?: Board, filter?: NoticeFilt
 
 function rowTone(category: string) {
   if (category.includes("행사")) {
-    return { backgroundColor: COLORS.pink50, color: COLORS.pink700 };
+    return { backgroundColor: "#FBEAF0", color: "#993556" };
   }
   if (category.includes("특강")) {
     return { backgroundColor: COLORS.cyan50, color: COLORS.cyan700 };
   }
-  return { backgroundColor: COLORS.primary50, color: COLORS.primary };
+  if (category.includes("기타")) {
+    return { backgroundColor: "#F0EEF9", color: "#5A4C8B" };
+  }
+  return { backgroundColor: "#E6F1FB", color: "#0C447C" };
 }
 
 function IconButton({ icon, onPress, label }: { icon: IconName; onPress: () => void; label: string }) {
@@ -162,12 +165,12 @@ function NoticeRow({ item }: { item: NoticeRowModel }) {
     <Pressable disabled={!handlePress} onPress={handlePress} style={[styles.noticeRow, item.isPinned ? styles.noticeRowPinned : null]}>
       <View style={styles.noticeMain}>
         <View style={styles.metaRow}>
-          {item.isPinned ? <Ionicons name="pin" size={12} color={COLORS.primary} /> : null}
+          {item.isPinned ? <FontAwesome5 name="thumbtack" size={10} color={COLORS.primary} /> : null}
           <View style={[styles.categoryPill, { backgroundColor: tone.backgroundColor }]}>
             <Text style={[styles.categoryText, { color: tone.color }]}>{item.category}</Text>
           </View>
         </View>
-        <Text numberOfLines={2} style={styles.noticeTitle}>
+        <Text numberOfLines={2} style={[styles.noticeTitle, item.isPinned ? styles.noticeTitlePinned : null]}>
           {item.title}
         </Text>
         <Text style={styles.noticeDate}>{item.date}</Text>
@@ -185,11 +188,12 @@ function LoadingRows() {
   );
 }
 
-function EmptyState({ title }: { title: string }) {
+function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
     <View style={styles.emptyState}>
-      <Ionicons name="document-text-outline" size={24} color={COLORS.subtle} />
+      <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
       <Text style={styles.emptyTitle}>{title}</Text>
+      {description ? <Text style={styles.emptyDescription}>{description}</Text> : null}
     </View>
   );
 }
@@ -289,7 +293,10 @@ export default function NoticesScreen() {
           </View>
         ) : null}
         {!isLoading && visibleRows.length === 0 ? (
-          <EmptyState title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지가 없습니다."} />
+          <EmptyState
+            title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지가 없어요"}
+            description={isOfflinePreview ? "잠시 후 다시 시도해주세요" : "새로운 공지가 등록되면 알려드릴게요"}
+          />
         ) : null}
       </ScrollView>
 
@@ -313,7 +320,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -326,34 +333,34 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   filterWrap: {
     flexDirection: "row",
     gap: 8,
-    paddingHorizontal: 24,
-    paddingTop: 7,
-    paddingBottom: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 14,
     backgroundColor: COLORS.surface,
   },
   filterChip: {
-    minWidth: 72,
-    height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
-    backgroundColor: "#F4F6F8",
-    paddingHorizontal: 16,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   filterChipActive: {
-    backgroundColor: COLORS.text,
+    backgroundColor: "#15171C",
+    borderColor: "#15171C",
   },
   filterText: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   filterTextActive: {
     color: "#FFFFFF",
@@ -382,21 +389,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
   },
   noticeRow: {
-    minHeight: 91,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomWidth: 0.5,
+    borderBottomColor: COLORS.border,
     paddingVertical: 14,
   },
   noticeRowPinned: {
     borderBottomWidth: 0,
-    borderRadius: 9,
-    backgroundColor: "#F0F2F5",
+    borderRadius: 12,
+    backgroundColor: "#EEF0F3",
     paddingHorizontal: 12,
+    paddingVertical: 12,
     marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   noticeMain: {
     flex: 1,
@@ -409,27 +416,30 @@ const styles = StyleSheet.create({
     minHeight: 24,
   },
   categoryPill: {
-    height: 24,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
-    paddingHorizontal: 9,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
   categoryText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   noticeTitle: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
-    lineHeight: 21,
-    marginTop: 7,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 20,
+    marginTop: 6,
+  },
+  noticeTitlePinned: {
+    fontWeight: "500",
   },
   noticeDate: {
-    color: COLORS.subtle,
+    color: COLORS.muted,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
     marginTop: 6,
   },
   loadingWrap: {
@@ -447,12 +457,20 @@ const styles = StyleSheet.create({
     minHeight: 170,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 8,
+    padding: 24,
   },
   emptyTitle: {
-    color: COLORS.muted,
-    fontSize: 14,
-    fontWeight: "900",
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+  },
+  emptyDescription: {
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
   },
   refreshIndicator: {
     position: "absolute",

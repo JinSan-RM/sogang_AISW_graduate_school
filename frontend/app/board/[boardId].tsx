@@ -15,7 +15,7 @@ import type { Board, PostListItem } from "../../types";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
   divider: "#EEF0F3",
@@ -114,7 +114,7 @@ type PastCouncilSummary = {
   bannerImageUrl?: string;
   presidentImageUrl?: string;
   vicePresidentImageUrl?: string;
-  activities: string[];
+  activities: { date?: string; title: string }[];
 };
 
 function flattenBoards(groups?: { boards: Board[] }[]) {
@@ -456,7 +456,7 @@ function CohortLeaderScreen({
                 <Text style={styles.cohortBadgeText}>{item.cohort}</Text>
               </View>
               <View style={styles.executiveText}>
-                <Text style={styles.executiveRole}>{item.cohort} 기장</Text>
+                <Text style={styles.executiveRole}>기장</Text>
                 <Text style={styles.executiveName}>{item.captain}{item.viceCaptain ? " 외 1명" : ""}</Text>
               </View>
             </Pressable>
@@ -488,7 +488,18 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
       bannerImageUrl: value("banner_image_url") || undefined,
       presidentImageUrl: value("president_image_url") || undefined,
       vicePresidentImageUrl: value("vice_president_image_url") || undefined,
-      activities: Array.isArray(record.activities) ? record.activities.filter((activity): activity is string => typeof activity === "string" && Boolean(activity.trim())) : [],
+      activities: Array.isArray(record.activities)
+        ? record.activities.flatMap((activity): { date?: string; title: string }[] => {
+            if (typeof activity === "string" && activity.trim()) return [{ title: activity.trim() }];
+            if (activity && typeof activity === "object") {
+              const r = activity as Record<string, unknown>;
+              const title = typeof r.title === "string" ? r.title.trim() : "";
+              if (!title) return [];
+              return [{ title, date: typeof r.date === "string" && r.date.trim() ? r.date.trim() : undefined }];
+            }
+            return [];
+          })
+        : [],
     }];
   }).sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
 }
@@ -525,10 +536,11 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
             </>
           ) : (
             <>
-              {imageUrl(selected.bannerImageUrl) ? <Image source={{ uri: imageUrl(selected.bannerImageUrl) as string }} style={styles.cohortBanner} /> : <View style={styles.cohortBannerFallback} />}
-              <Text style={styles.cohortIntroText}>{selected.intro || "등록된 소개글이 없습니다."}</Text>
               {selected.activities.length > 0 ? selected.activities.map((activity, index) => (
-                <View key={`${activity}-${index}`} style={styles.councilActivityRow}><Text style={styles.councilActivityTitle}>{activity}</Text></View>
+                <View key={`${activity.title}-${index}`} style={styles.pastActivityItem}>
+                  {activity.date ? <Text style={styles.pastActivityDate}>{activity.date}</Text> : null}
+                  <Text style={styles.pastActivityTitle}>{activity.title}</Text>
+                </View>
               )) : <View style={styles.emptyBox}><Text style={styles.emptyText}>등록된 활동내역이 없습니다.</Text></View>}
             </>
           )}
@@ -680,9 +692,9 @@ function AccountingExternalScreen({ board, topInset, onBack }: { board?: Board |
         <View style={styles.accountingIcon}>
           <Ionicons name="card-outline" size={28} color={COLORS.subtle} />
         </View>
-        <Text style={styles.accountingTitle}>회계장부는 Google Sheets에서 관리하고 있어요</Text>
+        <Text style={styles.accountingTitle}>회계장부는 외부 페이지에서 관리하고 있어요</Text>
         <Text style={styles.accountingDescription}>
-          원우회 회비 입출금 내역을 투명하게 공개하고 있습니다. 아래 버튼을 누르면 외부 회계장부 시트로 이동합니다.
+          {"원우회 회비 입출금 내역을 투명하게 공개하고 있어요.\n아래 버튼을 누르면 외부 회계장부 페이지로 연결돼요."}
         </Text>
         <Pressable onPress={openAccounting} style={styles.accountingButton}>
           <Text style={styles.accountingButtonText}>회계장부 보러가기</Text>
@@ -724,10 +736,18 @@ function AlbumTile({ post, index, onPress }: { post: PostListItem; index: number
   );
 }
 
+function guideBadgeTone(label: string) {
+  if (label.includes("상시")) return { bg: "#EEEDFE", fg: "#3C3489" };
+  if (label.includes("마감")) return { bg: "#F0F0EE", fg: "#5B5B57" };
+  return { bg: "#E6F1FB", fg: "#0C447C" };
+}
+
 function ParticipationGuideTile({ post, board, index, onPress }: { post: PostListItem; board?: Board | null; index: number; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
   const thumbnailUrl = imageUrl(post.thumbnail_url);
   const preview = compactPreview(post);
+  const badge = participationBadgeLabel(post, board);
+  const tone = guideBadgeTone(badge);
 
   return (
     <Pressable onPress={() => onPress(post.id)} style={styles.guideCard}>
@@ -739,8 +759,8 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.guideThumb} />
       )}
       <View style={styles.guideBody}>
-        <View style={styles.guidePill}>
-          <Text style={styles.guidePillText}>{participationBadgeLabel(post, board)}</Text>
+        <View style={[styles.guidePill, { backgroundColor: tone.bg }]}>
+          <Text style={[styles.guidePillText, { color: tone.fg }]}>{badge}</Text>
         </View>
         <Text numberOfLines={2} style={styles.guideTitle}>
           {post.title}
@@ -773,15 +793,14 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
         <View style={styles.activityPill}>
           <Text style={styles.activityPillText}>{post.category || "활동 인증"}</Text>
         </View>
-        <Text numberOfLines={2} style={styles.activityTitle}>
-          {post.title}
-        </Text>
         {preview ? (
           <Text numberOfLines={2} style={styles.activityPreview}>
             {preview}
           </Text>
         ) : null}
-        <Text style={styles.activityDate}>{shortDate(post.created_at)}</Text>
+        <Text style={styles.activityDate}>
+          {`${post.author_cohort ? `${post.author_cohort}기 ` : ""}${post.author_nickname} · ${shortDate(post.created_at)}`}
+        </Text>
       </View>
     </Pressable>
   );
@@ -812,7 +831,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   const isParticipationGuideCards = Boolean(participationGroupKey(board)) && !isActivityCards;
   const tabs = sectionTabs(board, boards);
   const canWriteBoard = !board || board.write_permission !== "admin" || user?.role === "admin";
-  const canShowCreateButton = canWriteBoard && (!isParticipationGuideCards || board?.slug === "study-recruit" || user?.role === "admin");
+  const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit");
   const isResourceAll = board?.board_type === "resource" && selectedFilter === "전체";
   const isCouncilActivityHistory = board?.slug === "council-activity" || board?.slug === "gsa-activity";
   const resourceBoardIds = useMemo(
@@ -947,20 +966,45 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
-        {isTabRoot ? (
-          <View style={styles.iconButton} />
+        {showSearch ? (
+          <>
+            <IconButton
+              icon="chevron-back"
+              label="검색 닫기"
+              onPress={() => {
+                setShowSearch(false);
+                setQuery("");
+                setQueryInput("");
+              }}
+            />
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={18} color="#A6ACB7" />
+              <TextInput
+                autoFocus
+                value={queryInput}
+                onChangeText={setQueryInput}
+                onSubmitEditing={() => setQuery(queryInput.trim())}
+                returnKeyType="search"
+                placeholder="검색어를 입력하세요"
+                placeholderTextColor="#A6ACB7"
+                style={[styles.searchBarInput, { outlineStyle: "none" } as never]}
+              />
+            </View>
+          </>
         ) : (
-          <IconButton
-            icon="chevron-back"
-            label="뒤로"
-            onPress={exitBoardDepth}
-          />
+          <>
+            {isTabRoot ? (
+              <View style={styles.iconButton} />
+            ) : (
+              <IconButton icon="chevron-back" label="뒤로" onPress={exitBoardDepth} />
+            )}
+            <Text style={styles.appBarTitle}>{display.name}</Text>
+            <IconButton icon="search-outline" label="검색" onPress={() => setShowSearch(true)} />
+          </>
         )}
-        <Text style={styles.appBarTitle}>{display.name}</Text>
-        <IconButton icon="search-outline" label="검색" onPress={() => setShowSearch((value) => !value)} />
       </View>
 
-      {tabs.length > 0 ? (
+      {!showSearch && tabs.length > 0 ? (
         <View style={styles.sectionTabs}>
           {tabs.map((item) => (
             <Pressable key={item.label} onPress={() => navigateToBoard(item.target)} style={[styles.sectionTab, item.active ? styles.sectionTabActive : null]}>
@@ -970,23 +1014,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
         </View>
       ) : null}
 
-      {showSearch ? (
-        <View style={styles.searchWrap}>
-          <TextInput
-            value={queryInput}
-            onChangeText={setQueryInput}
-            onSubmitEditing={() => setQuery(queryInput.trim())}
-            returnKeyType="search"
-            placeholder="게시글 검색"
-            placeholderTextColor={COLORS.subtle}
-            style={styles.searchInput}
-          />
-          <Pressable onPress={() => setQuery(queryInput.trim())} style={styles.searchButton}>
-            <Ionicons name="search" size={18} color="#FFFFFF" />
-          </Pressable>
-        </View>
-      ) : null}
-
+      {filters.length > 1 ? (
       <View style={styles.filterWrap}>
         <ScrollView
           horizontal
@@ -1005,6 +1033,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
           })}
         </ScrollView>
       </View>
+      ) : null}
 
       {isLoading ? (
         <View style={styles.center}>
@@ -1018,7 +1047,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
           data={posts}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={[
-            isAlbum ? styles.albumContent : isParticipationGuideCards || isActivityCards ? styles.cardContent : styles.listContent,
+            isAlbum ? styles.albumContent : isParticipationGuideCards ? styles.guideContent : isActivityCards ? styles.cardContent : styles.listContent,
             posts.length === 0 ? styles.emptyContent : null,
           ]}
           columnWrapperStyle={isAlbum ? styles.albumRow : undefined}
@@ -1030,13 +1059,13 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
               </Pressable>
             ) : (
               <View style={styles.emptyBox}>
-                {isMutualAid || isSuggestion ? <Ionicons name="calendar-outline" size={30} color={COLORS.subtle} /> : null}
+                <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
                 <Text style={styles.emptyText}>
-                  {isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : "게시글이 없습니다."}
+                  {query ? "검색 결과가 없어요" : isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : board?.slug === "study-recruit" ? "모집 중인 스터디가 없어요" : isParticipationGuideCards ? (participationGroupKey(board) === "networking" ? "등록된 네트워킹이 없어요" : "등록된 동아리가 없어요") : isAlbum ? "등록된 사진이 없어요" : "아직 게시물이 없어요"}
                 </Text>
-                {isMutualAid || isSuggestion ? (
-                  <Text style={styles.emptySubText}>{isMutualAid ? "경조사 발생 시 신청해보세요" : "원우회에 건의하고 싶은 내용을 남겨보세요"}</Text>
-                ) : null}
+                <Text style={styles.emptySubText}>
+                  {query ? "다른 검색어로 다시 시도해보세요" : isMutualAid ? "경조사 발생 시 신청해보세요" : isSuggestion ? "원우회에 건의하고 싶은 내용을 남겨보세요" : board?.slug === "study-recruit" ? "첫 스터디를 모집해보세요" : isParticipationGuideCards ? (participationGroupKey(board) === "networking" ? "새로운 네트워킹이 등록되면 알려드릴게요" : "새로운 동아리가 등록되면 알려드릴게요") : isAlbum ? "행사 사진이 등록되면 알려드릴게요" : "첫 게시글을 남겨보세요"}
+                </Text>
               </View>
             )
           }
@@ -1082,7 +1111,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -1095,44 +1124,34 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
-  searchWrap: {
-    flexDirection: "row",
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: 24,
-    paddingBottom: 12,
-  },
-  searchInput: {
+  searchBar: {
     flex: 1,
-    height: 42,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
-    borderRadius: 8,
+    height: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F7F8FA",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    marginLeft: 4,
+  },
+  searchBarInput: {
+    flex: 1,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "700",
-    paddingHorizontal: 12,
-  },
-  searchButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
+    fontWeight: "400",
+    lineHeight: 22,
   },
   sectionTabs: {
     height: 46,
     flexDirection: "row",
     alignItems: "flex-end",
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
   sectionTab: {
     flex: 1,
@@ -1146,12 +1165,13 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.text,
   },
   sectionTabText: {
-    color: COLORS.subtle,
-    fontSize: 13,
-    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 14,
+    fontWeight: "400",
   },
   sectionTabTextActive: {
     color: COLORS.text,
+    fontWeight: "500",
   },
   filterWrap: {
     height: 56,
@@ -1172,24 +1192,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   filterChip: {
-    minWidth: 52,
-    height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
+    borderRadius: 999,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
   filterChipActive: {
-    borderColor: COLORS.text,
-    backgroundColor: COLORS.text,
+    borderColor: "#15171C",
+    backgroundColor: "#15171C",
   },
   filterText: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   filterTextActive: {
     color: "#FFFFFF",
@@ -1198,28 +1217,28 @@ const styles = StyleSheet.create({
     paddingBottom: 92,
   },
   albumContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 92,
   },
   albumRow: {
-    gap: 12,
+    gap: 10,
   },
   albumTile: {
     flex: 1,
     maxWidth: "50%",
-    marginBottom: 18,
+    marginBottom: 12,
   },
   albumThumb: {
     position: "relative",
     aspectRatio: 1.05,
     justifyContent: "flex-end",
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: "hidden",
     padding: 10,
   },
   albumImage: {
-    borderRadius: 8,
+    borderRadius: 10,
   },
   albumScrim: {
     ...StyleSheet.absoluteFillObject,
@@ -1227,114 +1246,118 @@ const styles = StyleSheet.create({
   },
   albumCountPill: {
     alignSelf: "flex-start",
-    borderRadius: 11,
-    backgroundColor: "rgba(255,255,255,0.82)",
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.85)",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   albumCountText: {
     color: COLORS.text,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   albumTitle: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 13,
+    fontWeight: "500",
     marginTop: 8,
   },
   albumDate: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 5,
+    color: "#A6ACB7",
+    fontSize: 11,
+    fontWeight: "400",
+    marginTop: 4,
   },
   cardContent: {
-    paddingHorizontal: 24,
-    paddingTop: 14,
+    paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 92,
+  },
+  guideContent: {
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   guideCard: {
     overflow: "hidden",
-    borderRadius: 8,
     backgroundColor: "#FFFFFF",
-    marginBottom: 22,
+    paddingBottom: 20,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
   },
   guideThumb: {
     position: "relative",
-    aspectRatio: 1.96,
+    width: "100%",
+    aspectRatio: 1.565,
     overflow: "hidden",
   },
-  guideImage: {
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-  },
+  guideImage: {},
   guideScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(17,24,39,0.06)",
   },
   guideBody: {
-    paddingTop: 9,
+    paddingTop: 10,
+    paddingHorizontal: 20,
   },
   guidePill: {
     alignSelf: "flex-start",
-    borderRadius: 5,
+    borderRadius: 8,
     backgroundColor: COLORS.primary50,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   guidePillText: {
     color: COLORS.primary,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   guideTitle: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "900",
-    lineHeight: 21,
-    marginTop: 7,
+    fontSize: 16,
+    fontWeight: "500",
+    lineHeight: 22,
+    marginTop: 8,
   },
   guidePreview: {
     color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 20,
+    marginTop: 8,
   },
   activityCard: {
-    overflow: "hidden",
-    borderRadius: 8,
     backgroundColor: "#FFFFFF",
-    marginBottom: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
   },
   activityThumb: {
     position: "relative",
-    aspectRatio: 1.96,
+    aspectRatio: 2.05,
+    borderRadius: 8,
     overflow: "hidden",
   },
   activityImage: {
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderRadius: 8,
   },
   activityScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(17,24,39,0.06)",
   },
   activityBody: {
-    paddingTop: 9,
+    paddingTop: 8,
   },
   activityPill: {
     alignSelf: "flex-start",
-    borderRadius: 5,
-    backgroundColor: COLORS.primary50,
+    borderRadius: 8,
+    backgroundColor: "#E6F1FB",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   activityPillText: {
-    color: COLORS.primary,
+    color: "#0C447C",
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   activityTitle: {
     color: COLORS.text,
@@ -1344,17 +1367,17 @@ const styles = StyleSheet.create({
     marginTop: 7,
   },
   activityPreview: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 4,
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 20,
+    marginTop: 8,
   },
   activityDate: {
-    color: COLORS.subtle,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 7,
+    color: "#A6ACB7",
+    fontSize: 12,
+    fontWeight: "400",
+    marginTop: 8,
   },
   center: {
     flex: 1,
@@ -1385,14 +1408,14 @@ const styles = StyleSheet.create({
   accountingTitle: {
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "500",
     textAlign: "center",
   },
   accountingDescription: {
     color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 19,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 21,
     textAlign: "center",
     marginTop: 14,
   },
@@ -1408,8 +1431,8 @@ const styles = StyleSheet.create({
   },
   accountingButtonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "500",
   },
   executiveScroller: {
     flex: 1,
@@ -1420,32 +1443,29 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   executiveCard: {
-    minHeight: 78,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
+    gap: 14,
+    borderRadius: 10,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 14,
     marginBottom: 10,
   },
   executiveAvatar: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 21,
+    borderRadius: 24,
     backgroundColor: "#E8F5FF",
-    marginRight: 14,
   },
   executiveAvatarImage: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#E8F5FF",
-    marginRight: 14,
   },
   executiveText: {
     flex: 1,
@@ -1453,14 +1473,14 @@ const styles = StyleSheet.create({
   },
   executiveName: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "500", // Figma 229:11
   },
   executiveRole: {
     color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "400",
+    marginTop: 2,
   },
   councilActivityContent: {
     paddingHorizontal: 20,
@@ -1491,47 +1511,48 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   councilActivityDate: {
-    color: COLORS.subtle,
+    color: "#A6ACB7",
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "400",
     marginBottom: 4,
   },
   councilActivityTitle: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "500",
   },
   councilActivityPreview: {
     color: COLORS.muted,
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
     marginTop: 4,
   },
   cohortCard: {
-    minHeight: 76,
+    minHeight: 68,
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 8,
+    borderRadius: 10, // Figma 62:46 card
     borderWidth: 1,
-    borderColor: COLORS.divider,
+    borderColor: "#E1E4E9",
     backgroundColor: COLORS.surface,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 10,
   },
   cohortBadge: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: COLORS.primary50,
-    marginRight: 14,
+    backgroundColor: "#E6F1FB", // Figma 62:46 badge
+    marginRight: 12,
   },
   cohortBadgeText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: "900",
+    color: "#0C447C",
+    fontSize: 13,
+    fontWeight: "500", // Figma: Medium
   },
   cohortDetailContent: {
     paddingHorizontal: 20,
@@ -1539,18 +1560,18 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   cohortBanner: {
-    width: "100%",
-    aspectRatio: 2.2,
-    borderRadius: 8,
+    marginHorizontal: -20, // full-bleed (cancel content padding)
+    marginTop: -14,
+    height: 180, // Figma 134:28 대표 사진
     backgroundColor: COLORS.primary50,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   cohortBannerFallback: {
-    width: "100%",
-    aspectRatio: 2.2,
-    borderRadius: 8,
-    backgroundColor: "#7FB4E8",
-    marginBottom: 18,
+    marginHorizontal: -20,
+    marginTop: -14,
+    height: 180,
+    backgroundColor: "#85B7EB", // Figma 대표 사진 placeholder
+    marginBottom: 16,
   },
   pastCouncilTabs: {
     flexDirection: "row",
@@ -1566,21 +1587,24 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   pastCouncilTabActive: { borderBottomColor: COLORS.text },
-  pastCouncilTabText: { color: COLORS.subtle, fontSize: 11, fontWeight: "900" },
-  pastCouncilTabTextActive: { color: COLORS.text },
+  pastCouncilTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "400" }, // Figma 232 서브탭
+  pastCouncilTabTextActive: { color: COLORS.text, fontWeight: "500" },
+  pastActivityItem: { gap: 4, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#EAECEF", width: "100%" }, // Figma 232:40
+  pastActivityDate: { color: "#A6ACB7", fontSize: 12, fontWeight: "400" },
+  pastActivityTitle: { color: COLORS.text, fontSize: 15, fontWeight: "400" },
   cohortGreeting: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
-    lineHeight: 21,
+    fontSize: 14,
+    fontWeight: "400", // Figma: Regular
+    lineHeight: 23,
   },
   cohortIntroText: {
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "600",
-    lineHeight: 22,
-    marginTop: 22,
-    marginBottom: 18,
+    fontSize: 14,
+    fontWeight: "400", // Figma: Regular
+    lineHeight: 23,
+    marginTop: 14,
+    marginBottom: 4,
   },
   emptyContent: {
     flexGrow: 1,
@@ -1592,16 +1616,18 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   emptyText: {
-    color: COLORS.muted,
-    fontSize: 14,
-    fontWeight: "900",
-    marginTop: 12,
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 8,
   },
   emptySubText: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 6,
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 8,
   },
   errorBox: {
     margin: 24,

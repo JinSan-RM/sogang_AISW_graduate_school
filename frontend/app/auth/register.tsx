@@ -19,13 +19,14 @@ import {
 } from "../../utils/authValidation";
 
 const COLORS = {
-  primary: "#2761FF",
+  primary: "#2761FF", // primary/500
   primary50: "#EDF2FE",
-  text: "#111827",
-  muted: "#6B7280",
-  subtle: "#A0A7B2",
-  border: "#E5E7EB",
-  danger: "#DC2626",
+  text: "#15171C", // gray/900 (Figma)
+  muted: "#6B7280", // gray/600
+  subtle: "#A6ACB7", // placeholder
+  tertiary: "#8A919C", // gray/500, text/tertiary
+  border: "#E1E4E9", // border/default
+  danger: "#D64545", // error/500 (Figma)
   success: "#22A163",
   bg: "#FFFFFF",
 };
@@ -135,7 +136,7 @@ export default function RegisterScreen() {
       setResendCooldown(resendIn);
       setStep(1);
       setVerificationFailureState(null);
-      if (resend) setVerificationMessage({ type: "success", text: "새 인증코드가 발송되었어요." });
+      setVerificationMessage({ type: "success", text: "새 인증코드가 발송되었어요." });
     } catch (error) {
       const errorCode = apiErrorCode(error);
       const message =
@@ -157,7 +158,7 @@ export default function RegisterScreen() {
   const verifyCode = async () => {
     if (Date.now() >= verificationExpiresAtRef.current) {
       setVerificationFailureState("expired");
-      setErrors({ code: "인증 시간이 만료되었어요. 인증코드를 재전송해주세요." });
+      setErrors({ code: "인증 시간이 만료되었어요. 재전송을 눌러주세요." });
       return;
     }
     if (!/^\d{6}$/.test(code)) {
@@ -176,11 +177,12 @@ export default function RegisterScreen() {
       const errorCode = apiErrorCode(error);
       const message =
         errorCode === "VERIFICATION_EXPIRED"
-          ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요."
+          ? "인증 시간이 만료되었어요. 재전송을 눌러주세요."
           : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
-            ? "인증 시도 횟수를 초과했어요. 잠시 후 새 코드를 요청해주세요."
+            ? "인증 시도 횟수를 초과했어요. 잠시 후 다시 시도해주세요."
             : "인증코드가 일치하지 않아요.";
       setErrors({ code: message });
+      setVerificationMessage(null);
       setVerificationFailureState(
         errorCode === "VERIFICATION_EXPIRED"
           ? "expired"
@@ -197,7 +199,7 @@ export default function RegisterScreen() {
     setProfileValidationAttempted(true);
     const nextErrors: FieldErrors = {};
     if (!nickname.trim()) nextErrors.nickname = "이름을 입력해주세요.";
-    if (!/^\d{1,3}$/.test(cohort)) nextErrors.cohort = "기수는 숫자만 입력해주세요.";
+    if (!/^\d{1,3}$/.test(cohort)) nextErrors.cohort = "숫자만 입력해주세요.";
     if (!major) nextErrors.major = "전공을 선택해주세요.";
     const nextPhoneError = phoneError(phone);
     if (nextPhoneError) nextErrors.phone = nextPhoneError;
@@ -272,14 +274,16 @@ export default function RegisterScreen() {
     password === passwordConfirm &&
     consented &&
     Boolean(privacyPolicy);
-  const registerDisabled =
+  // 처음엔 파란 활성 버튼. 한 번 눌러 미입력·오류가 확인되면 회색으로 전환.
+  // 회색이어도 탭은 가능해 부족한 항목의 오류 문구를 다시 볼 수 있다(제출 중에만 비활성).
+  const registerBlocked =
     isSubmitting ||
     (profileValidationAttempted && (!isProfileFormValid || Boolean(errors.form) || Boolean(errors.nickname)));
   const verificationExpired =
     step === 1 && verificationExpiresAtRef.current > 0 && countdown <= 0;
   const verificationAttemptsLocked = verificationFailureState === "attempts" && !verificationExpired;
   const codeError = verificationExpired
-    ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요."
+    ? "인증 시간이 만료되었어요. 재전송을 눌러주세요."
     : errors.code;
 
   return (
@@ -296,7 +300,7 @@ export default function RegisterScreen() {
 
       {step === 3 ? (
         <View style={styles.completeContent}>
-          <View style={styles.successCircle}><Ionicons name="checkmark" size={48} color={COLORS.success} /></View>
+          <Ionicons name="checkmark-circle-outline" size={64} color="#2E9E5B" />
           <Text style={styles.completeTitle}>가입이 완료되었어요!</Text>
           <Pressable onPress={complete} style={[styles.primaryButton, styles.completeButton]}>
             <Text style={styles.primaryButtonText}>홈으로 가기</Text>
@@ -340,45 +344,49 @@ export default function RegisterScreen() {
                     }
                   }}
                   placeholder="인증코드 6자리"
-                  placeholderTextColor={COLORS.subtle}
-                  style={[styles.input, codeError ? styles.inputError : null, verificationAttemptsLocked ? styles.verificationLockedInput : null]}
+                  placeholderTextColor={COLORS.tertiary}
+                  style={[styles.codeInput, codeError ? styles.inputError : null, verificationAttemptsLocked ? styles.verificationLockedInput : null]}
                   value={code}
                 />
-                <FieldError message={codeError} />
               </View>
-              {verificationMessage ? (
-                <View style={verificationMessage.type === "success" ? styles.successRow : styles.errorRow}>
-                  <Ionicons
-                    name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
-                    size={14}
-                    color={verificationMessage.type === "success" ? COLORS.success : COLORS.danger}
-                  />
-                  <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>{verificationMessage.text}</Text>
+              <View style={styles.statusRow}>
+                <View style={styles.statusLeft}>
+                  {codeError ? (
+                    <View style={styles.errorRow}>
+                      <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
+                      <Text style={styles.errorText}>{codeError}</Text>
+                    </View>
+                  ) : verificationMessage?.type === "success" ? (
+                    <View style={styles.successRow}>
+                      <Ionicons name="checkmark-circle-outline" size={14} color="#3B6D11" />
+                      <Text style={styles.successText}>{verificationMessage.text}</Text>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
+                {verificationExpired || verificationAttemptsLocked ? null : resendCooldown > 0 ? (
+                  <Text style={styles.timerText}>{formatCountdown(countdown)}</Text>
+                ) : (
+                  <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
+                    <Text style={styles.resendLink}>{isSubmitting ? "발송 중" : "재전송"}</Text>
+                  </Pressable>
+                )}
+              </View>
               {verificationExpired ? (
-                <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null]}>
+                <Pressable
+                  disabled={isSubmitting}
+                  onPress={() => void requestCode(true)}
+                  style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null]}
+                >
                   <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 재전송"}</Text>
                 </Pressable>
               ) : (
-                <>
-                  <Pressable
-                    disabled={isSubmitting || resendCooldown > 0}
-                    onPress={() => void requestCode(true)}
-                    style={styles.resendButton}
-                  >
-                    <Text style={[styles.resendText, resendCooldown > 0 ? styles.resendTextDisabled : null]}>
-                      {resendCooldown > 0 ? `재전송 (${formatCountdown(resendCooldown)})` : "인증코드 재전송"}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    disabled={isSubmitting || verificationAttemptsLocked}
-                    onPress={verifyCode}
-                    style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, verificationAttemptsLocked ? styles.validationDisabledButton : null]}
-                  >
-                    <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
-                  </Pressable>
-                </>
+                <Pressable
+                  disabled={isSubmitting || verificationAttemptsLocked}
+                  onPress={verifyCode}
+                  style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, verificationAttemptsLocked ? styles.validationDisabledButton : null]}
+                >
+                  <Text style={styles.primaryButtonText}>{isSubmitting ? "확인 중" : "다음"}</Text>
+                </Pressable>
               )}
             </>
           ) : null}
@@ -388,12 +396,12 @@ export default function RegisterScreen() {
               <Text style={styles.heading}>기본 정보를 입력해주세요</Text>
               <View style={styles.field}>
                 <Text style={styles.label}>이름</Text>
-                <TextInput value={nickname} onChangeText={(value) => { setNickname(value); setErrors((current) => ({ ...current, nickname: undefined, form: undefined })); }} placeholder="이름" placeholderTextColor={COLORS.subtle} style={[styles.input, errors.nickname ? styles.profileInputError : null]} />
+                <TextInput value={nickname} onChangeText={(value) => { setNickname(value); setErrors((current) => ({ ...current, nickname: undefined, form: undefined })); }} placeholder="이름" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.nickname ? styles.profileInputError : null]} />
                 <FieldError message={errors.nickname} />
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>기수</Text>
-                <TextInput value={cohort} onChangeText={(value) => { setCohort(value.replace(/\D/g, "").slice(0, 3)); setErrors((current) => ({ ...current, cohort: undefined })); }} keyboardType="number-pad" placeholder="숫자만 입력 (예: 72)" placeholderTextColor={COLORS.subtle} style={[styles.input, errors.cohort ? styles.profileInputError : null]} />
+                <TextInput value={cohort} onChangeText={(value) => { setCohort(value.replace(/\D/g, "").slice(0, 3)); setErrors((current) => ({ ...current, cohort: undefined })); }} keyboardType="number-pad" placeholder="숫자만 입력 (예: 72)" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.cohort ? styles.profileInputError : null]} />
                 <FieldError message={errors.cohort} />
               </View>
               <View style={styles.field}>
@@ -406,30 +414,26 @@ export default function RegisterScreen() {
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>연락처</Text>
-                <TextInput value={phone} onChangeText={(value) => { setPhone(value.replace(/\D/g, "").slice(0, 11)); setErrors((current) => ({ ...current, phone: undefined })); }} keyboardType="phone-pad" placeholder="숫자만 입력 (예: 01012345678)" placeholderTextColor={COLORS.subtle} style={[styles.input, errors.phone ? styles.profileInputError : null]} />
+                <TextInput value={phone} onChangeText={(value) => { setPhone(value.replace(/\D/g, "").slice(0, 11)); setErrors((current) => ({ ...current, phone: undefined })); }} keyboardType="phone-pad" placeholder="숫자만 입력 (예: 01012345678)" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.phone ? styles.profileInputError : null]} />
                 <FieldError message={errors.phone} />
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>비밀번호</Text>
-                <TextInput value={password} onChangeText={(value) => { setPassword(value); setErrors((current) => ({ ...current, password: undefined })); }} secureTextEntry placeholder="비밀번호" placeholderTextColor={COLORS.subtle} style={[styles.input, errors.password ? styles.profileInputError : null]} />
-                {errors.password ? <FieldError message={errors.password} /> : <Text style={styles.passwordHelper}>영문, 숫자, 특수문자를 포함해 8자 이상 입력해주세요.</Text>}
+                <TextInput value={password} onChangeText={(value) => { setPassword(value); setErrors((current) => ({ ...current, password: undefined })); }} secureTextEntry placeholder="비밀번호" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.password ? styles.profileInputError : null]} />
+                {errors.password ? <FieldError message={errors.password} /> : <Text style={styles.passwordHelper}>영문, 숫자, 특수문자 포함 8자 이상</Text>}
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>비밀번호 확인</Text>
-                <TextInput value={passwordConfirm} onChangeText={(value) => { setPasswordConfirm(value); setErrors((current) => ({ ...current, passwordConfirm: undefined })); }} secureTextEntry placeholder="비밀번호 확인" placeholderTextColor={COLORS.subtle} style={[styles.input, errors.passwordConfirm ? styles.profileInputError : null]} />
+                <TextInput value={passwordConfirm} onChangeText={(value) => { setPasswordConfirm(value); setErrors((current) => ({ ...current, passwordConfirm: undefined })); }} secureTextEntry placeholder="비밀번호 확인" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.passwordConfirm ? styles.profileInputError : null]} />
                 <FieldError message={errors.passwordConfirm} />
               </View>
               <Pressable disabled={!privacyPolicy} onPress={() => { setConsented((value) => !value); setErrors((current) => ({ ...current, consent: undefined })); }} style={styles.consentRow}>
-                <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}>{consented ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}</View>
-                <Text style={styles.consentText}>개인정보 수집 및 이용 동의 (필수){privacyPolicy ? ` · v${privacyPolicy.version}` : ""}</Text>
+                <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><Ionicons name="checkmark" size={13} color="#FFFFFF" /></View>
+                <Text style={styles.consentText}>개인정보 수집 및 이용 동의 (필수)</Text>
               </Pressable>
-              <View style={styles.legalLinks}>
-                <Pressable onPress={() => router.push("/legal/terms")}><Text style={styles.legalLinkText}>이용약관 보기</Text></Pressable>
-                <Pressable onPress={() => router.push("/legal/privacy")}><Text style={styles.legalLinkText}>개인정보 처리방침 보기</Text></Pressable>
-              </View>
               <FieldError message={errors.consent} />
               <FieldError message={errors.form} />
-              <Pressable disabled={registerDisabled} onPress={register} style={[styles.primaryButton, registerDisabled ? styles.validationDisabledButton : null]}>
+              <Pressable disabled={isSubmitting} onPress={register} style={[styles.primaryButton, registerBlocked ? styles.validationDisabledButton : null]}>
                 <Text style={styles.primaryButtonText}>{isSubmitting ? "가입 중" : "가입하기"}</Text>
               </Pressable>
             </>
@@ -444,8 +448,8 @@ export default function RegisterScreen() {
             <Text style={styles.modalTitle}>전공 선택</Text>
             {majorOptions.map((option) => (
               <Pressable key={option.id} onPress={() => { setMajor(option.name); setErrors((current) => ({ ...current, major: undefined })); setMajorModalVisible(false); }} style={styles.modalOption}>
-                <Text style={styles.modalOptionText}>{option.name}</Text>
-                {major === option.name ? <Ionicons name="checkmark" size={19} color={COLORS.primary} /> : null}
+                <Text style={[styles.modalOptionText, major === option.name ? styles.modalOptionTextSelected : null]}>{option.name}</Text>
+                {major === option.name ? <Ionicons name="checkmark" size={16} color={COLORS.primary} /> : null}
               </Pressable>
             ))}
             {registrationOptionsQuery.isLoading ? <Text style={styles.modalStateText}>전공 목록을 불러오는 중이에요.</Text> : null}
@@ -459,52 +463,57 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#F1F2F4", backgroundColor: COLORS.bg, paddingHorizontal: 18, paddingBottom: 10 },
+  appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.bg, paddingHorizontal: 16, paddingBottom: 12 },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
+  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" }, // Figma: Inter Medium
   scroller: { flex: 1 },
-  content: { gap: 16, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 40 },
-  stepDots: { flexDirection: "row", gap: 8, marginBottom: 4 },
+  content: { gap: 20, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 }, // Figma body: pt28 pb24
+  stepDots: { flexDirection: "row", gap: 8 },
   stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#DDE2EA" },
   stepDotActive: { backgroundColor: COLORS.primary },
-  heading: { color: COLORS.text, fontSize: 21, fontWeight: "900", lineHeight: 29, marginBottom: 12 },
-  helper: { color: COLORS.subtle, fontSize: 13, fontWeight: "800", marginTop: -10 },
-  field: { gap: 8 },
-  label: { color: COLORS.text, fontSize: 14, fontWeight: "900" },
-  input: { minHeight: 52, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 15, fontWeight: "700", paddingHorizontal: 15 },
+  heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
+  helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, gray/500
+  field: { gap: 6 }, // Figma label→input gap
+  label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
+  input: { minHeight: 48, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, border 1, px16, Regular 14
+  codeInput: { minHeight: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 14, paddingVertical: 12 }, // Figma SignUp-Step2: 44h, border 0.5
   inputError: { borderColor: COLORS.danger },
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
   errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "800", lineHeight: 18 },
-  successText: { color: COLORS.success, fontSize: 12, fontWeight: "800", lineHeight: 18 },
+  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, marginTop: -12 },
+  statusLeft: { flexShrink: 1, minWidth: 0 },
+  timerText: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular 12
+  successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "700", lineHeight: 18 },
-  selectField: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 15 },
-  selectText: { color: COLORS.text, fontSize: 15, fontWeight: "700" },
-  selectPlaceholder: { color: COLORS.subtle },
-  primaryButton: { height: 54, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary },
+  passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
+  selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: border 0.5, px14 py12
+  selectText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
+  selectPlaceholder: { color: COLORS.tertiary },
+  primaryButton: { height: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary }, // Figma: 48h
   disabledButton: { opacity: 0.55 },
   validationDisabledButton: { backgroundColor: "#D1D5DB" },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "500" }, // Figma: Inter Medium ~14-15
   resendButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 8 },
-  resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "900" },
+  resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, primary/500
   resendTextDisabled: { color: COLORS.subtle },
   consentRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  checkBox: { width: 22, height: 22, alignItems: "center", justifyContent: "center", borderRadius: 6, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.bg },
-  checkBoxActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
-  consentText: { color: COLORS.text, fontSize: 13, fontWeight: "800" },
+  checkBox: { width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 5, backgroundColor: "#C7CCD4" }, // Figma: 20, radius 5, gray/300 unchecked
+  checkBoxActive: { backgroundColor: COLORS.primary }, // Figma: primary/500 checked
+  consentText: { color: COLORS.text, fontSize: 14, fontWeight: "400" }, // Figma: Regular 14
   legalLinks: { flexDirection: "row", flexWrap: "wrap", gap: 14, paddingLeft: 30, marginTop: -4 },
   legalLinkText: { color: COLORS.primary, fontSize: 12, fontWeight: "800", textDecorationLine: "underline" },
-  completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 39 },
-  successCircle: { width: 72, height: 72, alignItems: "center", justifyContent: "center", borderRadius: 36, borderWidth: 3, borderColor: COLORS.success, marginBottom: 30 },
-  completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "900", marginBottom: 26 },
-  completeButton: { alignSelf: "stretch" },
-  modalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.42)" },
-  modalCard: { borderTopLeftRadius: 18, borderTopRightRadius: 18, backgroundColor: COLORS.bg, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
-  modalHandle: { width: 36, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: "#D1D5DB", marginBottom: 18 },
-  modalTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900", marginBottom: 8 },
-  modalOption: { minHeight: 52, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  modalOptionText: { color: COLORS.text, fontSize: 15, fontWeight: "800" },
+  completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
+  completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
+  completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280
+  modalBackdrop: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(17,24,39,0.42)" },
+  modalCard: { width: "100%", maxWidth: 405, borderTopLeftRadius: 18, borderTopRightRadius: 18, backgroundColor: COLORS.bg, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
+  modalHandle: { width: 36, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: "#C7CCD4", marginBottom: 16 }, // Figma handle
+  modalTitle: { color: COLORS.text, fontSize: 18, fontWeight: "600", marginBottom: 8 }, // Figma: SemiBold 18
+  modalOption: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: "#EAECEF" }, // Figma divider
+  modalOptionText: { color: COLORS.text, fontSize: 15, fontWeight: "400" }, // Figma: Regular 15
+  modalOptionTextSelected: { color: COLORS.primary, fontWeight: "500" }, // Figma: selected = primary Medium
   modalStateText: { color: COLORS.muted, fontSize: 13, fontWeight: "700", paddingVertical: 14 },
 });

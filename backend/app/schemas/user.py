@@ -31,6 +31,10 @@ class UserPasswordUpdate(BaseModel):
     new_password: str
 
 
+class UserPasswordVerify(BaseModel):
+    current_password: str
+
+
 class UserDeactivateRequest(BaseModel):
     reason: str | None = None
 

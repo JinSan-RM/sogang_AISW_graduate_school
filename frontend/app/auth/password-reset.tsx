@@ -15,13 +15,15 @@ import {
 } from "../../utils/authValidation";
 
 const COLORS = {
-  primary: "#2761FF",
-  text: "#111827",
-  muted: "#6B7280",
-  subtle: "#A0A7B2",
-  border: "#E5E7EB",
-  danger: "#DC2626",
-  success: "#22A163",
+  primary: "#2761FF", // primary/500
+  text: "#15171C", // gray/900 (Figma)
+  muted: "#6B7280", // gray/600
+  subtle: "#A6ACB7", // placeholder
+  tertiary: "#8A919C", // gray/500, text/tertiary
+  border: "#E1E4E9", // border/default
+  danger: "#D64545", // error/500 (Figma)
+  success: "#2E9E5B", // success/500 (complete icon)
+  successText: "#3B6D11", // resent success message
   bg: "#FFFFFF",
   errorBg: "#FFF5F5",
   disabled: "#D1D5DB",
@@ -53,6 +55,7 @@ export default function PasswordResetScreen() {
   const resendAvailableAtRef = useRef(0);
   const [verificationMessage, setVerificationMessage] = useState<VerificationMessage>(null);
   const [verificationFailureState, setVerificationFailureState] = useState<VerificationFailureState>(null);
+  const [rateLimited, setRateLimited] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   const [resetValidationAttempted, setResetValidationAttempted] = useState(false);
@@ -106,6 +109,7 @@ export default function PasswordResetScreen() {
       setIsSubmitting(true);
       setErrors({});
       setVerificationMessage(null);
+      setRateLimited(false);
       const response = await authApi.requestPasswordReset({ email });
       if (response.data.email_sent === false) {
         const message = "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
@@ -125,17 +129,20 @@ export default function PasswordResetScreen() {
       setVerificationFailureState(null);
       setVerificationMessage({
         type: "success",
-        text: resend ? "새 인증코드가 발송되었어요." : "인증코드가 발송되었어요.",
+        text: "새 인증코드가 발송되었어요.",
       });
       setMode("code");
     } catch (error) {
       const errorCode = apiErrorCode(error);
-      const message =
-        errorCode === "RATE_LIMITED" || errorCode === "VERIFICATION_RESEND_COOLDOWN"
-          ? "인증코드는 5분 후 다시 요청할 수 있어요."
-          : "인증코드를 발송하지 못했어요. 이메일을 확인해주세요.";
+      const isRateLimited = errorCode === "RATE_LIMITED" || errorCode === "VERIFICATION_RESEND_COOLDOWN";
+      const message = isRateLimited
+        ? "인증 시도 횟수를 초과했어요.\n잠시 후 다시 시도해주세요."
+        : "인증코드를 발송하지 못했어요. 이메일을 확인해주세요.";
       if (resend) setVerificationMessage({ type: "error", text: message });
-      else setErrors({ email: message });
+      else {
+        setErrors({ email: message });
+        setRateLimited(isRateLimited);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -240,9 +247,7 @@ export default function PasswordResetScreen() {
 
       {mode === "complete" ? (
         <View style={styles.completeContent}>
-          <View style={styles.successCircle}>
-            <Ionicons name="checkmark" size={27} color={COLORS.success} />
-          </View>
+          <Ionicons name="checkmark-circle-outline" size={64} color={COLORS.success} />
           <Text style={styles.completeTitle}>비밀번호가 변경되었어요!</Text>
           <Pressable onPress={() => router.replace("/auth/login")} style={[styles.primaryButton, styles.completeButton]}>
             <Text style={styles.primaryButtonText}>로그인하러 가기</Text>
@@ -261,17 +266,18 @@ export default function PasswordResetScreen() {
                   onChangeText={(value) => {
                     setEmailId(value);
                     setErrors((current) => ({ ...current, email: undefined }));
+                    setRateLimited(false);
                   }}
                   hasError={Boolean(errors.email)}
                 />
                 <FieldError message={errors.email} />
               </View>
               <Pressable
-                disabled={isSubmitting}
+                disabled={isSubmitting || rateLimited}
                 onPress={() => void requestCode(false)}
-                style={[styles.primaryButton, isSubmitting ? styles.submittingButton : null]}
+                style={[styles.primaryButton, rateLimited ? styles.disabledButton : isSubmitting ? styles.submittingButton : null]}
               >
-                <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 받기"}</Text>
+                <Text style={styles.primaryButtonText}>{rateLimited ? "다음" : isSubmitting ? "발송 중" : "인증코드 받기"}</Text>
               </Pressable>
             </>
           ) : null}
@@ -293,7 +299,7 @@ export default function PasswordResetScreen() {
                     }
                   }}
                   placeholder="인증코드 6자리"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor={COLORS.tertiary}
                   style={[
                     styles.input,
                     codeError ? styles.inputError : null,
@@ -310,13 +316,12 @@ export default function PasswordResetScreen() {
                     <Ionicons
                       name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
                       size={14}
-                      color={verificationMessage.type === "success" ? COLORS.success : COLORS.danger}
+                      color={verificationMessage.type === "success" ? COLORS.successText : COLORS.danger}
                     />
                     <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
                       {verificationMessage.text}
                     </Text>
                   </View>
-                  <Text style={styles.timer}>{formatCountdown(countdown)}</Text>
                 </View>
               ) : null}
 
@@ -363,7 +368,7 @@ export default function PasswordResetScreen() {
                 {displayedPasswordError ? (
                   <FieldError message={displayedPasswordError} />
                 ) : (
-                  <Text style={styles.passwordHelper}>영문, 숫자, 특수문자를 포함해 8자 이상 입력해주세요.</Text>
+                  <Text style={styles.passwordHelper}>영문, 숫자, 특수문자 포함 8자 이상</Text>
                 )}
               </View>
               <View style={styles.field}>
@@ -373,7 +378,7 @@ export default function PasswordResetScreen() {
                     setNewPasswordConfirm(value);
                     setErrors((current) => ({ ...current, passwordConfirm: undefined, form: undefined }));
                   }}
-                  placeholder="비밀번호 확인"
+                  placeholder="새 비밀번호 확인"
                   placeholderTextColor={COLORS.subtle}
                   secureTextEntry
                   style={[styles.input, displayedPasswordConfirmError ? styles.inputErrorBackground : null]}
@@ -412,52 +417,43 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
-  content: { gap: 18, paddingHorizontal: 31, paddingTop: 28, paddingBottom: 40 },
-  heading: { color: COLORS.text, fontSize: 20, fontWeight: "900", lineHeight: 28, marginBottom: 2 },
-  helper: { color: COLORS.subtle, fontSize: 13, fontWeight: "700", lineHeight: 20, marginTop: -12 },
-  field: { gap: 9 },
-  label: { color: COLORS.text, fontSize: 14, fontWeight: "900" },
+  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" }, // Figma: Inter Medium
+  content: { gap: 20, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 }, // Figma body
+  heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
+  helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 13, gray/500
+  field: { gap: 6 }, // Figma label→input gap
+  label: { color: COLORS.text, fontSize: 14, fontWeight: "500" }, // Figma: Inter Medium
   input: {
-    minHeight: 52,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
-    paddingHorizontal: 15,
+    fontSize: 14,
+    fontWeight: "400", // Figma: Inter Regular
+    paddingHorizontal: 16,
   },
   inputError: { borderColor: COLORS.danger },
   inputErrorBackground: { borderColor: COLORS.danger, backgroundColor: COLORS.errorBg },
-  messageRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "800", lineHeight: 18 },
-  successText: { flexShrink: 1, color: COLORS.success, fontSize: 12, fontWeight: "800", lineHeight: 18 },
-  verificationStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: -8 },
-  timer: { color: COLORS.primary, fontSize: 12, fontWeight: "900" },
-  passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "700", lineHeight: 18 },
+  messageRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
+  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular
+  successText: { flexShrink: 1, color: COLORS.successText, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: green Regular
+  verificationStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: -12 },
+  timer: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
   primaryButton: {
-    height: 54,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: COLORS.primary,
   },
   submittingButton: { opacity: 0.55 },
+  disabledButton: { backgroundColor: "#D1D5DB" },
   validationDisabledButton: { backgroundColor: COLORS.disabled },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900" },
-  completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 31, gap: 18 },
-  successCircle: {
-    width: 46,
-    height: 46,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: COLORS.success,
-    borderRadius: 23,
-    marginBottom: 6,
-  },
-  completeTitle: { color: COLORS.text, fontSize: 22, fontWeight: "900" },
-  completeButton: { alignSelf: "stretch", marginTop: 4 },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500" }, // Figma: Inter Medium
+  completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
+  completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
+  completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280
 });

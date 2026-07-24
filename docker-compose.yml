@@ -22,6 +22,9 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
+      # 로컬 테스트 편의: 인증코드 재전송 쿨다운 제거(운영 기본값은 app/config.py의 5분 유지)
+      EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "0"
+      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "0"
     ports:
       - "8000:8000"
     volumes:

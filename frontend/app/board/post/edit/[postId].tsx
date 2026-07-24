@@ -14,7 +14,7 @@ import { pickAndUploadImages } from "../../../../utils/mediaPicker";
 
 const COLORS = {
   primary: "#2761FF",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#9CA3AF",
   border: "#E1E4E9",
@@ -191,11 +191,13 @@ export default function PostEditScreen() {
             <View>
               <TextInput
                 accessibilityLabel="제목"
+                multiline
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}
                 placeholder="제목을 입력하세요"
                 placeholderTextColor={COLORS.subtle}
-                style={[styles.input, fieldState.error ? styles.inputError : null]}
+                style={[styles.input, styles.titleInput, fieldState.error ? styles.inputError : null]}
+                textAlignVertical="top"
                 value={field.value}
               />
               {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
@@ -324,7 +326,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderBottomColor: "#EEF0F3",
+    borderBottomColor: "#E1E4E9",
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
@@ -336,31 +338,31 @@ const styles = StyleSheet.create({
   },
   appBarTitle: {
     color: COLORS.text,
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: 18,
+    fontWeight: "500",
   },
   scroller: {
     flex: 1,
   },
   content: {
-    gap: 12,
+    gap: 14,
     paddingHorizontal: 20,
-    paddingTop: 18,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   readOnlyField: {
-    minHeight: 46,
     justifyContent: "center",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   readOnlyText: {
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "400",
   },
   statusRow: {
     flexDirection: "row",
@@ -388,17 +390,21 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 46,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.surface,
     color: COLORS.text,
     fontSize: 14,
-    paddingHorizontal: 13,
-    paddingVertical: 11,
+    fontWeight: "400",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  titleInput: {
+    height: 100,
   },
   contentInput: {
-    minHeight: 148,
+    height: 116,
   },
   inputError: {
     borderColor: COLORS.danger,
@@ -465,7 +471,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 7,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
     marginTop: 4,
   },
@@ -475,6 +481,6 @@ const styles = StyleSheet.create({
   submitText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "500",
   },
 });

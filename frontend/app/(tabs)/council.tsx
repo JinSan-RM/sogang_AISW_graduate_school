@@ -10,7 +10,7 @@ import type { Board } from "../../types";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
   subtle: "#8A919C",
   border: "#EEF0F3",
@@ -41,16 +41,16 @@ const MENU_ITEMS: MenuItem[] = [
     slugs: ["mutual-aid", "gsa-mutual-aid"],
   },
   {
-    title: "건의사항",
-    slugs: ["suggestions", "gsa-proposal", "gsa-feedback"],
-  },
-  {
     title: "기수별 기장단 소개",
     slugs: ["gsa-cohort-leaders"],
   },
   {
     title: "역대 원우회",
     slugs: ["gsa-past-councils"],
+  },
+  {
+    title: "건의사항",
+    slugs: ["suggestions", "gsa-proposal", "gsa-feedback"],
   },
   {
     title: "자주 묻는 질문",
@@ -80,7 +80,7 @@ function MenuRow({ item, board }: { item: MenuItem; board?: Board }) {
   return (
     <Pressable onPress={() => openItem(item, board)} style={styles.menuRow}>
       <Text style={styles.menuTitle}>{item.title}</Text>
-      <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
+      <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
     </Pressable>
   );
 }
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -144,13 +144,13 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   scroller: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingBottom: 32,
   },
   center: {
@@ -168,15 +168,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingVertical: 11,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
+    paddingVertical: 13,
   },
   menuTitle: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "400",
   },
   messageBox: {
     borderRadius: 8,

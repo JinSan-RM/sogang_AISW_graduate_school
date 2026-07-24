@@ -258,6 +258,8 @@ export type UserActivityItem = {
   category?: string | null;
   comment_count?: number;
   like_count?: number;
+  author_nickname?: string | null;
+  author_cohort?: string | null;
   created_at: string;
 };
 
@@ -399,6 +401,7 @@ export type UserMe = {
   profile_image_url?: string | null;
   email: string;
   role: string;
+  created_at?: string | null;
   privacy_policy_version?: string | null;
   privacy_consented_at?: string | null;
 };

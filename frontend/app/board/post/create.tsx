@@ -18,7 +18,7 @@ const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
   primary100: "#D5E0FE",
-  text: "#111827",
+  text: "#15171C",
   navy: "#0B1F56",
   muted: "#6B7280",
   subtle: "#8A919C",
@@ -46,22 +46,27 @@ type FormValues = z.infer<typeof schema>;
 type FormFieldProps = {
   label: string;
   required?: boolean;
+  requiredStar?: boolean;
+  optional?: boolean;
   helper?: string;
   error?: string;
   children: ReactNode;
 };
 
-function FormField({ label, required, helper, error, children }: FormFieldProps) {
+function FormField({ label, required, requiredStar, optional, helper, error, children }: FormFieldProps) {
   return (
     <View style={styles.field}>
       {label ? (
         <View style={styles.labelRow}>
           <Text style={styles.label}>{label}</Text>
-          {required ? (
+          {requiredStar ? (
+            <Text style={styles.requiredStar}>*</Text>
+          ) : required ? (
             <View style={styles.requiredPill}>
               <Text style={styles.requiredText}>필수</Text>
             </View>
           ) : null}
+          {optional ? <Text style={styles.optionalMark}> (선택)</Text> : null}
         </View>
       ) : null}
       {children}
@@ -103,6 +108,7 @@ function SelectionSheet({
   title,
   options,
   emptyText,
+  selectedKey,
   onClose,
   onSelect,
 }: {
@@ -110,6 +116,7 @@ function SelectionSheet({
   title: string;
   options: SelectionOption[];
   emptyText: string;
+  selectedKey?: string;
   onClose: () => void;
   onSelect: (option: SelectionOption) => void;
 }) {
@@ -121,16 +128,73 @@ function SelectionSheet({
           <Text style={styles.sheetTitle}>{title}</Text>
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
             {options.length === 0 ? <Text style={styles.sheetEmpty}>{emptyText}</Text> : null}
-            {options.map((option) => (
-              <Pressable key={option.key} onPress={() => onSelect(option)} style={styles.sheetOption}>
-                <Text style={styles.sheetOptionText}>{option.label}</Text>
-                <Ionicons name="chevron-forward" size={17} color={COLORS.subtle} />
-              </Pressable>
-            ))}
+            {options.map((option) => {
+              const active = option.key === selectedKey;
+              return (
+                <Pressable key={option.key} onPress={() => onSelect(option)} style={styles.sheetOption}>
+                  <Text style={[styles.sheetOptionText, active ? styles.sheetOptionTextActive : null]}>{option.label}</Text>
+                  {active ? <Ionicons name="checkmark" size={16} color={COLORS.primary} /> : null}
+                </Pressable>
+              );
+            })}
           </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+const CAL_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function InlineCalendar({ value, onSelect }: { value?: string; onSelect: (dateStr: string) => void }) {
+  const [view, setView] = useState(() => {
+    const parts = (value ?? "").split(".").map((v) => Number(v));
+    if (parts[0] && parts[1]) return { y: parts[0], m: parts[1] - 1 };
+    const now = new Date();
+    return { y: now.getFullYear(), m: now.getMonth() };
+  });
+
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const firstWeekday = new Date(view.y, view.m, 1).getDay();
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const selected = value ?? "";
+  const goPrev = () => setView((v) => (v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }));
+  const goNext = () => setView((v) => (v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 }));
+
+  return (
+    <View style={styles.calCard}>
+      <View style={styles.calHeader}>
+        <Pressable hitSlop={10} onPress={goPrev} style={styles.calNav}>
+          <Ionicons name="chevron-back" size={20} color={COLORS.text} />
+        </Pressable>
+        <Text style={styles.calTitle}>{`${view.y}년 ${view.m + 1}월`}</Text>
+        <Pressable hitSlop={10} onPress={goNext} style={styles.calNav}>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.text} />
+        </Pressable>
+      </View>
+      <View style={styles.calWeekRow}>
+        {CAL_WEEKDAYS.map((w) => (
+          <Text key={w} style={styles.calWeekday}>{w}</Text>
+        ))}
+      </View>
+      <View style={styles.calGrid}>
+        {cells.map((day, index) => {
+          if (day === null) return <View key={`e-${index}`} style={styles.calCell} />;
+          const dateStr = `${view.y}.${String(view.m + 1).padStart(2, "0")}.${String(day).padStart(2, "0")}`;
+          const isSelected = dateStr === selected;
+          return (
+            <Pressable key={dateStr} onPress={() => onSelect(dateStr)} style={styles.calCell}>
+              <View style={[styles.calDay, isSelected ? styles.calDaySelected : null]}>
+                <Text style={[styles.calDayText, isSelected ? styles.calDayTextSelected : null]}>{day}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -144,7 +208,7 @@ export default function PostCreateScreen() {
     content?: string;
   }>();
 
-  const boardId = Number(params.boardId);
+  const [boardId, setBoardId] = useState(() => Number(params.boardId));
   const postId = params.postId ? Number(params.postId) : null;
 
   const createMutation = useCreatePost(boardId);
@@ -155,7 +219,8 @@ export default function PostCreateScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [participantQuery, setParticipantQuery] = useState("");
   const [selectedParticipants, setSelectedParticipants] = useState<UserSearchItem[]>([]);
-  const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | null>(null);
+  const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | "board" | null>(null);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [activitySourcePostId, setActivitySourcePostId] = useState<number | null>(null);
   const [createdPostId, setCreatedPostId] = useState<number | null>(null);
   const boards = useMemo(() => boardsRes?.data.flatMap((group) => group.boards) ?? [], [boardsRes?.data]);
@@ -180,6 +245,12 @@ export default function PostCreateScreen() {
   const isAdminParticipationPost = board?.slug === "club-promo" || isNetworkingProgram;
   const compactCreate = !isActivity && !isMutualAid;
   const requiresAttachment = isActivity || isMutualAid || isAlbum || isAdminParticipationPost;
+  const canPickBoard =
+    !postId && compactCreate && !isAlbum && !isSuggestion && !isStudyRecruit && !isNetworkingProgram && !isAdminParticipationPost;
+  const selectableBoards = useMemo(() => {
+    const group = boardsRes?.data.find((entry) => entry.boards.some((item) => item.id === boardId));
+    return group?.boards ?? [];
+  }, [boardsRes?.data, boardId]);
   const trimmedParticipantQuery = participantQuery.trim();
   const participantSearch = useQuery({
     queryKey: ["user-search", trimmedParticipantQuery],
@@ -222,7 +293,13 @@ export default function PostCreateScreen() {
     if (isStudyRecruit && (!params.category || params.category === "모집")) {
       setValue("category", "진행중");
     }
-  }, [isStudyRecruit, params.category, setValue]);
+    if (board?.slug === "club-promo" && !params.category) {
+      setValue("category", "모집중");
+    }
+    if (isActivity && (params.category === "활동 인증" || params.category === "안내")) {
+      setValue("category", "");
+    }
+  }, [isStudyRecruit, isActivity, board?.slug, params.category, setValue]);
 
   useEffect(() => {
     if (isAdminParticipationPost && !params.category) {
@@ -256,17 +333,21 @@ export default function PostCreateScreen() {
       : isActivity
         ? "활동명을 입력하세요"
         : isSuggestion
-          ? "건의 내용을 한 줄로 요약해 주세요"
+          ? "제목을 입력하세요"
+        : isStudyRecruit
+          ? "스터디 제목을 입력하세요"
           : "제목을 입력하세요",
     category: isMutualAid ? "경조사 종류" : isActivity ? "소속 그룹" : isStudyRecruit ? "모집 상태" : "분류",
     categoryPlaceholder: isMutualAid ? "결혼 / 상(喪) 중 선택" : isActivity ? "활동 대상을 선택하세요" : isStudyRecruit ? "진행중 / 마감" : "선택 입력",
-    content: isMutualAid ? "전달 사항" : isActivity ? "활동 소감" : isSuggestion ? "건의 내용" : "내용",
+    content: isMutualAid ? "비고" : isActivity ? "활동 소감" : isSuggestion ? "건의 내용" : "내용",
     contentPlaceholder: isMutualAid
-      ? "확인이 필요한 내용을 적어주세요"
+      ? "전달하고 싶은 내용이 있다면 적어주세요"
       : isActivity
         ? "활동 내용과 소감을 적어주세요"
         : isSuggestion
-          ? "건의 내용을 자세히 적어주세요"
+          ? "원우회에 건의하고 싶은 내용을 자유롭게 작성해주세요"
+        : isStudyRecruit
+          ? "스터디 내용, 진행 요일/시간 등을 입력하세요"
           : "내용을 입력하세요",
     attachment: isAlbum ? "사진" : isMutualAid ? "증빙서류" : isActivity ? "활동 사진" : isAdminParticipationPost ? "대표 사진" : "첨부파일",
     attachmentHelp: isAlbum ? "행사 사진 1장 이상 · 이미지 파일만 가능" : isMutualAid ? "청첩장, 부고장 등 증빙 파일" : isActivity ? "활동 사진 1장 이상" : isAdminParticipationPost ? "목록과 상세 상단에 표시할 사진을 1장 이상 첨부하세요." : "이미지, PDF, 문서 파일",
@@ -275,7 +356,7 @@ export default function PostCreateScreen() {
     ? {
         icon: "shield-checkmark-outline" as const,
         title: "익명으로 접수됩니다",
-        body: "작성자 정보는 노출되지 않고, 답변 완료 후 수정과 삭제가 제한됩니다.",
+        body: "해당 건의사항은 익명으로 등록되며, 작성자는 노출되지 않아요",
       }
     : isAlbum
       ? {
@@ -307,11 +388,11 @@ export default function PostCreateScreen() {
     : isAlbum
       ? "사진 등록"
     : isSuggestion
-      ? "익명 건의 등록"
+      ? "등록"
       : isActivity
         ? "인증 등록"
         : isMutualAid
-          ? "상조회 신청"
+          ? "신청"
           : isStudyRecruit
             ? "등록"
           : "등록";
@@ -453,7 +534,7 @@ export default function PostCreateScreen() {
       <View style={styles.successScreen}>
         <View style={styles.successContent}>
           <View style={styles.successIcon}>
-            <Ionicons name="checkmark" size={30} color="#16A34A" />
+            <Ionicons name="checkmark" size={38} color="#22C55E" />
           </View>
           <Text style={styles.successTitle}>
             {isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
@@ -546,7 +627,7 @@ export default function PostCreateScreen() {
                   multiline
                   onChangeText={field.onChange}
                   placeholder="활동에 대한 소감을 남겨주세요"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={[styles.input, styles.activityFeedbackInput, fieldState.error ? styles.inputError : null]}
                   textAlignVertical="top"
                   value={field.value}
@@ -562,7 +643,7 @@ export default function PostCreateScreen() {
                   <TextInput
                     onChangeText={field.onChange}
                     placeholder="YYYY.MM.DD"
-                    placeholderTextColor={COLORS.subtle}
+                    placeholderTextColor="#A6ACB7"
                     style={styles.activityInlineInput}
                     value={field.value}
                   />
@@ -580,7 +661,7 @@ export default function PostCreateScreen() {
                   <TextInput
                     onChangeText={field.onChange}
                     placeholder="은행 / 계좌번호를 입력하세요"
-                    placeholderTextColor={COLORS.subtle}
+                    placeholderTextColor="#A6ACB7"
                     style={styles.input}
                     value={field.value}
                   />
@@ -588,7 +669,7 @@ export default function PostCreateScreen() {
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
-                <Text style={styles.activityWarningText}>계좌는 본인 명의로 된 통장 가능해요</Text>
+                <Text style={styles.activityWarningText}>계좌는 본인 명의로만 등록 가능해요</Text>
               </View>
             </View>
 
@@ -605,7 +686,7 @@ export default function PostCreateScreen() {
                         <TextInput
                           onChangeText={setParticipantQuery}
                           placeholder="이름으로 검색"
-                          placeholderTextColor={COLORS.subtle}
+                          placeholderTextColor="#A6ACB7"
                           style={styles.activityInlineInput}
                           value={participantQuery}
                         />
@@ -654,25 +735,80 @@ export default function PostCreateScreen() {
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
-                <Text style={styles.activityWarningText}>원우회비 미납자, 휴학자는 검색되지 않아요</Text>
+                <Text style={styles.activityWarningText}>원우회비 미납자, 졸업자는 검색되지 않아요</Text>
               </View>
             </View>
           </>
         ) : (
           <>
-        <View style={styles.selectLike}>
-          <Text style={styles.selectText} numberOfLines={1}>
-            {board?.name ?? "게시판을 선택하세요"}
-          </Text>
-          <Ionicons name="chevron-down" size={18} color={COLORS.subtle} />
-        </View>
-
-        {guide ? (
-          <View style={styles.guideBox}>
-            <Ionicons name={guide.icon} size={17} color={COLORS.primary} />
-            <Text style={styles.guideBody}>{guide.body}</Text>
+        {canPickBoard ? (
+          <View style={styles.boardSelectWrap}>
+            <Pressable
+              onPress={() => setSelectionSheet(selectionSheet === "board" ? null : "board")}
+              style={styles.selectLike}
+            >
+              <Text style={[styles.selectText, !board ? styles.selectPlaceholder : null]} numberOfLines={1}>
+                {board?.name ?? "게시판을 선택하세요"}
+              </Text>
+              <Ionicons name={selectionSheet === "board" ? "chevron-up" : "chevron-down"} size={18} color={COLORS.subtle} />
+            </Pressable>
+            {selectionSheet === "board" ? (
+              <View style={styles.boardDropdown}>
+                <Text style={styles.boardDropdownTitle}>게시판을 선택하세요</Text>
+                {selectableBoards.length === 0 ? (
+                  <Text style={styles.boardDropdownEmpty}>선택할 수 있는 게시판이 없습니다.</Text>
+                ) : (
+                  selectableBoards.map((item, index) => {
+                    const active = item.id === boardId;
+                    return (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => {
+                          setBoardId(item.id);
+                          setSelectionSheet(null);
+                        }}
+                        style={[styles.boardDropdownItem, index > 0 ? styles.boardDropdownDivider : null]}
+                      >
+                        <Text style={[styles.boardDropdownText, active ? styles.boardDropdownTextActive : null]}>{item.name}</Text>
+                        {active ? <Ionicons name="checkmark" size={16} color={COLORS.primary} /> : null}
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            ) : null}
           </View>
         ) : null}
+
+        {guide && !isMutualAid ? (
+          <View style={[styles.guideBox, isSuggestion ? styles.guideBoxSuggestion : null]}>
+            <Ionicons name={isSuggestion ? "information-circle-outline" : guide.icon} size={17} color={isSuggestion ? "#0C447C" : COLORS.primary} />
+            <Text style={[styles.guideBody, isSuggestion ? styles.guideBodySuggestion : null]}>{guide.body}</Text>
+          </View>
+        ) : null}
+
+      {isStudyRecruit ? (
+        <Controller
+          control={control}
+          name="category"
+          render={({ field }) => (
+            <View style={styles.studyStatusWrap}>
+              <Text style={styles.label}>모집 상태</Text>
+              <View style={styles.recruitmentStatusRow}>
+                {["진행중", "마감"].map((status) => (
+                  <Pressable
+                    key={status}
+                    onPress={() => field.onChange(status)}
+                    style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
+                  >
+                    <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+        />
+      ) : null}
 
       {!isMutualAid ? (
         <Controller
@@ -683,7 +819,7 @@ export default function PostCreateScreen() {
               <TextInput
                 onChangeText={field.onChange}
                 placeholder={labels.titlePlaceholder}
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={[styles.input, fieldState.error ? styles.inputError : null]}
                 value={field.value}
               />
@@ -692,12 +828,12 @@ export default function PostCreateScreen() {
         />
       ) : null}
 
-      {!isAlbum ? (
+      {!isAlbum && (isMutualAid || board?.slug === "club-promo") ? (
         <Controller
           control={control}
           name="category"
           render={({ field }) => (
-            <FormField label={compactCreate ? "" : labels.category} helper={isSuggestion ? "운영, 행사, 시설 등 필요한 경우만 입력하세요." : undefined}>
+            <FormField label={compactCreate ? "" : labels.category} requiredStar={isMutualAid} helper={isSuggestion ? "운영, 행사, 시설 등 필요한 경우만 입력하세요." : undefined}>
               {isMutualAid ? (
                 <Pressable onPress={() => setSelectionSheet("mutualType")} style={styles.selectionField}>
                   <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>{field.value || labels.categoryPlaceholder}</Text>
@@ -715,11 +851,23 @@ export default function PostCreateScreen() {
                     </Pressable>
                   ))}
                 </View>
+              ) : board?.slug === "club-promo" ? (
+                <View style={styles.recruitmentStatusRow}>
+                  {["모집중", "상시", "마감"].map((status) => (
+                    <Pressable
+                      key={status}
+                      onPress={() => field.onChange(status)}
+                      style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
+                    >
+                      <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               ) : (
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder={labels.categoryPlaceholder}
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -739,7 +887,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder="YYYY.MM.DD"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -754,7 +902,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder="예: 홍길동, 김서강"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -769,7 +917,7 @@ export default function PostCreateScreen() {
                 <TextInput
                   onChangeText={field.onChange}
                   placeholder="예: 신한 110-000-000000 홍길동"
-                  placeholderTextColor={COLORS.subtle}
+                  placeholderTextColor="#A6ACB7"
                   style={styles.input}
                   value={field.value}
                 />
@@ -785,18 +933,22 @@ export default function PostCreateScreen() {
             control={control}
             name="eventDate"
             render={({ field }) => (
-              <FormField label="경조사 일자" required>
-                <View style={styles.activityInputWithIcon}>
-                  <TextInput
-                    keyboardType="numbers-and-punctuation"
-                    onChangeText={field.onChange}
-                    placeholder="YYYY.MM.DD"
-                    placeholderTextColor={COLORS.subtle}
-                    style={styles.activityInlineInput}
-                    value={field.value}
-                  />
+              <FormField label="날짜" requiredStar>
+                <Pressable onPress={() => setDatePickerOpen((open) => !open)} style={styles.selectionField}>
+                  <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>
+                    {field.value || "경조사 날짜를 선택하세요"}
+                  </Text>
                   <Ionicons name="calendar-outline" size={17} color={COLORS.subtle} />
-                </View>
+                </Pressable>
+                {datePickerOpen ? (
+                  <InlineCalendar
+                    value={field.value}
+                    onSelect={(dateStr) => {
+                      field.onChange(dateStr);
+                      setDatePickerOpen(false);
+                    }}
+                  />
+                ) : null}
               </FormField>
             )}
           />
@@ -804,7 +956,7 @@ export default function PostCreateScreen() {
             control={control}
             name="relation"
             render={({ field }) => (
-              <FormField label="관계" required>
+              <FormField label="관계" requiredStar>
                 <Pressable onPress={() => setSelectionSheet("mutualRelation")} style={styles.selectionField}>
                   <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>
                     {field.value || "본인 / 배우자 / 부모 등 선택"}
@@ -814,10 +966,49 @@ export default function PostCreateScreen() {
               </FormField>
             )}
           />
+          <View style={styles.field}>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>증빙서류 첨부</Text>
+              <Text style={styles.requiredStar}>*</Text>
+            </View>
+            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
+              <Ionicons name="document-outline" size={16} color={COLORS.muted} />
+              <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
+            </Pressable>
+            {attachments.length > 0 ? (
+              <View style={styles.compactAttachmentList}>
+                {attachments.map((attachment) => (
+                  <View key={attachment.id} style={styles.compactAttachmentItem}>
+                    <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
+                    <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+          <Controller
+            control={control}
+            name="content"
+            render={({ field }) => (
+              <FormField label="비고" optional>
+                <TextInput
+                  multiline
+                  onChangeText={field.onChange}
+                  placeholder="전달하고 싶은 내용이 있다면 적어주세요"
+                  placeholderTextColor="#A6ACB7"
+                  style={[styles.input, styles.textArea]}
+                  textAlignVertical="top"
+                  value={field.value ?? ""}
+                />
+              </FormField>
+            )}
+          />
         </>
       ) : null}
 
-      {!isAlbum ? (
+      {!isAlbum && !isMutualAid ? (
         <Controller
           control={control}
           name="content"
@@ -827,7 +1018,7 @@ export default function PostCreateScreen() {
                 multiline
                 onChangeText={field.onChange}
                 placeholder={labels.contentPlaceholder}
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={[styles.input, styles.textArea, fieldState.error ? styles.inputError : null]}
                 textAlignVertical="top"
                 value={field.value ?? ""}
@@ -842,12 +1033,14 @@ export default function PostCreateScreen() {
           control={control}
           name="contact"
           render={({ field }) => (
-            <FormField label="스터디장 연락수단" required helper="이메일, 카카오톡 ID, 휴대폰 번호 등을 입력해주세요.">
+            <FormField label="스터디장 연락수단">
               <TextInput
+                multiline
                 onChangeText={field.onChange}
-                placeholder="스터디원들과 연락할 수단"
-                placeholderTextColor={COLORS.subtle}
-                style={styles.input}
+                placeholder={"스터디원들과 연락할 수단을 입력해주세요.\n(이메일, 카카오톡 ID, 휴대폰번호 등)"}
+                placeholderTextColor="#A6ACB7"
+                style={[styles.input, styles.contactInput]}
+                textAlignVertical="top"
                 value={field.value}
               />
             </FormField>
@@ -867,7 +1060,7 @@ export default function PostCreateScreen() {
                 keyboardType="url"
                 onChangeText={field.onChange}
                 placeholder="https://forms.gle/..."
-                placeholderTextColor={COLORS.subtle}
+                placeholderTextColor="#A6ACB7"
                 style={styles.input}
                 value={field.value}
               />
@@ -876,7 +1069,7 @@ export default function PostCreateScreen() {
         />
       ) : null}
 
-      {compactCreate ? (
+      {isStudyRecruit || isSuggestion || isMutualAid ? null : compactCreate ? (
         <View style={styles.compactAttachWrap}>
           {isAdminParticipationPost ? (
             <View style={styles.labelRow}>
@@ -887,22 +1080,47 @@ export default function PostCreateScreen() {
             </View>
           ) : null}
           <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
-            <Ionicons name="image-outline" size={17} color={COLORS.muted} />
+            <Ionicons name="image-outline" size={16} color={COLORS.muted} />
             <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : isAdminParticipationPost ? "대표 사진 첨부" : "이미지 첨부"}</Text>
           </Pressable>
           {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
-          {attachments.length > 0 ? (
+          {imageAttachments.length > 0 ? (
+            <View style={styles.writeImageGrid}>
+              {imageAttachments.map((attachment) => {
+                const previewUrl = mediaUrl(attachment.url);
+                return (
+                  <ImageBackground
+                    key={attachment.id}
+                    source={previewUrl ? { uri: previewUrl } : undefined}
+                    imageStyle={styles.writeImageThumbImage}
+                    style={styles.writeImageThumb}
+                  >
+                    <Pressable
+                      hitSlop={6}
+                      onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                      style={styles.writeImageRemove}
+                    >
+                      <Ionicons name="close" size={12} color="#FFFFFF" />
+                    </Pressable>
+                  </ImageBackground>
+                );
+              })}
+            </View>
+          ) : null}
+          {attachments.some((item) => !item.content_type.startsWith("image/")) ? (
             <View style={styles.compactAttachmentList}>
-              {attachments.map((attachment) => (
-                <View key={attachment.id} style={styles.compactAttachmentItem}>
-                  <Text numberOfLines={1} style={styles.compactAttachmentName}>
-                    {attachment.original_filename}
-                  </Text>
-                  <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                    <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
-                  </Pressable>
-                </View>
-              ))}
+              {attachments
+                .filter((item) => !item.content_type.startsWith("image/"))
+                .map((attachment) => (
+                  <View key={attachment.id} style={styles.compactAttachmentItem}>
+                    <Text numberOfLines={1} style={styles.compactAttachmentName}>
+                      {attachment.original_filename}
+                    </Text>
+                    <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                      <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
+                    </Pressable>
+                  </View>
+                ))}
             </View>
           ) : null}
         </View>
@@ -1014,36 +1232,36 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 360,
     alignItems: "center",
+    gap: 16,
   },
   successIcon: {
-    width: 48,
-    height: 48,
+    width: 64,
+    height: 64,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "#22C55E",
-    borderRadius: 24,
-    marginBottom: 20,
+    borderRadius: 32,
   },
   successTitle: {
     color: COLORS.text,
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: 24,
+    fontWeight: "500",
+    lineHeight: 32,
     textAlign: "center",
   },
   successButton: {
-    width: "100%",
-    height: 50,
+    width: 280,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 7,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
-    marginTop: 28,
   },
   successButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "500",
   },
   screen: {
     flex: 1,
@@ -1057,7 +1275,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -1070,15 +1288,15 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   formScroller: {
     flex: 1,
   },
   content: {
-    gap: 16,
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   activityContent: {
@@ -1086,31 +1304,31 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   activitySelect: {
-    height: 42,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   activitySelectInput: {
     flex: 1,
     height: 40,
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "400",
     paddingVertical: 0,
   },
   activitySelectValue: {
     flex: 1,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
   },
   activitySelectPlaceholder: {
-    color: COLORS.subtle,
+    color: "#A6ACB7",
   },
   selectionField: {
     minHeight: 52,
@@ -1135,26 +1353,31 @@ const styles = StyleSheet.create({
   },
   recruitmentStatusRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
+    width: "100%",
+    backgroundColor: "#F0F0EE",
+    padding: 4,
+    borderRadius: 10,
   },
   recruitmentStatusButton: {
     flex: 1,
-    height: 44,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: 8,
-    backgroundColor: COLORS.bg,
   },
   recruitmentStatusButtonActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary50,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   recruitmentStatusText: {
     color: COLORS.muted,
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   recruitmentStatusTextActive: {
     color: COLORS.primary,
@@ -1162,9 +1385,12 @@ const styles = StyleSheet.create({
   sheetBackdrop: {
     flex: 1,
     justifyContent: "flex-end",
+    alignItems: "center",
     backgroundColor: "rgba(17, 24, 39, 0.42)",
   },
   sheetCard: {
+    width: "100%",
+    maxWidth: 405,
     maxHeight: "70%",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
@@ -1178,13 +1404,13 @@ const styles = StyleSheet.create({
     height: 4,
     alignSelf: "center",
     borderRadius: 2,
-    backgroundColor: "#D1D5DB",
-    marginBottom: 18,
+    backgroundColor: "#C7CCD4",
+    marginBottom: 16,
   },
   sheetTitle: {
     color: COLORS.text,
     fontSize: 17,
-    fontWeight: "900",
+    fontWeight: "500",
     marginBottom: 8,
   },
   sheetEmpty: {
@@ -1194,19 +1420,24 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   sheetOption: {
-    minHeight: 52,
+    minHeight: 50,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: "#EAECEF",
   },
   sheetOptionText: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "400",
+  },
+  sheetOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: "500",
   },
   activityPhotoBox: {
     height: 148,
@@ -1302,9 +1533,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   activityPhotoText: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "800",
+    color: "#A6ACB7",
+    fontSize: 13,
+    fontWeight: "400",
   },
   activityAttachmentList: {
     gap: 6,
@@ -1332,7 +1563,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
@@ -1342,8 +1573,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 42,
     color: COLORS.text,
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "400",
     paddingVertical: 0,
   },
   participantResultBox: {
@@ -1386,12 +1617,12 @@ const styles = StyleSheet.create({
   participantName: {
     color: COLORS.text,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   participantMeta: {
     color: COLORS.subtle,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "400",
     marginTop: 2,
   },
   participantEmptyText: {
@@ -1405,23 +1636,24 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   activityFieldTitle: {
-    color: COLORS.text,
-    fontSize: 12,
-    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "500",
   },
   activityWarning: {
-    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    borderRadius: 7,
-    backgroundColor: "#FEF1D9",
-    paddingHorizontal: 10,
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#FAEEDA",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   activityWarningText: {
-    color: "#9A6B00",
-    fontSize: 11,
-    fontWeight: "800",
+    color: "#854F0B",
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 17,
   },
   activityChipRow: {
     flexDirection: "row",
@@ -1432,22 +1664,25 @@ const styles = StyleSheet.create({
     minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderRadius: 14,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 9,
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   activityMemberChipText: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: "800",
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
   },
   selectLike: {
     height: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
@@ -1455,9 +1690,60 @@ const styles = StyleSheet.create({
   },
   selectText: {
     flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "400",
+  },
+  selectPlaceholder: {
+    color: "#A6ACB7",
+  },
+  boardSelectWrap: {
+    width: "100%",
+    position: "relative",
+    zIndex: 10,
+  },
+  boardDropdown: {
+    marginTop: 6,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  boardDropdownTitle: {
+    color: COLORS.text,
+    fontSize: 17,
+    fontWeight: "500",
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  boardDropdownItem: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  boardDropdownDivider: {
+    borderTopWidth: 1,
+    borderTopColor: "#EAECEF",
+  },
+  boardDropdownText: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "400",
+  },
+  boardDropdownTextActive: {
+    color: COLORS.primary,
+    fontWeight: "500",
+  },
+  boardDropdownEmpty: {
     color: COLORS.subtle,
     fontSize: 14,
-    fontWeight: "800",
+    paddingHorizontal: 14,
+    paddingVertical: 16,
   },
   guideBox: {
     flexDirection: "row",
@@ -1475,6 +1761,14 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 17,
   },
+  guideBoxSuggestion: {
+    alignItems: "flex-start",
+    backgroundColor: "#E6F1FB", // Figma 134:7 banner bg
+  },
+  guideBodySuggestion: {
+    color: "#0C447C", // Figma 134:7 banner text
+    fontWeight: "400",
+  },
   field: {
     gap: 8,
   },
@@ -1484,9 +1778,9 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   label: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "500",
   },
   requiredPill: {
     borderRadius: 4,
@@ -1499,18 +1793,54 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
+  requiredStar: {
+    color: "#E24B4A", // Figma 64:13 required asterisk
+    fontSize: 13,
+    fontWeight: "500",
+    marginLeft: -4, // 라벨 글씨에 붙이기 (labelRow gap 상쇄)
+  },
+  calCard: {
+    marginTop: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: COLORS.bg,
+  },
+  calHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  calNav: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  calTitle: { color: COLORS.text, fontSize: 16, fontWeight: "600" },
+  calWeekRow: { flexDirection: "row", marginBottom: 4 },
+  calWeekday: { flex: 1, textAlign: "center", color: COLORS.subtle, fontSize: 12, fontWeight: "500" },
+  calGrid: { flexDirection: "row", flexWrap: "wrap" },
+  calCell: { width: `${100 / 7}%`, alignItems: "center", justifyContent: "center", paddingVertical: 4 },
+  calDay: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18 },
+  calDaySelected: { backgroundColor: COLORS.primary },
+  calDayText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
+  calDayTextSelected: { color: "#FFFFFF", fontWeight: "600" },
+  optionalMark: {
+    color: "#A6ACB7",
+    fontSize: 12,
+    fontWeight: "400",
+  },
   input: {
     width: "100%",
     minHeight: 52,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "700",
-    paddingHorizontal: 15,
-    paddingVertical: 13,
+    fontWeight: "400",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   inputError: {
     borderColor: COLORS.danger,
@@ -1518,10 +1848,17 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 132,
   },
+  contactInput: {
+    minHeight: 60,
+  },
+  studyStatusWrap: {
+    width: "100%",
+    gap: 6,
+  },
   helperText: {
     color: COLORS.muted,
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "400",
     lineHeight: 17,
   },
   errorText: {
@@ -1628,20 +1965,46 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   compactAttachButton: {
-    height: 38,
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    borderWidth: 1,
+    gap: 6,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   compactAttachText: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "400",
+  },
+  writeImageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  writeImageThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#E1E4E9",
+  },
+  writeImageThumbImage: {
+    borderRadius: 8,
+  },
+  writeImageRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "rgba(17,24,39,0.55)",
   },
   compactAttachmentList: {
     width: "100%",
@@ -1663,15 +2026,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   submitButton: {
-    height: 54,
+    height: 48,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.primary,
+    marginTop: 10,
   },
   activitySubmitButton: {
-    height: 46,
-    borderRadius: 7,
+    height: 48,
+    borderRadius: 8,
     marginTop: 2,
   },
   submitButtonDisabled: {
@@ -1679,8 +2043,8 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 15,
+    fontWeight: "500",
   },
   activitySubmitText: {
     fontSize: 14,

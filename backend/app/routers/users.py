@@ -14,7 +14,7 @@ from app.models.registration import MajorOption
 from app.models.user import User
 from app.models.user_block import UserBlock
 from app.response import success_response
-from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeactivateRequest, UserMeUpdate, UserPasswordUpdate
+from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeactivateRequest, UserMeUpdate, UserPasswordUpdate, UserPasswordVerify
 from app.security import ensure_password_policy, hash_password, utc_now, verify_password
 from app.user_validation import nickname_is_taken, normalize_nickname
 from app.audit import log_admin_action
@@ -52,6 +52,7 @@ def get_me(user: User = Depends(get_current_user)):
             "profile_image_url": user.profile_image_url,
             "email": user.email,
             "role": user.role,
+            "created_at": user.created_at,
             "privacy_policy_version": user.privacy_policy_version,
             "privacy_consented_at": user.privacy_consented_at,
         }
@@ -258,9 +259,10 @@ def get_my_activity(
             or 0
         )
         bookmarks = db.execute(
-            select(Bookmark, Post, Board.name)
+            select(Bookmark, Post, Board.name, User.nickname, User.cohort)
             .join(Post, Post.id == Bookmark.post_id)
             .join(Board, Board.id == Post.board_id)
+            .join(User, User.id == Post.author_id)
             .where(Bookmark.user_id == user.id, Post.deleted_at.is_(None))
             .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
             .offset(offset)
@@ -278,9 +280,11 @@ def get_my_activity(
                 "category": post.category,
                 "comment_count": post.comment_count,
                 "like_count": post.like_count,
+                "author_nickname": author_nickname,
+                "author_cohort": author_cohort,
                 "created_at": bookmark.created_at,
             }
-            for bookmark, post, board_name in bookmarks
+            for bookmark, post, board_name, author_nickname, author_cohort in bookmarks
         ]
     else:
         filters = [Post.author_id == user.id, Post.deleted_at.is_(None)]
@@ -381,6 +385,11 @@ def unblock_user(blocked_user_id: int, db: Session = Depends(get_db), user: User
         db.commit()
 
     return success_response({"blocked_user_id": blocked_user_id, "blocked": False})
+
+
+@router.post('/me/password/verify')
+def verify_current_password(payload: UserPasswordVerify, user: User = Depends(get_current_user)):
+    return success_response({"valid": verify_password(payload.current_password, user.password_hash)})
 
 
 @router.put('/me/password')

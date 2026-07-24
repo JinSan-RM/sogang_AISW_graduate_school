@@ -412,6 +412,10 @@ export const userApi = {
     const response = await api.put<ApiSuccess<{ id: number }>>("/users/me", payload);
     return response.data;
   },
+  verifyPassword: async (payload: { current_password: string }) => {
+    const response = await api.post<ApiSuccess<{ valid: boolean }>>("/users/me/password/verify", payload);
+    return response.data;
+  },
   updatePassword: async (payload: { current_password: string; new_password: string }) => {
     const response = await api.put<ApiSuccess<{ changed: boolean }>>("/users/me/password", payload);
     return response.data;

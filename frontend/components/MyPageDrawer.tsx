@@ -24,13 +24,13 @@ const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
   primary100: "#D5E0FE",
-  text: "#111827",
+  text: "#15171C",
   muted: "#6B7280",
-  subtle: "#9AA3B2",
-  border: "#EEF0F3",
+  subtle: "#A6ACB7",
+  border: "#E1E4E9",
   avatar: "#EAF4FF",
   bg: "#FFFFFF",
-  danger: "#FF6B6B",
+  danger: "#E24B4A",
   backdrop: "rgba(17,24,39,0.24)",
 };
 
@@ -78,7 +78,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clearSession = useUserStore((state) => state.clearSession);
   const [isVisible, setIsVisible] = useState(false);
-  const drawerWidth = Math.min(320, Math.max(286, width * 0.86));
+  const drawerWidth = width;
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const me = data?.data;
   const image = mediaUrl(me?.profile_image_url);
@@ -182,7 +182,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
               style={[
                 styles.drawer,
                 {
-                  width: drawerWidth,
+                  width: "100%",
                   paddingTop: Math.max(insets.top, 10),
                   transform: [{ translateX }],
                 },
@@ -212,39 +212,18 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
                       {[me?.major, me?.cohort ? `${me.cohort}기` : null].filter(Boolean).join(" · ") || me?.email || ""}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color={COLORS.subtle} />
+                  <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
                 </Pressable>
 
                 <View style={styles.menuList}>
                   {MENU_ITEMS.map((item) => (
                     <Pressable key={item.title} onPress={() => navigateTo(item.href)} style={styles.menuRow}>
                       <Text style={styles.menuText}>{item.title}</Text>
-                      <Ionicons name="chevron-forward" size={20} color={COLORS.subtle} />
+                      <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
                     </Pressable>
                   ))}
                 </View>
 
-                {me?.role === "admin" ? (
-                  <View style={styles.adminPanel}>
-                    <Pressable onPress={() => navigateTo("/admin")} style={styles.adminEntry}>
-                      <View style={styles.adminIcon}>
-                        <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
-                      </View>
-                      <View style={styles.adminTextWrap}>
-                        <Text style={styles.adminTitle}>관리자 페이지</Text>
-                        <Text style={styles.adminSubtitle}>배너, 공지사항, 게시판 설정</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-                    </Pressable>
-                    {ADMIN_QUICK_ITEMS.map((item) => (
-                      <Pressable key={item.title} onPress={() => navigateTo(item.href)} style={styles.adminQuickRow}>
-                        <Ionicons name={item.icon} size={18} color={COLORS.primary} />
-                        <Text style={styles.adminQuickText}>{item.title}</Text>
-                        <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
                 <Pressable onPress={logout} style={styles.logoutRow}>
                   <Text style={styles.logoutText}>로그아웃</Text>
                 </Pressable>
@@ -284,13 +263,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: COLORS.bg,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.border,
-    shadowColor: "#111827",
-    shadowOffset: { width: 8, height: 0 },
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    elevation: 12,
   },
   appBar: {
     minHeight: 62,
@@ -298,7 +270,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingBottom: 10,
   },
   iconButton: {
@@ -310,7 +282,7 @@ const styles = StyleSheet.create({
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   scroller: {
     flex: 1,
@@ -319,33 +291,32 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   profileRow: {
-    minHeight: 92,
     flexDirection: "row",
     alignItems: "center",
-    gap: 14,
-    borderBottomWidth: 1,
+    gap: 12,
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
-    paddingVertical: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   avatar: {
-    width: 58,
-    height: 58,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 29,
+    borderRadius: 26,
     backgroundColor: COLORS.avatar,
   },
   avatarImage: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: COLORS.avatar,
   },
   avatarText: {
     color: COLORS.primary,
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: 20,
+    fontWeight: "500",
   },
   profileText: {
     flex: 1,
@@ -353,31 +324,31 @@ const styles = StyleSheet.create({
   },
   profileName: {
     color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 16,
+    fontWeight: "500",
   },
   profileMeta: {
-    color: COLORS.subtle,
-    fontSize: 13,
-    fontWeight: "800",
-    marginTop: 4,
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "400",
+    marginTop: 3,
   },
   menuList: {
-    marginTop: 22,
+    marginTop: 8,
   },
   menuRow: {
-    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   menuText: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "400",
   },
   adminPanel: {
     overflow: "hidden",
@@ -437,14 +408,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   logoutRow: {
-    minHeight: 52,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    marginTop: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    marginTop: 8,
   },
   logoutText: {
     color: COLORS.danger,
-    fontSize: 16,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "400",
   },
 });
