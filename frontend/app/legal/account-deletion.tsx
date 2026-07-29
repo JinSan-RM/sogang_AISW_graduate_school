@@ -253,7 +253,7 @@ export default function PublicAccountDeletionScreen() {
           <Pressable
             accessibilityHint="현재 로그인한 계정의 삭제 화면을 엽니다."
             accessibilityRole="link"
-            onPress={() => router.push("/settings/account")}
+            onPress={() => router.push("/settings/account-deletion")}
             style={styles.signedInCard}
           >
             <Text style={styles.signedInTitle}>현재 로그인한 계정 삭제</Text>

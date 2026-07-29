@@ -66,6 +66,7 @@ export default function RootLayout() {
               <Stack.Screen name="settings/notifications" options={{ headerShown: false }} />
               <Stack.Screen name="settings/profile" options={{ headerShown: false }} />
               <Stack.Screen name="settings/account" options={{ headerShown: false }} />
+              <Stack.Screen name="settings/account-deletion" options={{ headerShown: false }} />
               <Stack.Screen name="settings/password" options={{ headerShown: false }} />
               <Stack.Screen name="settings/email-verification" options={{ headerShown: false }} />
               <Stack.Screen name="settings/activity" options={{ headerShown: false }} />

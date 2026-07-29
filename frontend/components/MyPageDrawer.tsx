@@ -19,7 +19,6 @@ import MediaImage from "./MediaImage";
 import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
-import { isAdminUser } from "../utils/permissions";
 
 const COLORS = {
   primary: "#2761FF",
@@ -35,21 +34,12 @@ const COLORS = {
   backdrop: "rgba(17,24,39,0.24)",
 };
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
 const MENU_ITEMS = [
   { title: "내가 쓴 글", href: "/settings/activity?type=posts" },
   { title: "스크랩한 글", href: "/settings/activity?type=bookmarks" },
   { title: "알림 설정", href: "/settings/notifications" },
-  { title: "계정 및 데이터 삭제", href: "/settings/account" },
+  { title: "계정 설정", href: "/settings/account" },
 ] as const;
-
-const ADMIN_QUICK_ITEMS: { title: string; href: string; icon: IconName }[] = [
-  { title: "배너 관리", href: "/admin?section=banners", icon: "albums-outline" },
-  { title: "공지사항 관리", href: "/admin?section=notices", icon: "megaphone-outline" },
-  { title: "원우회 관리", href: "/admin?section=boards&scope=council", icon: "people-circle-outline" },
-  { title: "전체 게시글", href: "/admin?section=posts", icon: "document-text-outline" },
-];
 
 type MyPageDrawerContextValue = {
   openDrawer: () => void;
@@ -223,28 +213,6 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
                   ))}
                 </View>
 
-                {isAdminUser(me) ? (
-                  <View style={styles.adminPanel}>
-                    <Pressable onPress={() => navigateTo("/admin")} style={styles.adminEntry}>
-                      <View style={styles.adminIcon}>
-                        <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
-                      </View>
-                      <View style={styles.adminTextWrap}>
-                        <Text style={styles.adminTitle}>관리자 페이지</Text>
-                        <Text style={styles.adminSubtitle}>배너, 공지사항, 게시판 설정</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
-                    </Pressable>
-                    {ADMIN_QUICK_ITEMS.map((item) => (
-                      <Pressable key={item.title} onPress={() => navigateTo(item.href)} style={styles.adminQuickRow}>
-                        <Ionicons name={item.icon} size={18} color={COLORS.primary} />
-                        <Text style={styles.adminQuickText}>{item.title}</Text>
-                        <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-
                 <Pressable onPress={logout} style={styles.logoutRow}>
                   <Text style={styles.logoutText}>로그아웃</Text>
                 </Pressable>
@@ -370,63 +338,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
-  },
-  adminPanel: {
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.primary100,
-    borderRadius: 8,
-    backgroundColor: "#F8FAFF",
-    marginHorizontal: 18,
-    marginTop: 18,
-  },
-  adminEntry: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.primary100,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  adminIcon: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: COLORS.primary50,
-  },
-  adminTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  adminTitle: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  adminSubtitle: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
-  },
-  adminQuickRow: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingHorizontal: 14,
-  },
-  adminQuickText: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
   },
   logoutRow: {
     justifyContent: "center",
