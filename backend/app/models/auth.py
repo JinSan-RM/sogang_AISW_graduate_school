@@ -24,7 +24,10 @@ class RefreshToken(Base):
 class EmailVerificationToken(Base):
     __tablename__ = "email_verification_tokens"
     __table_args__ = (
-        CheckConstraint("purpose IN ('register', 'change_email')", name="ck_email_verification_tokens_purpose"),
+        CheckConstraint(
+            "purpose IN ('register', 'change_email', 'account_delete')",
+            name="ck_email_verification_tokens_purpose",
+        ),
         Index("ix_email_verification_tokens_email", "email"),
     )
 

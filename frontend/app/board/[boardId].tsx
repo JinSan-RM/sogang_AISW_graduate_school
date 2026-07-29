@@ -2,15 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Image, ImageBackground, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import PostCard from "../../components/PostCard";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useBoardPosts, useMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { Board, PostListItem } from "../../types";
+import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 
 const COLORS = {
   primary: "#2761FF",
@@ -224,8 +226,7 @@ function IconButton({ icon, onPress, label }: { icon: IconName; onPress: () => v
 }
 
 function imageUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
+  return toAbsoluteMediaUrl(value, API_ORIGIN);
 }
 
 function compactPreview(post: PostListItem) {
@@ -406,7 +407,7 @@ function CohortLeaderScreen({
       ) : selected ? (
         <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
           {imageUrl(selected.bannerImageUrl) ? (
-            <Image source={{ uri: imageUrl(selected.bannerImageUrl) as string }} style={styles.cohortBanner} />
+            <MediaImage media={{ url: selected.bannerImageUrl }} style={styles.cohortBanner} />
           ) : (
             <View style={styles.cohortBannerFallback} />
           )}
@@ -416,7 +417,7 @@ function CohortLeaderScreen({
           </Text>
           <View style={styles.executiveCard}>
             {imageUrl(selected.captainImageUrl) ? (
-              <Image source={{ uri: imageUrl(selected.captainImageUrl) as string }} style={styles.executiveAvatarImage} />
+              <MediaImage media={{ url: selected.captainImageUrl }} style={styles.executiveAvatarImage} />
             ) : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
             <View style={styles.executiveText}>
               <Text style={styles.executiveName}>{selected.captain}</Text>
@@ -425,7 +426,7 @@ function CohortLeaderScreen({
           </View>
           <View style={styles.executiveCard}>
             {imageUrl(selected.viceCaptainImageUrl) ? (
-              <Image source={{ uri: imageUrl(selected.viceCaptainImageUrl) as string }} style={styles.executiveAvatarImage} />
+              <MediaImage media={{ url: selected.viceCaptainImageUrl }} style={styles.executiveAvatarImage} />
             ) : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
             <View style={styles.executiveText}>
               <Text style={styles.executiveName}>{selected.viceCaptain ?? "윤OO"}</Text>
@@ -529,7 +530,7 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
             <>
               {[{ name: selected.presidentName, cohort: selected.presidentCohort, role: "회장", image: selected.presidentImageUrl }, { name: selected.vicePresidentName, cohort: selected.vicePresidentCohort, role: "부회장", image: selected.vicePresidentImageUrl }].filter((member) => member.name).map((member) => (
                 <View key={member.role} style={styles.executiveCard}>
-                  {imageUrl(member.image) ? <Image source={{ uri: imageUrl(member.image) as string }} style={styles.executiveAvatarImage} /> : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
+                  {imageUrl(member.image) ? <MediaImage media={{ url: member.image }} style={styles.executiveAvatarImage} /> : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
                   <View style={styles.executiveText}><Text style={styles.executiveName}>{member.name}</Text><Text style={styles.executiveRole}>{[member.cohort, member.role].filter(Boolean).join(" ")}</Text></View>
                 </View>
               ))}
@@ -585,7 +586,7 @@ function ExecutiveIntroScreen({ board, topInset, onBack }: { board?: Board | nul
         {executives.map((member) => (
           <View key={`${member.name}-${member.role}`} style={styles.executiveCard}>
             {imageUrl(member.imageUrl) ? (
-              <Image source={{ uri: imageUrl(member.imageUrl) as string }} style={styles.executiveAvatarImage} />
+              <MediaImage media={{ url: member.imageUrl }} style={styles.executiveAvatarImage} />
             ) : (
               <View style={styles.executiveAvatar}>
                 <Ionicons name="person" size={22} color={COLORS.primary} />
@@ -650,7 +651,11 @@ function CouncilActivityHistoryScreen({
           renderItem={({ item }) => (
             <Pressable onPress={() => router.push(`/board/post/${item.id}`)} style={styles.councilActivityRow}>
               {imageUrl(item.thumbnail_url) ? (
-                <ImageBackground source={{ uri: imageUrl(item.thumbnail_url) as string }} imageStyle={styles.councilActivityImage} style={styles.councilActivityThumb} />
+                <MediaImageBackground
+                  media={{ id: item.thumbnail_media_id, url: item.thumbnail_url }}
+                  imageStyle={styles.councilActivityImage}
+                  style={styles.councilActivityThumb}
+                />
               ) : null}
               <View style={styles.councilActivityText}>
                 <Text style={styles.councilActivityDate}>{shortDate(item.created_at)}</Text>
@@ -715,12 +720,12 @@ function AlbumTile({ post, index, onPress }: { post: PostListItem; index: number
   return (
     <Pressable onPress={() => onPress(post.id)} style={styles.albumTile}>
       {thumbnailUrl ? (
-        <ImageBackground source={{ uri: thumbnailUrl }} imageStyle={styles.albumImage} style={styles.albumThumb}>
+        <MediaImageBackground media={{ id: post.thumbnail_media_id, url: thumbnailUrl }} imageStyle={styles.albumImage} style={styles.albumThumb}>
           <View style={styles.albumScrim} />
           <View style={styles.albumCountPill}>
             <Text style={styles.albumCountText}>{post.attachment_count || 1}장</Text>
           </View>
-        </ImageBackground>
+        </MediaImageBackground>
       ) : (
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.albumThumb}>
           <View style={styles.albumCountPill}>
@@ -752,9 +757,9 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
   return (
     <Pressable onPress={() => onPress(post.id)} style={styles.guideCard}>
       {thumbnailUrl ? (
-        <ImageBackground source={{ uri: thumbnailUrl }} imageStyle={styles.guideImage} style={styles.guideThumb}>
+        <MediaImageBackground media={{ id: post.thumbnail_media_id, url: thumbnailUrl }} imageStyle={styles.guideImage} style={styles.guideThumb}>
           <View style={styles.guideScrim} />
-        </ImageBackground>
+        </MediaImageBackground>
       ) : (
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.guideThumb} />
       )}
@@ -783,9 +788,9 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
   return (
     <Pressable onPress={() => onPress(post.id)} style={styles.activityCard}>
       {thumbnailUrl ? (
-        <ImageBackground source={{ uri: thumbnailUrl }} imageStyle={styles.activityImage} style={styles.activityThumb}>
+        <MediaImageBackground media={{ id: post.thumbnail_media_id, url: thumbnailUrl }} imageStyle={styles.activityImage} style={styles.activityThumb}>
           <View style={styles.activityScrim} />
-        </ImageBackground>
+        </MediaImageBackground>
       ) : (
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.activityThumb} />
       )}
@@ -877,7 +882,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   useEffect(() => {
     if (!board) return;
     setSelectedFilter(defaultFilterForBoard(board));
-  }, [board?.id]);
+  }, [board]);
 
   const navigateToBoard = (target?: Board) => {
     if (target && target.id !== boardId) {

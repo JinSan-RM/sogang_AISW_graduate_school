@@ -1,0 +1,138 @@
+name: aisw-production
+
+services:
+  db:
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env.production}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    volumes:
+      - production_pgdata:/var/lib/postgresql/data
+    # Intentionally no host port: PostgreSQL is reachable only on the Compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  backend:
+    build: ./backend
+    init: true
+    read_only: true
+    restart: unless-stopped
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-.env.production}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Keep the host binding on loopback. A host-local HTTPS reverse proxy or
+    # authenticated tunnel is the only supported public ingress.
+    ports:
+      - "127.0.0.1:${BACKEND_BIND_PORT:-8000}:8000"
+    volumes:
+      - production_media:/data/media
+      - production_private_media:/data/private-media
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import os, urllib.request; host=os.environ['ALLOWED_HOSTS'].split(',')[0].strip(); request=urllib.request.Request('http://localhost:8000/health/ready', headers={'Host': host}); urllib.request.urlopen(request, timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  frontend-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.web
+      args:
+        EXPO_PUBLIC_API_URL: ${PUBLIC_API_URL:?Set PUBLIC_API_URL in .env.production}
+        EXPO_PUBLIC_SUPPORT_URL: ${SUPPORT_URL:?Set SUPPORT_URL in .env.production}
+        EXPO_PUBLIC_PRIVACY_POLICY_URL: ${PRIVACY_POLICY_URL:?Set PRIVACY_POLICY_URL in .env.production}
+        EXPO_PUBLIC_ACCOUNT_DELETION_URL: ${ACCOUNT_DELETION_URL:?Set ACCOUNT_DELETION_URL in .env.production}
+        EXPO_PUBLIC_SUPPORT_EMAIL: ${SUPPORT_EMAIL:?Set SUPPORT_EMAIL in .env.production}
+        EXPO_PUBLIC_OPERATOR_NAME: ${PUBLIC_OPERATOR_NAME:?Set PUBLIC_OPERATOR_NAME in .env.production}
+        EXPO_PUBLIC_PRIVACY_EFFECTIVE_DATE: ${PRIVACY_POLICY_EFFECTIVE_DATE:?Set PRIVACY_POLICY_EFFECTIVE_DATE in .env.production}
+        EXPO_PUBLIC_PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:?Set PRIVACY_POLICY_VERSION in .env.production}
+    init: true
+    read_only: true
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Static web output also stays host-local and must be published through HTTPS.
+    ports:
+      - "127.0.0.1:${FRONTEND_BIND_PORT:-8080}:8080"
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/healthz
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  notification-worker:
+    build: ./backend
+    init: true
+    read_only: true
+    command: ["python", "scripts/run_notification_scheduler.py"]
+    restart: unless-stopped
+    env_file:
+      - ${PRODUCTION_WORKER_ENV_FILE:-.env.production.worker}
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - production_media:/data/media
+      - production_private_media:/data/private-media
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  production_pgdata:
+  production_media:
+    name: ${PRODUCTION_MEDIA_VOLUME_NAME:-aisw-production_production_media}
+  production_private_media:
+    name: ${PRODUCTION_PRIVATE_MEDIA_VOLUME_NAME:-aisw-production_production_private_media}

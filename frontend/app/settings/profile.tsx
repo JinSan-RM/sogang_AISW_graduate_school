@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { API_ORIGIN, registrationApi, userApi } from "../../services/api";
+import MediaImage from "../../components/MediaImage";
+import { registrationApi, userApi } from "../../services/api";
 import { pickAndUploadImage } from "../../utils/mediaPicker";
 import { apiErrorCode, phoneError } from "../../utils/authValidation";
 
@@ -27,11 +28,6 @@ type FieldValues = {
   phone: string;
 };
 
-function mediaUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
-}
-
 export default function ProfileSettingsScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -39,6 +35,10 @@ export default function ProfileSettingsScreen() {
     queryKey: ["registration-options"],
     queryFn: registrationApi.getOptions,
     staleTime: 60_000,
+  });
+  const profileQuery = useQuery({
+    queryKey: ["me"],
+    queryFn: userApi.getMe,
   });
   const majorOptions = registrationOptionsQuery.data?.data.majors ?? [];
   const [fields, setFields] = useState<FieldValues>({
@@ -48,6 +48,7 @@ export default function ProfileSettingsScreen() {
     phone: "",
   });
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [profileImageMediaId, setProfileImageMediaId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -55,16 +56,17 @@ export default function ProfileSettingsScreen() {
   const [majorModalVisible, setMajorModalVisible] = useState(false);
 
   useEffect(() => {
-    userApi.getMe().then((response) => {
-      setFields({
-        nickname: response.data.nickname ?? "",
-        cohort: response.data.cohort ?? "",
-        major: response.data.major ?? "",
-        phone: response.data.phone ?? "",
-      });
-      setProfileImageUrl(response.data.profile_image_url ?? null);
+    const profile = profileQuery.data?.data;
+    if (!profile) return;
+    setFields({
+      nickname: profile.nickname ?? "",
+      cohort: profile.cohort ?? "",
+      major: profile.major ?? "",
+      phone: profile.phone ?? "",
     });
-  }, []);
+    setProfileImageUrl(profile.profile_image_url ?? null);
+    setProfileImageMediaId(profile.profile_image_media_id ?? null);
+  }, [profileQuery.data]);
 
   const selectProfileImage = async () => {
     try {
@@ -73,6 +75,7 @@ export default function ProfileSettingsScreen() {
       const image = await pickAndUploadImage(setUploadProgress);
       if (image) {
         setProfileImageUrl(image.url ?? null);
+        setProfileImageMediaId(image.id);
       }
     } catch {
       Alert.alert("이미지 업로드 실패", "사진 접근 권한 또는 업로드 상태를 확인해주세요.");
@@ -113,7 +116,7 @@ export default function ProfileSettingsScreen() {
     }
   };
 
-  const image = mediaUrl(profileImageUrl);
+  const hasProfileImage = Boolean(profileImageMediaId || profileImageUrl);
   const cohortLabel = fields.cohort
     ? fields.cohort.endsWith("기")
       ? fields.cohort
@@ -138,11 +141,23 @@ export default function ProfileSettingsScreen() {
         <View style={styles.iconButton} />
       </View>
 
-      <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+      {profileQuery.isLoading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={COLORS.primary} />
+        </View>
+      ) : profileQuery.isError ? (
+        <View style={styles.center}>
+          <Text style={styles.loadErrorText}>프로필을 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void profileQuery.refetch()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
         <View style={styles.avatarSection}>
           <Pressable disabled={isUploadingImage} onPress={selectProfileImage} style={styles.avatarButton}>
-            {image ? (
-              <Image source={{ uri: image }} style={styles.avatarImage} />
+            {hasProfileImage ? (
+              <MediaImage media={{ id: profileImageMediaId, url: profileImageUrl }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{fields.nickname.slice(0, 1) || "?"}</Text>
@@ -154,7 +169,13 @@ export default function ProfileSettingsScreen() {
           </Pressable>
           {isUploadingImage ? <Text style={styles.uploadText}>업로드 {uploadProgress || 0}%</Text> : null}
           {profileImageUrl ? (
-            <Pressable onPress={() => setProfileImageUrl(null)} style={styles.removeButton}>
+            <Pressable
+              onPress={() => {
+                setProfileImageUrl(null);
+                setProfileImageMediaId(null);
+              }}
+              style={styles.removeButton}
+            >
               <Text style={styles.removeButtonText}>사진 제거</Text>
             </Pressable>
           ) : null}
@@ -190,7 +211,14 @@ export default function ProfileSettingsScreen() {
               </Text>
               <Ionicons name="chevron-down" size={18} color={COLORS.subtle} />
             </Pressable>
-            {registrationOptionsQuery.isError ? <Text style={styles.errorText}>전공 목록을 불러오지 못했습니다.</Text> : null}
+            {registrationOptionsQuery.isError ? (
+              <View style={styles.inlineError}>
+                <Text style={styles.errorText}>전공 목록을 불러오지 못했습니다.</Text>
+                <Pressable accessibilityRole="button" onPress={() => void registrationOptionsQuery.refetch()} style={styles.inlineRetryButton}>
+                  <Text style={styles.inlineRetryText}>다시 시도</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.fieldGroup}>
@@ -215,7 +243,8 @@ export default function ProfileSettingsScreen() {
         <Pressable disabled={saveDisabled} onPress={save} style={[styles.primaryButton, saveDisabled ? styles.disabledButton : null]}>
           <Text style={styles.primaryButtonText}>{isSubmitting ? "저장 중" : "완료"}</Text>
         </Pressable>
-      </ScrollView>
+        </ScrollView>
+      )}
 
       <Modal animationType="slide" transparent visible={majorModalVisible} onRequestClose={() => setMajorModalVisible(false)}>
         <Pressable onPress={() => setMajorModalVisible(false)} style={styles.modalBackdrop}>
@@ -247,6 +276,27 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.bg,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadErrorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   appBar: {
     minHeight: 62,
@@ -331,6 +381,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "800", marginTop: 10 },
+  inlineError: { alignItems: "flex-start", gap: 8 },
+  inlineRetryButton: { borderRadius: 7, backgroundColor: COLORS.primary50, paddingHorizontal: 12, paddingVertical: 8 },
+  inlineRetryText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
   form: {
     gap: 14,
   },

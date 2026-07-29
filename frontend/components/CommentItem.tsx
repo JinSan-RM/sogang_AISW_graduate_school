@@ -53,7 +53,8 @@ export default function CommentItem({
   const isMine = currentUserId === comment.author_id;
   const isReported = reportedTargets[`comment:${comment.id}`];
   const canReport = !isMine && Boolean(onReport) && !isReported;
-  const hasActionRow = isMine;
+  const canReply = depth === 0 && Boolean(onReply);
+  const hasActionRow = isMine || canReply;
 
   return (
     <View
@@ -91,6 +92,12 @@ export default function CommentItem({
 
       {hasActionRow ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 8 }}>
+          {canReply ? (
+            <Pressable onPress={() => onReply?.(comment.id)}>
+              <Text style={{ color: "#2761FF", fontSize: 12, fontWeight: "500" }}>답글</Text>
+            </Pressable>
+          ) : null}
+
           {isMine && isEditing ? (
             <>
               <Pressable
@@ -127,6 +134,20 @@ export default function CommentItem({
           ) : null}
         </View>
       ) : null}
+
+      {comment.children.map((child) => (
+        <CommentItem
+          key={child.id}
+          comment={child}
+          currentUserId={currentUserId}
+          depth={depth + 1}
+          onDelete={onDelete}
+          onEdit={onEdit}
+          onReply={onReply}
+          onReport={onReport}
+          reportedTargets={reportedTargets}
+        />
+      ))}
     </View>
   );
 }

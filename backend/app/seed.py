@@ -354,33 +354,24 @@ FAQ_SEED_DATA = [
 ]
 
 
-def seed_initial_data(db: Session) -> None:
-    user = db.get(User, 1)
-    if user is None:
-        user = User(
-                id=1,
-                username="testuser",
-                password_hash=hash_password("password123"),
-                nickname="72gi_KimJinsan",
-                cohort="72",
-                major="AI-SW",
-                phone="010-0000-0000",
-                company="WithWe",
-                job_title="Dev Lead",
-                email="test@sogang.ac.kr",
-                role="admin",
-            )
-        db.add(user)
-        db.flush()
-    elif user.password_hash == "temp_hash":
-        user.password_hash = hash_password("password123")
-        user.cohort = user.cohort or "72"
+def seed_reference_data(
+    db: Session,
+    *,
+    creator_id: int | None = None,
+    authoritative: bool = False,
+) -> None:
+    """Insert missing reference content without creating credentials.
 
+    Production startup uses the non-authoritative mode so a restart cannot
+    overwrite operator-managed content or deactivate custom boards. Development
+    and test fixtures opt into authoritative synchronization separately.
+    """
     target_slugs = {item["slug"] for item in ACTIVE_BOARD_SEED_DATA}
-    existing_boards = db.scalars(select(Board)).all()
-    for board in existing_boards:
-        if board.slug not in target_slugs:
-            board.is_active = False
+    if authoritative:
+        existing_boards = db.scalars(select(Board)).all()
+        for board in existing_boards:
+            if board.slug not in target_slugs:
+                board.is_active = False
 
     for item in ACTIVE_BOARD_SEED_DATA:
         board = db.scalar(select(Board).where(Board.slug == item["slug"]))
@@ -397,20 +388,21 @@ def seed_initial_data(db: Session) -> None:
         }
         if board is None:
             db.add(Board(slug=item["slug"], metadata_json=item.get("metadata"), **values))
-        else:
+        elif authoritative:
             for key, value in values.items():
                 setattr(board, key, value)
             if "metadata" in item:
                 board.metadata_json = item["metadata"]
 
-    for faq in db.scalars(select(FAQ).where(FAQ.question == "Smoke original?")).all():
-        faq.is_active = False
+    if authoritative:
+        for faq in db.scalars(select(FAQ).where(FAQ.question == "Smoke original?")).all():
+            faq.is_active = False
 
     for item in FAQ_SEED_DATA:
         faq = db.scalar(select(FAQ).where(FAQ.question == item["question"]))
         if faq is None:
             db.add(FAQ(**item, is_active=True))
-        else:
+        elif authoritative:
             faq.answer = item["answer"]
             faq.category = item["category"]
             faq.sort_order = item["sort_order"]
@@ -429,8 +421,40 @@ def seed_initial_data(db: Session) -> None:
                 theme="navy",
                 sort_order=0,
                 is_active=True,
-                created_by=1,
+                created_by=creator_id,
             )
         )
 
     db.commit()
+
+
+def seed_initial_data(db: Session) -> None:
+    """Create deterministic local demo credentials and synchronize fixtures.
+
+    This function is intentionally limited to non-production startup paths.
+    Production uses ``seed_reference_data`` and provisions administrators
+    through the explicit bootstrap procedure.
+    """
+
+    user = db.get(User, 1)
+    if user is None:
+        user = User(
+            id=1,
+            username="testuser",
+            password_hash=hash_password("password123"),
+            nickname="72gi_KimJinsan",
+            cohort="72",
+            major="AI-SW",
+            phone="010-0000-0000",
+            company="WithWe",
+            job_title="Dev Lead",
+            email="test@sogang.ac.kr",
+            role="admin",
+        )
+        db.add(user)
+        db.flush()
+    elif user.password_hash == "temp_hash":
+        user.password_hash = hash_password("password123")
+        user.cohort = user.cohort or "72"
+
+    seed_reference_data(db, creator_id=user.id, authoritative=True)

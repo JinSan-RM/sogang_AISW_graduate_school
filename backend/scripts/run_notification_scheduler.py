@@ -12,8 +12,11 @@ import sys
 import time
 from zoneinfo import ZoneInfo
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_ROOT))
+
+from app.monitoring import send_operational_alert
+
 SEOUL = ZoneInfo("Asia/Seoul")
 
 
@@ -52,6 +55,10 @@ def main() -> None:
             _run_once()
         except Exception as exc:
             print({"notification_scheduler_error": type(exc).__name__, "message": str(exc)}, flush=True)
+            send_operational_alert(
+                "worker.notification.failed",
+                context={"error_type": type(exc).__name__},
+            )
             time.sleep(300)
 
 

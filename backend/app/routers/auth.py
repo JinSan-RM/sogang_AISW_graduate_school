@@ -5,10 +5,11 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.account_deletion import ACCOUNT_DELETE_PURPOSE, delete_user_account
 from app.config import settings
 from app.deps import get_current_user, get_db
 from app.email import is_email_configured, send_email
-from app.email_templates import password_reset_email, verification_email
+from app.email_templates import account_deletion_email, password_reset_email, verification_email
 from app.errors import AppException
 from app.models.auth import EmailVerificationToken, PasswordResetToken, RefreshToken
 from app.models.notification import NotificationSetting
@@ -17,6 +18,8 @@ from app.models.user import User
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
 from app.schemas.auth import (
+    AccountDeletionRequest,
+    AccountDeletionVerify,
     EmailVerificationConfirm,
     EmailVerificationRequest,
     LoginRequest,
@@ -66,6 +69,20 @@ def _verification_failure(token, db: Session, *, expired_code: str, invalid_code
             code="VERIFICATION_ATTEMPTS_EXCEEDED",
         )
     raise AppException(status_code=400, message="Invalid verification code.", code=invalid_code)
+
+
+def _lock_email_request(db: Session, email: str) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:email, 0))"), {"email": email})
+
+
+def _account_deletion_invalid() -> AppException:
+    return AppException(
+        status_code=400,
+        message="Invalid or expired account deletion request.",
+        code="ACCOUNT_DELETION_INVALID",
+    )
 
 
 def _user_payload(user: User) -> dict:
@@ -162,16 +179,12 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
         "expires_in": settings.email_verification_expire_minutes * 60,
         "resend_in": settings.email_verification_resend_cooldown_seconds,
     }
-    # 개발 편의: SMTP가 설정되지 않은 로컬 환경에서는 실제 발송 대신 코드를 서버 로그로 남기고
-    # 가입 플로우가 진행되도록 한다(운영에서는 SMTP가 설정되어 이 분기를 타지 않음).
     if not is_email_configured():
-        logger.warning("[DEV] 회원가입 인증 코드 for %s = %s (SMTP 미설정)", email, code)
-        consumed_at = utc_now()
-        for previous in previous_tokens:
-            previous.consumed_at = consumed_at
+        logger.warning("Registration verification email was not sent because SMTP is not configured")
+        db.delete(token)
         db.commit()
-        data["email_sent"] = True
-        data["dev_mode"] = True
+        data["email_sent"] = False
+        data["dev_mode"] = False
         return success_response(data)
 
     plain_body, html_body = verification_email(code, settings.email_verification_expire_minutes)
@@ -330,6 +343,156 @@ def logout(payload: LogoutRequest, db: Session = Depends(get_db), _: User = Depe
     return success_response({"logged_out": True})
 
 
+@router.post("/account-deletion/request")
+def request_account_deletion(
+    payload: AccountDeletionRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Issue a deletion code without revealing whether the account exists."""
+
+    email = payload.email.lower()
+    enforce_rate_limit(
+        request,
+        action="auth.account_deletion.request",
+        subject=email,
+        limit=3,
+        ip_limit=10,
+        window_seconds=900,
+    )
+    ensure_school_email(email)
+    response_data = {
+        "accepted": True,
+        "expires_in": settings.email_verification_expire_minutes * 60,
+        "resend_in": settings.email_verification_resend_cooldown_seconds,
+    }
+
+    _lock_email_request(db, email)
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        return success_response(response_data)
+
+    previous_tokens = db.scalars(
+        select(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.email == email,
+            EmailVerificationToken.purpose == ACCOUNT_DELETE_PURPOSE,
+            EmailVerificationToken.consumed_at.is_(None),
+        )
+        .order_by(EmailVerificationToken.created_at.desc(), EmailVerificationToken.id.desc())
+    ).all()
+    now = utc_now()
+    latest_token = previous_tokens[0] if previous_tokens else None
+    if (
+        latest_token is not None
+        and (now - latest_token.created_at).total_seconds()
+        < settings.email_verification_resend_cooldown_seconds
+    ):
+        return success_response(response_data)
+
+    code = generate_verification_code()
+    token = EmailVerificationToken(
+        email=email,
+        code_hash=hash_token(code),
+        purpose=ACCOUNT_DELETE_PURPOSE,
+        expires_at=now + timedelta(minutes=settings.email_verification_expire_minutes),
+    )
+    db.add(token)
+    db.commit()
+
+    delivered = False
+    if not is_email_configured():
+        logger.warning("Account deletion verification email was not sent because SMTP is not configured")
+    else:
+        plain_body, html_body = account_deletion_email(code, settings.email_verification_expire_minutes)
+        try:
+            delivered = send_email(
+                email,
+                "[Sogang AI-SW Community] Account deletion verification",
+                plain_body,
+                html_body=html_body,
+            )
+        except Exception:
+            # Delivery failures must not turn this endpoint into an account
+            # existence oracle.
+            logger.exception("Failed to send account deletion verification email")
+
+    if not delivered:
+        db.delete(token)
+        db.commit()
+        return success_response(response_data)
+
+    consumed_at = utc_now()
+    for previous in previous_tokens:
+        previous.consumed_at = consumed_at
+    db.commit()
+    return success_response(response_data)
+
+
+@router.post("/account-deletion/verify")
+def verify_account_deletion(
+    payload: AccountDeletionVerify,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Verify email ownership and password, then permanently delete the account."""
+
+    email = payload.email.lower()
+    enforce_rate_limit(
+        request,
+        action="auth.account_deletion.verify",
+        subject=email,
+        limit=10,
+        ip_limit=30,
+        window_seconds=900,
+    )
+    ensure_school_email(email)
+    token = db.scalar(
+        select(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.email == email,
+            EmailVerificationToken.purpose == ACCOUNT_DELETE_PURPOSE,
+            EmailVerificationToken.consumed_at.is_(None),
+        )
+        .order_by(EmailVerificationToken.created_at.desc(), EmailVerificationToken.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    user = db.scalar(select(User).where(User.email == email))
+    valid = bool(
+        token is not None
+        and user is not None
+        and token.expires_at >= utc_now()
+        and token.attempt_count < MAX_VERIFICATION_ATTEMPTS
+        and token.code_hash == hash_token(payload.code)
+        and verify_password(payload.current_password, user.password_hash)
+    )
+    if not valid:
+        if token is not None and token.expires_at >= utc_now():
+            token.attempt_count = min(MAX_VERIFICATION_ATTEMPTS, token.attempt_count + 1)
+            db.commit()
+        raise _account_deletion_invalid()
+
+    try:
+        result = delete_user_account(
+            db,
+            user_id=user.id,
+            current_password=payload.current_password,
+            channel="public_email",
+        )
+    except AppException as exc:
+        if exc.code == "ADMIN_ACCOUNT_DELETION_FORBIDDEN":
+            raise
+        raise _account_deletion_invalid() from exc
+    return success_response(
+        {
+            "deleted": True,
+            "receipt_id": result.receipt_id,
+            "completed_at": result.completed_at,
+        }
+    )
+
+
 @router.post("/password-reset/request")
 def request_password_reset(payload: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
     email = payload.email.lower()
@@ -376,15 +539,12 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, db: 
         db.add(token)
         db.commit()
 
-        # 개발 편의: SMTP 미설정 시 실제 발송 대신 코드를 서버 로그로 남기고 흐름을 진행한다.
         if not is_email_configured():
-            logger.warning("[DEV] 비밀번호 재설정 인증 코드 for %s = %s (SMTP 미설정)", user.email, reset_token)
-            consumed_at = utc_now()
-            for previous in previous_tokens:
-                previous.consumed_at = consumed_at
+            logger.warning("Password reset email was not sent because SMTP is not configured")
+            db.delete(token)
             db.commit()
-            data["email_sent"] = True
-            data["dev_mode"] = True
+            data["email_sent"] = False
+            data["dev_mode"] = False
             return success_response(data)
 
         plain_body, html_body = password_reset_email(reset_token, settings.password_reset_expire_minutes)

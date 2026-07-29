@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import type { ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -15,7 +16,21 @@ function formatConsentDate(value?: string | null) {
   return `${base}(${WEEKDAYS[date.getDay()]})`;
 }
 
-export default function LegalDocumentScreen({ title, effectiveDate, version, sections, consentDate }: { title: string; effectiveDate?: string; version?: string; sections: LegalSection[]; consentDate?: string | null }) {
+export default function LegalDocumentScreen({
+  title,
+  effectiveDate,
+  version,
+  sections,
+  consentDate,
+  footer,
+}: {
+  title: string;
+  effectiveDate?: string;
+  version?: string;
+  sections: LegalSection[];
+  consentDate?: string | null;
+  footer?: ReactNode;
+}) {
   const insets = useSafeAreaInsets();
   const showConsent = consentDate !== undefined;
   const consentLabel = formatConsentDate(consentDate);
@@ -29,15 +44,16 @@ export default function LegalDocumentScreen({ title, effectiveDate, version, sec
         <View style={styles.iconButton} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
+        {effectiveDate || version ? (
+          <View style={styles.policyMeta}>
+            {effectiveDate ? <Text style={styles.effective}>시행일: {effectiveDate}</Text> : null}
+            {version ? <Text style={styles.effective}>버전: {version}</Text> : null}
+          </View>
+        ) : null}
         {showConsent ? (
           <View style={styles.consentRow}>
             <Ionicons name="checkmark-circle" size={14} color="#2E9E5B" />
             <Text style={styles.consentText}>{consentLabel ? `${consentLabel} 동의 완료` : "동의 완료"}</Text>
-          </View>
-        ) : effectiveDate ? (
-          <View style={styles.policyMeta}>
-            <Text style={styles.effective}>시행일: {effectiveDate}</Text>
-            {version ? <Text style={styles.effective}>버전: {version}</Text> : null}
           </View>
         ) : null}
         {sections.map((section) => (
@@ -46,6 +62,7 @@ export default function LegalDocumentScreen({ title, effectiveDate, version, sec
             <Text style={styles.body}>{section.body}</Text>
           </View>
         ))}
+        {footer}
       </ScrollView>
     </View>
   );

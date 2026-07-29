@@ -7,6 +7,9 @@ on:
       - main
       - develop
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend
@@ -15,13 +18,13 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: sogang_app
+          POSTGRES_DB: sogang_app_ci
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d sogang_app"
+          --health-cmd "pg_isready -U postgres -d sogang_app_ci"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -29,7 +32,10 @@ jobs:
       run:
         working-directory: backend
     env:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/sogang_app
+      APP_ENVIRONMENT: test
+      ALLOW_TEST_DB_RESET: "1"
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/sogang_app_ci
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/sogang_app_test
       AUTH_SECRET_KEY: ci-secret-key
       EXPO_PUSH_ENABLED: "false"
     steps:
@@ -42,13 +48,39 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r requirements-test.txt
+
+      - name: Audit backend production dependencies
+        run: python -m pip_audit -r requirements.txt
+
+      - name: Create isolated test databases
+        run: >-
+          python -c "import psycopg;
+          connection=psycopg.connect('postgresql://postgres:postgres@localhost:5432/postgres', autocommit=True);
+          connection.execute('CREATE DATABASE sogang_app_test');
+          connection.execute('CREATE DATABASE sogang_app_legacy_test');
+          connection.close()"
 
       - name: Compile backend
         run: python -m compileall app scripts alembic/versions
 
+      - name: Import backend
+        run: python -c "from app.main import app; assert app"
+
       - name: Run migrations
-        run: alembic upgrade head
+        run: python -m app.migrate
+
+      - name: Verify model and migration metadata are aligned
+        run: alembic check
+
+      - name: Verify exact legacy schema detection against PostgreSQL
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/sogang_app_legacy_test
+        run: |
+          alembic upgrade 0001_phase1_init
+          python -c "from app.database import engine; connection=engine.connect(); connection.exec_driver_sql('DROP TABLE alembic_version'); connection.commit(); connection.close()"
+          python -m app.migrate
+          alembic current --check-heads
 
       - name: Seed clean database
         run: >-
@@ -63,6 +95,14 @@ jobs:
 
       - name: Validate OpenAPI schema
         run: python -c "from app.main import app; schema = app.openapi(); assert schema.get('openapi')"
+
+      - name: Run backend tests
+        run: pytest -q
+
+      - name: Verify migration database remains intact
+        run: |
+          alembic current --check-heads
+          python -c "from app.database import SessionLocal; from app.models.user import User; from app.models.banner import Banner; db=SessionLocal(); assert db.query(User).count() >= 1; assert db.query(Banner).count() >= 1; db.close()"
 
   frontend:
     name: Frontend
@@ -83,8 +123,20 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Setup Java for Android manifest verification
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run frontend tests
+        run: npm test
 
       - name: Typecheck
         run: npm run typecheck
@@ -92,12 +144,79 @@ jobs:
       - name: Expo doctor
         run: npm run doctor
 
+      - name: Check static release configuration
+        run: npm run release:check:ci
+
+      - name: Generate and verify merged Android release manifest
+        env:
+          NODE_ENV: production
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:processReleaseMainManifest --no-daemon --console=plain
+          cd ..
+          npm run release:verify-android-manifest
+
+      - name: Build unsigned Android release bundle and verify 16 KB alignment
+        env:
+          NODE_ENV: production
+        run: |
+          cd android
+          ./gradlew :app:bundleRelease --no-daemon --console=plain
+          cd ..
+          curl --fail --location --silent --show-error \
+            https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar \
+            --output /tmp/bundletool-all-1.18.3.jar
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  /tmp/bundletool-all-1.18.3.jar" \
+            | sha256sum --check
+          java -jar /tmp/bundletool-all-1.18.3.jar dump config \
+            --bundle=android/app/build/outputs/bundle/release/app-release.aab \
+            | tee /tmp/android-bundle-config.txt
+          grep --fixed-strings --quiet PAGE_ALIGNMENT_16K /tmp/android-bundle-config.txt
+
+      - name: Reject critical production dependency advisories
+        run: npm audit --omit=dev --audit-level=critical
+
+      - name: Export web
+        run: npm run export:web
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan full Git history for secrets
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output /tmp/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks_8.30.1_linux_x64.tar.gz" \
+            | sha256sum --check
+          tar --extract --gzip --file /tmp/gitleaks_8.30.1_linux_x64.tar.gz --directory /tmp gitleaks
+          /tmp/gitleaks git . --no-banner --redact=100
+
+      - name: Reject tracked credential files
+        shell: bash
+        run: |
+          tracked="$(git ls-files | grep -E '(^|/)(google-services\.json|GoogleService-Info\.plist|credentials\.json|[^/]+\.(jks|keystore|p12|p8|mobileprovision|key|pem)|\.env\.production(\.local)?)$' || true)"
+          if [ -n "$tracked" ]; then
+            echo "Tracked credential-like files are forbidden:"
+            echo "$tracked"
+            exit 1
+          fi
 
       - name: Build compose services
         run: docker compose build
+
+      - name: Validate and build production templates
+        env:
+          PRODUCTION_ENV_FILE: .env.production.example
+          PRODUCTION_WORKER_ENV_FILE: .env.production.worker.example
+        run: |
+          docker compose --env-file .env.production.example -f docker-compose.production.example.yml config -q
+          docker compose --env-file .env.production.example -f docker-compose.production.example.yml build

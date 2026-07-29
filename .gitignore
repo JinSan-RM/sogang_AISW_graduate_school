@@ -8,11 +8,23 @@ frontend/.expo/
 dist/
 web-build/
 frontend/dist/
+frontend/dist-release/
 frontend/web-build/
 frontend/android/.gradle/
 frontend/android/build/
 frontend/android/app/build/
 frontend/android/app/debug.keystore
+frontend/android/app/google-services.json
+frontend/android/keystores/
+frontend/credentials.json
+frontend/*.jks
+frontend/*.keystore
+frontend/*.p12
+frontend/*.mobileprovision
+frontend/*.cer
+*.aab
+*.apk
+*.ipa
 
 # Python
 __pycache__/
@@ -27,19 +39,44 @@ backend/venv/
 
 # Local environment
 .env
-.env.example
+.env.production
+.env.production.worker
 *.env.local
+**/.env.*.local
 backend/.env
-backend/.env.example
 frontend/.env
-frontend/.env.example
+backend/.env.production
+frontend/.env.production
+*.service-account.json
+*service-account*.json
+*firebase-admin*.json
+firebase-adminsdk-*.json
+**/google-services.json
+**/GoogleService-Info.plist
+**/credentials.json
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.p8
+**/*.mobileprovision
+**/*.cer
+**/*.key
+**/*.pem
 
 # Runtime files
 backend/uploads/
 uploads/
+backend/private_uploads/
+private_uploads/
+backups/
+*.dump
+*.dump.gz
+*.tar
+*.tar.gz
 *.log
 frontend/expo-web.log
 frontend/expo-web.err.log
+/tmp/
 
 # Local Git metadata backups
 frontend/.git.backup-*/

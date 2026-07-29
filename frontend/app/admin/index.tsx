@@ -5,13 +5,15 @@ import { router, useLocalSearchParams } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ActivityIndicator, Alert, Image, ImageBackground, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
+import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
+import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatCohortName } from "../../utils/userLabel";
 import type {
   AdminReportItem,
@@ -506,10 +508,7 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
 }
 
 function mediaUrl(value?: string | null) {
-  if (!value) {
-    return null;
-  }
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
+  return toAbsoluteMediaUrl(value, API_ORIGIN);
 }
 
 function parseSort(value: string) {
@@ -648,8 +647,9 @@ function EventDateTimePicker({
   const [timeOpen, setTimeOpen] = useState(false);
 
   useEffect(() => {
-    if (selectedDate) {
-      setVisibleMonth(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
+    const nextSelectedDate = parseDateTimeValue(value);
+    if (nextSelectedDate) {
+      setVisibleMonth(new Date(nextSelectedDate.getFullYear(), nextSelectedDate.getMonth(), 1));
     }
   }, [value]);
 
@@ -1043,8 +1043,8 @@ function BannerPreview({ form, index = 0, total = 1 }: { form: BannerForm; index
     <View style={{ gap: 8 }}>
       <Text style={{ color: COLORS.primary900, fontSize: 13, fontWeight: "900" }}>홈 배너 미리보기</Text>
       {imageUrl ? (
-        <ImageBackground
-          source={{ uri: imageUrl }}
+        <MediaImageBackground
+          media={{ url: imageUrl }}
           imageStyle={{ borderRadius: RADIUS.card }}
           style={{
             borderRadius: RADIUS.card,
@@ -1056,7 +1056,7 @@ function BannerPreview({ form, index = 0, total = 1 }: { form: BannerForm; index
           }}
         >
           {content}
-        </ImageBackground>
+        </MediaImageBackground>
       ) : (
         <View
           style={{
@@ -1741,17 +1741,17 @@ export default function AdminScreen() {
     if (!executivesBoard) return;
     const parsed = executiveMembersFromMetadata(executivesBoard.metadata);
     setExecutiveMembers(parsed.length > 0 ? parsed : defaultExecutiveMembers.map((item) => ({ ...item })));
-  }, [executivesBoard?.id, executivesBoard?.metadata]);
+  }, [executivesBoard]);
 
   useEffect(() => {
     if (!cohortLeadersBoard) return;
     setCohortLeaders(cohortLeadersFromMetadata(cohortLeadersBoard.metadata));
-  }, [cohortLeadersBoard?.id, cohortLeadersBoard?.metadata]);
+  }, [cohortLeadersBoard]);
 
   useEffect(() => {
     if (!pastCouncilsBoard) return;
     setPastCouncils(pastCouncilsFromMetadata(pastCouncilsBoard.metadata));
-  }, [pastCouncilsBoard?.id, pastCouncilsBoard?.metadata]);
+  }, [pastCouncilsBoard]);
 
   if (!isAdmin) {
     return (
@@ -3081,7 +3081,7 @@ export default function AdminScreen() {
                         }}
                       >
                         {isImage && url ? (
-                          <Image source={{ uri: url }} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
+                          <MediaImage media={attachment} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
                         ) : (
                           <View style={{ width: 56, height: 56, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
                             <Ionicons name="document-attach-outline" size={22} color={COLORS.primary} />
@@ -3271,7 +3271,7 @@ export default function AdminScreen() {
                   <View style={{ gap: 10 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                       {previewUrl ? (
-                        <Image source={{ uri: previewUrl }} style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.primary50 }} />
+                        <MediaImage media={{ url: member.image_url }} style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.primary50 }} />
                       ) : (
                         <View style={{ width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
                           <Ionicons name="person" size={30} color={COLORS.primary} />
@@ -3359,8 +3359,8 @@ export default function AdminScreen() {
                       <View key={field} style={{ gap: 8 }}>
                         <Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>{label}</Text>
                         {previewUrl ? (
-                          <Image
-                            source={{ uri: previewUrl }}
+                          <MediaImage
+                            media={{ url: leader[field] }}
                             style={field === "banner_image_url" ? { width: "100%", aspectRatio: 2.2, borderRadius: 8, backgroundColor: COLORS.primary50 } : { width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.primary50 }}
                           />
                         ) : null}
@@ -3404,7 +3404,7 @@ export default function AdminScreen() {
                   {PAST_COUNCIL_IMAGE_FIELDS.map(({ field, label }) => {
                     const previewUrl = mediaUrl(council[field]);
                     const uploading = pastCouncilUploading?.index === index && pastCouncilUploading.field === field;
-                    return <View key={field} style={{ gap: 7 }}><Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>{label}</Text>{previewUrl ? <Image source={{ uri: previewUrl }} style={field === "banner_image_url" ? { width: "100%", aspectRatio: 2.2, borderRadius: 8 } : { width: 72, height: 72, borderRadius: 36 }} /> : null}<View style={{ flexDirection: "row", gap: 8 }}><View style={{ flex: 1 }}><ActionButton icon="image-outline" label={uploading ? "업로드 중" : `${label} 등록`} onPress={() => void handleUploadPastCouncilImage(index, field)} disabled={Boolean(pastCouncilUploading)} tone="outline" /></View>{council[field] ? <View style={{ flex: 1 }}><ActionButton label="삭제" onPress={() => updatePastCouncil(index, { [field]: "" })} tone="danger" /></View> : null}</View></View>;
+                    return <View key={field} style={{ gap: 7 }}><Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>{label}</Text>{previewUrl ? <MediaImage media={{ url: council[field] }} style={field === "banner_image_url" ? { width: "100%", aspectRatio: 2.2, borderRadius: 8 } : { width: 72, height: 72, borderRadius: 36 }} /> : null}<View style={{ flexDirection: "row", gap: 8 }}><View style={{ flex: 1 }}><ActionButton icon="image-outline" label={uploading ? "업로드 중" : `${label} 등록`} onPress={() => void handleUploadPastCouncilImage(index, field)} disabled={Boolean(pastCouncilUploading)} tone="outline" /></View>{council[field] ? <View style={{ flex: 1 }}><ActionButton label="삭제" onPress={() => updatePastCouncil(index, { [field]: "" })} tone="danger" /></View> : null}</View></View>;
                   })}
                   <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} tone="danger" />
                 </View>

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.account_deletion import DELETED_USER_NICKNAME
 from app.board_policies import ANONYMOUS_NO_COMMENT_BOARD_SLUGS
 from app.deps import get_current_user, get_db
 from app.models.board import Board
@@ -11,6 +12,7 @@ from app.models.post import Post
 from app.models.search import SearchHistory
 from app.models.user import User
 from app.models.user_block import UserBlock
+from app.post_access import post_read_filter
 from app.response import success_response
 from app.routers.posts import _highlight
 
@@ -29,9 +31,7 @@ def search(
     current_user: User = Depends(get_current_user),
 ):
     keyword = f"%{q}%"
-    filters = [Post.deleted_at.is_(None), Board.is_active.is_(True)]
-    if current_user.role != "admin":
-        filters.append(Board.read_permission.in_(["guest", "user"]))
+    filters = [Post.deleted_at.is_(None), post_read_filter(current_user)]
     if scope == "board" and board_id is not None:
         filters.append(Post.board_id == board_id)
     elif scope != "all":
@@ -67,7 +67,14 @@ def search(
         select(UserBlock.blocked_user_id).where(UserBlock.blocker_id == current_user.id)
     ).all()
     if blocked_author_ids:
-        filters.append(Post.author_id.not_in(blocked_author_ids))
+        filters.append(
+            or_(
+                Post.is_anonymous.is_(True),
+                Board.slug.in_(ANONYMOUS_NO_COMMENT_BOARD_SLUGS),
+                Post.author_id.is_(None),
+                Post.author_id.not_in(blocked_author_ids),
+            )
+        )
 
     if current_user.role == "admin":
         filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | User.nickname.ilike(keyword))
@@ -77,6 +84,7 @@ def search(
                 Post.title.ilike(keyword),
                 Post.content.ilike(keyword),
                 and_(
+                    Post.is_anonymous.is_(False),
                     Board.slug.not_in(ANONYMOUS_NO_COMMENT_BOARD_SLUGS),
                     User.nickname.ilike(keyword),
                 ),
@@ -88,7 +96,7 @@ def search(
             select(func.count(Post.id))
             .select_from(Post)
             .join(Board, Board.id == Post.board_id)
-            .join(User, User.id == Post.author_id)
+            .outerjoin(User, User.id == Post.author_id)
             .where(*filters)
         )
         or 0
@@ -98,7 +106,7 @@ def search(
     rows = db.execute(
         select(Post, Board.name, Board.slug, User.nickname)
         .join(Board, Board.id == Post.board_id)
-        .join(User, User.id == Post.author_id)
+        .outerjoin(User, User.id == Post.author_id)
         .where(*filters)
         .order_by(Post.created_at.desc(), Post.id.desc())
         .offset((page - 1) * size)
@@ -118,9 +126,14 @@ def search(
             "category": post.category,
             "title": post.title,
             "content_preview": post.content[:100],
-            "author_nickname": "Anonymous"
-            if post.is_anonymous or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
-            else nickname,
+            "author_nickname": DELETED_USER_NICKNAME
+            if post.author_id is None
+            else (
+                "Anonymous"
+                if post.is_anonymous
+                or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
+                else nickname
+            ),
             "created_at": post.created_at,
             "highlights": {
                 "title": _highlight(post.title, q),

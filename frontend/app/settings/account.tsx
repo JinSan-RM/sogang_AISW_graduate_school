@@ -1,16 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { userApi } from "../../services/api";
-import { useUserStore } from "../../stores/userStore";
-import { clearStoredPushToken } from "../../utils/pushTokenStorage";
-
 const COLORS = {
-  primary: "#2761FF",
   text: "#15171C",
-  muted: "#6B7280",
   subtle: "#A6ACB7",
   border: "#E1E4E9",
   bg: "#FFFFFF",
@@ -19,34 +13,13 @@ const COLORS = {
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const clearSession = useUserStore((state) => state.clearSession);
-
-  const deactivate = () => {
-    Alert.alert("회원 탈퇴", "계정을 비활성화하면 다시 로그인할 수 없습니다.", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "탈퇴",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await userApi.deactivateMe({ reason: "user_requested" });
-            await clearStoredPushToken().catch(() => undefined);
-            clearSession();
-            Alert.alert("계정 비활성화 완료", "계정이 비활성화되었습니다.");
-            router.replace("/auth/login");
-          } catch {
-            Alert.alert("비활성화 실패", "잠시 후 다시 시도해주세요.");
-          }
-        },
-      },
-    ]);
-  };
 
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
+          accessibilityRole="button"
           onPress={() => {
             if (router.canGoBack()) router.back();
             else router.replace("/(tabs)/settings");
@@ -55,7 +28,9 @@ export default function AccountSettingsScreen() {
         >
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />
         </Pressable>
-        <Text style={styles.appBarTitle}>계정 설정</Text>
+        <Text accessibilityRole="header" style={styles.appBarTitle}>
+          계정 설정
+        </Text>
         <View style={styles.iconButton} />
       </View>
 
@@ -75,7 +50,12 @@ export default function AccountSettingsScreen() {
           </Pressable>
         </View>
         <View style={styles.deactivateWrap}>
-          <Pressable onPress={deactivate} style={styles.deactivateRow}>
+          <Pressable
+            accessibilityHint="비밀번호 확인 후 계정과 개인정보를 삭제하는 화면을 엽니다."
+            accessibilityRole="link"
+            onPress={() => router.push("/settings/account-deletion")}
+            style={styles.deactivateRow}
+          >
             <Text style={styles.dangerText}>회원 탈퇴</Text>
           </Pressable>
         </View>

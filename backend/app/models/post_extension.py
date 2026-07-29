@@ -29,7 +29,7 @@ class PostSuggestion(Base):
     suggestion_category: Mapped[str | None] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(20), default="received", nullable=False)
     admin_reply: Mapped[str | None] = mapped_column(Text)
-    replied_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    replied_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     replied_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
@@ -49,5 +49,5 @@ class PostMutualAid(Base):
     relation: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="processing", nullable=False)
     rejection_reason: Mapped[str | None] = mapped_column(Text)
-    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)

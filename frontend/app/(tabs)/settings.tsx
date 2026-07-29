@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../../hooks/useApi";
-import { API_ORIGIN, authApi, notificationApi } from "../../services/api";
+import MediaImage from "../../components/MediaImage";
+import { authApi, notificationApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../../utils/pushTokenStorage";
 
@@ -21,8 +22,6 @@ const COLORS = {
   danger: "#E24B4A",
 };
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
 const MENU_ITEMS = [
   { title: "내가 쓴 글", href: "/settings/activity?type=posts" },
   { title: "스크랩한 글", href: "/settings/activity?type=bookmarks" },
@@ -30,26 +29,14 @@ const MENU_ITEMS = [
   { title: "계정 설정", href: "/settings/account" },
 ] as const;
 
-const ADMIN_QUICK_ITEMS: { title: string; href: string; icon: IconName }[] = [
-  { title: "배너 관리", href: "/admin?section=banners", icon: "albums-outline" },
-  { title: "공지사항 관리", href: "/admin?section=notices", icon: "megaphone-outline" },
-  { title: "원우회 관리", href: "/admin?section=boards&scope=council", icon: "people-circle-outline" },
-  { title: "전체 게시글", href: "/admin?section=posts", icon: "document-text-outline" },
-];
-
-function mediaUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
-}
-
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { data } = useMeQuery();
+  const { data, isError, isLoading, refetch } = useMeQuery();
   const refreshToken = useUserStore((state) => state.refreshToken);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clearSession = useUserStore((state) => state.clearSession);
   const me = data?.data;
-  const image = mediaUrl(me?.profile_image_url);
+  const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
   const logout = async () => {
     const pushToken = await getStoredPushToken().catch(() => null);
@@ -82,9 +69,21 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+        {isError ? (
+          <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.loadErrorBox}>
+            <Text style={styles.loadErrorText}>프로필을 불러오지 못했습니다. 다시 시도</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => router.push("/settings/profile")} style={styles.profileRow}>
-          {image ? (
-            <Image source={{ uri: image }} style={styles.avatarImage} />
+          {isLoading ? (
+            <View style={styles.avatar}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            </View>
+          ) : hasProfileImage ? (
+            <MediaImage
+              media={{ id: me?.profile_image_media_id, url: me?.profile_image_url }}
+              style={styles.avatarImage}
+            />
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{me?.nickname?.slice(0, 1) ?? "?"}</Text>
@@ -153,6 +152,19 @@ const styles = StyleSheet.create({
   content: {
     paddingBottom: 36,
   },
+  loadErrorBox: {
+    borderRadius: 8,
+    backgroundColor: "#FFF1F2",
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  loadErrorText: {
+    color: COLORS.danger,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
+  },
   profileRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -212,63 +224,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
-  },
-  adminPanel: {
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.primary100,
-    borderRadius: 8,
-    backgroundColor: "#F8FAFF",
-    marginHorizontal: 24,
-    marginTop: 18,
-  },
-  adminEntry: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.primary100,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  adminIcon: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: COLORS.primary50,
-  },
-  adminTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  adminTitle: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  adminSubtitle: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
-  },
-  adminQuickRow: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingHorizontal: 14,
-  },
-  adminQuickText: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
   },
   logoutRow: {
     justifyContent: "center",

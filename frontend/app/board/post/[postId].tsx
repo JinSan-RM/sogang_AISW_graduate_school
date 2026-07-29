@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
+import MediaImage from "../../../components/MediaImage";
 import { useBoardsQuery } from "../../../hooks/useApi";
+import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import {
   useCreateComment,
   useDeleteComment,
@@ -19,7 +21,7 @@ import {
   useUpdateMutualAid,
   useUpdateSuggestion,
 } from "../../../hooks/usePosts";
-import { API_ORIGIN, mediaApi, reportApi, userApi } from "../../../services/api";
+import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
 import { formatCohortName } from "../../../utils/userLabel";
@@ -122,11 +124,6 @@ function categoryTone(label: string) {
   return { bg: "#E6F1FB", fg: "#0C447C" };
 }
 
-function fileUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
-}
-
 function isAdminParticipationGuideBoard(board?: { slug?: string } | null) {
   return board?.slug === "club-promo" || board?.slug === "networking-programs";
 }
@@ -150,7 +147,7 @@ export default function PostDetailScreen() {
   const userId = useUserStore((state) => state.userId);
   const currentUser = useUserStore((state) => state.user);
 
-  const { data: postRes, isLoading } = usePostDetail(postId);
+  const { data: postRes, isError, isLoading, refetch } = usePostDetail(postId);
   const { data: boardsRes } = useBoardsQuery();
 
   const post = postRes?.data;
@@ -207,10 +204,21 @@ export default function PostDetailScreen() {
     setGalleryIndex(0);
   }, [postId]);
 
-  if (isLoading || !post) {
+  if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  if (isError || !post) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadErrorText}>게시글을 불러오지 못했습니다.</Text>
+        <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+          <Text style={styles.retryButtonText}>다시 시도</Text>
+        </Pressable>
       </View>
     );
   }
@@ -235,7 +243,7 @@ export default function PostDetailScreen() {
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
   const canEditOwn = isMine && !hasLockedSuggestion && !isNotice;
   const showReportItem = !isMine;
-  const showBlockItem = !isMine && !canManagePost;
+  const showBlockItem = post.author_id !== null && !isMine && !canManagePost;
   const hasPostMenu = canEditOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
@@ -260,14 +268,15 @@ export default function PostDetailScreen() {
           ? [["스터디장 연락수단", metadata.contact]]
         : [];
   const imageAttachments = post.attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
-  const firstImageUrl = fileUrl(imageAttachments[0]?.url);
   const normalizedGalleryIndex = Math.min(galleryIndex, Math.max(imageAttachments.length - 1, 0));
-  const selectedImageUrl = fileUrl(imageAttachments[normalizedGalleryIndex]?.url);
   const isActivityCertification = board?.board_type === "activity_certification";
   const isStudyRecruit = board?.slug === "study-recruit";
   const isStudyActivity = board?.slug === "study-activity";
   const isCouncilActivity = board?.board_type === "activity_history";
-  const heroImageUrl = board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? selectedImageUrl : firstImageUrl;
+  const heroAttachment =
+    board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry
+      ? imageAttachments[normalizedGalleryIndex]
+      : imageAttachments[0];
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
   const hasVisualHero = board?.board_type === "album" || isActivityCertification || isAdminParticipationGuide || isCouncilActivityEntry;
@@ -338,7 +347,8 @@ export default function PostDetailScreen() {
   };
 
   const handleBlockAuthor = () => {
-    if (!requireLogin() || isMine || isBlockingAuthor) return;
+    const authorId = post.author_id;
+    if (!requireLogin() || authorId === null || isMine || isBlockingAuthor) return;
     Alert.alert("작성자 차단", "이 작성자의 게시글과 댓글을 내 화면에서 숨길까요?", [
       { text: "취소", style: "cancel" },
       {
@@ -347,7 +357,7 @@ export default function PostDetailScreen() {
         onPress: async () => {
           try {
             setIsBlockingAuthor(true);
-            await userApi.blockUser({ blocked_user_id: post.author_id, reason: "post_detail" });
+            await userApi.blockUser({ blocked_user_id: authorId, reason: "post_detail" });
             Alert.alert("차단 완료", "차단한 작성자의 콘텐츠를 숨겼습니다.");
             router.replace(`/board/${post.board_id}`);
           } catch {
@@ -469,8 +479,8 @@ export default function PostDetailScreen() {
         {hasVisualHero ? (
           <View style={styles.visualHeroBlock}>
             <View style={styles.visualHero}>
-              {heroImageUrl ? (
-                <Image source={{ uri: heroImageUrl }} style={styles.visualHeroImage} />
+              {heroAttachment ? (
+                <MediaImage media={heroAttachment} style={styles.visualHeroImage} />
               ) : (
                 <LinearGradient
                   colors={board?.board_type === "album" ? ALBUM_FALLBACK_GRADIENTS[normalizedGalleryIndex % ALBUM_FALLBACK_GRADIENTS.length] : ["#2761FF", "#86C8FF"]}
@@ -500,7 +510,6 @@ export default function PostDetailScreen() {
             {board?.board_type === "album" ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbs}>
                 {(imageAttachments.length > 0 ? imageAttachments : [null, null, null, null]).map((attachment, index) => {
-                  const thumbUrl = attachment ? fileUrl(attachment.url) : null;
                   return (
                     <Pressable
                       key={attachment?.id ?? `fallback-${index}`}
@@ -509,8 +518,8 @@ export default function PostDetailScreen() {
                       onPress={() => setGalleryIndex(index)}
                       style={[styles.galleryThumb, index === normalizedGalleryIndex ? styles.galleryThumbActive : null]}
                     >
-                      {thumbUrl ? (
-                        <Image source={{ uri: thumbUrl }} style={styles.galleryThumbImage} />
+                      {attachment ? (
+                        <MediaImage media={attachment} style={styles.galleryThumbImage} />
                       ) : (
                         <LinearGradient
                           colors={ALBUM_FALLBACK_GRADIENTS[index % ALBUM_FALLBACK_GRADIENTS.length]}
@@ -613,27 +622,22 @@ export default function PostDetailScreen() {
         {visibleAttachments.length > 0 ? (
           <View style={styles.attachments}>
             {visibleAttachments.map((attachment) => {
-              const url = fileUrl(attachment.url);
               const isImage = attachment.content_type.startsWith("image/");
               return (
                 <Pressable
                   key={attachment.id}
                   onPress={async () => {
-                    if (attachment.is_private) {
-                      try {
-                        const response = await mediaApi.getPrivateDownloadLink(attachment.id);
-                        await Linking.openURL(fileUrl(response.data.url) ?? response.data.url);
-                      } catch {
-                        Alert.alert("파일 열기 실패", "비공개 증빙 파일에 접근할 수 없습니다.");
-                      }
-                      return;
+                    try {
+                      const accessUrl = await resolveMediaAccessUrl(attachment);
+                      if (accessUrl) await Linking.openURL(accessUrl);
+                    } catch {
+                      Alert.alert("파일 열기 실패", "첨부 파일에 접근할 수 없습니다.");
                     }
-                    if (url) await Linking.openURL(url);
                   }}
-                  style={isImage && url ? styles.imageAttachment : styles.fileAttachment}
+                  style={isImage ? styles.imageAttachment : styles.fileAttachment}
                 >
-                  {isImage && url ? <Image source={{ uri: url }} style={styles.attachmentImage} /> : null}
-                  {!isImage || !url ? (
+                  {isImage ? <MediaImage media={attachment} style={styles.attachmentImage} /> : null}
+                  {!isImage ? (
                     <>
                       <Ionicons name="document-outline" size={18} color={COLORS.subtle} />
                       <Text numberOfLines={1} style={styles.fileName}>
@@ -957,7 +961,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
     backgroundColor: COLORS.page,
+  },
+  loadErrorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   appBar: {
     minHeight: 62,

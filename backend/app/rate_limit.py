@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 from datetime import timedelta
+from ipaddress import IPv4Address, IPv6Address, ip_address
 
 from fastapi import Request
 from sqlalchemy import case
@@ -17,12 +18,49 @@ def _subject_hash(value: str) -> str:
     return hmac.new(settings.auth_secret_key.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+def subject_rate_limit_hash(subject: str) -> str:
+    """Return the persisted hash used for a subject-scoped rate-limit key."""
+
+    return _subject_hash(f"subject:{subject.strip().lower()}")
+
+
+def _parsed_ip(value: str) -> IPv4Address | IPv6Address | None:
+    try:
+        return ip_address(value.strip())
+    except ValueError:
+        return None
+
+
 def _client_ip(request: Request) -> str:
-    if settings.rate_limit_trust_proxy:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
-        if forwarded:
-            return forwarded
-    return request.client.host if request.client is not None else "unknown"
+    direct_client = request.client.host if request.client is not None else "unknown"
+    if not settings.rate_limit_trust_proxy:
+        return direct_client
+
+    direct_address = _parsed_ip(direct_client)
+    trusted_networks = settings.rate_limit_trusted_proxy_networks()
+    if direct_address is None or not any(
+        direct_address.version == network.version and direct_address in network
+        for network in trusted_networks
+    ):
+        return direct_client
+
+    forwarded_values = [
+        value.strip()
+        for value in request.headers.get("x-forwarded-for", "").split(",")
+        if value.strip()
+    ]
+    forwarded_addresses = [_parsed_ip(value) for value in forwarded_values]
+    if not forwarded_addresses or any(address is None for address in forwarded_addresses):
+        return direct_client
+
+    valid_forwarded_addresses = [address for address in forwarded_addresses if address is not None]
+    for address in reversed(valid_forwarded_addresses):
+        if not any(
+            address.version == network.version and address in network
+            for network in trusted_networks
+        ):
+            return str(address)
+    return direct_client
 
 
 def enforce_rate_limit(

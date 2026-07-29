@@ -35,8 +35,10 @@ class UserPasswordVerify(BaseModel):
     current_password: str
 
 
-class UserDeactivateRequest(BaseModel):
-    reason: str | None = None
+class UserDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(min_length=1, max_length=1024)
 
 
 class UserBlockCreate(BaseModel):

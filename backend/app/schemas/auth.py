@@ -49,3 +49,13 @@ class PasswordResetVerify(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
+
+
+class AccountDeletionRequest(BaseModel):
+    email: EmailStr
+
+
+class AccountDeletionVerify(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")
+    current_password: str = Field(min_length=1, max_length=1024)

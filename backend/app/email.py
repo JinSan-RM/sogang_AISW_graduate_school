@@ -34,7 +34,7 @@ def send_email(to_email: str, subject: str, body: str, html_body: str | None = N
             smtp.send_message(message)
         return True
     except (OSError, smtplib.SMTPException):
-        logger.exception("Failed to send email to %s", to_email)
+        logger.exception("SMTP delivery failed")
         if settings.smtp_required:
             raise
         return False

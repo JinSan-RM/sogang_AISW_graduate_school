@@ -101,6 +101,18 @@ def password_reset_email(token: str, expiry_minutes: int) -> tuple[str, str]:
     )
 
 
+def account_deletion_email(code: str, expiry_minutes: int) -> tuple[str, str]:
+    title = "Account deletion verification"
+    intro = (
+        "Enter the verification code below only if you requested permanent "
+        "deletion of your Sogang AI-SW Community account."
+    )
+    return (
+        _plain_email(title, intro, "Verification code", code, expiry_minutes),
+        _html_email(title, intro, code, expiry_minutes, compact_code=True),
+    )
+
+
 def smtp_test_email() -> tuple[str, str]:
     title = "SMTP 테스트 메일"
     intro = "이 메일을 받았다면 회원가입 인증과 비밀번호 재설정 메일 발송 설정이 정상 동작합니다."

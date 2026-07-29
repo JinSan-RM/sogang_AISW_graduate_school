@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Image,
   PanResponder,
   Platform,
   Pressable,
@@ -16,7 +15,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../hooks/useApi";
-import { API_ORIGIN, authApi, notificationApi } from "../services/api";
+import MediaImage from "./MediaImage";
+import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
@@ -34,8 +34,6 @@ const COLORS = {
   backdrop: "rgba(17,24,39,0.24)",
 };
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
 const MENU_ITEMS = [
   { title: "내가 쓴 글", href: "/settings/activity?type=posts" },
   { title: "스크랩한 글", href: "/settings/activity?type=bookmarks" },
@@ -43,24 +41,12 @@ const MENU_ITEMS = [
   { title: "계정 설정", href: "/settings/account" },
 ] as const;
 
-const ADMIN_QUICK_ITEMS: { title: string; href: string; icon: IconName }[] = [
-  { title: "배너 관리", href: "/admin?section=banners", icon: "albums-outline" },
-  { title: "공지사항 관리", href: "/admin?section=notices", icon: "megaphone-outline" },
-  { title: "원우회 관리", href: "/admin?section=boards&scope=council", icon: "people-circle-outline" },
-  { title: "전체 게시글", href: "/admin?section=posts", icon: "document-text-outline" },
-];
-
 type MyPageDrawerContextValue = {
   openDrawer: () => void;
   closeDrawer: () => void;
 };
 
 const MyPageDrawerContext = createContext<MyPageDrawerContextValue | null>(null);
-
-function mediaUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
-}
 
 export function useMyPageDrawer() {
   const context = useContext(MyPageDrawerContext);
@@ -81,7 +67,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const drawerWidth = width;
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const me = data?.data;
-  const image = mediaUrl(me?.profile_image_url);
+  const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
   useEffect(() => {
     if (!isVisible) {
@@ -199,8 +185,11 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
 
               <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
                 <Pressable onPress={() => navigateTo("/settings/profile")} style={styles.profileRow}>
-                  {image ? (
-                    <Image source={{ uri: image }} style={styles.avatarImage} />
+                  {hasProfileImage ? (
+                    <MediaImage
+                      media={{ id: me?.profile_image_media_id, url: me?.profile_image_url }}
+                      style={styles.avatarImage}
+                    />
                   ) : (
                     <View style={styles.avatar}>
                       <Text style={styles.avatarText}>{me?.nickname?.slice(0, 1) ?? "?"}</Text>
@@ -349,63 +338,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
-  },
-  adminPanel: {
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.primary100,
-    borderRadius: 8,
-    backgroundColor: "#F8FAFF",
-    marginHorizontal: 18,
-    marginTop: 18,
-  },
-  adminEntry: {
-    minHeight: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.primary100,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  adminIcon: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: COLORS.primary50,
-  },
-  adminTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  adminTitle: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: "900",
-  },
-  adminSubtitle: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 4,
-  },
-  adminQuickRow: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingHorizontal: 14,
-  },
-  adminQuickText: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "900",
   },
   logoutRow: {
     justifyContent: "center",
