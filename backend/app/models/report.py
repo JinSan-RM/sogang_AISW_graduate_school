@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -10,6 +10,8 @@ class Report(Base):
     __tablename__ = "reports"
     __table_args__ = (
         UniqueConstraint("reporter_id", "target_type", "target_id", name="uq_reports_reporter_target"),
+        Index("ix_reports_target", "target_type", "target_id"),
+        Index("ix_reports_status_created", "status", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

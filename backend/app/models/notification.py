@@ -27,6 +27,7 @@ class Notification(Base):
             "notification_type IN ('comment', 'like', 'notice', 'event', 'admin_reply', 'report', 'council')",
             name="ck_notifications_notification_type",
         ),
+        Index("ix_notifications_dedupe_key", "dedupe_key", unique=True),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -35,7 +36,7 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     post_id: Mapped[int | None] = mapped_column(ForeignKey("posts.id", ondelete="CASCADE"))
     event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
-    dedupe_key: Mapped[str | None] = mapped_column(String(255), unique=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(255))
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 

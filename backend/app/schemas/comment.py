@@ -1,21 +1,28 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+COMMENT_MAX_LENGTH = 500
 
 
-class CommentCreate(BaseModel):
-    content: str
+class CommentMutationBase(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    content: str = Field(min_length=1, max_length=COMMENT_MAX_LENGTH)
+
+
+class CommentCreate(CommentMutationBase):
     parent_id: int | None = None
 
 
-class CommentUpdate(BaseModel):
-    content: str
+class CommentUpdate(CommentMutationBase):
+    pass
 
 
 class CommentNode(BaseModel):
     id: int
     post_id: int
-    author_id: int
+    author_id: int | None
     author_nickname: str
     parent_id: int | None = None
     content: str

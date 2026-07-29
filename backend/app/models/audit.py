@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,3 +21,24 @@ class OperationalAuditLog(Base):
     target_id: Mapped[int | None] = mapped_column(nullable=True)
     details: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AccountDeletionReceipt(Base):
+    __tablename__ = "account_deletion_receipts"
+    __table_args__ = (
+        CheckConstraint(
+            "channel IN ('authenticated', 'public_email')",
+            name="ck_account_deletion_receipts_channel",
+        ),
+        CheckConstraint(
+            "result = 'completed'",
+            name="ck_account_deletion_receipts_result",
+        ),
+        Index("ix_account_deletion_receipts_completed_at", "completed_at"),
+    )
+
+    # Deliberately contains no user id, email, IP address, or deletion counts.
+    receipt_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    result: Mapped[str] = mapped_column(String(20), default="completed", nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

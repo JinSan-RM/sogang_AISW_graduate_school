@@ -3,7 +3,6 @@ import { router } from "expo-router";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
-  Image,
   PanResponder,
   Platform,
   Pressable,
@@ -16,9 +15,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../hooks/useApi";
-import { API_ORIGIN, authApi, notificationApi } from "../services/api";
+import MediaImage from "./MediaImage";
+import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
+import { isAdminUser } from "../utils/permissions";
 
 const COLORS = {
   primary: "#2761FF",
@@ -40,7 +41,7 @@ const MENU_ITEMS = [
   { title: "내가 쓴 글", href: "/settings/activity?type=posts" },
   { title: "스크랩한 글", href: "/settings/activity?type=bookmarks" },
   { title: "알림 설정", href: "/settings/notifications" },
-  { title: "계정 설정", href: "/settings/account" },
+  { title: "계정 및 데이터 삭제", href: "/settings/account" },
 ] as const;
 
 const ADMIN_QUICK_ITEMS: { title: string; href: string; icon: IconName }[] = [
@@ -56,11 +57,6 @@ type MyPageDrawerContextValue = {
 };
 
 const MyPageDrawerContext = createContext<MyPageDrawerContextValue | null>(null);
-
-function mediaUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
-}
 
 export function useMyPageDrawer() {
   const context = useContext(MyPageDrawerContext);
@@ -81,7 +77,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const drawerWidth = width;
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const me = data?.data;
-  const image = mediaUrl(me?.profile_image_url);
+  const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
   useEffect(() => {
     if (!isVisible) {
@@ -199,8 +195,11 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
 
               <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
                 <Pressable onPress={() => navigateTo("/settings/profile")} style={styles.profileRow}>
-                  {image ? (
-                    <Image source={{ uri: image }} style={styles.avatarImage} />
+                  {hasProfileImage ? (
+                    <MediaImage
+                      media={{ id: me?.profile_image_media_id, url: me?.profile_image_url }}
+                      style={styles.avatarImage}
+                    />
                   ) : (
                     <View style={styles.avatar}>
                       <Text style={styles.avatarText}>{me?.nickname?.slice(0, 1) ?? "?"}</Text>
@@ -223,6 +222,28 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
                     </Pressable>
                   ))}
                 </View>
+
+                {isAdminUser(me) ? (
+                  <View style={styles.adminPanel}>
+                    <Pressable onPress={() => navigateTo("/admin")} style={styles.adminEntry}>
+                      <View style={styles.adminIcon}>
+                        <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
+                      </View>
+                      <View style={styles.adminTextWrap}>
+                        <Text style={styles.adminTitle}>관리자 페이지</Text>
+                        <Text style={styles.adminSubtitle}>배너, 공지사항, 게시판 설정</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+                    </Pressable>
+                    {ADMIN_QUICK_ITEMS.map((item) => (
+                      <Pressable key={item.title} onPress={() => navigateTo(item.href)} style={styles.adminQuickRow}>
+                        <Ionicons name={item.icon} size={18} color={COLORS.primary} />
+                        <Text style={styles.adminQuickText}>{item.title}</Text>
+                        <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
 
                 <Pressable onPress={logout} style={styles.logoutRow}>
                   <Text style={styles.logoutText}>로그아웃</Text>

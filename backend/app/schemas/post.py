@@ -1,24 +1,29 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+POST_TITLE_MAX_LENGTH = 100
+POST_CONTENT_MAX_LENGTH = 10_000
 
 
-class PostCreate(BaseModel):
-    title: str
-    content: str
+class PostMutationBase(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    title: str = Field(min_length=1, max_length=POST_TITLE_MAX_LENGTH)
+    # Album requests still carry a validated body (the client uses the title);
+    # the router discards it when persisting image-only album posts.
+    content: str = Field(min_length=1, max_length=POST_CONTENT_MAX_LENGTH)
     is_anonymous: bool = False
     category: str | None = None
     metadata: dict | None = None
+
+
+class PostCreate(PostMutationBase):
     attachment_ids: list[int] = Field(default_factory=list)
     deadline_at: datetime | None = None
 
 
-class PostUpdate(BaseModel):
-    title: str
-    content: str
-    is_anonymous: bool = False
-    category: str | None = None
-    metadata: dict | None = None
+class PostUpdate(PostMutationBase):
     attachment_ids: list[int] | None = None
     deadline_at: datetime | None = None
 
@@ -38,7 +43,7 @@ class PostListItem(BaseModel):
     board_id: int
     title: str
     content_preview: str
-    author_id: int
+    author_id: int | None
     author_nickname: str
     is_pinned: bool
     is_notice: bool
@@ -53,7 +58,7 @@ class PostDetail(BaseModel):
     board_id: int
     title: str
     content: str
-    author_id: int
+    author_id: int | None
     author_nickname: str
     is_pinned: bool
     is_notice: bool

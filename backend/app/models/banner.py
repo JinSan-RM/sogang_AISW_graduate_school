@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,6 +12,7 @@ class Banner(Base):
     __table_args__ = (
         CheckConstraint("placement IN ('home')", name="ck_banners_placement"),
         CheckConstraint("theme IN ('none', 'blue', 'navy', 'cyan', 'purple')", name="ck_banners_theme"),
+        Index("ix_banners_placement_active_order", "placement", "is_active", "sort_order"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -29,6 +30,6 @@ class Banner(Base):
     starts_at: Mapped[datetime | None] = mapped_column(DateTime)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime)
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

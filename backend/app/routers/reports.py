@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.account_deletion import DELETED_USER_NICKNAME
 from app.deps import get_current_user, get_db, require_admin
 from app.errors import AppException
 from app.models.comment import Comment
@@ -11,6 +12,7 @@ from app.models.post import Post
 from app.models.report import Report
 from app.models.user import User
 from app.notifications import notify_admins
+from app.post_access import require_comment_read, require_post_read
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
 from app.schemas.report import ReportCreate, ReportStatusUpdate
@@ -57,7 +59,7 @@ def _create_report(target_type: str, target_id: int, payload: ReportCreate, db: 
 def _post_target_payload(db: Session, post_id: int) -> dict:
     row = db.execute(
         select(Post, User.nickname)
-        .join(User, User.id == Post.author_id)
+        .outerjoin(User, User.id == Post.author_id)
         .where(Post.id == post_id)
     ).first()
     if row is None:
@@ -72,7 +74,9 @@ def _post_target_payload(db: Session, post_id: int) -> dict:
         "title": post.title,
         "content_preview": post.content[:160],
         "author_id": post.author_id,
-        "author_nickname": "Anonymous" if post.is_anonymous else author_nickname,
+        "author_nickname": DELETED_USER_NICKNAME
+        if post.author_id is None
+        else ("Anonymous" if post.is_anonymous else author_nickname),
     }
 
 
@@ -80,7 +84,7 @@ def _comment_target_payload(db: Session, comment_id: int) -> dict:
     row = db.execute(
         select(Comment, Post, User.nickname)
         .join(Post, Post.id == Comment.post_id)
-        .join(User, User.id == Comment.author_id)
+        .outerjoin(User, User.id == Comment.author_id)
         .where(Comment.id == comment_id)
     ).first()
     if row is None:
@@ -95,7 +99,7 @@ def _comment_target_payload(db: Session, comment_id: int) -> dict:
         "title": post.title,
         "content_preview": comment.content[:160],
         "author_id": comment.author_id,
-        "author_nickname": author_nickname,
+        "author_nickname": author_nickname or DELETED_USER_NICKNAME,
     }
 
 
@@ -191,6 +195,7 @@ def report_post(
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+    require_post_read(db, post, user)
     if post.author_id == user.id:
         raise AppException(status_code=400, message="You cannot report your own post.", code="BAD_REQUEST")
     return _create_report("post", post_id, payload, db, user)
@@ -205,9 +210,7 @@ def report_comment(
     user: User = Depends(get_current_user),
 ):
     enforce_rate_limit(request, action="report.create", subject=str(user.id), limit=10, ip_limit=30, window_seconds=3600)
-    comment = db.get(Comment, comment_id)
-    if comment is None:
-        raise AppException(status_code=404, message="Comment not found.", code="NOT_FOUND")
+    comment, _, _ = require_comment_read(db, db.get(Comment, comment_id), user)
     if comment.author_id == user.id:
         raise AppException(status_code=400, message="You cannot report your own comment.", code="BAD_REQUEST")
     return _create_report("comment", comment_id, payload, db, user)

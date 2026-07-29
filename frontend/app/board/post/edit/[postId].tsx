@@ -37,7 +37,7 @@ export default function PostEditScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ postId: string }>();
   const postId = Number(params.postId);
-  const { data, isLoading } = usePostDetail(postId);
+  const { data, isError, isLoading, refetch } = usePostDetail(postId);
   const post = data?.data;
   const { data: boardsRes } = useBoardsQuery();
   const board = boardsRes?.data.flatMap((group) => group.boards).find((item) => item.id === post?.board_id);
@@ -70,10 +70,21 @@ export default function PostEditScreen() {
     else router.replace(`/board/post/${postId}`);
   };
 
-  if (isLoading || !post) {
+  if (isLoading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={COLORS.primary} />
+      </View>
+    );
+  }
+
+  if (isError || !post) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.loadErrorText}>게시글을 불러오지 못했습니다.</Text>
+        <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+          <Text style={styles.retryButtonText}>다시 시도</Text>
+        </Pressable>
       </View>
     );
   }
@@ -110,7 +121,7 @@ export default function PostEditScreen() {
     updateMutation.mutate(
       {
         title: values.title.trim(),
-        content,
+        content: isAlbum ? values.title.trim() : content,
         category: values.category?.trim() || undefined,
         metadata: isStudyRecruit
           ? {
@@ -318,7 +329,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
     backgroundColor: COLORS.surface,
+  },
+  loadErrorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   appBar: {
     minHeight: 62,

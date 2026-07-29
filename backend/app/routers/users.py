@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.account_deletion import DELETED_USER_NICKNAME, delete_user_account
+from app.board_policies import hides_author_identity
 from app.deps import get_current_user, get_db, require_admin
 from app.errors import AppException
+from app.media_service import media_access_reference, profile_image_media_id, validate_profile_image_reference
 from app.models.board import Board
 from app.models.bookmark import Bookmark
 from app.models.comment import Comment
@@ -13,8 +16,10 @@ from app.models.notification import PushToken
 from app.models.registration import MajorOption
 from app.models.user import User
 from app.models.user_block import UserBlock
+from app.post_access import post_read_filter
+from app.rate_limit import enforce_rate_limit
 from app.response import success_response
-from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeactivateRequest, UserMeUpdate, UserPasswordUpdate, UserPasswordVerify
+from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeleteRequest, UserMeUpdate, UserPasswordUpdate, UserPasswordVerify
 from app.security import ensure_password_policy, hash_password, utc_now, verify_password
 from app.user_validation import nickname_is_taken, normalize_nickname
 from app.audit import log_admin_action
@@ -38,7 +43,7 @@ def nickname_availability(
 
 
 @router.get('/me')
-def get_me(user: User = Depends(get_current_user)):
+def get_me(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return success_response(
         {
             "id": user.id,
@@ -50,6 +55,7 @@ def get_me(user: User = Depends(get_current_user)):
             "job_title": user.job_title,
             "position": user.position,
             "profile_image_url": user.profile_image_url,
+            "profile_image_media_id": profile_image_media_id(db, user),
             "email": user.email,
             "role": user.role,
             "created_at": user.created_at,
@@ -195,6 +201,13 @@ def update_admin_user(
 @router.put('/me')
 def update_me(payload: UserMeUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     data = payload.model_dump(exclude_unset=True)
+    if "profile_image_url" in data:
+        profile_reference = (data["profile_image_url"] or "").strip()
+        if not profile_reference:
+            data["profile_image_url"] = None
+        else:
+            profile_media = validate_profile_image_reference(db, profile_reference, user)
+            data["profile_image_url"] = media_access_reference(profile_media.id)
     if "major" in data:
         major = (data["major"] or "").strip()
         active_major = db.scalar(
@@ -223,12 +236,20 @@ def get_my_activity(
     offset = (page - 1) * size
 
     if activity_type == "comments":
-        total = db.scalar(select(func.count(Comment.id)).where(Comment.author_id == user.id)) or 0
+        total = (
+            db.scalar(
+                select(func.count(Comment.id))
+                .join(Post, Post.id == Comment.post_id)
+                .join(Board, Board.id == Post.board_id)
+                .where(Comment.author_id == user.id, Post.deleted_at.is_(None), post_read_filter(user))
+            )
+            or 0
+        )
         comments = db.execute(
             select(Comment, Post.title, Post.board_id, Board.name, Post.comment_count, Post.like_count, Post.category)
             .join(Post, Post.id == Comment.post_id)
             .join(Board, Board.id == Post.board_id)
-            .where(Comment.author_id == user.id, Post.deleted_at.is_(None))
+            .where(Comment.author_id == user.id, Post.deleted_at.is_(None), post_read_filter(user))
             .order_by(Comment.created_at.desc(), Comment.id.desc())
             .offset(offset)
             .limit(size)
@@ -254,16 +275,17 @@ def get_my_activity(
             db.scalar(
                 select(func.count(Bookmark.id))
                 .join(Post, Post.id == Bookmark.post_id)
-                .where(Bookmark.user_id == user.id, Post.deleted_at.is_(None))
+                .join(Board, Board.id == Post.board_id)
+                .where(Bookmark.user_id == user.id, Post.deleted_at.is_(None), post_read_filter(user))
             )
             or 0
         )
         bookmarks = db.execute(
-            select(Bookmark, Post, Board.name, User.nickname, User.cohort)
+            select(Bookmark, Post, Board, User.nickname, User.cohort)
             .join(Post, Post.id == Bookmark.post_id)
             .join(Board, Board.id == Post.board_id)
-            .join(User, User.id == Post.author_id)
-            .where(Bookmark.user_id == user.id, Post.deleted_at.is_(None))
+            .outerjoin(User, User.id == Post.author_id)
+            .where(Bookmark.user_id == user.id, Post.deleted_at.is_(None), post_read_filter(user))
             .order_by(Bookmark.created_at.desc(), Bookmark.id.desc())
             .offset(offset)
             .limit(size)
@@ -276,19 +298,30 @@ def get_my_activity(
                 "title": post.title,
                 "content_preview": post.content[:100],
                 "board_id": post.board_id,
-                "board_name": board_name,
+                "board_name": board.name,
                 "category": post.category,
                 "comment_count": post.comment_count,
                 "like_count": post.like_count,
-                "author_nickname": author_nickname,
-                "author_cohort": author_cohort,
+                "author_nickname": DELETED_USER_NICKNAME
+                if post.author_id is None
+                else (
+                    "Anonymous"
+                    if user.role != "admin" and (post.is_anonymous or hides_author_identity(board))
+                    else author_nickname
+                ),
+                "author_cohort": None
+                if post.author_id is None
+                or (user.role != "admin" and (post.is_anonymous or hides_author_identity(board)))
+                else author_cohort,
                 "created_at": bookmark.created_at,
             }
-            for bookmark, post, board_name, author_nickname, author_cohort in bookmarks
+            for bookmark, post, board, author_nickname, author_cohort in bookmarks
         ]
     else:
-        filters = [Post.author_id == user.id, Post.deleted_at.is_(None)]
-        total = db.scalar(select(func.count(Post.id)).where(*filters)) or 0
+        filters = [Post.author_id == user.id, Post.deleted_at.is_(None), post_read_filter(user)]
+        total = db.scalar(
+            select(func.count(Post.id)).join(Board, Board.id == Post.board_id).where(*filters)
+        ) or 0
         posts = db.execute(
             select(Post, Board.name)
             .join(Board, Board.id == Post.board_id)
@@ -414,16 +447,31 @@ def update_password(payload: UserPasswordUpdate, db: Session = Depends(get_db), 
 
 
 @router.delete('/me')
-def deactivate_me(
-    _: UserDeactivateRequest | None = None,
+def delete_me(
+    payload: UserDeleteRequest,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    user.is_active = False
-    push_tokens = db.scalars(select(PushToken).where(PushToken.user_id == user.id, PushToken.is_active.is_(True))).all()
-    for push_token in push_tokens:
-        push_token.is_active = False
-    db.commit()
-
-    return success_response({"deactivated": True})
+    enforce_rate_limit(
+        request,
+        action="account.delete.authenticated",
+        subject=str(user.id),
+        limit=5,
+        ip_limit=10,
+        window_seconds=3600,
+    )
+    result = delete_user_account(
+        db,
+        user_id=user.id,
+        current_password=payload.current_password,
+        channel="authenticated",
+    )
+    return success_response(
+        {
+            "deleted": True,
+            "receipt_id": result.receipt_id,
+            "completed_at": result.completed_at,
+        }
+    )
 

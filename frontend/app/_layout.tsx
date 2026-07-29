@@ -7,6 +7,7 @@ import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import NotificationBootstrap from "../components/NotificationBootstrap";
 import { useUserStore } from "../stores/userStore";
 import { INTER_FONTS, patchDefaultFontFamily } from "../utils/fonts";
+import { isAdminUser } from "../utils/permissions";
 
 // Route every <Text>/<TextInput> through the matching Inter face (design uses Inter).
 patchDefaultFontFamily();
@@ -19,7 +20,7 @@ export default function RootLayout() {
   const hasHydrated = useUserStore((state) => state.hasHydrated);
   const hydrateSession = useUserStore((state) => state.hydrateSession);
   const user = useUserStore((state) => state.user);
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminUser(user);
   const isWeb = Platform.OS === "web";
   const useWebFrame = isWeb && width > 430;
 
@@ -45,6 +46,8 @@ export default function RootLayout() {
           >
             <Stack.Screen name="legal/terms" options={{ headerShown: false }} />
             <Stack.Screen name="legal/privacy" options={{ headerShown: false }} />
+            <Stack.Screen name="legal/account-deletion" options={{ headerShown: false }} />
+            <Stack.Screen name="legal/support" options={{ headerShown: false }} />
             <Stack.Protected guard={!isAuthenticated}>
               <Stack.Screen name="auth/login" options={{ headerShown: false }} />
               <Stack.Screen name="auth/register" options={{ headerShown: false }} />

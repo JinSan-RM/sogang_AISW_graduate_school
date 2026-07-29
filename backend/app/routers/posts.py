@@ -3,9 +3,10 @@ from datetime import date
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.account_deletion import DELETED_USER_NICKNAME
 from app.board_policies import hides_author_identity
 from app.deps import can_read_board, can_write_board, get_current_user, get_db, require_admin
 from app.errors import AppException
@@ -18,6 +19,7 @@ from app.models.post_extension import PostMutualAid, PostSuggestion
 from app.models.user import User
 from app.models.user_block import UserBlock
 from app.notifications import create_notification
+from app.post_access import post_status_read_filter, require_post_read
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
 from app.schemas.post import MutualAidUpdate, PostCreate, PostUpdate, SuggestionUpdate
@@ -37,6 +39,42 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
     if board.board_type == "activity_certification" and not include_sensitive:
         metadata.pop("bank_account", None)
     return metadata
+
+
+def _hide_post_author(post: Post, board: Board, current_user: User) -> bool:
+    return current_user.role != "admin" and (post.is_anonymous or hides_author_identity(board))
+
+
+def _visible_post_author_id(post: Post, board: Board, current_user: User) -> int | None:
+    if post.author_id is None:
+        return None
+    if _hide_post_author(post, board, current_user) and post.author_id != current_user.id:
+        return None
+    return post.author_id
+
+
+def _post_author_nickname(
+    post: Post,
+    board: Board,
+    current_user: User,
+    nickname: str | None,
+) -> str:
+    if post.author_id is None:
+        return DELETED_USER_NICKNAME
+    if _hide_post_author(post, board, current_user):
+        return "Anonymous"
+    return nickname or DELETED_USER_NICKNAME
+
+
+def _post_author_cohort(
+    post: Post,
+    board: Board,
+    current_user: User,
+    cohort: str | None,
+) -> str | None:
+    if post.author_id is None or _hide_post_author(post, board, current_user):
+        return None
+    return cohort
 
 
 def _enforce_council_management_policy(board: Board, current_user: User) -> None:
@@ -65,6 +103,7 @@ def get_posts(
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
 
     filters = [Post.board_id == board_id, Post.deleted_at.is_(None)]
+    filters.append(post_status_read_filter(current_user))
     if board.board_type == "mutual_aid" and current_user.role != "admin":
         filters.append(Post.author_id == current_user.id)
     if q:
@@ -72,7 +111,10 @@ def get_posts(
         if hides_author_identity(board) and current_user.role != "admin":
             filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword))
         else:
-            filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | User.nickname.ilike(keyword))
+            author_match = User.nickname.ilike(keyword)
+            if current_user.role != "admin":
+                author_match = and_(Post.is_anonymous.is_(False), author_match)
+            filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | author_match)
     if category:
         filters.append(Post.category == category)
     if status:
@@ -80,14 +122,20 @@ def get_posts(
     blocked_author_ids = db.scalars(
         select(UserBlock.blocked_user_id).where(UserBlock.blocker_id == current_user.id)
     ).all()
-    if blocked_author_ids:
-        filters.append(Post.author_id.not_in(blocked_author_ids))
+    if blocked_author_ids and not hides_author_identity(board):
+        filters.append(
+            or_(
+                Post.is_anonymous.is_(True),
+                Post.author_id.is_(None),
+                Post.author_id.not_in(blocked_author_ids),
+            )
+        )
 
     total = (
         db.scalar(
             select(func.count(Post.id))
             .select_from(Post)
-            .join(User, User.id == Post.author_id)
+            .outerjoin(User, User.id == Post.author_id)
             .where(*filters)
         )
         or 0
@@ -109,6 +157,7 @@ def get_posts(
     image_attachment_order = (
         select(
             PostAttachment.post_id.label("post_id"),
+            MediaAsset.id.label("thumbnail_media_id"),
             MediaAsset.url.label("thumbnail_url"),
             func.row_number()
             .over(
@@ -122,14 +171,25 @@ def get_posts(
         .subquery()
     )
     thumbnails = (
-        select(image_attachment_order.c.post_id, image_attachment_order.c.thumbnail_url)
+        select(
+            image_attachment_order.c.post_id,
+            image_attachment_order.c.thumbnail_media_id,
+            image_attachment_order.c.thumbnail_url,
+        )
         .where(image_attachment_order.c.rank == 1)
         .subquery()
     )
 
     rows = db.execute(
-        select(Post, User.nickname, User.cohort, func.coalesce(attachment_counts.c.attachment_count, 0), thumbnails.c.thumbnail_url)
-        .join(User, User.id == Post.author_id)
+        select(
+            Post,
+            User.nickname,
+            User.cohort,
+            func.coalesce(attachment_counts.c.attachment_count, 0),
+            thumbnails.c.thumbnail_media_id,
+            thumbnails.c.thumbnail_url,
+        )
+        .outerjoin(User, User.id == Post.author_id)
         .outerjoin(attachment_counts, attachment_counts.c.post_id == Post.id)
         .outerjoin(thumbnails, thumbnails.c.post_id == Post.id)
         .where(*filters)
@@ -144,13 +204,9 @@ def get_posts(
             "board_id": post.board_id,
             "title": post.title,
             "content_preview": post.content[:100],
-            "author_id": post.author_id,
-            "author_nickname": "Anonymous"
-            if post.is_anonymous or (hides_author_identity(board) and current_user.role != "admin")
-            else nickname,
-            "author_cohort": None
-            if post.is_anonymous or (hides_author_identity(board) and current_user.role != "admin")
-            else cohort,
+            "author_id": _visible_post_author_id(post, board, current_user),
+            "author_nickname": _post_author_nickname(post, board, current_user, nickname),
+            "author_cohort": _post_author_cohort(post, board, current_user, cohort),
             "is_anonymous": post.is_anonymous,
             "is_pinned": post.is_pinned,
             "is_notice": post.is_notice,
@@ -160,6 +216,7 @@ def get_posts(
             "suggestion": _suggestion_payload(db, post.id) if board.board_type == "suggestion" else None,
             "mutual_aid": _mutual_aid_payload(db, post.id) if board.board_type == "mutual_aid" else None,
             "attachment_count": attachment_count,
+            "thumbnail_media_id": thumbnail_media_id,
             "thumbnail_url": thumbnail_url,
             "view_count": post.view_count,
             "like_count": post.like_count,
@@ -173,7 +230,7 @@ def get_posts(
             if q
             else None,
         }
-        for post, nickname, cohort, attachment_count, thumbnail_url in rows
+        for post, nickname, cohort, attachment_count, thumbnail_media_id, thumbnail_url in rows
     ]
 
     return success_response(
@@ -382,17 +439,6 @@ def _suggestion_has_admin_reply(db: Session, post_id: int) -> bool:
     return bool(suggestion and suggestion.admin_reply)
 
 
-def _require_post_read(db: Session, post: Post, user: User) -> Board:
-    board = db.get(Board, post.board_id)
-    if board is None or not board.is_active:
-        raise AppException(status_code=404, message="Board not found.", code="NOT_FOUND")
-    if not can_read_board(user, board.read_permission):
-        raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
-    if board.board_type == "mutual_aid" and post.author_id != user.id and user.role != "admin":
-        raise AppException(status_code=403, message="Only the requester and admins can read this request.", code="FORBIDDEN")
-    return board
-
-
 @router.get("/posts/admin/all")
 def get_admin_posts(
     page: int = Query(1, ge=1),
@@ -428,7 +474,7 @@ def get_admin_posts(
         db.scalar(
             select(func.count(Post.id))
             .select_from(Post)
-            .join(User, User.id == Post.author_id)
+            .outerjoin(User, User.id == Post.author_id)
             .join(Board, Board.id == Post.board_id)
             .where(*filters)
         )
@@ -444,6 +490,7 @@ def get_admin_posts(
     image_attachment_order = (
         select(
             PostAttachment.post_id.label("post_id"),
+            MediaAsset.id.label("thumbnail_media_id"),
             MediaAsset.url.label("thumbnail_url"),
             func.row_number()
             .over(
@@ -457,7 +504,11 @@ def get_admin_posts(
         .subquery()
     )
     thumbnails = (
-        select(image_attachment_order.c.post_id, image_attachment_order.c.thumbnail_url)
+        select(
+            image_attachment_order.c.post_id,
+            image_attachment_order.c.thumbnail_media_id,
+            image_attachment_order.c.thumbnail_url,
+        )
         .where(image_attachment_order.c.rank == 1)
         .subquery()
     )
@@ -471,9 +522,10 @@ def get_admin_posts(
             Board.category.label("board_category"),
             Board.board_type.label("board_type"),
             func.coalesce(attachment_counts.c.attachment_count, 0),
+            thumbnails.c.thumbnail_media_id,
             thumbnails.c.thumbnail_url,
         )
-        .join(User, User.id == Post.author_id)
+        .outerjoin(User, User.id == Post.author_id)
         .join(Board, Board.id == Post.board_id)
         .outerjoin(attachment_counts, attachment_counts.c.post_id == Post.id)
         .outerjoin(thumbnails, thumbnails.c.post_id == Post.id)
@@ -493,8 +545,8 @@ def get_admin_posts(
             "title": post.title,
             "content_preview": post.content[:100],
             "author_id": post.author_id,
-            "author_nickname": nickname,
-            "author_cohort": cohort,
+            "author_nickname": nickname or DELETED_USER_NICKNAME,
+            "author_cohort": cohort if post.author_id is not None else None,
             "is_anonymous": post.is_anonymous,
             "is_pinned": post.is_pinned,
             "is_notice": post.is_notice,
@@ -504,6 +556,7 @@ def get_admin_posts(
             "suggestion": _suggestion_payload(db, post.id) if board_type == "suggestion" else None,
             "mutual_aid": _mutual_aid_payload(db, post.id) if board_type == "mutual_aid" else None,
             "attachment_count": attachment_count,
+            "thumbnail_media_id": thumbnail_media_id,
             "thumbnail_url": thumbnail_url,
             "view_count": post.view_count,
             "like_count": post.like_count,
@@ -518,7 +571,7 @@ def get_admin_posts(
             if q
             else None,
         }
-        for post, nickname, cohort, board_name, board_category, board_type, attachment_count, thumbnail_url in rows
+        for post, nickname, cohort, board_name, board_category, board_type, attachment_count, thumbnail_media_id, thumbnail_url in rows
     ]
 
     return success_response(
@@ -540,14 +593,14 @@ def get_post_detail(
 ):
     row = db.execute(
         select(Post, User.nickname, User.cohort)
-        .join(User, User.id == Post.author_id)
+        .outerjoin(User, User.id == Post.author_id)
         .where(Post.id == post_id, Post.deleted_at.is_(None))
     ).first()
     if row is None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
 
     post, nickname, cohort = row
-    board = _require_post_read(db, post, current_user)
+    board = require_post_read(db, post, current_user)
 
     post.view_count += 1
 
@@ -568,13 +621,9 @@ def get_post_detail(
             "board_id": post.board_id,
             "title": post.title,
             "content": post.content,
-            "author_id": post.author_id,
-            "author_nickname": "Anonymous"
-            if post.is_anonymous or (hides_author_identity(board) and current_user.role != "admin")
-            else nickname,
-            "author_cohort": None
-            if post.is_anonymous or (hides_author_identity(board) and current_user.role != "admin")
-            else cohort,
+            "author_id": _visible_post_author_id(post, board, current_user),
+            "author_nickname": _post_author_nickname(post, board, current_user, nickname),
+            "author_cohort": _post_author_cohort(post, board, current_user, cohort),
             "is_anonymous": post.is_anonymous,
             "is_pinned": post.is_pinned,
             "is_notice": post.is_notice,
@@ -663,8 +712,7 @@ def update_post(
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
-    _require_post_read(db, post, current_user)
-    board = db.get(Board, post.board_id)
+    board = require_post_read(db, post, current_user)
     if board is not None:
         _enforce_council_management_policy(board, current_user)
         _validate_admin_participation_post(board, payload.metadata, current_user)
@@ -701,10 +749,9 @@ def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User 
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
-    _require_post_read(db, post, current_user)
+    board = require_post_read(db, post, current_user)
     if post.author_id != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
-    board = db.get(Board, post.board_id)
     if board is not None:
         _enforce_council_management_policy(board, current_user)
     if board is not None and board.board_type == "suggestion" and current_user.role != "admin":
@@ -761,7 +808,7 @@ def toggle_like(post_id: int, db: Session = Depends(get_db), current_user: User 
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
-    _require_post_read(db, post, current_user)
+    require_post_read(db, post, current_user)
 
     like = db.scalar(select(Like).where(Like.post_id == post_id, Like.user_id == user_id))
     if like is None:
@@ -794,7 +841,7 @@ def toggle_bookmark(post_id: int, db: Session = Depends(get_db), current_user: U
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
-    _require_post_read(db, post, current_user)
+    require_post_read(db, post, current_user)
 
     bookmark = db.scalar(select(Bookmark).where(Bookmark.post_id == post_id, Bookmark.user_id == user_id))
     if bookmark is None:

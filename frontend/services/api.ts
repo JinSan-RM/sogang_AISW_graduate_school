@@ -1,9 +1,14 @@
-import axios from "axios";
+import { create as createAxiosClient, isAxiosError } from "axios";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 import { useUserStore } from "../stores/userStore";
 import type {
+  AccountDeletionEmailRequest,
+  AccountDeletionEmailRequestResult,
+  AccountDeletionRequest,
+  AccountDeletionResult,
+  AccountDeletionVerifyRequest,
   ApiSuccess,
   AdminReportItem,
   AdminAuditLog,
@@ -33,34 +38,94 @@ import type {
   PrivacyPolicyVersion,
   RegistrationOptions,
 } from "../types";
+import {
+  createKeyedSingleFlight,
+  resolveApiBaseUrl,
+  resolveMediaUploadTimeoutMs,
+  shouldRetryWithCurrentAccessToken,
+} from "../utils/apiRuntime";
+import { mediaAccessEndpoint } from "../utils/mediaAccess";
 
 function getApiBaseUrl() {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
+  const expoConstants = Constants as any;
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    expoConstants.manifest2?.extra?.expoGo?.debuggerHost ??
+    expoConstants.manifest?.debuggerHost;
 
-  if (Platform.OS !== "web") {
-    const expoConstants = Constants as any;
-    const hostUri =
-      Constants.expoConfig?.hostUri ??
-      expoConstants.manifest2?.extra?.expoGo?.debuggerHost ??
-      expoConstants.manifest?.debuggerHost;
-    const host = typeof hostUri === "string" ? hostUri.split(":")[0] : null;
-    if (host) {
-      return `http://${host}:8000/api`;
-    }
-  }
-
-  return "http://localhost:8000/api";
+  return resolveApiBaseUrl({
+    configuredUrl: process.env.EXPO_PUBLIC_API_URL,
+    platform: Platform.OS,
+    expoHostUri: typeof hostUri === "string" ? hostUri : null,
+  });
 }
 
 export const API_BASE_URL = getApiBaseUrl();
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+export const MEDIA_UPLOAD_TIMEOUT_MS = resolveMediaUploadTimeoutMs(
+  process.env.EXPO_PUBLIC_MEDIA_UPLOAD_TIMEOUT_MS,
+);
 
-export const api = axios.create({
+export const api = createAxiosClient({
   baseURL: API_BASE_URL,
   timeout: 10000,
 });
+
+const publicApi = createAxiosClient({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+});
+
+const refreshSession = createKeyedSingleFlight(async (refreshToken: string) => {
+  const response = await publicApi.post<
+    ApiSuccess<Omit<AuthSession, "user">>
+  >("/auth/refresh", {
+    refresh_token: refreshToken,
+  });
+  const currentSession = useUserStore.getState();
+  if (
+    !currentSession.user ||
+    currentSession.refreshToken !== refreshToken
+  ) {
+    throw new Error("Session changed while the refresh request was in flight.");
+  }
+
+  currentSession.setSession({
+    access_token: response.data.data.access_token,
+    refresh_token: response.data.data.refresh_token,
+    user: currentSession.user,
+  });
+  return response.data.data.access_token;
+});
+
+type MutableRequestHeaders = {
+  Authorization?: string;
+  authorization?: string;
+  get?: (name: string) => unknown;
+  set?: (name: string, value: string) => void;
+};
+
+function requestAuthorization(headers: unknown): unknown {
+  if (!headers || typeof headers !== "object") return undefined;
+  const candidate = headers as MutableRequestHeaders;
+  if (typeof candidate.get === "function") {
+    return candidate.get("Authorization");
+  }
+  return candidate.Authorization ?? candidate.authorization;
+}
+
+function setRequestAuthorization(
+  request: { headers?: unknown },
+  accessToken: string,
+) {
+  const headers = (request.headers ?? {}) as MutableRequestHeaders;
+  if (typeof headers.set === "function") {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  } else {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+  request.headers = headers;
+}
 
 api.interceptors.request.use((config) => {
   const token = useUserStore.getState().accessToken;
@@ -74,7 +139,6 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    const refreshToken = useUserStore.getState().refreshToken;
     const requestUrl = String(originalRequest?.url ?? "");
     const isRefreshRequest = requestUrl.includes("/auth/refresh");
 
@@ -83,26 +147,33 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    const session = useUserStore.getState();
+    const refreshToken = session.refreshToken;
     if (error.response?.status === 401 && refreshToken && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true;
-      try {
-        const response = await api.post<ApiSuccess<Omit<AuthSession, "user">>>("/auth/refresh", {
-          refresh_token: refreshToken,
-        });
-        const currentUser = useUserStore.getState().user;
-        if (!currentUser) {
-          throw new Error("Missing current user");
-        }
-        useUserStore.getState().setSession({
-          access_token: response.data.data.access_token,
-          refresh_token: response.data.data.refresh_token,
-          user: currentUser,
-        });
-        originalRequest.headers.Authorization = `Bearer ${response.data.data.access_token}`;
+      if (
+        shouldRetryWithCurrentAccessToken(
+          requestAuthorization(originalRequest.headers),
+          session.accessToken,
+        )
+      ) {
+        setRequestAuthorization(originalRequest, session.accessToken as string);
         return api(originalRequest);
-      } catch (refreshError) {
-        useUserStore.getState().clearSession();
       }
+
+      let accessToken: string;
+      try {
+        accessToken = await refreshSession(refreshToken);
+      } catch {
+        const currentSession = useUserStore.getState();
+        if (currentSession.refreshToken === refreshToken) {
+          currentSession.clearSession();
+        }
+        return Promise.reject(error);
+      }
+
+      setRequestAuthorization(originalRequest, accessToken);
+      return api(originalRequest);
     } else if (error.response?.status === 401 && requestUrl && !requestUrl.includes("/auth/")) {
       useUserStore.getState().clearSession();
     }
@@ -420,8 +491,22 @@ export const userApi = {
     const response = await api.put<ApiSuccess<{ changed: boolean }>>("/users/me/password", payload);
     return response.data;
   },
-  deactivateMe: async (payload?: { reason?: string }) => {
-    const response = await api.delete<ApiSuccess<{ deactivated: boolean }>>("/users/me", { data: payload ?? {} });
+  deleteMe: async (payload: AccountDeletionRequest) => {
+    const response = await api.delete<ApiSuccess<AccountDeletionResult>>("/users/me", { data: payload });
+    return response.data;
+  },
+  requestAccountDeletion: async (payload: AccountDeletionEmailRequest) => {
+    const response = await publicApi.post<ApiSuccess<AccountDeletionEmailRequestResult>>(
+      "/auth/account-deletion/request",
+      payload
+    );
+    return response.data;
+  },
+  verifyAccountDeletion: async (payload: AccountDeletionVerifyRequest) => {
+    const response = await publicApi.post<ApiSuccess<AccountDeletionResult>>(
+      "/auth/account-deletion/verify",
+      payload
+    );
     return response.data;
   },
   getActivity: async (params?: { type?: "posts" | "comments" | "bookmarks"; page?: number; size?: number }) => {
@@ -548,6 +633,7 @@ export const mediaApi = {
     formData.append("private", String(isPrivate));
     const response = await api.post<ApiSuccess<MediaAsset>>("/media/uploads", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: MEDIA_UPLOAD_TIMEOUT_MS,
       onUploadProgress: (event) => {
         if (event.total && onProgress) {
           onProgress(Math.round((event.loaded / event.total) * 100));
@@ -558,6 +644,22 @@ export const mediaApi = {
   },
   getPrivateDownloadLink: async (mediaId: number) => {
     const response = await api.get<ApiSuccess<{ url: string; expires_in: number }>>(`/media/${mediaId}/download-link`);
+    return response.data;
+  },
+  getAccessUrl: async (mediaId: number) => {
+    try {
+      const response = await api.get<ApiSuccess<{ url: string; expires_in: number }>>(mediaAccessEndpoint(mediaId));
+      return response.data;
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 404) throw error;
+      const legacyResponse = await api.get<ApiSuccess<{ url: string; expires_in: number }>>(`/media/${mediaId}/download-link`);
+      return legacyResponse.data;
+    }
+  },
+  getAccessUrlForPath: async (path: string) => {
+    const response = await api.get<ApiSuccess<{ url: string; expires_in: number }>>("/media/access-url", {
+      params: { path },
+    });
     return response.data;
   },
 };

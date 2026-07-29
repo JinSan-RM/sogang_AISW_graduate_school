@@ -4,13 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Alert, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { useCreatePost, useUpdatePost } from "../../../hooks/usePosts";
-import { API_ORIGIN, postApi, userApi } from "../../../services/api";
+import { MediaImageBackground } from "../../../components/MediaImage";
+import { postApi, userApi } from "../../../services/api";
 import type { MediaAsset, PostListItem, UserSearchItem } from "../../../types";
 import { pickAndUploadDocuments, pickAndUploadImages } from "../../../utils/mediaPicker";
 
@@ -94,11 +95,6 @@ function activitySelectPlaceholder(slug?: string) {
 
 function participantLabel(user: UserSearchItem) {
   return [user.cohort ? `${user.cohort}기` : null, user.nickname].filter(Boolean).join(" ");
-}
-
-function mediaUrl(value?: string | null) {
-  if (!value) return null;
-  return /^(https?:|file:|blob:|data:)/.test(value) ? value : `${API_ORIGIN}${value}`;
 }
 
 type SelectionOption = { key: string; label: string };
@@ -476,7 +472,7 @@ export default function PostCreateScreen() {
     const generatedMutualAidTitle = `${clean(values.category) ?? "경조사"} 상조회 신청`;
     const payload = {
       title: isActivity ? clean(values.title) ?? clean(values.category) ?? generatedActivityTitle : isMutualAid ? generatedMutualAidTitle : clean(values.title) as string,
-      content: isAlbum ? "" : values.content ?? "",
+      content: isAlbum ? (clean(values.title) as string) : values.content ?? "",
       category: isAlbum ? undefined : clean(values.category),
       metadata: buildMetadata(values),
       attachment_ids: attachmentIds,
@@ -591,9 +587,8 @@ export default function PostCreateScreen() {
               {imageAttachments.length > 0 ? (
                 <View style={styles.activityPhotoGrid}>
                   {imageAttachments.map((attachment) => {
-                    const url = mediaUrl(attachment.url);
                     return (
-                      <ImageBackground key={attachment.id} source={url ? { uri: url } : undefined} imageStyle={styles.activityPhotoTileImage} style={styles.activityPhotoTile}>
+                      <MediaImageBackground key={attachment.id} media={attachment} imageStyle={styles.activityPhotoTileImage} style={styles.activityPhotoTile}>
                         <Pressable
                           accessibilityLabel={`${attachment.original_filename} 삭제`}
                           hitSlop={6}
@@ -602,7 +597,7 @@ export default function PostCreateScreen() {
                         >
                           <Ionicons name="close" size={12} color="#FFFFFF" />
                         </Pressable>
-                      </ImageBackground>
+                      </MediaImageBackground>
                     );
                   })}
                   <View style={styles.activityPhotoAddTile}>
@@ -1087,11 +1082,10 @@ export default function PostCreateScreen() {
           {imageAttachments.length > 0 ? (
             <View style={styles.writeImageGrid}>
               {imageAttachments.map((attachment) => {
-                const previewUrl = mediaUrl(attachment.url);
                 return (
-                  <ImageBackground
+                  <MediaImageBackground
                     key={attachment.id}
-                    source={previewUrl ? { uri: previewUrl } : undefined}
+                    media={attachment}
                     imageStyle={styles.writeImageThumbImage}
                     style={styles.writeImageThumb}
                   >
@@ -1102,7 +1096,7 @@ export default function PostCreateScreen() {
                     >
                       <Ionicons name="close" size={12} color="#FFFFFF" />
                     </Pressable>
-                  </ImageBackground>
+                  </MediaImageBackground>
                 );
               })}
             </View>

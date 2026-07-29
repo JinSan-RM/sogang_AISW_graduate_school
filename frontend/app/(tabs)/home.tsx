@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
-  ImageBackground,
   Linking,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -20,11 +19,13 @@ import {
   View,
 } from "react-native";
 
+import { MediaImageBackground } from "../../components/MediaImage";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
+import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 
 const COLORS = {
   primary: "#2761FF",
@@ -75,10 +76,7 @@ const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
 type IconName = keyof typeof Ionicons.glyphMap;
 
 function mediaUrl(value?: string | null) {
-  if (!value) {
-    return null;
-  }
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
+  return toAbsoluteMediaUrl(value, API_ORIGIN);
 }
 
 function pickBannerImage(banner: BannerItem | undefined, width: number) {
@@ -293,6 +291,18 @@ function HomeEmptyState({ type }: { type: "notices" | "popular" | "album" }) {
   );
 }
 
+function HomeErrorState({ label, onRetry }: { label: string; onRetry: () => void }) {
+  return (
+    <View style={styles.emptyState}>
+      <Ionicons name="cloud-offline-outline" size={30} color="#AAB2BF" />
+      <Text style={styles.emptyStateTitle}>{label}을 불러오지 못했습니다.</Text>
+      <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retryButton}>
+        <Text style={styles.retryButtonText}>다시 시도</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function HomeBanner({
   banner,
   index,
@@ -379,13 +389,13 @@ function HomeBanner({
   );
 
   const bannerView = imageUrl ? (
-    <ImageBackground
-      source={{ uri: imageUrl }}
+    <MediaImageBackground
+      media={{ url: imageUrl }}
       imageStyle={styles.bannerImage}
       style={[styles.banner, isPlain ? styles.plainBanner : null, { width, backgroundColor: theme.bg, borderColor: theme.border ?? "transparent" }]}
     >
       {content}
-    </ImageBackground>
+    </MediaImageBackground>
   ) : (
     <View style={[styles.banner, isPlain ? styles.plainBanner : null, { width, backgroundColor: theme.bg, borderColor: theme.border ?? "transparent" }]}>{content}</View>
   );
@@ -485,10 +495,14 @@ function HomeBannerCarousel({ banners }: { banners: BannerItem[] }) {
 function NoticeList({
   posts,
   loading,
+  isError,
+  onRetry,
   boardId,
 }: {
   posts: PostListItem[];
   loading: boolean;
+  isError: boolean;
+  onRetry: () => void;
   boardId?: number;
 }) {
   if (loading) {
@@ -497,6 +511,10 @@ function NoticeList({
         <ActivityIndicator size="small" color={COLORS.primary} />
       </View>
     );
+  }
+
+  if (isError) {
+    return <HomeErrorState label="공지사항" onRetry={onRetry} />;
   }
 
   const rows = posts.slice(0, 2);
@@ -649,7 +667,11 @@ function AlbumStrip({ posts }: { posts: PostListItem[] }) {
         return (
           <Pressable key={post.id} onPress={() => router.push(`/board/post/${post.id}` as never)} style={styles.albumCard}>
             {image ? (
-              <ImageBackground source={{ uri: image }} imageStyle={styles.albumImage} style={styles.albumImageBox} />
+              <MediaImageBackground
+                media={{ id: post.thumbnail_media_id, url: image }}
+                imageStyle={styles.albumImage}
+                style={styles.albumImageBox}
+              />
             ) : (
               <LinearGradient
                 colors={ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length]}
@@ -680,7 +702,12 @@ export default function HomeScreen() {
   const compact = false;
   const monthStart = dateKey(new Date(month.getFullYear(), month.getMonth(), 1));
   const monthEnd = dateKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
-  const { data: boardGroups, isLoading: boardsLoading } = useBoardsQuery();
+  const {
+    data: boardGroups,
+    isError: boardsError,
+    isLoading: boardsLoading,
+    refetch: refetchBoards,
+  } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardGroups?.data), [boardGroups?.data]);
   const noticeBoardId = useMemo(() => findBoardId(boards, NOTICE_BOARD_SLUGS, "notices"), [boards]);
   const popularBoardId = useMemo(() => findBoardId(boards, POPULAR_BOARD_SLUGS, "community"), [boards]);
@@ -741,19 +768,57 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <HomeBannerCarousel banners={banners} />
+      {bannersQuery.isLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      ) : bannersQuery.isError ? (
+        <HomeErrorState label="홈 배너" onRetry={() => void bannersQuery.refetch()} />
+      ) : (
+        <HomeBannerCarousel banners={banners} />
+      )}
 
       <SectionHeader title="공지사항" onPress={() => router.push("/(tabs)/notices" as never)} />
-      <NoticeList posts={notices} loading={noticesQuery.isLoading || boardsLoading} boardId={noticeBoardId} />
+      <NoticeList
+        posts={notices}
+        loading={noticesQuery.isLoading || boardsLoading}
+        isError={boardsError || noticesQuery.isError}
+        onRetry={() => void Promise.all([refetchBoards(), noticesQuery.refetch()])}
+        boardId={noticeBoardId}
+      />
 
       <SectionHeader title="서강생활 일정" />
-      <CalendarCard events={events} month={month} />
+      {eventsQuery.isLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      ) : eventsQuery.isError ? (
+        <HomeErrorState label="일정" onRetry={() => void eventsQuery.refetch()} />
+      ) : (
+        <CalendarCard events={events} month={month} />
+      )}
 
       <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((popularBoardId ? `/board/${popularBoardId}` : "/(tabs)/boards") as never)} />
-      <PopularPosts posts={popularPosts} compact={compact} />
+      {popularQuery.isLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      ) : boardsError || popularQuery.isError ? (
+        <HomeErrorState label="인기 게시글" onRetry={() => void Promise.all([refetchBoards(), popularQuery.refetch()])} />
+      ) : (
+        <PopularPosts posts={popularPosts} compact={compact} />
+      )}
 
       <SectionHeader title="📸 행사 사진첩" onPress={() => router.push((albumBoardId ? `/board/${albumBoardId}` : "/(tabs)/boards") as never)} />
-      <AlbumStrip posts={albumPosts} />
+      {albumQuery.isLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      ) : boardsError || albumQuery.isError ? (
+        <HomeErrorState label="행사 사진첩" onRetry={() => void Promise.all([refetchBoards(), albumQuery.refetch()])} />
+      ) : (
+        <AlbumStrip posts={albumPosts} />
+      )}
     </ScrollView>
   );
 }
@@ -995,6 +1060,18 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     lineHeight: 18,
     marginTop: 8,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 12,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   noticeList: {
     borderRadius: 0,

@@ -25,6 +25,32 @@ export type AuthSession = {
   user: AuthUser;
 };
 
+export type AccountDeletionRequest = {
+  current_password: string;
+};
+
+export type AccountDeletionResult = {
+  deleted: boolean;
+  receipt_id: string;
+  completed_at: string;
+};
+
+export type AccountDeletionEmailRequest = {
+  email: string;
+};
+
+export type AccountDeletionEmailRequestResult = {
+  accepted: boolean;
+  expires_in: number;
+  resend_in: number;
+};
+
+export type AccountDeletionVerifyRequest = {
+  email: string;
+  code: string;
+  current_password: string;
+};
+
 export type MajorOption = {
   id: number;
   name: string;
@@ -122,7 +148,7 @@ export type PostListItem = {
   board_type?: string;
   title: string;
   content_preview: string;
-  author_id: number;
+  author_id: number | null;
   author_nickname: string;
   author_cohort?: string | null;
   is_anonymous: boolean;
@@ -134,6 +160,7 @@ export type PostListItem = {
   suggestion?: SuggestionDetail | null;
   mutual_aid?: MutualAidDetail | null;
   attachment_count?: number;
+  thumbnail_media_id?: number | null;
   thumbnail_url?: string | null;
   view_count: number;
   like_count: number;
@@ -152,7 +179,7 @@ export type PostDetail = {
   board_id: number;
   title: string;
   content: string;
-  author_id: number;
+  author_id: number | null;
   author_nickname: string;
   author_cohort?: string | null;
   is_anonymous: boolean;
@@ -399,6 +426,7 @@ export type UserMe = {
   job_title?: string;
   position?: string;
   profile_image_url?: string | null;
+  profile_image_media_id?: number | null;
   email: string;
   role: string;
   created_at?: string | null;

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.notification import PushDelivery, PushToken
+from app.monitoring import send_operational_alert
 from app.security import utc_now
 
 
@@ -94,9 +95,14 @@ def send_push_to_user(
         for delivery in deliveries:
             delivery.status = "failed"
             delivery.error_message = last_error or "Unknown Expo push error"
+        send_operational_alert(
+            "push.send.failed",
+            context={"delivery_count": len(deliveries)},
+        )
         return
 
     tickets = result.get("data", []) if isinstance(result, dict) else []
+    rejected = 0
     for index, delivery in enumerate(deliveries):
         ticket = tickets[index] if index < len(tickets) and isinstance(tickets[index], dict) else {}
         if ticket.get("status") == "ok":
@@ -104,11 +110,17 @@ def send_push_to_user(
             delivery.ticket_id = ticket.get("id")
             delivery.error_message = None
         else:
+            rejected += 1
             details = ticket.get("details") if isinstance(ticket.get("details"), dict) else {}
             error_code = details.get("error")
             delivery.status = "failed"
             delivery.error_message = str(ticket.get("message") or error_code or "Expo rejected push")[:1000]
             _deactivate_invalid_token(tokens[index], error_code)
+    if rejected:
+        send_operational_alert(
+            "push.ticket.rejected",
+            context={"delivery_count": len(deliveries), "failed_count": rejected},
+        )
 
 
 def sync_push_receipts(db: Session, *, limit: int = 300) -> dict:
@@ -129,6 +141,10 @@ def sync_push_receipts(db: Session, *, limit: int = 300) -> dict:
         result = _post_json(EXPO_RECEIPTS_URL, {"ids": [item.ticket_id for item in deliveries]})
     except (OSError, ValueError, error.URLError) as exc:
         logger.warning("Expo receipt sync failed: %s", exc)
+        send_operational_alert(
+            "push.receipt_sync.failed",
+            context={"delivery_count": len(deliveries)},
+        )
         return {"checked": 0, "delivered": 0, "failed": 0, "error": "receipt_sync_failed"}
 
     receipts = result.get("data", {}) if isinstance(result, dict) else {}
@@ -159,4 +175,9 @@ def sync_push_receipts(db: Session, *, limit: int = 300) -> dict:
                 _deactivate_invalid_token(token, error_code)
             failed += 1
     db.commit()
+    if failed:
+        send_operational_alert(
+            "push.receipt.failed",
+            context={"checked_count": delivered + failed, "failed_count": failed},
+        )
     return {"checked": delivered + failed, "delivered": delivered, "failed": failed}

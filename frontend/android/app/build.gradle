@@ -3,6 +3,7 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def nativeBuildStagingDirectory = System.getenv("ANDROID_CXX_BUILD_STAGING_DIR")
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -96,6 +97,14 @@ android {
         versionName "0.1.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+
+        // Keep generated React Native codegen object paths below Ninja's
+        // Windows path limit even when the repository lives in a deep folder.
+        externalNativeBuild {
+            cmake {
+                arguments "-DCMAKE_OBJECT_PATH_MAX=200"
+            }
+        }
     }
     signingConfigs {
         debug {
@@ -110,9 +119,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // EAS Build injects the approved release signing configuration.
+            // Deliberately leave local release builds unsigned instead of using
+            // the debug key, which must never be accepted as a store artifact.
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
@@ -127,6 +136,24 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+    if (nativeBuildStagingDirectory) {
+        externalNativeBuild {
+            cmake {
+                // Android Gradle Plugin creates this directory. A short path
+                // avoids Windows Ninja's legacy MAX_PATH limit.
+                buildStagingDirectory nativeBuildStagingDirectory
+            }
+        }
+    }
+}
+
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+} else if (System.getenv("EAS_BUILD_PROFILE") == "production") {
+    throw new GradleException(
+        "Production Android builds require android/app/google-services.json. " +
+        "Provide GOOGLE_SERVICES_JSON as an EAS file environment variable."
+    )
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`

@@ -1,16 +1,29 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.account_deletion import purge_account_deletion_staging_files, purge_expired_account_deletion_receipts
 from app.config import settings
 from app.database import SessionLocal
-from app.errors import AppException, app_exception_handler
+from app.deps import get_db
+from app.errors import (
+    AppException,
+    app_exception_handler,
+    http_exception_handler,
+    request_validation_exception_handler,
+    unhandled_exception_handler,
+)
 from app import models  # noqa: F401
 from app.routers import admin, auth, banners, users, boards, posts, comments, events, faqs, media, notifications, registration, reports, search
-from app.seed import seed_initial_data
+from app.response import success_response
+from app.seed import seed_initial_data, seed_reference_data
 
 API_DESCRIPTION = """
 Sogang AI-SW Graduate Community backend.
@@ -22,7 +35,7 @@ and student council suggestion replies.
 
 OPENAPI_TAGS = [
     {"name": "auth", "description": "Login, registration verification, refresh, logout, and password reset."},
-    {"name": "users", "description": "My profile, password change, and account deactivation."},
+    {"name": "users", "description": "My profile, password change, and account deletion."},
     {"name": "boards", "description": "Board groups and board metadata."},
     {"name": "banners", "description": "Home banner list and admin banner management."},
     {"name": "posts", "description": "Board posts, detail, pinning, likes, bookmarks, and suggestion replies."},
@@ -43,8 +56,13 @@ async def lifespan(_: FastAPI):
     settings.validate_runtime()
     db = SessionLocal()
     try:
-        seed_initial_data(db)
+        if settings.is_deployed_environment:
+            seed_reference_data(db)
+        else:
+            seed_initial_data(db)
         media.migrate_private_files(db)
+        purge_account_deletion_staging_files()
+        purge_expired_account_deletion_receipts(db)
     finally:
         db.close()
     yield
@@ -58,6 +76,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[],
@@ -65,6 +86,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.trusted_hosts(),
+    www_redirect=False,
 )
 
 app.include_router(users.router, prefix="/api/users", tags=["users"])
@@ -81,12 +107,17 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 app.include_router(media.router, prefix="/api/media", tags=["media"])
 app.include_router(reports.router, prefix="/api", tags=["reports"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.mount("/uploads", StaticFiles(directory="uploads", check_dir=False), name="uploads")
 
 
 @app.get("/health")
 def health_check():
     return {"status": "success", "data": {"ok": True}}
+
+
+@app.get("/health/ready")
+def readiness_check(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return success_response({"ok": True, "database": "ready"})
 
 
 @app.get("/api-docs", include_in_schema=False)
@@ -158,7 +189,7 @@ def api_docs_landing() -> HTMLResponse:
                 Backend documentation hub for the community app. Use Swagger for interactive testing,
                 ReDoc for a clean reference view, and OpenAPI JSON for tooling.
               </p>
-              <p>Local base URL: <code>http://localhost:8000/api</code></p>
+              <p>API base path: <code>/api</code></p>
               <section class="grid">
                 <a href="/docs">Swagger UI<span>Interactive API tester</span></a>
                 <a href="/redoc">ReDoc<span>Readable API reference</span></a>

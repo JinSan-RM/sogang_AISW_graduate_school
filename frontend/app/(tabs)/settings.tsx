@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../../hooks/useApi";
-import { API_ORIGIN, authApi, notificationApi } from "../../services/api";
+import MediaImage from "../../components/MediaImage";
+import { authApi, notificationApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../../utils/pushTokenStorage";
+import { isAdminUser } from "../../utils/permissions";
 
 const COLORS = {
   primary: "#2761FF",
@@ -27,7 +29,7 @@ const MENU_ITEMS = [
   { title: "내가 쓴 글", href: "/settings/activity?type=posts" },
   { title: "스크랩한 글", href: "/settings/activity?type=bookmarks" },
   { title: "알림 설정", href: "/settings/notifications" },
-  { title: "계정 설정", href: "/settings/account" },
+  { title: "계정 및 데이터 삭제", href: "/settings/account" },
 ] as const;
 
 const ADMIN_QUICK_ITEMS: { title: string; href: string; icon: IconName }[] = [
@@ -37,19 +39,14 @@ const ADMIN_QUICK_ITEMS: { title: string; href: string; icon: IconName }[] = [
   { title: "전체 게시글", href: "/admin?section=posts", icon: "document-text-outline" },
 ];
 
-function mediaUrl(value?: string | null) {
-  if (!value) return null;
-  return value.startsWith("http") ? value : `${API_ORIGIN}${value}`;
-}
-
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { data } = useMeQuery();
+  const { data, isError, isLoading, refetch } = useMeQuery();
   const refreshToken = useUserStore((state) => state.refreshToken);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clearSession = useUserStore((state) => state.clearSession);
   const me = data?.data;
-  const image = mediaUrl(me?.profile_image_url);
+  const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
   const logout = async () => {
     const pushToken = await getStoredPushToken().catch(() => null);
@@ -82,9 +79,21 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+        {isError ? (
+          <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.loadErrorBox}>
+            <Text style={styles.loadErrorText}>프로필을 불러오지 못했습니다. 다시 시도</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => router.push("/settings/profile")} style={styles.profileRow}>
-          {image ? (
-            <Image source={{ uri: image }} style={styles.avatarImage} />
+          {isLoading ? (
+            <View style={styles.avatar}>
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            </View>
+          ) : hasProfileImage ? (
+            <MediaImage
+              media={{ id: me?.profile_image_media_id, url: me?.profile_image_url }}
+              style={styles.avatarImage}
+            />
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{me?.nickname?.slice(0, 1) ?? "?"}</Text>
@@ -107,6 +116,28 @@ export default function SettingsScreen() {
             </Pressable>
           ))}
         </View>
+
+        {isAdminUser(me) ? (
+          <View style={styles.adminPanel}>
+            <Pressable onPress={() => router.push("/admin" as never)} style={styles.adminEntry}>
+              <View style={styles.adminIcon}>
+                <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.primary} />
+              </View>
+              <View style={styles.adminTextWrap}>
+                <Text style={styles.adminTitle}>관리자 페이지</Text>
+                <Text style={styles.adminSubtitle}>배너, 공지사항, 게시판 설정</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.primary} />
+            </Pressable>
+            {ADMIN_QUICK_ITEMS.map((item) => (
+              <Pressable key={item.title} onPress={() => router.push(item.href as never)} style={styles.adminQuickRow}>
+                <Ionicons name={item.icon} size={18} color={COLORS.primary} />
+                <Text style={styles.adminQuickText}>{item.title}</Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
 
         {isAuthenticated ? (
           <Pressable onPress={logout} style={styles.logoutRow}>
@@ -152,6 +183,19 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 36,
+  },
+  loadErrorBox: {
+    borderRadius: 8,
+    backgroundColor: "#FFF1F2",
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  loadErrorText: {
+    color: COLORS.danger,
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "center",
   },
   profileRow: {
     flexDirection: "row",

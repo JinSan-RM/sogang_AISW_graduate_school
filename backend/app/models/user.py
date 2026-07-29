@@ -37,5 +37,5 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    posts = relationship("Post", backref="author")
-    comments = relationship("Comment", backref="author")
+    posts = relationship("Post", backref="author", passive_deletes=True)
+    comments = relationship("Comment", backref="author", passive_deletes=True)

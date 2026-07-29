@@ -18,7 +18,7 @@ def _settings_allows(db: Session, user_id: int, field: str) -> bool:
 def create_notification(
     db: Session,
     *,
-    user_id: int,
+    user_id: int | None,
     actor_id: int | None,
     notification_type: str,
     message: str,
@@ -27,6 +27,8 @@ def create_notification(
     setting_field: str | None = None,
     dedupe_key: str | None = None,
 ) -> Notification | None:
+    if user_id is None:
+        return None
     if actor_id is not None and user_id == actor_id:
         return None
     if dedupe_key and db.scalar(select(Notification.id).where(Notification.dedupe_key == dedupe_key)) is not None:
