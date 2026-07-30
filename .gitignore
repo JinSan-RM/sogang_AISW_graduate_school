@@ -81,13 +81,8 @@ frontend/expo-web.err.log
 # Local Git metadata backups
 frontend/.git.backup-*/
 
-# User-managed/generated docs and exports
-docs/
-*.csv
+# User-managed/generated exports
 AISW_app_architecture_gap_analysis.html
-AGENTS.md
-CODEX.md
-PLAN.md
 
 # OS / editor
 .DS_Store
