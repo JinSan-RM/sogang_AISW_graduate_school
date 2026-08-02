@@ -21,10 +21,16 @@ const legalDocumentSource = source("components/LegalDocumentScreen.tsx");
 const myPageDrawerSource = source("components/MyPageDrawer.tsx");
 const postCardSource = source("components/PostCard.tsx");
 const fontSource = source("utils/fonts.ts");
+const qaComposeSource = source("../docker-compose.qa.yml");
 
 test("global font patch flattens styles before they reach React DOM", () => {
-  assert.match(fontSource, /style: StyleSheet\.flatten\(\[\{ fontFamily \}, style\]\)/);
+  assert.match(fontSource, /style: \{ \.\.\.flattened, fontFamily \}/);
+  assert.doesNotMatch(fontSource, /style: StyleSheet\.flatten\(\[\{ fontFamily \}, style\]\)/);
   assert.doesNotMatch(fontSource, /style: \[\{ fontFamily \}, style\]/);
+});
+
+test("QA frontend restart clears Metro before serving updated web styles", () => {
+  assert.match(qaComposeSource, /npm run web -- --host lan --clear/);
 });
 
 test("#2 메인 배너는 설정된 목적지로 직접 이동한다", () => {

@@ -74,7 +74,7 @@ function patchComponent(component: PatchableComponent): void {
       // Text/TextInput's patched render can already be returning a host element
       // on web. React DOM requires its style prop to be an object, so never pass
       // the React Native style array through to the resulting <span>/<input>.
-      style: StyleSheet.flatten([{ fontFamily }, style]),
+      style: { ...flattened, fontFamily },
     } as Partial<typeof element.props>);
   };
   component.__interPatched = true;
