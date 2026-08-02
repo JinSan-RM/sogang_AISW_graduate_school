@@ -53,7 +53,12 @@ const CARD_ELEVATION = {
 };
 
 const NOTICE_BOARD_SLUGS = ["all-notices", "academic-notices", "general-notices", "webinar-notices"];
-const POPULAR_BOARD_SLUGS = ["community-major", "free-board", "lecture-reviews", "mutual-aid"];
+const POPULAR_BOARD_SLUGS = [
+  "community-major",
+  "community-seminar",
+  "lecture-reviews",
+  "mutual-aid",
+];
 const ALBUM_BOARD_SLUGS = ["activity-history", "event-album", "photo-album", "student-council"];
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MOBILE_WEB_WIDTH = 405;

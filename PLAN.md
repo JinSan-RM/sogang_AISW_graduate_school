@@ -146,6 +146,6 @@ Phase 5 QA can start when:
 
 Checked on 2026-07-27: these local entry conditions pass. This is not a store-release approval. Signed mobile artifacts, physical-device checks, live-host checks, the 18 external release inputs, and the frontend dependency-risk decision remain open and are tracked in `CODEX.md`.
 
-Checked on 2026-08-02: the backend suite passes 174 tests, and isolated PostgreSQL clean upgrade plus
+Checked on 2026-08-02: the backend suite passes 185 tests, and isolated PostgreSQL clean upgrade plus
 `0021`→`0022`→`0021`→`0022` migration rehearsal passes. Legacy source workbooks and CSV exports
 remain local-only migration inputs because they contain personal data and the repository is public.

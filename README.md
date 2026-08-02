@@ -47,7 +47,7 @@ docker compose @qaComposeArgs exec backend alembic upgrade head
 docker compose @qaComposeArgs exec backend alembic heads
 ```
 
-Expected single Alembic head: `0021_account_deletion_receipts`.
+Expected single Alembic head: `0022_legacy_import_records`.
 
 3. Open `http://localhost:58081`. The QA frontend runs `npm ci` on every
 container start and uses Expo Fast Refresh for changes under `frontend/`.

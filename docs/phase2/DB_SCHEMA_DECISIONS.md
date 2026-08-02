@@ -1,6 +1,6 @@
 # Phase 2 DB Schema Decisions
 
-Status: implemented baseline through `0021_account_deletion_receipts`, checked 2026-07-27
+Status: implemented baseline through `0022_legacy_import_records`, checked 2026-08-02
 
 ## 1. Core Decisions
 
@@ -556,4 +556,4 @@ The receipt deliberately has no user ID, email, IP address, free-form reason, or
 Checked on 2026-07-27: clean upgrade, `0019`→head, `0021`→`0019`→`0021`, exact unversioned `0001` recovery, and unknown-schema fail-closed behavior all passed against isolated PostgreSQL.
 
 Checked on 2026-08-02: a clean isolated PostgreSQL database upgraded to `0022`, and the
-`0021`→`0022`→`0021`→`0022` round trip passed. The current backend suite passes 174 tests.
+`0021`→`0022`→`0021`→`0022` round trip passed. The current backend suite passes 185 tests.

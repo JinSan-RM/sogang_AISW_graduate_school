@@ -28,6 +28,8 @@ import type {
   NotificationSettings,
   MediaAsset,
   MajorOption,
+  LegacyImportRecordItem,
+  LegacyImportSummaryItem,
   PostDetail,
   PostListItem,
   SearchResult,
@@ -704,6 +706,20 @@ export const adminApi = {
   },
   getAuditLogs: async (params?: { page?: number; size?: number; action?: string }) => {
     const response = await api.get<ApiSuccess<AdminAuditLog[]>>("/admin/audit-logs", { params });
+    return response.data;
+  },
+  getLegacyImportSummary: async () => {
+    const response = await api.get<ApiSuccess<LegacyImportSummaryItem[]>>("/admin/legacy-import/summary");
+    return response.data;
+  },
+  getLegacyImportRecords: async (params?: {
+    page?: number;
+    size?: number;
+    status?: string;
+    entity_type?: string;
+    source_id?: string;
+  }) => {
+    const response = await api.get<ApiSuccess<LegacyImportRecordItem[]>>("/admin/legacy-import/records", { params });
     return response.data;
   },
   dispatchEventReminders: async (targetDate?: string) => {

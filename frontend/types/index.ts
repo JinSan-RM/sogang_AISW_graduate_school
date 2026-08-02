@@ -405,6 +405,32 @@ export type AdminAuditLog = {
   created_at: string;
 };
 
+export type LegacyImportSummaryItem = {
+  entity_type: string;
+  status: string;
+  action: string;
+  count: number;
+};
+
+export type LegacyImportRecordItem = {
+  id: number;
+  source_file: string;
+  source_sheet: string;
+  source_row: number;
+  entity_type: string;
+  source_id: string;
+  source_parent_id?: string | null;
+  source_hash: string;
+  action: string;
+  status: string;
+  target_table?: string | null;
+  target_id?: number | null;
+  reason?: string | null;
+  redacted_details?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CommentNode = {
   id: number;
   post_id: number;
