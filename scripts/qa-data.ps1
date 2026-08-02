@@ -254,17 +254,35 @@ try {
 }
 
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("build", "backend"))
-$restoreScript = @"
-find /data/media -mindepth 1 -delete
-find /data/private-media -mindepth 1 -delete
-tar -C /data/media -xf /snapshot/public-media.tar
-tar -C /data/private-media -xf /snapshot/private-media.tar
-python -m app.migrate
-"@
-Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
-    "run", "--rm", "--no-deps", "--volume", "${snapshot}:/snapshot:ro",
-    "--entrypoint", "sh", "backend", "-ceu", $restoreScript
-))
+$restoreHelperName = ".qa-restore-media-$PID.sh"
+$restoreHelperPath = Join-Path $snapshot $restoreHelperName
+if (Test-Path -LiteralPath $restoreHelperPath) {
+    throw "Temporary restore helper already exists: $restoreHelperPath"
+}
+$restoreLines = @(
+    "#!/bin/sh",
+    "set -eu",
+    "find /data/media -mindepth 1 -delete",
+    "find /data/private-media -mindepth 1 -delete",
+    "tar -C /data/media -xf /snapshot/public-media.tar",
+    "tar -C /data/private-media -xf /snapshot/private-media.tar",
+    "python -m app.migrate"
+)
+try {
+    # Always write LF without a BOM. Git may check this PowerShell file out as
+    # CRLF on Windows, while the Linux container requires Unix shell endings.
+    [IO.File]::WriteAllText(
+        $restoreHelperPath,
+        (($restoreLines -join "`n") + "`n"),
+        [Text.UTF8Encoding]::new($false)
+    )
+    Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+        "run", "--rm", "--no-deps", "--volume", "${snapshot}:/snapshot:ro",
+        "--entrypoint", "sh", "backend", "-eu", "/snapshot/$restoreHelperName"
+    ))
+} finally {
+    Remove-Item -LiteralPath $restoreHelperPath -Force -ErrorAction SilentlyContinue
+}
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
     "up", "-d", "--build", "--wait", "--wait-timeout", "300"
 ))
