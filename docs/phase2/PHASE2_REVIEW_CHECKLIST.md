@@ -92,4 +92,4 @@ Go to Phase 3 only when:
 - Remaining gaps have owner and target date.
 - Any deliberate shortcut is documented in `CODEX.md`.
 
-Current result: Phase 3/4 implementation is complete enough for **Phase 5 QA Conditional GO**. Store release remains **NO-GO**: the local Android AAB is unsigned and non-candidate, the strict release configuration check is blocked by 18 approved external inputs, the frontend high-severity dependency risk has no owner decision, and signed builds/device/store/live-host checks remain open in `docs/release/RELEASE_GATE_CHECKLIST.md`.
+Current result: Phase 3/4 implementation is complete enough for **Phase 5 QA Conditional GO**. Store release remains **NO-GO**: the local Android AAB is unsigned and non-candidate, the strict release configuration check is blocked by 18 approved external inputs, the frontend high-severity dependency risk has no owner decision, and signed builds/device/store/live-host checks remain open in `CODEX.md`.

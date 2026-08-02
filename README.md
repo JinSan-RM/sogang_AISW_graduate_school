@@ -68,8 +68,6 @@ The mobile IA uses five bottom tabs: Home, Notices, Community, Participation, an
 - `AGENTS.md`: agent/coding rules
 - `CODEX.md`: implementation backlog
 - `docs/phase2/`: API, DB, auth, frontend route, and implementation contracts
-- `docs/phase2/RUNTIME_SMOKE_TEST.md`: manual runtime smoke test checklist
-- `docs/release/RELEASE_GATE_CHECKLIST.md`: fixed 50-item store-readiness gate and current blockers
 - `OPERATIONS.md`: production configuration, backup, restore, and worker operations
 
 ## Migration Notes
@@ -138,8 +136,8 @@ python scripts/send_test_email.py your-id@sogang.ac.kr
 
 Run the same commands inside the deployed backend container. A Cloudflare
 Tunnel exposes inbound HTTPS but does not carry outbound SMTP. The fixed-domain
-server deployment and restart-resilient signup test are documented in
-`docs/release/SERVER_SIGNUP_DEPLOYMENT.md`.
+server deployment, proxy, SMTP, restart, and signup checks are maintained in
+`OPERATIONS.md`.
 
 ## Backend API (Phase 1)
 - `GET /api/boards`
@@ -247,7 +245,7 @@ npm run doctor
 npm run export:web
 ```
 
-Run the authenticated PostgreSQL/API matrix in `docs/phase2/RUNTIME_SMOKE_TEST.md`. Historical results at revisions `0016` and `0019` do not close the current `0021` gate.
+Run the backend test suite and the QA/production Compose checks above. Historical results at revisions `0016`, `0019`, and `0021` do not close the current `0022` gate.
 
 Checked on 2026-07-27 against the current worktree:
 
@@ -260,6 +258,6 @@ Checked on 2026-07-27 against the current worktree:
 - containers: database and backend were healthy, the worker was running, and backend/worker ran as UID 10001; readiness, guest/user/admin HTTP checks, one-shot worker (`reminders=0`, `receipts=0`, `removed_rate_limits=0`, `removed_account_deletion_receipts=0`), production Compose build/config, and web `/healthz` plus deep-link fallback passed.
 - Android local release rehearsal: the same 115 frontend source files built a temporary unsigned AAB in an isolated short-path workspace; bundletool 1.18.3 validation, target API 36, 16 KB page alignment, release-manifest restrictions, and an extracted-artifact Gitleaks scan passed. That disposable bundle was unsigned and contained placeholder identity/development strings, so it was not a production or store candidate.
 
-These are local release-engineering results, not store approval. The strict release configuration check is still `BLOCKED_EXTERNAL` by 18 approved inputs. No EAS production variables, remote versions, signed production AAB, or iOS archive were created or inspected; the local unsigned bundle above does not close those gates. After the safe `postcss` 8.5.18 update, frontend runtime audit (`npm audit --omit=dev`) reports 33 affected entries: critical 0/high 19/moderate 14; the all-dependency audit reports 40: critical 0/high 26/moderate 14. Remaining remediation requires incompatible major overrides or a breaking Expo 57/React Native 0.86 decision. Use `docs/release/RELEASE_GATE_CHECKLIST.md` for the store Go/No-Go state.
+These are local release-engineering results, not store approval. The strict release configuration check is still `BLOCKED_EXTERNAL` by 18 approved inputs. No EAS production variables, remote versions, signed production AAB, or iOS archive were created or inspected; the local unsigned bundle above does not close those gates. After the safe `postcss` 8.5.18 update, frontend runtime audit (`npm audit --omit=dev`) reports 33 affected entries: critical 0/high 19/moderate 14; the all-dependency audit reports 40: critical 0/high 26/moderate 14. Remaining remediation requires incompatible major overrides or a breaking Expo 57/React Native 0.86 decision, so store release remains `NO-GO`.
 
 When `TEST_DATABASE_URL` is set, pytest drops and recreates all tables in that database. It refuses to run unless `APP_ENVIRONMENT=test`, `ALLOW_TEST_DB_RESET=1`, and the database name is exactly `test`, starts with `test_`, or ends with `_test`. Never point it at development or production data.

@@ -1,6 +1,6 @@
 # Phase 2 Auth and Permission Spec
 
-2026-07-05 override: `정책_정의서_260705.md` changes the launch access model to a member-only app. `guest` users may use login, signup/email verification, password reset, public account-deletion request/verify, token refresh, registration options, legal/support screens, and health/docs only. Board, post, comment, search, event, FAQ, media, banner, notification, settings, and admin APIs require an authenticated user unless a later policy document explicitly re-opens a public route. A signed media file URL is a short-lived capability issued only after an authenticated authorization check.
+2026-07-05 override: `정책_정의서_260705.pdf` changes the launch access model to a member-only app. `guest` users may use login, signup/email verification, password reset, public account-deletion request/verify, token refresh, registration options, legal/support screens, and health/docs only. Board, post, comment, search, event, FAQ, media, banner, notification, settings, and admin APIs require an authenticated user unless a later policy document explicitly re-opens a public route. A signed media file URL is a short-lived capability issued only after an authenticated authorization check.
 
 Status: implemented baseline, checked 2026-07-27
 

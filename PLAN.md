@@ -4,7 +4,7 @@ Source: Notion `App Development (New)` > `Community App Enhancement Schedule`.
 Source plan checked on: 2026-04-25. Current implementation and release evidence checked on: 2026-07-27.
 Scope: Phase 1 through Phase 4.
 
-Policy update checked on 2026-07-05: `정책_정의서_260705.md`, `AISW UI.pdf`, and `AISW APP DESIGN GUIDE _ 260624.pdf` are the current product/UI override for implementation details. The app is member-only: non-members may access login, signup/email verification, password reset, token refresh, registration options, legal screens, and health/docs, but no content route.
+Policy update checked on 2026-07-05: `정책_정의서_260705.pdf`, `AISW UI.pdf`, and `AISW APP DESIGN GUIDE _ 260624.pdf` are the current product/UI override for implementation details. The app is member-only: non-members may access login, signup/email verification, password reset, token refresh, registration options, legal screens, and health/docs, but no content route.
 
 QA override accepted on 2026-08-02 for bug #47: a new or changed mutual-aid event date is selectable from the `Asia/Seoul` calendar date D+2 onward. Past dates, today, and tomorrow are rejected by both the mobile form and API. This replaces the earlier unconfirmed `event date ±30 days` proposal for the implemented lower bound; no maximum future horizon is introduced without a separate council policy decision.
 
@@ -32,14 +32,12 @@ Phase 2 converted the Notion planning into concrete API, DB, auth, route, and im
 
 ## Phase 2 Source Documents
 
-- `docs/phase2/NOTION_PHASE2_DEVELOPMENT_GUIDE.md`
 - `docs/phase2/API_CONTRACT.md`
 - `docs/phase2/DB_SCHEMA_DECISIONS.md`
 - `docs/phase2/AUTH_PERMISSION_SPEC.md`
 - `docs/phase2/FRONTEND_ROUTE_SPEC.md`
 - `docs/phase2/IMPLEMENTATION_SEQUENCE.md`
 - `docs/phase2/PHASE2_REVIEW_CHECKLIST.md`
-- `docs/phase2/RUNTIME_SMOKE_TEST.md`
 
 ## Phase 3 Notion Plan
 
@@ -146,7 +144,7 @@ Phase 5 QA can start when:
 - Alembic has one head at `0022_legacy_import_records`; clean, recognized legacy, downgrade/upgrade rehearsal, and fail-closed unknown-schema behavior are verified.
 - Known issues are tagged as `Phase 5 QA`, `v1.1`, or `blocked`.
 
-Checked on 2026-07-27: these local entry conditions pass. This is not a store-release approval. Signed mobile artifacts, physical-device checks, live-host checks, the 18 external release inputs, and the frontend dependency-risk decision remain open in `docs/release/RELEASE_GATE_CHECKLIST.md`.
+Checked on 2026-07-27: these local entry conditions pass. This is not a store-release approval. Signed mobile artifacts, physical-device checks, live-host checks, the 18 external release inputs, and the frontend dependency-risk decision remain open and are tracked in `CODEX.md`.
 
 Checked on 2026-08-02: the backend suite passes 174 tests, and isolated PostgreSQL clean upgrade plus
 `0021`→`0022`→`0021`→`0022` migration rehearsal passes. Legacy source workbooks and CSV exports

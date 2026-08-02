@@ -1,6 +1,6 @@
 # Phase 2 API Contract
 
-2026-07-05 override: `정책_정의서_260705.md` supersedes Phase 2 guest-read assumptions for launch. Auth endpoints remain guest-capable, but content APIs now require a Bearer access token: boards, posts, comments, search, media, events, FAQs, banners, notifications, settings, reports, and admin APIs.
+2026-07-05 override: `정책_정의서_260705.pdf` supersedes Phase 2 guest-read assumptions for launch. Auth endpoints remain guest-capable, but content APIs now require a Bearer access token: boards, posts, comments, search, media, events, FAQs, banners, notifications, settings, reports, and admin APIs.
 
 Status: implemented baseline, checked against the current code on 2026-07-27
 Applies to: FastAPI backend and Expo frontend

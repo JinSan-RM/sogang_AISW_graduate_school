@@ -6,7 +6,7 @@ This file turns the Notion Phase 1-4 planning into concrete work for coding agen
 
 Use the Phase 2 contracts as the foundation, then execute Notion Phase 3 and Phase 4 as development sprints.
 
-2026-07-05 policy alignment: implement against `정책_정의서_260705.md` and AISW UI/design PDFs where they are more specific than Phase 2. Content routes are member-only; guest access is limited to login, signup/email verification, password recovery, refresh, registration options, legal screens, and health/docs.
+2026-07-05 policy alignment: implement against `정책_정의서_260705.pdf` and AISW UI/design PDFs where they are more specific than Phase 2. Content routes are member-only; guest access is limited to login, signup/email verification, password recovery, refresh, registration options, legal screens, and health/docs.
 
 ## Required Reading Before Coding
 
@@ -16,7 +16,6 @@ Use the Phase 2 contracts as the foundation, then execute Notion Phase 3 and Pha
 - DB changes: `docs/phase2/DB_SCHEMA_DECISIONS.md`
 - Auth and permissions: `docs/phase2/AUTH_PERMISSION_SPEC.md`
 - Frontend routes/screens: `docs/phase2/FRONTEND_ROUTE_SPEC.md`
-- Runtime verification: `docs/phase2/RUNTIME_SMOKE_TEST.md`
 
 ## Current Baseline
 
@@ -40,7 +39,7 @@ Known gaps:
 - Production startup uses non-authoritative reference seeding: it creates no demo user, preserves operator edits, and leaves custom boards active. Deterministic demo credentials remain non-production-only. A production-only, advisory-lock-protected one-time command promotes an existing active member as the first administrator and records a detail-free audit event.
 - CI declares `permissions: contents: read` and installs pinned `pip-audit==2.10.1` through `requirements-test.txt`; the daily worker receives the approved account-deletion receipt retention value and reports its cleanup count.
 - Checksum-verified Gitleaks 8.30.1 found zero findings across 43 commits and 298 current non-ignored files, and CI now scans full history. The final signed artifact still needs an independent secret scan.
-- Reproducible CycloneDX 1.6 SBOM and license review passed for the production backend image and frontend production tree: forbidden, strong-copyleft-only, and unknown licenses are all zero. `docs/release/DEPENDENCY_REVIEW.md` records the weak/file-level copyleft, dual-license, and font exceptions; final signed native notices remain a separate artifact check.
+- Reproducible CycloneDX 1.6 SBOM and license review passed for the production backend image and frontend production tree: forbidden, strong-copyleft-only, and unknown licenses are all zero. Weak/file-level copyleft, dual-license, font exceptions, and final signed native notices remain artifact-level review items.
 - Local Android release rehearsal: `:app:bundleRelease` succeeded after using a short CMake staging path; bundletool 1.18.3 validation passed, API 36 and 16 KB page alignment were confirmed, and the extracted unsigned AAB had zero Gitleaks findings. Its placeholder package/version and bundled localhost/development-client strings make it explicitly non-candidate evidence.
 - A provider-neutral operational-alert adapter sends structured non-PII events for unhandled API exceptions, notification-worker failures, and push send/ticket/receipt failures. Production requires an approved HTTPS webhook in both backend and worker environments; provider setup and live alert delivery are deployment blockers.
 - Mobile password reset screen exists.
@@ -80,7 +79,7 @@ P0 already covered:
 - Admin can manage FAQ content from the app without direct DB edits.
 - Admin can manage home banners, notice posts, board settings, and account status/roles from the app.
 - Completed P0 Figma alignment: home/notice sample fallbacks were removed, home banners are administrator-uploaded image-only assets, and notice deadlines are driven by admin data with D-day display and notification dispatch.
-- Completed P0 board-presentation alignment: member board dates follow the per-surface Figma matrix (`YY.MM.DD(weekday)` by default, schedule/home/notification exceptions documented in `FRONTEND_ROUTE_SPEC.md`), activity feeds use the selected activity date, Past Council activity dates survive admin edits, and comment timestamps switch from recent minutes to `HH:mm` as captured. Study recruitment and council activity rows match the approved variants, while `lecture-reviews` remains anonymous and comment-free.
+- Completed P0 board-presentation alignment: member board dates follow the per-surface Figma matrix (`YY.MM.DD(weekday)` by default, schedule/home/notification exceptions documented in `docs/phase2/FRONTEND_ROUTE_SPEC.md`), activity feeds use the selected activity date, Past Council activity dates survive admin edits, and comment timestamps switch from recent minutes to `HH:mm` as captured. Study recruitment and council activity rows match the approved variants, while `lecture-reviews` remains anonymous and comment-free.
 - Completed P0 privacy alignment: mutual-aid evidence uses private storage and short-lived signed downloads limited to the author and admins.
 - Completed P0 participant eligibility alignment: admins manage enrollment/dues status and participant search only returns active eligible members.
 - Completed P0 account/calendar alignment: password changes revoke refresh sessions, event categories match the mobile UI, and month-end event queries include the final day.
@@ -115,7 +114,7 @@ P0 already covered:
 Functional Swing2App replacement estimate:
 
 - UI/menu coverage is high, but release readiness is tracked separately from feature presence.
-- The fixed-denominator store readiness score is maintained in `docs/release/RELEASE_GATE_CHECKLIST.md`; do not infer production readiness from menu parity or local Compose success.
+- Store readiness remains `NO-GO` until signed builds, device/store/live-host checks, approved external inputs, and the frontend dependency-risk decision are complete; do not infer production readiness from menu parity or local Compose success.
 
 P0 launch-candidate hardening:
 
@@ -129,7 +128,7 @@ P0 launch-candidate hardening:
 - Completed: add production rate limiting for login, verification, password reset, reports, post/comment writes, and media upload.
 - Completed in code: native token storage uses SecureStore. Physical-device refresh/logout verification remains Phase 5 QA.
 - Run full route audit for guest/user/admin on iOS, Android, and web.
-- Completed locally: isolated Docker/API smoke reports `0021_account_deletion_receipts`; the exact command families and 2026-07-27 result are recorded in `docs/phase2/RUNTIME_SMOKE_TEST.md`.
+- Completed locally: isolated Docker/API smoke reached `0021_account_deletion_receipts` on 2026-07-27; the current 2026-08-02 migration rehearsal reaches `0022_legacy_import_records`.
 - Completed locally: PostgreSQL `pg_dump`/restore reproduced 30 tables with identical all-table row counts and column/index/constraint fingerprints; protected-media tar/restore reproduced identical checksums.
 - Completed locally: an unsigned Android release AAB built and passed bundletool, API 36, 16 KB page-alignment, merged-manifest, and extracted-artifact secret checks. It is not a production candidate because official release inputs and signing are absent and placeholder/development strings remain.
 - External release gate: `npm run release:check` remains blocked by 18 approved identifiers, assets, Firebase, URL, contact, operator, and policy inputs. EAS production variables, remote versions, production AAB, and iOS archive do not exist yet.
@@ -203,7 +202,7 @@ Scope:
 
 - Completed: mobile password reset request/verify/confirm screens.
 - Completed: frontend token refresh failure handling and logout fallback.
-- Completed in code: provider-independent STARTTLS/implicit-TLS transport, connection-only preflight, normalized signup delivery failure, one-time registration claim, remote-client timeout handling, and an optional Compose-managed Named Tunnel connector. Deployment-only: supply the Cloudflare token/dashboard routes and run the container SMTP/inbox and external-network restart signup tests in `docs/release/SERVER_SIGNUP_DEPLOYMENT.md`.
+- Completed in code: provider-independent STARTTLS/implicit-TLS transport, connection-only preflight, normalized signup delivery failure, one-time registration claim, remote-client timeout handling, and an optional Compose-managed Named Tunnel connector. Deployment-only: supply the Cloudflare token/dashboard routes and run the container SMTP/inbox and external-network restart signup tests described in `OPERATIONS.md`.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on successful login.
 - Completed: PostgreSQL-backed rate limiting for login, verification, password reset, reports, write-heavy endpoints, and media upload.
 

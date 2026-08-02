@@ -114,9 +114,9 @@ of the following:
 
 Cloudflare Tunnel is inbound HTTPS transport only. Authentication email leaves
 the backend directly through the SMTP provider, so the production host must
-allow provider DNS and outbound TCP 587 or 465. The complete named-tunnel,
-SMTP, proxy-IP, restart, and signup procedure is in
-`docs/release/SERVER_SIGNUP_DEPLOYMENT.md`.
+allow provider DNS and outbound TCP 587 or 465. Before go-live, verify the
+named tunnel routes, trusted proxy IPs, SMTP preflight, external signup inbox,
+and signup again after a backend restart.
 
 The Compose connector also needs outbound DNS plus TCP or UDP 7844 to
 Cloudflare. It needs no inbound firewall rule. Do not run an OS-installed
