@@ -1,8 +1,8 @@
 name: aisw-production
 
+# Production-only overlay. Combine with docker-compose.yml.
 services:
   db:
-    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env.production}
@@ -10,11 +10,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
     volumes:
       - production_pgdata:/var/lib/postgresql/data
-    # Intentionally no host port: PostgreSQL is reachable only on the Compose network.
+    # PostgreSQL is reachable only on the private Compose network.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
-      timeout: 5s
       retries: 10
     security_opt:
       - no-new-privileges:true
@@ -25,8 +23,6 @@ services:
         max-file: "5"
 
   backend:
-    build: ./backend
-    init: true
     read_only: true
     restart: unless-stopped
     env_file:
@@ -39,11 +35,8 @@ services:
       CLOUDFLARE_TUNNEL_IP: ${CLOUDFLARE_TUNNEL_IP:-172.30.250.14}
       RATE_LIMIT_TRUST_PROXY: ${RATE_LIMIT_TRUST_PROXY:?Set RATE_LIMIT_TRUST_PROXY in .env.production}
       RATE_LIMIT_TRUSTED_PROXY_IPS: ${RATE_LIMIT_TRUSTED_PROXY_IPS?Set RATE_LIMIT_TRUSTED_PROXY_IPS in .env.production}
-    depends_on:
-      db:
-        condition: service_healthy
-    # Keep the host binding on loopback. A host-local HTTPS reverse proxy or
-    # authenticated tunnel is the only supported public ingress.
+    # A host-local HTTPS reverse proxy or authenticated tunnel is the only
+    # supported public ingress.
     ports:
       - "127.0.0.1:${BACKEND_BIND_PORT:-8000}:8000"
     volumes:
@@ -93,7 +86,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    # Static web output also stays host-local and must be published through HTTPS.
+    # Static web output stays host-local and must be published through HTTPS.
     ports:
       - "127.0.0.1:${FRONTEND_BIND_PORT:-8080}:8080"
     networks:
@@ -174,16 +167,10 @@ services:
         max-file: "5"
 
   notification-worker:
-    build: ./backend
-    init: true
     read_only: true
-    command: ["python", "scripts/run_notification_scheduler.py"]
     restart: unless-stopped
     env_file:
       - ${PRODUCTION_WORKER_ENV_FILE:-.env.production.worker}
-    depends_on:
-      backend:
-        condition: service_healthy
     volumes:
       - production_media:/data/media
       - production_private_media:/data/private-media

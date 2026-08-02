@@ -182,6 +182,7 @@ Run from the target server, not the development desktop:
 
 $composeArgs = @(
   '--env-file', '.env.production',
+  '-f', 'docker-compose.yml',
   '-f', 'docker-compose.production.example.yml'
 )
 

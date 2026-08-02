@@ -1,49 +1,35 @@
+# Common Compose services.
+# Always combine this file with docker-compose.qa.yml or
+# docker-compose.production.example.yml.
 services:
   db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: sogang_app
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sogang_app"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+    init: true
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
-      # 로컬 테스트 편의: 인증코드 재전송 쿨다운 제거(운영 기본값은 app/config.py의 5분 유지)
-      EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "0"
-      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "0"
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   notification-worker:
-    build: ./backend
+    build:
+      context: ./backend
+    init: true
     command: ["python", "scripts/run_notification_scheduler.py"]
-    restart: unless-stopped
     depends_on:
-      db:
+      backend:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
-      NOTIFICATION_JOB_HOUR: "9"
-      NOTIFICATION_JOB_MINUTE: "0"
-      NOTIFICATION_JOB_RUN_ON_START: "false"
-    volumes:
-      - ./backend:/app
-
-volumes:
-  pgdata:

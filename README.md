@@ -8,11 +8,15 @@
 ## Structure
 - `backend/`: FastAPI server, SQLAlchemy models, Alembic migration
 - `frontend/`: Expo app with tabs + board/post/comment screens
-- `docker-compose.yml`: local PostgreSQL + backend + daily notification worker
+- `docker-compose.yml`: shared database, backend, and worker definitions
+- `docker-compose.qa.yml`: isolated QA settings and live Expo web development
+- `docker-compose.production.example.yml`: production-only security, storage, and ingress settings
 
 ## Quick Start
 
-Prerequisites: Docker Desktop, Node.js 22, and npm. For a host-only backend run, use Python 3.12 and PostgreSQL 16.
+Prerequisite for the complete local web stack: Docker Desktop. Node.js 22 and
+npm are needed only when running Expo directly on the host. For a host-only
+backend run, use Python 3.12 and PostgreSQL 16.
 
 1. Clone the repository and create local environment files. Example files contain placeholders only; never commit real secrets.
 
@@ -23,23 +27,32 @@ Copy-Item backend/.env.example backend/.env
 Copy-Item frontend/.env.example frontend/.env
 ```
 
-2. Validate and start PostgreSQL, the backend, and the notification worker.
+2. Validate and start the isolated QA stack. Always combine the shared Compose
+file with exactly one environment overlay.
 
 ```powershell
-docker compose config -q
-docker compose up -d --build
+$qaComposeArgs = @(
+  '-p', 'aisw_p0qa',
+  '-f', 'docker-compose.yml',
+  '-f', 'docker-compose.qa.yml'
+)
+docker compose @qaComposeArgs config -q
+docker compose @qaComposeArgs up -d --build --wait --wait-timeout 300
 ```
 
 The backend startup migration is safe for clean or recognized legacy databases. An unrecognized unversioned schema stops without stamping or changing data.
 
 ```powershell
-docker compose exec backend alembic upgrade head
-docker compose exec backend alembic heads
+docker compose @qaComposeArgs exec backend alembic upgrade head
+docker compose @qaComposeArgs exec backend alembic heads
 ```
 
 Expected single Alembic head: `0021_account_deletion_receipts`.
 
-3. Install the exact frontend dependencies and start Expo.
+3. Open `http://localhost:58081`. The QA frontend runs `npm ci` on every
+container start and uses Expo Fast Refresh for changes under `frontend/`.
+
+For Expo Go or native-device development, run Expo directly on the host:
 
 ```powershell
 cd frontend

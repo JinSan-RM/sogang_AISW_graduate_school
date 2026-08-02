@@ -1,26 +1,19 @@
+# Local isolated QA overlay. Combine with docker-compose.yml.
 services:
   db:
-    image: postgres:16
     environment:
       POSTGRES_DB: sogang_app_qa
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - qa_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sogang_app_qa"]
       interval: 2s
-      timeout: 5s
       retries: 30
 
   backend:
-    build:
-      context: ./backend
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app_qa
       APP_ENVIRONMENT: test
@@ -32,22 +25,45 @@ services:
       MEDIA_UPLOAD_DIR: /tmp/qa_uploads
       MEDIA_PRIVATE_UPLOAD_DIR: /tmp/qa_private_uploads
     ports:
-      - "58000:8000"
+      - "127.0.0.1:58000:8000"
     healthcheck:
-      test:
-        - CMD-SHELL
-        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"
       interval: 2s
-      timeout: 5s
       retries: 30
 
-  notification-worker:
-    build:
-      context: ./backend
-    command: ["python", "scripts/run_notification_scheduler.py"]
+  frontend-web:
+    image: node:22.16.0-alpine@sha256:41e4389f3d988d2ed55392df4db1420ad048ae53324a8e2b7c6d19508288107e
+    init: true
+    working_dir: /app
     depends_on:
       backend:
         condition: service_healthy
+    command:
+      - sh
+      - -lc
+      - npm ci --legacy-peer-deps && npm run web -- --host lan
+    environment:
+      BROWSER: "none"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_API_URL: ${QA_PUBLIC_API_URL:-http://localhost:58000/api}
+      EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS: "120000"
+    ports:
+      - "127.0.0.1:${QA_FRONTEND_BIND_PORT:-58081}:8081"
+    volumes:
+      - ./frontend:/app
+      - qa_frontend_node_modules:/app/node_modules
+      - qa_frontend_npm_cache:/root/.npm
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8081').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  notification-worker:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app_qa
       APP_ENVIRONMENT: test
@@ -59,3 +75,5 @@ services:
 
 volumes:
   qa_pgdata:
+  qa_frontend_node_modules:
+  qa_frontend_npm_cache:

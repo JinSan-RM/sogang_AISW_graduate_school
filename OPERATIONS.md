@@ -1,10 +1,12 @@
 # Runtime Operations
 
-This runbook applies only to `docker-compose.production.example.yml`. Commands
-must be run from the repository root. Windows examples use PowerShell; the
-production helper also has a Bash version for Linux servers. The verification
-evidence at the end is historical evidence, not an operating procedure or proof
-that the current host is ready for public traffic.
+This runbook applies to the shared `docker-compose.yml` plus the
+`docker-compose.production.example.yml` production overlay. Commands must be
+run from the repository root. Never run the production overlay by itself.
+Windows examples use PowerShell; the production helper also has a Bash version
+for Linux servers. The verification evidence at the end is historical evidence,
+not an operating procedure or proof that the current host is ready for public
+traffic.
 
 ## Production environment gate
 
@@ -168,6 +170,7 @@ For later manual operations in this PowerShell runbook, define:
 ```powershell
 $composeArgs = @(
   '--env-file', '.env.production',
+  '-f', 'docker-compose.yml',
   '-f', 'docker-compose.production.example.yml'
 )
 

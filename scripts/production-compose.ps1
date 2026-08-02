@@ -10,6 +10,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$composeBaseFile = Join-Path $repoRoot "docker-compose.yml"
 $composeFile = Join-Path $repoRoot "docker-compose.production.example.yml"
 
 function Resolve-RequiredFile {
@@ -120,7 +121,11 @@ try {
     Set-TemporaryProcessValue -Name "PRODUCTION_WORKER_ENV_FILE" -Value $resolvedWorkerEnvFile -OriginalValues $originalProcessValues
     Set-TemporaryProcessValue -Name "CLOUDFLARE_ENABLED" -Value $enabledText -OriginalValues $originalProcessValues
 
-    $baseArgs = @("--env-file", $resolvedEnvFile, "-f", $composeFile)
+    $baseArgs = @(
+        "--env-file", $resolvedEnvFile,
+        "-f", $composeBaseFile,
+        "-f", $composeFile
+    )
     $desiredArgs = @($baseArgs)
 
     if ($cloudflareEnabled) {

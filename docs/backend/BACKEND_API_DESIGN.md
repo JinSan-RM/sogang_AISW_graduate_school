@@ -204,19 +204,19 @@ Search supports post title/content/author lookup.
 Local Docker:
 
 ```bash
-docker compose up
+docker compose -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml up -d --build
 ```
 
 Backend restart after code/migration changes:
 
 ```bash
-docker compose restart backend
+docker compose -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml restart backend
 ```
 
 Check migration version:
 
 ```bash
-docker compose exec -T db psql -U postgres -d sogang_app -c "SELECT version_num FROM alembic_version;"
+docker compose -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml exec -T db psql -U postgres -d sogang_app_qa -c "SELECT version_num FROM alembic_version;"
 ```
 
 Recommended smoke checks:

@@ -6,6 +6,7 @@ env_file="${2:-.env.production}"
 worker_env_file="${3:-.env.production.worker}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "$script_dir/.." && pwd -P)"
+compose_base_file="$repo_root/docker-compose.yml"
 compose_file="$repo_root/docker-compose.production.example.yml"
 
 fail() {
@@ -104,7 +105,11 @@ export PRODUCTION_ENV_FILE="$resolved_env_file"
 export PRODUCTION_WORKER_ENV_FILE="$resolved_worker_env_file"
 export CLOUDFLARE_ENABLED="$enabled_text"
 
-base_args=(--env-file "$resolved_env_file" -f "$compose_file")
+base_args=(
+  --env-file "$resolved_env_file"
+  -f "$compose_base_file"
+  -f "$compose_file"
+)
 desired_args=("${base_args[@]}")
 
 if [[ "$enabled_text" == "true" ]]; then

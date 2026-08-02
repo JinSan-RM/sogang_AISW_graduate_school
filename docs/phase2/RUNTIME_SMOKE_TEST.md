@@ -1,10 +1,23 @@
 # Runtime Smoke Test
 
-Use the tracked `docker-compose.qa.yml` so verification never touches the normal development Compose project or its `pgdata` volume. The QA project uses:
+Use the shared `docker-compose.yml` with the tracked `docker-compose.qa.yml`
+overlay so verification never touches production containers or volumes. Set
+the Compose arguments once in the PowerShell session:
+
+```powershell
+$qaComposeArgs = @(
+  '-p', 'aisw_p0qa',
+  '-f', 'docker-compose.yml',
+  '-f', 'docker-compose.qa.yml'
+)
+```
+
+The QA project uses:
 
 - project name: `aisw_p0qa`
 - PostgreSQL host port: `55432`
 - backend host port: `58000`
+- Expo web host port: `58081`
 - dedicated volume: `aisw_p0qa_qa_pgdata`
 
 The test secret and disabled external providers in this file are for isolated local QA only.
@@ -14,19 +27,21 @@ The test secret and disabled external providers in this file are for isolated lo
 From the repository root:
 
 ```powershell
-docker compose -p aisw_p0qa -f docker-compose.qa.yml config -q
-docker compose -p aisw_p0qa -f docker-compose.qa.yml build
-docker compose -p aisw_p0qa -f docker-compose.qa.yml up -d
-docker compose -p aisw_p0qa -f docker-compose.qa.yml ps -a
+docker compose @qaComposeArgs config -q
+docker compose @qaComposeArgs build
+docker compose @qaComposeArgs up -d --wait --wait-timeout 300
+docker compose @qaComposeArgs ps -a
 ```
 
-Expected: database and backend are healthy; notification worker is running.
+Expected: database, backend, and Expo web are healthy; notification worker is
+running. The frontend performs a clean `npm ci` on container start and applies
+source changes through Expo Fast Refresh at `http://localhost:58081`.
 
 ## 2. Confirm Clean Migration and Seed
 
 ```powershell
-docker compose -p aisw_p0qa -f docker-compose.qa.yml exec -T backend alembic current --check-heads
-docker compose -p aisw_p0qa -f docker-compose.qa.yml exec -T db `
+docker compose @qaComposeArgs exec -T backend alembic current --check-heads
+docker compose @qaComposeArgs exec -T db `
   psql -U postgres -d sogang_app_qa -Atc `
   "SELECT version_num FROM alembic_version;
    SELECT 'users='||count(*) FROM users;
@@ -63,7 +78,7 @@ python -m venv .venv
 python -m pip install -r requirements.txt -r requirements-test.txt
 Set-Location ..
 
-docker compose -p aisw_p0qa -f docker-compose.qa.yml exec -T db `
+docker compose @qaComposeArgs exec -T db `
   createdb -U postgres sogang_app_test
 
 Set-Location backend
@@ -88,7 +103,7 @@ Never point `TEST_DATABASE_URL` at development, staging, or production data.
 Create another disposable database, build only revision `0001`, remove its version marker, and run the guarded migration entry point:
 
 ```powershell
-docker compose -p aisw_p0qa -f docker-compose.qa.yml exec -T db `
+docker compose @qaComposeArgs exec -T db `
   createdb -U postgres sogang_app_legacy_test
 
 Set-Location backend
@@ -97,7 +112,7 @@ $env:APP_ENVIRONMENT = "test"
 alembic upgrade 0001_phase1_init
 Set-Location ..
 
-docker compose -p aisw_p0qa -f docker-compose.qa.yml exec -T db `
+docker compose @qaComposeArgs exec -T db `
   psql -U postgres -d sogang_app_legacy_test -v ON_ERROR_STOP=1 `
   -c "DROP TABLE alembic_version;"
 
@@ -192,9 +207,9 @@ Expected:
 ## 8. Notification Worker
 
 ```powershell
-docker compose -p aisw_p0qa -f docker-compose.qa.yml exec -T backend `
+docker compose @qaComposeArgs exec -T backend `
   python scripts/run_notification_jobs.py
-docker compose -p aisw_p0qa -f docker-compose.qa.yml logs `
+docker compose @qaComposeArgs logs `
   --no-color --tail=100 backend notification-worker
 ```
 
@@ -246,7 +261,8 @@ Archive both protected media roots with `tar`, extract into a new disposable dir
 
 ## 12. Production Compose and Web Rehearsal
 
-Using temporary non-secret rehearsal values, validate and build `docker-compose.production.example.yml`. Confirm:
+Using temporary non-secret rehearsal values, validate and build the shared
+`docker-compose.yml` with `docker-compose.production.example.yml`. Confirm:
 
 - PostgreSQL, backend, and notification worker are healthy;
 - backend and worker run as UID `10001`;
@@ -262,14 +278,14 @@ This is a local topology check. It does not verify public DNS/TLS, production se
 First verify the exact QA project targets:
 
 ```powershell
-docker compose -p aisw_p0qa -f docker-compose.qa.yml ps -a
+docker compose @qaComposeArgs ps -a
 docker volume ls --filter "label=com.docker.compose.project=aisw_p0qa"
 ```
 
 Then remove only the disposable QA containers/network/volume:
 
 ```powershell
-docker compose -p aisw_p0qa -f docker-compose.qa.yml down -v
+docker compose @qaComposeArgs down -v
 ```
 
 Do not run `down -v` against the normal `aisw_app_renewal` project.
