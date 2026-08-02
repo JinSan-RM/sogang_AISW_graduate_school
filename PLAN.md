@@ -143,7 +143,11 @@ Phase 5 QA can start when:
 - All P0 mobile routes are reachable.
 - Guest/user/admin permissions, mutual-aid owner scope, and media access are verified by API tests.
 - Backend compile checks and frontend typecheck pass.
-- Alembic has one head at `0021_account_deletion_receipts`; clean, recognized legacy, downgrade/upgrade rehearsal, and fail-closed unknown-schema behavior are verified.
+- Alembic has one head at `0022_legacy_import_records`; clean, recognized legacy, downgrade/upgrade rehearsal, and fail-closed unknown-schema behavior are verified.
 - Known issues are tagged as `Phase 5 QA`, `v1.1`, or `blocked`.
 
 Checked on 2026-07-27: these local entry conditions pass. This is not a store-release approval. Signed mobile artifacts, physical-device checks, live-host checks, the 18 external release inputs, and the frontend dependency-risk decision remain open in `docs/release/RELEASE_GATE_CHECKLIST.md`.
+
+Checked on 2026-08-02: the backend suite passes 174 tests, and isolated PostgreSQL clean upgrade plus
+`0021`→`0022`→`0021`→`0022` migration rehearsal passes. Legacy source workbooks and CSV exports
+remain local-only migration inputs because they contain personal data and the repository is public.

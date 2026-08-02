@@ -1266,6 +1266,12 @@ Synchronizes Expo delivery receipts, records failures, and disables tokens rejec
 
 - `GET /admin/stats`: active users, posts, comments, notices, events, reports, and push-delivery metrics.
 - `GET /admin/audit-logs?page=1&size=30`: recent protected administrator actions.
+- `GET /admin/legacy-import/summary`: grouped legacy-import counts by entity type, status, and action.
+- `GET /admin/legacy-import/records?page=1&size=50`: paginated private reconciliation records.
+
+Both legacy-import endpoints require `admin`. The records endpoint accepts optional `status`,
+`entity_type`, and `source_id` filters and returns provenance, target linkage, bounded reason text,
+and redacted details only. It does not return the raw spreadsheet row or unredacted legacy content.
 
 ### GET `/users/nickname-availability`
 

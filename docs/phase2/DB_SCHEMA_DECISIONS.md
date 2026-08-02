@@ -401,6 +401,18 @@ Purpose: immutable record of protected administrator changes.
 
 Columns include actor, action, target type/id, JSON details, and creation timestamp.
 
+### `legacy_import_records`
+
+Purpose: private provenance and exception ledger for the one-time Swing2App data reconciliation.
+
+Columns include the source file/sheet/row identifier, entity and parent identifiers, a source-row
+hash, import action/status, optional target table/id, bounded reason text, redacted JSON details,
+and timestamps. Raw source rows are not copied into this table.
+
+The combination `(source_file, source_sheet, entity_type, source_id)` is unique. Status/entity and
+target table/id indexes support the admin-only review endpoints. The source XLSX/CSV files remain
+local migration inputs and are excluded from Git because they may contain personal data.
+
 ### `search_histories`
 
 Columns:
@@ -535,10 +547,13 @@ The receipt deliberately has no user ID, email, IP address, free-form reason, or
 
 ## 6. Existing Database Bootstrap Safety
 
-- The Alembic graph must have one head, currently `0021_account_deletion_receipts`.
+- The Alembic graph must have one head, currently `0022_legacy_import_records`.
 - A database without `alembic_version` is never stamped directly to `head` merely because a few tables or columns exist.
 - The bootstrap helper may stamp only a revision whose complete, versioned schema signature is recognized. Known legacy signatures and their target revisions are covered by tests.
 - An unknown or mixed signature fails without changing data and prints recovery guidance: back up the database, inspect the schema, and perform an explicit operator-approved stamp/migration.
 - A clean database follows `alembic upgrade head` without any bootstrap stamp.
 
 Checked on 2026-07-27: clean upgrade, `0019`→head, `0021`→`0019`→`0021`, exact unversioned `0001` recovery, and unknown-schema fail-closed behavior all passed against isolated PostgreSQL.
+
+Checked on 2026-08-02: a clean isolated PostgreSQL database upgraded to `0022`, and the
+`0021`→`0022`→`0021`→`0022` round trip passed. The current backend suite passes 174 tests.

@@ -144,11 +144,16 @@ Checklist:
 
 2026-07-27 implementation addendum:
 
-- Current Alembic head is `0021_account_deletion_receipts`.
+- Current Alembic head is `0022_legacy_import_records`.
 - Account deletion uses server-verified current-password hard deletion and a non-enumerating public email flow; it is not account deactivation.
 - SQLite and isolated PostgreSQL each pass 104/104 backend tests.
 - Local production Compose, web deep-link, migration, and backup/restore rehearsals pass.
 - Signed mobile builds, physical devices, live hosting, and store-console checks remain separate release gates and are not implied by Phase 2 completion.
+
+2026-08-02 migration addendum: the local backend suite passes 174 tests, and an isolated PostgreSQL
+clean upgrade plus `0021`→`0022`→`0021`→`0022` round trip passed. Legacy XLSX/CSV inputs are
+local-only personal-data-bearing migration sources; only the importer, redacted provenance ledger,
+tests, and operator documentation belong in Git.
 
 ## Recommended First Pull Requests
 
