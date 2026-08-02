@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.account_deletion import DELETED_USER_NICKNAME
@@ -642,7 +642,11 @@ def get_post_detail(
     post, nickname, cohort = row
     board = require_post_read(db, post, current_user)
 
-    post.view_count += 1
+    db.execute(
+        update(Post)
+        .where(Post.id == post.id)
+        .values(view_count=Post.view_count + 1, updated_at=post.updated_at)
+    )
 
     user_id = current_user.id
     is_liked = db.scalar(
