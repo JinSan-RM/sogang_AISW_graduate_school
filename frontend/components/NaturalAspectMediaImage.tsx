@@ -2,6 +2,7 @@ import { useState, type ComponentProps } from "react";
 import { StyleSheet } from "react-native";
 
 import MediaImage from "./MediaImage";
+import { imageDimensionsFromLoadEvent } from "../utils/imageDimensions";
 
 type Props = ComponentProps<typeof MediaImage> & {
   fallbackAspectRatio?: number;
@@ -14,9 +15,9 @@ export default function NaturalAspectMediaImage({ fallbackAspectRatio = 16 / 9, 
     <MediaImage
       {...props}
       onLoad={(event) => {
-        const { width, height } = event.nativeEvent.source;
-        if (width > 0 && height > 0) {
-          setAspectRatio(width / height);
+        const dimensions = imageDimensionsFromLoadEvent(event);
+        if (dimensions) {
+          setAspectRatio(dimensions.width / dimensions.height);
         }
         onLoad?.(event);
       }}
