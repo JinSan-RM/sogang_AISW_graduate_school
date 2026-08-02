@@ -17,15 +17,19 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app_qa
       APP_ENVIRONMENT: test
+      SEED_DEMO_DATA: "false"
       AUTH_SECRET_KEY: isolated-qa-secret-not-for-deployment
       RATE_LIMIT_ENABLED: "false"
       EXPO_PUSH_ENABLED: "false"
       EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "0"
       PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "0"
-      MEDIA_UPLOAD_DIR: /tmp/qa_uploads
-      MEDIA_PRIVATE_UPLOAD_DIR: /tmp/qa_private_uploads
+      MEDIA_UPLOAD_DIR: /data/media
+      MEDIA_PRIVATE_UPLOAD_DIR: /data/private-media
     ports:
-      - "127.0.0.1:58000:8000"
+      - "${QA_BIND_ADDRESS:-127.0.0.1}:${QA_BACKEND_BIND_PORT:-58000}:8000"
+    volumes:
+      - qa_media:/data/media
+      - qa_private_media:/data/private-media
     healthcheck:
       interval: 2s
       retries: 30
@@ -47,7 +51,7 @@ services:
       EXPO_PUBLIC_API_URL: ${QA_PUBLIC_API_URL:-http://localhost:58000/api}
       EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS: "120000"
     ports:
-      - "127.0.0.1:${QA_FRONTEND_BIND_PORT:-58081}:8081"
+      - "${QA_BIND_ADDRESS:-127.0.0.1}:${QA_FRONTEND_BIND_PORT:-58081}:8081"
     volumes:
       - ./frontend:/app
       - qa_frontend_node_modules:/app/node_modules
@@ -67,6 +71,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app_qa
       APP_ENVIRONMENT: test
+      SEED_DEMO_DATA: "false"
       AUTH_SECRET_KEY: isolated-qa-secret-not-for-deployment
       EXPO_PUSH_ENABLED: "false"
       NOTIFICATION_JOB_HOUR: "9"
@@ -75,5 +80,9 @@ services:
 
 volumes:
   qa_pgdata:
+  qa_media:
+    name: ${QA_MEDIA_VOLUME_NAME:-aisw-p0qa_qa_media}
+  qa_private_media:
+    name: ${QA_PRIVATE_MEDIA_VOLUME_NAME:-aisw-p0qa_qa_private_media}
   qa_frontend_node_modules:
   qa_frontend_npm_cache:

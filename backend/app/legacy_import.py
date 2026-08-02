@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -538,6 +538,31 @@ def _activity_certification_metadata(content: str, created_at: datetime, title: 
     participants: list[str] = []
     activity_date = created_at.date()
 
+    def add_participant(name: str, cohort_number: str = "") -> None:
+        name = name.strip()
+        if not re.fullmatch(r"[가-힣]{2,5}", name):
+            return
+        cohort = f"{cohort_number}기" if cohort_number else ""
+        label = f"{cohort} {name}".strip()
+        if label not in participants:
+            participants.append(label)
+
+    def parsed_date(candidate: str) -> date | None:
+        match = re.search(
+            r"(?:(?P<year>\d{2,4})\s*(?:년|[./-])\s*)?"
+            r"(?P<month>\d{1,2})\s*(?:월|[./-])\s*(?P<day>\d{1,2})",
+            candidate,
+        )
+        if not match:
+            return None
+        try:
+            year = int(match.group("year") or created_at.year)
+            if year < 100:
+                year += 2000
+            return date(year, int(match.group("month")), int(match.group("day")))
+        except ValueError:
+            return None
+
     for index, line in enumerate(lines):
         if line in participant_labels or line.startswith("[스터디원 이름"):
             for candidate in lines[index + 1:]:
@@ -560,26 +585,47 @@ def _activity_certification_metadata(content: str, created_at: datetime, title: 
                     candidate,
                     re.I,
                 )
+                grouped_cohort_match = re.match(
+                    r"^(?:\d+\.\s*)?(?P<cohort>\d{2})기?\s*[-:]\s*(?P<names>.+)$",
+                    candidate,
+                )
                 participant_match = re.match(
                     r"^(?:\d+\.\s*)?(?:(?P<cohort_first>\d{2})(?:기)?[\s_/]+(?P<name_after>[가-힣]{2,5})|"
                     r"(?P<name_first>[가-힣]{2,5})[\s_/]+(?P<cohort_after>\d{2})(?:기)?)",
                     candidate,
                 )
                 if legacy_student_match:
-                    cohort = f"{legacy_student_match.group('cohort')}기"
-                    name = legacy_student_match.group("name")
+                    add_participant(legacy_student_match.group("name"), legacy_student_match.group("cohort"))
+                    continue
+                if grouped_cohort_match:
+                    cohort_number = grouped_cohort_match.group("cohort")
+                    for name_part in re.split(r"[,，]", grouped_cohort_match.group("names")):
+                        name_match = re.search(r"[가-힣]{2,5}", name_part)
+                        if name_match:
+                            add_participant(name_match.group(), cohort_number)
+                    continue
                 elif participant_match:
                     cohort_number = participant_match.group("cohort_first") or participant_match.group("cohort_after") or ""
-                    cohort = f"{cohort_number}기" if cohort_number else ""
                     name = participant_match.group("name_after") or participant_match.group("name_first") or ""
                 else:
-                    name, cohort = normalize_author(candidate)
-                if not name or not re.fullmatch(r"[가-힣]{2,5}", name):
-                    continue
-                label = f"{cohort} {name}".strip() if cohort else name
-                if label not in participants:
-                    participants.append(label)
+                    name, normalized_cohort = normalize_author(candidate)
+                    cohort_number = (normalized_cohort or "").removesuffix("기")
+                add_participant(name, cohort_number)
             break
+
+    # Older study forms contain only a paid-member student ID next to each
+    # participant. The ID is used solely to recover the cohort and is never
+    # retained in the imported metadata.
+    legacy_identity_pattern = re.compile(
+        r"(?:(?P<name_first>[가-힣]{2,5})\s*\(\s*A(?P<cohort_after>\d{2})\d{3,}\s*\)|"
+        r"A(?P<cohort_first>\d{2})\d{3,}\s+(?P<name_after>[가-힣]{2,5}))",
+        re.I,
+    )
+    for match in legacy_identity_pattern.finditer(content):
+        add_participant(
+            match.group("name_first") or match.group("name_after") or "",
+            match.group("cohort_after") or match.group("cohort_first") or "",
+        )
 
     for index, line in enumerate(lines):
         if line not in date_labels and not line.startswith("[스터디 날짜"):
@@ -592,23 +638,16 @@ def _activity_certification_metadata(content: str, created_at: datetime, title: 
             ),
             "",
         )
-        match = re.search(
-            r"(?:(?P<year>\d{2,4})\s*(?:년|[./-])\s*)?(?P<month>\d{1,2})\s*(?:월|[./-])\s*(?P<day>\d{1,2})",
-            candidate,
-        )
-        if match:
-            try:
-                year = int(match.group("year") or created_at.year)
-                if year < 100:
-                    year += 2000
-                activity_date = datetime(
-                    year,
-                    int(match.group("month")),
-                    int(match.group("day")),
-                ).date()
-            except ValueError:
-                pass
+        extracted_date = parsed_date(candidate)
+        if extracted_date:
+            activity_date = extracted_date
         break
+
+    if activity_date == created_at.date():
+        meeting_date = re.search(r"모임일자\s*[:：]\s*([^\r\n]+)", content)
+        extracted_date = parsed_date(meeting_date.group(1) if meeting_date else content)
+        if extracted_date:
+            activity_date = extracted_date
 
     metadata = {
         "activity_date": activity_date.isoformat(),

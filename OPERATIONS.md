@@ -23,6 +23,10 @@ configuration, including weak auth secrets, default database credentials,
 missing SMTP, non-public URLs, non-durable media paths, disabled push/rate
 limiting, and broad CORS or Host rules.
 
+Keep `SEED_DEMO_DATA=false` for imported QA data and every deployed
+environment. Demo seeding is only for an intentionally disposable development
+database; reference seeding preserves operator-managed board metadata.
+
 Required production values:
 
 - `AUTH_SECRET_KEY`: random value of at least 32 characters.

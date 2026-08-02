@@ -27,30 +27,54 @@ Copy-Item backend/.env.example backend/.env
 Copy-Item frontend/.env.example frontend/.env
 ```
 
-2. Validate and start the isolated QA stack. Always combine the shared Compose
-file with exactly one environment overlay.
+2. Validate and start the isolated QA stack. This path does not require
+`.env.production` or production secrets. It binds to this desktop only, keeps
+the QA database/media in Docker volumes, and does not run demo-data seeding.
 
 ```powershell
-$qaComposeArgs = @(
-  '-p', 'aisw_p0qa',
-  '-f', 'docker-compose.yml',
-  '-f', 'docker-compose.qa.yml'
-)
-docker compose @qaComposeArgs config -q
-docker compose @qaComposeArgs up -d --build --wait --wait-timeout 300
+.\scripts\qa-compose.ps1 -Action Config
+.\scripts\qa-compose.ps1 -Action Up
 ```
 
 The backend startup migration is safe for clean or recognized legacy databases. An unrecognized unversioned schema stops without stamping or changing data.
 
 ```powershell
-docker compose @qaComposeArgs exec backend alembic upgrade head
-docker compose @qaComposeArgs exec backend alembic heads
+docker compose --env-file .env.qa.example -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml exec backend alembic upgrade head
+docker compose --env-file .env.qa.example -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml exec backend alembic heads
 ```
 
 Expected single Alembic head: `0022_legacy_import_records`.
 
 3. Open `http://localhost:58081`. The QA frontend runs `npm ci` on every
 container start and uses Expo Fast Refresh for changes under `frontend/`.
+
+Use `.\scripts\qa-compose.ps1 -Action Logs` for API/frontend logs and
+`.\scripts\qa-compose.ps1 -Action Down` to stop QA without deleting its data.
+To test from another device on the same private network, copy
+`.env.qa.example` to the ignored `.env.qa`, set `QA_BIND_ADDRESS=0.0.0.0`, and
+replace `localhost` in `QA_PUBLIC_API_URL` with the desktop's private LAN IP.
+Do not expose this QA configuration to the public internet.
+
+To move an already-reviewed PostgreSQL database and its media into this
+isolated QA stack, export a checksummed snapshot and restore it. Both the
+snapshot and real `.env.qa` stay ignored by Git.
+
+```powershell
+.\scripts\qa-data.ps1 -Action Export `
+  -SnapshotDirectory .codex-tmp\qa-data-snapshot `
+  -SourceDatabase <review-database-name> `
+  -PublicMediaDirectory <review-public-media-directory> `
+  -PrivateMediaDirectory <review-private-media-directory>
+
+.\scripts\qa-data.ps1 -Action Verify
+.\scripts\qa-data.ps1 -Action Restore
+```
+
+`Restore` only replaces the `aisw_p0qa` project's `sogang_app_qa` database and
+its two QA media volumes. It does not modify the source database. The package
+may contain personal/review data, so keep it out of Git and do not use it as a
+production dump until transient QA accounts, sessions, tokens, and logs have
+been explicitly sanitized.
 
 For Expo Go or native-device development, run Expo directly on the host:
 

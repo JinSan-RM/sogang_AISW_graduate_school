@@ -25,6 +25,7 @@ RFC1918_NETWORKS = (
 
 class Settings(BaseSettings):
     app_environment: str = "development"
+    seed_demo_data: bool | None = None
     database_url: str = "postgresql+psycopg://postgres:postgres@db:5432/sogang_app"
     app_name: str = "Sogang AI-SW Community API"
     app_version: str = "0.1.0"
@@ -92,6 +93,17 @@ class Settings(BaseSettings):
     @property
     def is_deployed_environment(self) -> bool:
         return self.normalized_environment in DEPLOYED_ENVIRONMENTS
+
+    @property
+    def uses_demo_seed(self) -> bool:
+        """Use deterministic fixtures only when explicitly enabled or local by default.
+
+        Imported QA databases opt out so an application restart cannot replace
+        operator-managed board metadata or create a demo administrator.
+        """
+        if self.seed_demo_data is not None:
+            return self.seed_demo_data
+        return not self.is_deployed_environment
 
     @staticmethod
     def _is_placeholder(value: str | None) -> bool:
@@ -231,6 +243,8 @@ class Settings(BaseSettings):
             )
         if not self.is_deployed_environment:
             return
+        if self.seed_demo_data:
+            raise RuntimeError("Deployment SEED_DEMO_DATA must not be enabled.")
         allowed_hosts = self._validated_public_hosts()
         if self._is_placeholder(self.auth_secret_key) or len(self.auth_secret_key) < 32:
             raise RuntimeError("Deployment AUTH_SECRET_KEY must be a non-default value with at least 32 characters.")

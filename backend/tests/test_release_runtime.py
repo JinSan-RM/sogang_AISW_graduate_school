@@ -66,6 +66,11 @@ def test_complete_production_runtime_is_accepted() -> None:
     production_settings().validate_runtime()
 
 
+def test_deployed_runtime_rejects_demo_seed() -> None:
+    with pytest.raises(RuntimeError, match="SEED_DEMO_DATA"):
+        production_settings(seed_demo_data=True).validate_runtime()
+
+
 def test_cloudflare_compose_ingress_with_exact_private_peer_is_accepted() -> None:
     production_settings(
         cloudflare_enabled=True,
@@ -289,17 +294,19 @@ def test_main_registers_trusted_host_middleware() -> None:
 
 
 @pytest.mark.parametrize(
-    ("environment", "expected_seed"),
+    ("environment", "seed_demo_data", "expected_seed"),
     [
-        ("development", "demo"),
-        ("test", "demo"),
-        ("staging", "reference"),
-        ("production", "reference"),
+        ("development", None, "demo"),
+        ("test", None, "demo"),
+        ("test", False, "reference"),
+        ("staging", None, "reference"),
+        ("production", None, "reference"),
     ],
 )
 def test_lifespan_seed_strategy_is_environment_scoped(
     monkeypatch: pytest.MonkeyPatch,
     environment: str,
+    seed_demo_data: bool | None,
     expected_seed: str,
 ) -> None:
     calls: list[str] = []
@@ -312,6 +319,7 @@ def test_lifespan_seed_strategy_is_environment_scoped(
 
     db = FakeSession()
     monkeypatch.setattr(settings, "app_environment", environment)
+    monkeypatch.setattr(settings, "seed_demo_data", seed_demo_data)
     monkeypatch.setattr(Settings, "validate_runtime", lambda _settings: None)
     monkeypatch.setattr(main_module, "SessionLocal", lambda: db)
     monkeypatch.setattr(main_module, "seed_initial_data", lambda _db: calls.append("demo"))

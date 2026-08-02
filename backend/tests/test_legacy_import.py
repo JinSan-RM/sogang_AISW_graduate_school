@@ -210,6 +210,35 @@ def test_activity_participants_skip_template_notes_and_remove_student_ids() -> N
     assert "A66071" not in study["participants"]
 
 
+def test_legacy_activity_extracts_grouped_cohorts_and_inline_date() -> None:
+    metadata = _activity_certification_metadata(
+        """[이름 / 기수]
+66기-최철, 정승연
+67기-권영환, 선용준
+
+모임일자: 2024.03.15""",
+        datetime(2024, 3, 20, 9, 0, 0),
+        "동아리 활동",
+    )
+
+    assert metadata["activity_date"] == "2024-03-15"
+    assert metadata["participants"] == "66기 최철, 66기 정승연, 67기 권영환, 67기 선용준"
+
+
+def test_legacy_activity_recovers_cohort_from_student_id_without_storing_id() -> None:
+    metadata = _activity_certification_metadata(
+        """4월 15일 모임에 참석했습니다.
+주정헌(A701234)
+A725678 변유철""",
+        datetime(2022, 4, 20, 9, 0, 0),
+        "스터디 활동",
+    )
+
+    assert metadata["activity_date"] == "2022-04-15"
+    assert metadata["participants"] == "70기 주정헌, 72기 변유철"
+    assert "A701234" not in metadata["participants"]
+
+
 def test_headerless_staging_sheet_and_duplicate_article_are_parsed(tmp_path: Path) -> None:
     path = tmp_path / "board_articles_ver2.xlsx"
     workbook = Workbook()

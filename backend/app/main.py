@@ -56,10 +56,10 @@ async def lifespan(_: FastAPI):
     settings.validate_runtime()
     db = SessionLocal()
     try:
-        if settings.is_deployed_environment:
-            seed_reference_data(db)
-        else:
+        if settings.uses_demo_seed:
             seed_initial_data(db)
+        else:
+            seed_reference_data(db)
         media.migrate_private_files(db)
         purge_account_deletion_staging_files()
         purge_expired_account_deletion_receipts(db)
