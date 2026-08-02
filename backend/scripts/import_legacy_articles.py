@@ -132,6 +132,14 @@ def main() -> None:
                     summary["reports"] = [str(path) for path in paths]
             else:
                 db.rollback()
+                if args.report_dir:
+                    args.report_dir.mkdir(parents=True, exist_ok=True)
+                    dry_run_path = args.report_dir / "migration-dry-run-summary.json"
+                    summary["reports"] = [str(dry_run_path)]
+                    dry_run_path.write_text(
+                        json.dumps(summary, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
     finally:
         engine.dispose()
     print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))

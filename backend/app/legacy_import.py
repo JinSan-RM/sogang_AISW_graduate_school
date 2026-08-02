@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -22,6 +23,7 @@ from openpyxl import load_workbook
 from sqlalchemy import func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.media_service import _matches_declared_content, media_access_reference, normalize_content_type
 from app.models.audit import LegacyImportRecord
@@ -103,6 +105,7 @@ NOTICE_CATEGORY = {
 EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])")
 PHONE_RE = re.compile(r"(?<!\d)(?:01[016789])[-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)")
 STUDENT_ID_RE = re.compile(r"(?<!\d)(?:19|20)\d{6,8}(?!\d)")
+LEGACY_STUDENT_ID_RE = re.compile(r"(?<![A-Za-z0-9])A\d{5,8}(?![A-Za-z0-9])", re.I)
 PLACEHOLDER_TITLE_RE = re.compile(r"^\s*\[?\s*강의\s*명\s*-\s*\d{4}년도\s*\d\s*학기\s*\]?\s*", re.I)
 
 ALLOWED_MIME_TYPES = {
@@ -258,9 +261,10 @@ def redact_text(value: Any) -> tuple[str, list[str]]:
     if PHONE_RE.search(text):
         findings.append("phone")
         text = PHONE_RE.sub("[연락처 비공개]", text)
-    if STUDENT_ID_RE.search(text):
+    if STUDENT_ID_RE.search(text) or LEGACY_STUDENT_ID_RE.search(text):
         findings.append("student_id")
         text = STUDENT_ID_RE.sub("[학번 비공개]", text)
+        text = LEGACY_STUDENT_ID_RE.sub("[학번 비공개]", text)
     return text, findings
 
 
@@ -499,10 +503,16 @@ def _post_payload(row: SourceRow, board: Board, author: User) -> dict[str, Any]:
         "legacy_pii_redacted": sorted(set(title_pii + body_pii)),
     }
     if board.board_type == "activity_certification":
-        metadata["activity_date"] = created_at.date().isoformat()
+        metadata.update(_activity_certification_metadata(normalized_body, created_at, title))
     if board.slug == "study-recruit":
         metadata["recruitment_status"] = "closed"
-    category = NOTICE_CATEGORY.get(row.sheet) if board.board_type == "notice" else row.sheet
+    if board.board_type == "notice":
+        category = NOTICE_CATEGORY.get(row.sheet)
+    elif row.sheet == "자유게시판":
+        # The workbook sheet is a staging bucket, not an end-user category.
+        category = board.name
+    else:
+        category = row.sheet
     return {
         "board_id": board.id,
         "author_id": author.id,
@@ -519,6 +529,94 @@ def _post_payload(row: SourceRow, board: Board, author: User) -> dict[str, Any]:
         "updated_at": updated_at,
         "deleted_at": None,
     }
+
+
+def _activity_certification_metadata(content: str, created_at: datetime, title: str) -> dict[str, str]:
+    lines = [line.strip() for line in content.splitlines()]
+    participant_labels = {"[이름 / 기수]", "[이름/기수]", "[참가자]", "[참여자]", "[참여 인원]"}
+    date_labels = {"[활동 날짜]", "[활동날짜]", "[활동 일자]", "[활동일자]", "[첫 활동일]"}
+    participants: list[str] = []
+    activity_date = created_at.date()
+
+    for index, line in enumerate(lines):
+        if line in participant_labels or line.startswith("[스터디원 이름"):
+            for candidate in lines[index + 1:]:
+                if candidate.startswith("[") and candidate.endswith("]"):
+                    if any(
+                        marker in candidate
+                        for marker in ("활동 날짜", "첫 활동일", "이미지", "스터디 날짜", "스터디 내용")
+                    ):
+                        break
+                    continue
+                if (
+                    not candidate
+                    or re.search(r"총\s*\d+\s*명", candidate)
+                    or re.search(r"\d{1,2}\s*[./월]\s*\d{1,2}", candidate)
+                    or "모임 참석" in candidate
+                ):
+                    continue
+                legacy_student_match = re.match(
+                    r"^(?:\d+\.\s*)?A(?P<cohort>\d{2})\d{3,}\s+(?P<name>[가-힣]{2,5})",
+                    candidate,
+                    re.I,
+                )
+                participant_match = re.match(
+                    r"^(?:\d+\.\s*)?(?:(?P<cohort_first>\d{2})(?:기)?[\s_/]+(?P<name_after>[가-힣]{2,5})|"
+                    r"(?P<name_first>[가-힣]{2,5})[\s_/]+(?P<cohort_after>\d{2})(?:기)?)",
+                    candidate,
+                )
+                if legacy_student_match:
+                    cohort = f"{legacy_student_match.group('cohort')}기"
+                    name = legacy_student_match.group("name")
+                elif participant_match:
+                    cohort_number = participant_match.group("cohort_first") or participant_match.group("cohort_after") or ""
+                    cohort = f"{cohort_number}기" if cohort_number else ""
+                    name = participant_match.group("name_after") or participant_match.group("name_first") or ""
+                else:
+                    name, cohort = normalize_author(candidate)
+                if not name or not re.fullmatch(r"[가-힣]{2,5}", name):
+                    continue
+                label = f"{cohort} {name}".strip() if cohort else name
+                if label not in participants:
+                    participants.append(label)
+            break
+
+    for index, line in enumerate(lines):
+        if line not in date_labels and not line.startswith("[스터디 날짜"):
+            continue
+        candidate = next(
+            (
+                value
+                for value in lines[index + 1:index + 5]
+                if value and not (value.startswith("[") and value.endswith("]"))
+            ),
+            "",
+        )
+        match = re.search(
+            r"(?:(?P<year>\d{2,4})\s*(?:년|[./-])\s*)?(?P<month>\d{1,2})\s*(?:월|[./-])\s*(?P<day>\d{1,2})",
+            candidate,
+        )
+        if match:
+            try:
+                year = int(match.group("year") or created_at.year)
+                if year < 100:
+                    year += 2000
+                activity_date = datetime(
+                    year,
+                    int(match.group("month")),
+                    int(match.group("day")),
+                ).date()
+            except ValueError:
+                pass
+        break
+
+    metadata = {
+        "activity_date": activity_date.isoformat(),
+        "legacy_activity_name": title,
+    }
+    if participants:
+        metadata["participants"] = ", ".join(participants)
+    return metadata
 
 
 def _assign_if_changed(target: Any, payload: dict[str, Any]) -> bool:
@@ -769,6 +867,11 @@ def import_articles_and_specials(
                 details={"title": redact_text(row.data.get("title"))[0]},
             )
             continue
+        if existing_post is not None:
+            # A resumed import must not undo engagement accumulated after the
+            # first migration rehearsal or after launch.
+            payload["view_count"] = max(existing_post.view_count, payload["view_count"])
+            payload["like_count"] = max(existing_post.like_count, payload["like_count"])
         if existing_post is None:
             post = Post(comment_count=0, **payload)
             db.add(post)
@@ -810,9 +913,22 @@ def import_articles_and_specials(
             board = boards.get(board_slug)
             if board is None:
                 raise RuntimeError(f"Missing required special board: {board_slug}")
-            metadata = dict(board.metadata_json or {})
+            metadata = copy.deepcopy(board.metadata_json or {})
+            existing_entries = {
+                str(entry.get("legacy_write_id")): entry
+                for entry in metadata.get(metadata_key, [])
+                if entry.get("legacy_write_id") is not None
+            }
+            for entry in special_rows:
+                existing_entry = existing_entries.get(str(entry["legacy_write_id"]))
+                if existing_entry is None:
+                    continue
+                for field in ("banner_image_url", "attachment_urls"):
+                    if existing_entry.get(field):
+                        entry[field] = copy.deepcopy(existing_entry[field])
             metadata[metadata_key] = special_rows
-            if board.metadata_json != metadata:
+            metadata_changed = board.metadata_json != metadata
+            if metadata_changed:
                 board.metadata_json = metadata
             row_by_id = {row.source_id: row for row in selected_rows if SPECIAL_SHEETS.get(row.sheet) == entity_type}
             for entry in special_rows:
@@ -821,7 +937,7 @@ def import_articles_and_specials(
                     db,
                     row_by_id[source_id],
                     entity_type=entity_type,
-                    action="upserted_metadata",
+                    action="updated" if metadata_changed else "unchanged",
                     status="imported",
                     target_table="boards",
                     target_id=board.id,
@@ -954,6 +1070,20 @@ def import_comments(
                         details={"preview": redact_text(row.data.get("content"))[0][:160]},
                     )
                 continue
+            if parent is not None and parent.parent_id is not None:
+                stats["over_depth_reply_comments"] += 1
+                if apply:
+                    upsert_ledger(
+                        db,
+                        row,
+                        entity_type="comment",
+                        action="archived",
+                        status="archived",
+                        source_parent_id=parent_source_id,
+                        reason="comment_depth_exceeds_two",
+                        details={"preview": redact_text(row.data.get("content"))[0][:160]},
+                    )
+                continue
             original_content = value_as_text(row.data.get("content"))
             content, findings = redact_text(original_content)
             created_at = parse_datetime(row.data.get("date"))
@@ -1024,8 +1154,11 @@ def import_comments(
             post.comment_count = actual_count
             legacy_updated_at = value_as_text((post.metadata_json or {}).get("legacy_updated_at"))
             restored_updated_at = parse_datetime(legacy_updated_at)
-            if restored_updated_at is not None:
+            if restored_updated_at is not None and db.is_modified(post, include_collections=False):
                 post.updated_at = restored_updated_at
+                # Force an explicit value so SQLAlchemy's on-update default cannot
+                # replace the historical timestamp when another field changed.
+                flag_modified(post, "updated_at")
     return stats
 
 
@@ -1035,15 +1168,92 @@ def _safe_filename(value: str, fallback: str) -> str:
     return (basename or fallback)[:255]
 
 
+def _download_url(value: str) -> str:
+    """Quote legacy object-storage paths without changing query parameters."""
+    parsed = urllib.parse.urlsplit(value)
+    quoted_path = urllib.parse.quote(urllib.parse.unquote(parsed.path), safe="/:@")
+    return urllib.parse.urlunsplit(
+        (parsed.scheme, parsed.netloc, quoted_path, parsed.query, parsed.fragment)
+    )
+
+
+def _detected_content_type(path: Path, *candidates: str) -> str:
+    """Return the MIME type supported by the app that matches the file bytes.
+
+    Legacy storage headers and filenames are not reliable. Candidate types still
+    take precedence for OLE containers, whose magic bytes alone cannot distinguish
+    Word, Excel, PowerPoint, and HWP documents.
+    """
+    detection_order = [
+        *(normalize_content_type(candidate) for candidate in candidates),
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/msword",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/x-hwp",
+        "application/haansofthwp",
+        "application/vnd.hancom.hwp",
+    ]
+    seen: set[str] = set()
+    for content_type in detection_order:
+        if content_type in seen or content_type not in ALLOWED_MIME_TYPES:
+            continue
+        seen.add(content_type)
+        if _matches_declared_content(path, content_type):
+            return content_type
+    return ""
+
+
+def _attach_media_to_special_entry(
+    board: Board,
+    *,
+    collection_key: str,
+    article_id: str,
+    media_url: str,
+) -> bool:
+    metadata = copy.deepcopy(board.metadata_json or {})
+    entries = list(metadata.get(collection_key) or [])
+    changed = False
+    for entry in entries:
+        if str(entry.get("legacy_write_id")) != article_id:
+            continue
+        attachment_urls = list(entry.get("attachment_urls") or [])
+        if media_url not in attachment_urls:
+            attachment_urls.append(media_url)
+            entry["attachment_urls"] = attachment_urls
+            changed = True
+        if not entry.get("banner_image_url"):
+            entry["banner_image_url"] = media_url
+            changed = True
+        break
+    if changed:
+        metadata[collection_key] = entries
+        board.metadata_json = metadata
+    return changed
+
+
 def _download_attachment(
     url: str,
     destination: Path,
     *,
     declared_name: str,
     maximum_bytes: int,
-) -> tuple[str, int, str]:
-    request = urllib.request.Request(url, headers={"User-Agent": "AISW-Legacy-Migration/1.0"})
+) -> tuple[str, int, str, Path]:
+    request = urllib.request.Request(
+        _download_url(url),
+        headers={"User-Agent": "AISW-Legacy-Migration/1.0"},
+    )
     temporary = destination.with_name(f".{destination.name}.part")
+    temporary.parent.mkdir(parents=True, exist_ok=True)
     temporary.unlink(missing_ok=True)
     digest = hashlib.sha256()
     total = 0
@@ -1065,17 +1275,19 @@ def _download_attachment(
         if total == 0:
             raise ValueError("empty_file")
         inferred_content_type = normalize_content_type(mimetypes.guess_type(declared_name)[0])
-        if content_type in {"application/octet-stream", "binary/octet-stream", ""} or (
-            content_type not in ALLOWED_MIME_TYPES and inferred_content_type in ALLOWED_MIME_TYPES
-        ):
-            content_type = inferred_content_type
-        if content_type not in ALLOWED_MIME_TYPES:
-            raise ValueError(f"unsupported_content_type:{content_type or 'unknown'}")
-        if not _matches_declared_content(temporary, content_type):
-            raise ValueError(f"content_signature_mismatch:{content_type}")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(temporary, destination)
-        return content_type, total, digest.hexdigest()
+        actual_content_type = _detected_content_type(
+            temporary,
+            content_type,
+            inferred_content_type,
+        )
+        if not actual_content_type:
+            reported_type = content_type or inferred_content_type or "unknown"
+            raise ValueError(f"unsupported_or_invalid_content:{reported_type}")
+        expected_extension = MIME_EXTENSIONS[actual_content_type]
+        corrected_destination = destination.with_suffix(expected_extension)
+        corrected_destination.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(temporary, corrected_destination)
+        return actual_content_type, total, digest.hexdigest(), corrected_destination
     except BaseException:
         temporary.unlink(missing_ok=True)
         raise
@@ -1096,6 +1308,11 @@ def import_attachments(
     public_root = media_root / "public"
     private_root = media_root / "private"
     existing_media = {media.stored_filename: media for media in db.scalars(select(MediaAsset)).all()}
+    existing_media_by_storage_id = {
+        match.group(1): media
+        for media in existing_media.values()
+        if (match := re.fullmatch(r"legacy-(.+?)(?:\.[^.]+)?", media.stored_filename))
+    }
     admin = db.scalar(select(User).where(User.role == "admin").order_by(User.id))
     if apply and admin is None:
         raise RuntimeError("A review-database administrator is required for archived media ownership.")
@@ -1138,6 +1355,7 @@ def import_attachments(
                     entity_type="attachment",
                     action="archived",
                     status="archived",
+                    source_parent_id=article_id,
                     reason="article_not_migrated",
                     details={"article_id": article_id},
                 )
@@ -1151,6 +1369,7 @@ def import_attachments(
                     entity_type="attachment",
                     action="failed",
                     status="failed",
+                    source_parent_id=article_id,
                     reason="missing_download_url",
                     details={"article_id": article_id, "filename": value_as_text(row.data.get("subject"))},
                 )
@@ -1159,30 +1378,37 @@ def import_attachments(
         guessed_extension = Path(filename).suffix.lower() or Path(urllib.parse.urlparse(url).path).suffix.lower()
         stored_filename = f"legacy-{storage_id}{guessed_extension}"
         destination = (private_root if is_private else public_root) / stored_filename
-        media = existing_media.get(stored_filename) or existing_media.get(storage_id)
+        media = existing_media.get(stored_filename) or existing_media_by_storage_id.get(storage_id)
+        if media is not None:
+            stored_filename = media.stored_filename
+            destination = (private_root if media.is_private else public_root) / stored_filename
         if skip_downloads or not apply:
             stats["download_candidates"] += 1
             continue
         action = "unchanged"
         sha256 = ""
+        downloaded_now = False
+        post_attachment_id: int | None = None
         try:
             if destination.exists() and destination.stat().st_size > 0:
                 sha256 = hashlib.sha256(destination.read_bytes()).hexdigest()
-                content_type = normalize_content_type(mimetypes.guess_type(filename)[0])
+                content_type = _detected_content_type(
+                    destination,
+                    media.content_type if media else "",
+                    mimetypes.guess_type(filename)[0] or "",
+                )
+                if not content_type:
+                    raise ValueError("unsupported_or_invalid_existing_file")
                 file_size = destination.stat().st_size
             else:
-                content_type, file_size, sha256 = _download_attachment(
+                content_type, file_size, sha256, destination = _download_attachment(
                     url,
                     destination,
                     declared_name=filename,
                     maximum_bytes=maximum_bytes,
                 )
-                expected_extension = MIME_EXTENSIONS.get(content_type, guessed_extension)
-                if not guessed_extension and expected_extension:
-                    corrected = destination.with_name(f"legacy-{storage_id}{expected_extension}")
-                    os.replace(destination, corrected)
-                    destination = corrected
-                    stored_filename = corrected.name
+                downloaded_now = True
+                stored_filename = destination.name
             if media is None:
                 media = MediaAsset(
                     owner_id=post.author_id if post else admin.id,
@@ -1199,6 +1425,7 @@ def import_attachments(
                 db.flush()
                 media.url = media_access_reference(media.id)
                 existing_media[stored_filename] = media
+                existing_media_by_storage_id[storage_id] = media
                 action = "created"
             else:
                 changed = _assign_if_changed(
@@ -1222,25 +1449,24 @@ def import_attachments(
                     )
                 )
                 if link is None:
-                    db.add(
-                        PostAttachment(
-                            post_id=post.id,
-                            media_id=media.id,
-                            sort_order=value_as_int(row.data.get("sequence")),
-                        )
+                    link = PostAttachment(
+                        post_id=post.id,
+                        media_id=media.id,
+                        sort_order=value_as_int(row.data.get("sequence")),
                     )
+                    db.add(link)
+                    db.flush()
+                post_attachment_id = link.id
             elif special_record and special_record.entity_type in {"cohort_leader", "past_council"}:
                 board = board_by_id.get(special_record.target_id or 0)
                 if board:
-                    metadata = dict(board.metadata_json or {})
                     collection_key = "cohort_leaders" if special_record.entity_type == "cohort_leader" else "past_councils"
-                    entries = list(metadata.get(collection_key) or [])
-                    for entry in entries:
-                        if str(entry.get("legacy_write_id")) == article_id and not entry.get("banner_image_url"):
-                            entry["banner_image_url"] = media_access_reference(media.id)
-                            break
-                    metadata[collection_key] = entries
-                    board.metadata_json = metadata
+                    _attach_media_to_special_entry(
+                        board,
+                        collection_key=collection_key,
+                        article_id=article_id,
+                        media_url=media_access_reference(media.id),
+                    )
             upsert_ledger(
                 db,
                 attachment_row,
@@ -1257,12 +1483,16 @@ def import_attachments(
                     "file_size": file_size,
                     "sha256": sha256,
                     "is_private": is_private,
+                    "storage_path": f"{'private' if is_private else 'public'}/{stored_filename}",
                     "source_url": url,
+                    "media_asset_id": media.id,
+                    "post_attachment_id": post_attachment_id,
                 },
             )
             stats[f"{action}_attachments"] += 1
         except Exception as exc:
-            destination.unlink(missing_ok=True)
+            if downloaded_now:
+                destination.unlink(missing_ok=True)
             stats["failed_attachments"] += 1
             upsert_ledger(
                 db,

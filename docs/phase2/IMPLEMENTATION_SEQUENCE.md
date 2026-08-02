@@ -150,7 +150,7 @@ Checklist:
 - Local production Compose, web deep-link, migration, and backup/restore rehearsals pass.
 - Signed mobile builds, physical devices, live hosting, and store-console checks remain separate release gates and are not implied by Phase 2 completion.
 
-2026-08-02 migration addendum: the local backend suite passes 174 tests, and an isolated PostgreSQL
+2026-08-02 migration addendum: the local backend suite passes 185 tests, and an isolated PostgreSQL
 clean upgrade plus `0021`→`0022`→`0021`→`0022` round trip passed. Legacy XLSX/CSV inputs are
 local-only personal-data-bearing migration sources; only the importer, redacted provenance ledger,
 tests, and operator documentation belong in Git.

@@ -759,7 +759,7 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
 
 function ActivityTile({ post, index, onPress }: { post: PostListItem; index: number; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
-  const preview = compactPreview(post);
+  const preview = post.title.trim() || compactPreview(post);
   const thumbnailUrl = imageUrl(post.thumbnail_url);
   const activityDate =
     typeof post.metadata?.activity_date === "string" && post.metadata.activity_date.trim()
