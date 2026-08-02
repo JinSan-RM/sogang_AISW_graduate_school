@@ -20,6 +20,12 @@ const schoolEmailSource = source("components/SchoolEmailInput.tsx");
 const legalDocumentSource = source("components/LegalDocumentScreen.tsx");
 const myPageDrawerSource = source("components/MyPageDrawer.tsx");
 const postCardSource = source("components/PostCard.tsx");
+const fontSource = source("utils/fonts.ts");
+
+test("global font patch flattens styles before they reach React DOM", () => {
+  assert.match(fontSource, /style: StyleSheet\.flatten\(\[\{ fontFamily \}, style\]\)/);
+  assert.doesNotMatch(fontSource, /style: \[\{ fontFamily \}, style\]/);
+});
 
 test("#2 메인 배너는 설정된 목적지로 직접 이동한다", () => {
   assert.match(homeSource, /const linkHref = banner\.cta_href\?\.trim\(\)/);

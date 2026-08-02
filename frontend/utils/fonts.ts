@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TextInput } from "react-native";
+import { StyleSheet, Text, TextInput, type StyleProp, type TextStyle } from "react-native";
 
 import {
   Inter_400Regular,
@@ -63,7 +63,7 @@ function patchComponent(component: PatchableComponent): void {
     const element = originalRender.apply(this, args);
     if (!element || !React.isValidElement(element)) return element;
 
-    const style = (element.props as { style?: unknown }).style;
+    const style = (element.props as { style?: StyleProp<TextStyle> }).style;
     const flattened = (StyleSheet.flatten(style) ?? {}) as { fontFamily?: string; fontWeight?: unknown };
 
     // Respect an explicit fontFamily if a caller ever sets one.
@@ -71,7 +71,10 @@ function patchComponent(component: PatchableComponent): void {
 
     const fontFamily = familyForWeight(flattened.fontWeight);
     return React.cloneElement(element, {
-      style: [{ fontFamily }, style],
+      // Text/TextInput's patched render can already be returning a host element
+      // on web. React DOM requires its style prop to be an object, so never pass
+      // the React Native style array through to the resulting <span>/<input>.
+      style: StyleSheet.flatten([{ fontFamily }, style]),
     } as Partial<typeof element.props>);
   };
   component.__interPatched = true;
