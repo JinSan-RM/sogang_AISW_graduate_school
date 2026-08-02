@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../../components/LoadingState";
 import { eventApi } from "../../../services/api";
 import type { EventItem } from "../../../types";
+import { formatBoardDate, formatTime24 } from "../../../utils/dateFormat";
 
 const COLORS = {
   primary: "#2761FF",
@@ -15,8 +17,6 @@ const COLORS = {
   border: "#EAECEF",
   bg: "#FFFFFF",
 };
-
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
   academic: "학사일정",
@@ -45,19 +45,6 @@ function parseDateKey(value: string | string[] | undefined) {
   return { date, dateKey };
 }
 
-function selectedDateLabel(date: Date) {
-  const year = String(date.getFullYear()).slice(-2);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}.${month}.${day}(${WEEKDAYS[date.getDay()]})`;
-}
-
-function formatTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
 function EventRow({ item }: { item: EventItem }) {
   const categoryColors = EVENT_CATEGORY_COLORS[item.category] ?? EVENT_CATEGORY_COLORS.other;
 
@@ -69,7 +56,7 @@ function EventRow({ item }: { item: EventItem }) {
             {EVENT_CATEGORY_LABELS[item.category] ?? item.category}
           </Text>
         </View>
-        <Text style={styles.eventTime}>{formatTime(item.start_at)}</Text>
+        <Text style={styles.eventTime}>{formatTime24(item.start_at)}</Text>
       </View>
       <Text numberOfLines={2} style={styles.eventTitle}>
         {item.title}
@@ -107,9 +94,7 @@ export default function EventDayScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : isError || !selectedDate ? (
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={34} color={COLORS.subtle} />
@@ -123,7 +108,7 @@ export default function EventDayScreen() {
           data={events}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={[styles.listContent, events.length === 0 ? styles.emptyContent : null]}
-          ListHeaderComponent={events.length ? <Text style={styles.dateLabel}>{selectedDateLabel(selectedDate.date)}</Text> : null}
+          ListHeaderComponent={events.length ? <Text style={styles.dateLabel}>{formatBoardDate(selectedDate.dateKey)}</Text> : null}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
               <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />

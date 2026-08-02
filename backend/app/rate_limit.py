@@ -44,6 +44,15 @@ def _client_ip(request: Request) -> str:
     ):
         return direct_client
 
+    # Cloudflare documents CF-Connecting-IP as the canonical single visitor
+    # address. It is trusted only after the direct TCP peer matched the narrow
+    # ingress allowlist above, so clients cannot spoof it through a public
+    # origin port.
+    connecting_ip = request.headers.get("cf-connecting-ip")
+    if connecting_ip is not None:
+        connecting_address = _parsed_ip(connecting_ip)
+        return str(connecting_address) if connecting_address is not None else direct_client
+
     forwarded_values = [
         value.strip()
         for value in request.headers.get("x-forwarded-for", "").split(",")

@@ -32,8 +32,8 @@ export default function LegalDocumentScreen({
   footer?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
-  const showConsent = consentDate !== undefined;
   const consentLabel = formatConsentDate(consentDate);
+  const showConsent = Boolean(consentLabel);
   return (
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
@@ -53,7 +53,7 @@ export default function LegalDocumentScreen({
         {showConsent ? (
           <View style={styles.consentRow}>
             <Ionicons name="checkmark-circle" size={14} color="#2E9E5B" />
-            <Text style={styles.consentText}>{consentLabel ? `${consentLabel} 동의 완료` : "동의 완료"}</Text>
+            <Text style={styles.consentText}>{consentLabel} 동의 완료</Text>
           </View>
         ) : null}
         {sections.map((section) => (

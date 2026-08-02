@@ -219,4 +219,11 @@ jobs:
           PRODUCTION_WORKER_ENV_FILE: .env.production.worker.example
         run: |
           docker compose --env-file .env.production.example -f docker-compose.production.example.yml config -q
+          bash scripts/production-compose.sh Config .env.production.example .env.production.worker.example
+          pwsh -NoProfile -File scripts/production-compose.ps1 -Action Config -EnvFile .env.production.example -WorkerEnvFile .env.production.worker.example
+          printf '%s\n' 'compose-validation-token' > /tmp/cloudflare-tunnel-token
+          CLOUDFLARE_ENABLED=true CLOUDFLARE_TUNNEL_TOKEN_FILE=/tmp/cloudflare-tunnel-token \
+            bash scripts/production-compose.sh Config .env.production.example .env.production.worker.example
+          CLOUDFLARE_ENABLED=true CLOUDFLARE_TUNNEL_TOKEN_FILE=/tmp/cloudflare-tunnel-token \
+            pwsh -NoProfile -File scripts/production-compose.ps1 -Action Config -EnvFile .env.production.example -WorkerEnvFile .env.production.worker.example
           docker compose --env-file .env.production.example -f docker-compose.production.example.yml build

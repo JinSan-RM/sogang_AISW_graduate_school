@@ -41,6 +41,7 @@ backend/venv/
 .env
 .env.production
 .env.production.worker
+.secrets/
 *.env.local
 **/.env.*.local
 backend/.env
@@ -80,6 +81,11 @@ frontend/expo-web.err.log
 
 # Local Git metadata backups
 frontend/.git.backup-*/
+
+# Local Codex verification artifacts
+.codex-tmp/
+outputs/
+~$*.xlsx
 
 # User-managed/generated exports
 AISW_app_architecture_gap_analysis.html

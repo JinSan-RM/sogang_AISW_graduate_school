@@ -94,6 +94,16 @@ BOARD_SEED_DATA = [
         "allow_anonymous": True,
     },
     {
+        "name": "졸업논문",
+        "slug": "graduation-thesis",
+        "category": "resources",
+        "board_type": "resource",
+        "description": "졸업논문 정보와 준비 자료를 공유합니다.",
+        "sort_order": 23,
+        "write_permission": "user",
+        "allow_anonymous": True,
+    },
+    {
         "name": "동아리 활동 인증",
         "slug": "club-activity",
         "category": "participation",
@@ -413,14 +423,9 @@ def seed_reference_data(
         db.add(
             Banner(
                 placement="home",
-                title="AI-SW 커뮤니티",
-                subtitle="공지, 일정, 커뮤니티와 원우회 소식을 한곳에서 확인하세요.",
-                badge_text="SOGANG AI-SW",
-                cta_label="공지 보기",
-                cta_href="/(tabs)/boards",
-                theme="navy",
+                theme="none",
                 sort_order=0,
-                is_active=True,
+                is_active=False,
                 created_by=creator_id,
             )
         )
@@ -439,7 +444,6 @@ def seed_initial_data(db: Session) -> None:
     user = db.get(User, 1)
     if user is None:
         user = User(
-            id=1,
             username="testuser",
             password_hash=hash_password("password123"),
             nickname="72gi_KimJinsan",

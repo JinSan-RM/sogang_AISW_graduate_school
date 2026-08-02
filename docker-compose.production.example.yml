@@ -31,6 +31,14 @@ services:
     restart: unless-stopped
     env_file:
       - ${PRODUCTION_ENV_FILE:-.env.production}
+    # Keep the connector toggle and trusted peer identical between Compose
+    # interpolation and the backend runtime, including explicit shell overrides.
+    environment:
+      CLOUDFLARE_ENABLED: ${CLOUDFLARE_ENABLED:-false}
+      CLOUDFLARE_TUNNEL_SUBNET: ${CLOUDFLARE_TUNNEL_SUBNET:-172.30.250.0/28}
+      CLOUDFLARE_TUNNEL_IP: ${CLOUDFLARE_TUNNEL_IP:-172.30.250.14}
+      RATE_LIMIT_TRUST_PROXY: ${RATE_LIMIT_TRUST_PROXY:?Set RATE_LIMIT_TRUST_PROXY in .env.production}
+      RATE_LIMIT_TRUSTED_PROXY_IPS: ${RATE_LIMIT_TRUSTED_PROXY_IPS?Set RATE_LIMIT_TRUSTED_PROXY_IPS in .env.production}
     depends_on:
       db:
         condition: service_healthy
@@ -41,6 +49,9 @@ services:
     volumes:
       - production_media:/data/media
       - production_private_media:/data/private-media
+    networks:
+      - default
+      - cloudflare_origin
     tmpfs:
       - /tmp
     healthcheck:
@@ -68,6 +79,7 @@ services:
       dockerfile: Dockerfile.web
       args:
         EXPO_PUBLIC_API_URL: ${PUBLIC_API_URL:?Set PUBLIC_API_URL in .env.production}
+        EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS: ${EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS:-120000}
         EXPO_PUBLIC_SUPPORT_URL: ${SUPPORT_URL:?Set SUPPORT_URL in .env.production}
         EXPO_PUBLIC_PRIVACY_POLICY_URL: ${PRIVACY_POLICY_URL:?Set PRIVACY_POLICY_URL in .env.production}
         EXPO_PUBLIC_ACCOUNT_DELETION_URL: ${ACCOUNT_DELETION_URL:?Set ACCOUNT_DELETION_URL in .env.production}
@@ -84,6 +96,9 @@ services:
     # Static web output also stays host-local and must be published through HTTPS.
     ports:
       - "127.0.0.1:${FRONTEND_BIND_PORT:-8080}:8080"
+    networks:
+      - default
+      - cloudflare_origin
     tmpfs:
       - /tmp
     healthcheck:
@@ -94,6 +109,60 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  cloudflared:
+    image: cloudflare/cloudflared@sha256:e39ee8da81ad5e05d77f38d2f51c60ca51bf2a8450ac3abab50c17fdb91d91bf
+    profiles:
+      - cloudflare
+    init: true
+    read_only: true
+    restart: unless-stopped
+    command:
+      - tunnel
+      - --metrics
+      - 0.0.0.0:2000
+      - --loglevel
+      - info
+      - run
+      - --token-file
+      - /run/secrets/cloudflare_tunnel_token
+    secrets:
+      - source: cloudflare_tunnel_token
+        target: cloudflare_tunnel_token
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend-web:
+        condition: service_healthy
+    networks:
+      cloudflare_origin:
+        ipv4_address: ${CLOUDFLARE_TUNNEL_IP:-172.30.250.14}
+      cloudflare_egress:
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD
+        - cloudflared
+        - --no-autoupdate
+        - tunnel
+        - --metrics
+        - 127.0.0.1:2000
+        - ready
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 35s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -136,3 +205,17 @@ volumes:
     name: ${PRODUCTION_MEDIA_VOLUME_NAME:-aisw-production_production_media}
   production_private_media:
     name: ${PRODUCTION_PRIVATE_MEDIA_VOLUME_NAME:-aisw-production_production_private_media}
+
+networks:
+  # Origin traffic stays on this private bridge. Only cloudflared has the
+  # separate egress network needed to reach Cloudflare on outbound port 7844.
+  cloudflare_origin:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${CLOUDFLARE_TUNNEL_SUBNET:-172.30.250.0/28}
+  cloudflare_egress:
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ${CLOUDFLARE_TUNNEL_TOKEN_FILE:-../aisw-production-secrets/cloudflare-tunnel-token}

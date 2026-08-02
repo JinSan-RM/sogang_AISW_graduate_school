@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../components/LoadingState";
 import { faqApi } from "../services/api";
 import type { FAQItem } from "../types";
 
@@ -21,14 +22,25 @@ export default function FAQScreen() {
   const insets = useSafeAreaInsets();
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [expandedFaqId, setExpandedFaqId] = useState<number | null>(null);
 
-  useEffect(() => {
-    faqApi
-      .getFAQs()
-      .then((response) => setFaqs(response.data))
-      .finally(() => setIsLoading(false));
+  const loadFAQs = useCallback(async () => {
+    setIsLoading(true);
+    setIsError(false);
+    try {
+      const response = await faqApi.getFAQs();
+      setFaqs(response.data);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadFAQs();
+  }, [loadFAQs]);
 
   const visibleFAQs = useMemo(() => faqs.filter((item) => item.is_active !== false), [faqs]);
 
@@ -43,8 +55,13 @@ export default function FAQScreen() {
       </View>
 
       {isLoading ? (
+        <LoadingState />
+      ) : isError ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
+          <Text style={styles.errorText}>FAQ를 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void loadFAQs()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
         </View>
       ) : (
         <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
@@ -124,6 +141,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
+  },
+  errorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   faqItem: {
     gap: 8,

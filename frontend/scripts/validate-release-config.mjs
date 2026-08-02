@@ -50,17 +50,32 @@ function isPublicHttpsUrl(value) {
       hostname === "::1" ||
       /^(?:fc|fd)/.test(hostname) ||
       /^fe[89ab]/.test(hostname);
+    const isTemporaryCloudflareHostname =
+      hostname === "trycloudflare.com" || hostname.endsWith(".trycloudflare.com");
     return (
       url.protocol === "https:" &&
       !url.username &&
       !url.password &&
+      !url.search &&
+      !url.hash &&
       !["localhost", "0.0.0.0", "example.com"].includes(hostname) &&
       ![".local", ".localhost", ".internal", ".invalid", ".example", ".test"].some((suffix) =>
         hostname.endsWith(suffix),
       ) &&
       !isPrivateIpv4 &&
-      !isPrivateIpv6
+      !isPrivateIpv6 &&
+      !isTemporaryCloudflareHostname
     );
+  } catch {
+    return false;
+  }
+}
+
+function hasApiBasePath(value) {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return !url.search && !url.hash && url.pathname.replace(/\/+$/, "").endsWith("/api");
   } catch {
     return false;
   }
@@ -236,8 +251,7 @@ const apiUrlChecks = [
     "EXPO_PUBLIC_API_URL must be a public HTTPS URL in the selected EAS environment.",
   ],
   [
-    typeof process.env.EXPO_PUBLIC_API_URL === "string" &&
-      process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, "").endsWith("/api"),
+    hasApiBasePath(process.env.EXPO_PUBLIC_API_URL),
     "EXPO_PUBLIC_API_URL must end with /api.",
   ],
 ];
@@ -246,6 +260,20 @@ for (const [condition, message] of apiUrlChecks) {
   if (requiresPublicApiUrl && !condition) {
     remoteApiErrors.push(message);
   }
+}
+
+const authEmailTimeoutValue = process.env.EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS ?? "";
+const authEmailTimeoutMs = Number(authEmailTimeoutValue);
+const authEmailTimeoutIsValid =
+  /^\d+$/.test(authEmailTimeoutValue) &&
+  Number.isSafeInteger(authEmailTimeoutMs) &&
+  authEmailTimeoutMs >= 15000 &&
+  authEmailTimeoutMs <= 120000;
+const authEmailTimeoutMessage =
+  "EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS must be an integer from 15000 to 120000.";
+check(authEmailTimeoutIsValid, authEmailTimeoutMessage);
+if (requiresPublicApiUrl && !authEmailTimeoutIsValid) {
+  remoteApiErrors.push(authEmailTimeoutMessage);
 }
 
 for (const [name, value] of [

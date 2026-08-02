@@ -243,6 +243,7 @@ export type SearchResult = {
   title: string;
   content_preview: string;
   author_nickname: string;
+  author_cohort?: string | null;
   created_at: string;
   highlights: {
     title: string;
@@ -407,8 +408,9 @@ export type AdminAuditLog = {
 export type CommentNode = {
   id: number;
   post_id: number;
-  author_id: number;
+  author_id: number | null;
   author_nickname: string;
+  author_cohort?: string | null;
   parent_id: number | null;
   content: string;
   created_at: string;

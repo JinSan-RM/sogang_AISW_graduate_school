@@ -4,8 +4,10 @@ import { router } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../components/LoadingState";
 import { notificationApi } from "../services/api";
 import type { NotificationItem } from "../types";
+import { formatKoreanTime, formatShortDate } from "../utils/dateFormat";
 
 const COLORS = {
   primary: "#2761FF",
@@ -29,34 +31,29 @@ const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: s
   council: { icon: "people-outline", color: "#3B6D11", bg: "#EAF3DE" },
 };
 
-function isSameDay(left: Date, right: Date) {
-  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+function dayNumber(value: string) {
+  const [year, month, day] = formatShortDate(value).split(".").map(Number);
+  if (![year, month, day].every(Number.isFinite)) return null;
+  return Date.UTC(2000 + year, month - 1, day) / 86400000;
 }
 
-function daysAgo(date: Date) {
-  const today = new Date();
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  return Math.round((startOfToday - startOfDate) / 86400000);
+function daysAgo(value: string) {
+  const todayNumber = dayNumber(new Date().toISOString());
+  const valueNumber = dayNumber(value);
+  return todayNumber === null || valueNumber === null ? null : todayNumber - valueNumber;
 }
 
 function sectionLabel(value: string) {
-  const date = new Date(value);
-  const today = new Date();
-  if (isSameDay(date, today)) return "오늘";
-  if (daysAgo(date) <= 7) return "지난 7일";
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  const elapsedDays = daysAgo(value);
+  if (elapsedDays === null) return "";
+  if (elapsedDays === 0) return "오늘";
+  if (elapsedDays > 0 && elapsedDays <= 7) return "지난 7일";
+  return formatShortDate(value);
 }
 
 function timeLabel(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  if (isSameDay(date, new Date())) {
-    const hours = date.getHours();
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${hours < 12 ? "오전" : "오후"} ${hours % 12 || 12}:${minutes}`;
-  }
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  if (daysAgo(value) === 0) return formatKoreanTime(value);
+  return formatShortDate(value);
 }
 
 function decorateItems(items: NotificationItem[]) {
@@ -129,9 +126,7 @@ export default function NotificationsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : (
         <FlatList
           data={rows}

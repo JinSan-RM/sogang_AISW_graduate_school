@@ -40,8 +40,8 @@ def production_settings(**overrides) -> Settings:
         "smtp_required": True,
         "expo_push_enabled": True,
         "rate_limit_enabled": True,
-        "rate_limit_trust_proxy": False,
-        "rate_limit_trusted_proxy_ips": "",
+        "rate_limit_trust_proxy": True,
+        "rate_limit_trusted_proxy_ips": "10.0.0.2/32",
         "media_upload_dir": PRODUCTION_PUBLIC_MEDIA,
         "media_private_upload_dir": PRODUCTION_PRIVATE_MEDIA,
         "support_email": "support@aisw.sogang.ac.kr",
@@ -66,8 +66,25 @@ def test_complete_production_runtime_is_accepted() -> None:
     production_settings().validate_runtime()
 
 
+def test_cloudflare_compose_ingress_with_exact_private_peer_is_accepted() -> None:
+    production_settings(
+        cloudflare_enabled=True,
+        cloudflare_tunnel_subnet="10.0.0.0/28",
+        cloudflare_tunnel_ip="10.0.0.2",
+        rate_limit_trusted_proxy_ips="10.0.0.2/32",
+    ).validate_runtime()
+
+
 def test_complete_staging_runtime_uses_the_same_validation_gate() -> None:
     production_settings(app_environment="staging").validate_runtime()
+
+
+def test_explicit_ip_authenticated_smtp_relay_is_accepted() -> None:
+    production_settings(
+        smtp_auth="none",
+        smtp_username=None,
+        smtp_password=None,
+    ).validate_runtime()
 
 
 def test_unknown_runtime_environment_cannot_bypass_deployment_validation() -> None:
@@ -105,12 +122,37 @@ def test_unknown_runtime_environment_cannot_bypass_deployment_validation() -> No
             "DATABASE_URL",
         ),
         ({"smtp_required": False}, "SMTP"),
-        ({"smtp_password": None}, "SMTP_USERNAME"),
+        ({"smtp_password": None}, "SMTP_AUTH=password"),
+        ({"smtp_username": "", "smtp_password": ""}, "SMTP_AUTH=password"),
+        ({"smtp_username": "mailer", "smtp_password": ""}, "SMTP_AUTH=password"),
+        ({"smtp_username": "mailer", "smtp_password": "   "}, "SMTP_AUTH=password"),
+        (
+            {
+                "smtp_auth": "none",
+                "smtp_username": "mailer",
+                "smtp_password": "mail-password",
+            },
+            "SMTP_AUTH=none",
+        ),
         ({"smtp_host": "replace-with-smtp-host"}, "SMTP_HOST"),
         ({"smtp_from_email": "no-reply@sogang-ai-sw.local"}, "SMTP_FROM_EMAIL"),
+        ({"smtp_security": "plain"}, "SMTP_SECURITY"),
+        (
+            {
+                "smtp_timeout_seconds": 15,
+                "expo_public_auth_email_timeout_ms": 15_000,
+            },
+            "EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS",
+        ),
         ({"cors_origin_regex": r"^https?://.*$"}, "CORS_ORIGIN_REGEX"),
         ({"rate_limit_enabled": False}, "RATE_LIMIT_ENABLED"),
-        ({"rate_limit_trust_proxy": True}, "RATE_LIMIT_TRUSTED_PROXY_IPS"),
+        (
+            {
+                "rate_limit_trust_proxy": True,
+                "rate_limit_trusted_proxy_ips": "",
+            },
+            "RATE_LIMIT_TRUSTED_PROXY_IPS",
+        ),
         (
             {
                 "rate_limit_trust_proxy": True,
@@ -132,6 +174,58 @@ def test_unknown_runtime_environment_cannot_bypass_deployment_validation() -> No
             },
             "RATE_LIMIT_TRUSTED_PROXY_IPS",
         ),
+        (
+            {
+                "rate_limit_trust_proxy": False,
+                "rate_limit_trusted_proxy_ips": "",
+            },
+            "RATE_LIMIT_TRUST_PROXY",
+        ),
+        (
+            {
+                "cloudflare_enabled": True,
+                "cloudflare_tunnel_subnet": "10.0.0.0/28",
+                "cloudflare_tunnel_ip": "10.0.0.3",
+                "rate_limit_trusted_proxy_ips": "10.0.0.2/32",
+            },
+            "RATE_LIMIT_TRUSTED_PROXY_IPS",
+        ),
+        (
+            {
+                "cloudflare_enabled": True,
+                "cloudflare_tunnel_subnet": "8.8.8.0/28",
+                "cloudflare_tunnel_ip": "8.8.8.8",
+                "rate_limit_trusted_proxy_ips": "8.8.8.8/32",
+            },
+            "CLOUDFLARE_TUNNEL_IP",
+        ),
+        (
+            {
+                "cloudflare_enabled": True,
+                "cloudflare_tunnel_subnet": "10.0.0.0/28",
+                "cloudflare_tunnel_ip": "10.0.0.2",
+                "rate_limit_trusted_proxy_ips": "10.0.0.0/24",
+            },
+            "RATE_LIMIT_TRUSTED_PROXY_IPS",
+        ),
+        (
+            {
+                "cloudflare_enabled": True,
+                "cloudflare_tunnel_subnet": "10.0.1.0/28",
+                "cloudflare_tunnel_ip": "10.0.0.2",
+                "rate_limit_trusted_proxy_ips": "10.0.0.2/32",
+            },
+            "CLOUDFLARE_TUNNEL_IP",
+        ),
+        (
+            {
+                "cloudflare_enabled": True,
+                "cloudflare_tunnel_subnet": "10.0.0.0/30",
+                "cloudflare_tunnel_ip": "10.0.0.2",
+                "rate_limit_trusted_proxy_ips": "10.0.0.2/32",
+            },
+            "CLOUDFLARE_TUNNEL_SUBNET",
+        ),
         ({"expo_push_enabled": False}, "EXPO_PUSH_ENABLED"),
         ({"account_deletion_receipt_retention_days": None}, "ACCOUNT_DELETION_RECEIPT_RETENTION_DAYS"),
         ({"media_upload_dir": Path("uploads")}, "MEDIA_UPLOAD_DIR"),
@@ -144,6 +238,13 @@ def test_unknown_runtime_environment_cannot_bypass_deployment_validation() -> No
         ({"public_api_url": "http://api.aisw.sogang.ac.kr/api"}, "PUBLIC_API_URL"),
         ({"public_api_url": "https://api.aisw.sogang.ac.kr"}, "PUBLIC_API_URL"),
         ({"public_api_url": "https://192.168.10.20/api"}, "PUBLIC_API_URL"),
+        (
+            {
+                "public_api_url": "https://temporary.trycloudflare.com/api",
+                "allowed_hosts": "temporary.trycloudflare.com",
+            },
+            "PUBLIC_API_URL",
+        ),
         ({"support_url": "https://example.com/support"}, "SUPPORT_URL"),
         ({"privacy_policy_url": None}, "PRIVACY_POLICY_URL"),
         ({"account_deletion_url": "https://localhost/delete"}, "ACCOUNT_DELETION_URL"),
@@ -233,10 +334,13 @@ def _request_with_forwarded_for(
     *,
     client_host: str,
     forwarded_for: str | None,
+    connecting_ip: str | None = None,
 ) -> Request:
     headers = []
     if forwarded_for is not None:
         headers.append((b"x-forwarded-for", forwarded_for.encode("ascii")))
+    if connecting_ip is not None:
+        headers.append((b"cf-connecting-ip", connecting_ip.encode("ascii")))
     return Request(
         {
             "type": "http",
@@ -273,11 +377,23 @@ def test_rate_limit_uses_forwarded_ip_only_from_configured_ingress(
         client_host="10.0.0.2",
         forwarded_for="not-an-ip",
     )
+    cloudflare_peer = _request_with_forwarded_for(
+        client_host="10.0.0.2",
+        forwarded_for="6.6.6.6, 8.8.8.8",
+        connecting_ip="203.0.113.42",
+    )
+    untrusted_cloudflare_header = _request_with_forwarded_for(
+        client_host="192.168.10.20",
+        forwarded_for="1.1.1.1",
+        connecting_ip="203.0.113.42",
+    )
 
     assert _client_ip(trusted_chain) == "1.1.1.1"
     assert _client_ip(spoofed_leftmost) == "8.8.8.8"
     assert _client_ip(untrusted_peer) == "192.168.10.20"
     assert _client_ip(malformed_chain) == "10.0.0.2"
+    assert _client_ip(cloudflare_peer) == "203.0.113.42"
+    assert _client_ip(untrusted_cloudflare_header) == "192.168.10.20"
 
 
 def test_readiness_endpoint_checks_database(api) -> None:
@@ -332,9 +448,16 @@ def test_production_reference_seed_creates_no_demo_user_and_preserves_operator_c
             custom_board = db.scalar(select(Board).where(Board.slug == "operator-custom"))
             assert custom_board is not None
             assert custom_board.is_active is True
+            graduation_board = db.scalar(select(Board).where(Board.slug == "graduation-thesis"))
+            assert graduation_board is not None
+            assert graduation_board.board_type == "resource"
+            assert graduation_board.write_permission == "user"
             banner = db.scalar(select(Banner).where(Banner.placement == "home"))
             assert banner is not None
             assert banner.created_by is None
+            assert banner.is_active is False
+            assert banner.image_url is None
+            assert banner.image_urls is None
     finally:
         Base.metadata.drop_all(engine)
         engine.dispose()

@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
+import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
+import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import {
@@ -24,6 +26,8 @@ import {
 import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
+import { formatBoardDate } from "../../../utils/dateFormat";
+import { isAdminUser } from "../../../utils/permissions";
 import { formatCohortName } from "../../../utils/userLabel";
 
 const COLORS = {
@@ -73,41 +77,20 @@ const REPORT_REASONS = [
 
 const SUGGESTION_STATUSES = [
   { value: "received", label: "대기중" },
-  { value: "answered", label: "답변 완료" },
+  { value: "answered", label: "답변완료" },
 ];
 
 const MUTUAL_AID_STATUSES: { value: MutualAidStatus; label: string }[] = [
   { value: "processing", label: "처리중" },
-  { value: "completed", label: "처리 완료" },
+  { value: "completed", label: "완료" },
   { value: "rejected", label: "반려" },
 ];
-
-function shortDate(value: string) {
-  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
-  const date = new Date(value.includes("T") && !hasTimezone ? `${value}Z` : value);
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(2, 10).replace(/-/g, ".");
-  }
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
-}
-
-function formatDotDate(value: string) {
-  const parts = value.trim().split(".").map((part) => part.trim()).filter(Boolean);
-  if (parts.length < 3) return value;
-  const [rawYear, rawMonth, rawDay] = parts;
-  const year = rawYear.length === 2 ? Number(`20${rawYear}`) : Number(rawYear);
-  const date = new Date(year, Number(rawMonth) - 1, Number(rawDay));
-  if (Number.isNaN(date.getTime())) return value;
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
-}
 
 function categoryLabel(value?: string | null, fallback = "게시글") {
   const raw = value?.trim();
   if (!raw) return fallback;
   const lower = raw.toLowerCase();
-  if (lower.includes("event") || raw.includes("행사")) return "행사공지";
+  if (lower.includes("event") || lower.includes("webinar") || raw.includes("행사") || raw.includes("특강")) return "행사공지";
   if (lower.includes("academic") || raw.includes("학사")) return "학사공지";
   if (raw.includes("전체")) return "공지";
   if (lower === "all" || lower.includes("other") || lower.includes("general") || raw.includes("기타")) return "기타공지";
@@ -116,11 +99,15 @@ function categoryLabel(value?: string | null, fallback = "게시글") {
 
 function categoryTone(label: string) {
   if (label.includes("반려")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("종합")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
   if (label.includes("행사") || label.includes("시험") || label.includes("족보")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("진행중")) return { bg: "#EAF3DE", fg: "#3B6D11" };
+  if (label === "마감") return { bg: "#F1F3F5", fg: COLORS.muted };
   if (label.includes("인증") || label.includes("완료")) return { bg: COLORS.green50, fg: COLORS.green700 };
   if (label.includes("대기")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
   if (label.includes("건의") || label.includes("답변")) return { bg: COLORS.cyan50, fg: COLORS.cyan700 };
   if (label.includes("후기")) return { bg: "#EEEDFE", fg: "#3C3489" };
+  if (label.includes("기타")) return { bg: "#F0EEF9", fg: "#5A4C8B" };
   return { bg: "#E6F1FB", fg: "#0C447C" };
 }
 
@@ -178,6 +165,8 @@ export default function PostDetailScreen() {
   const [mutualAidRejectionReason, setMutualAidRejectionReason] = useState("");
   const [showPostMenu, setShowPostMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<number | null>(null);
+  const [commentDeleteError, setCommentDeleteError] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
   const likeMutation = useToggleLike(postId, post?.board_id ?? 0);
@@ -205,11 +194,7 @@ export default function PostDetailScreen() {
   }, [postId]);
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.primary} />
-      </View>
-    );
+    return <LoadingState />;
   }
 
   if (isError || !post) {
@@ -224,7 +209,7 @@ export default function PostDetailScreen() {
   }
 
   const isMine = post.author_id === userId;
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = isAdminUser(currentUser);
   const hasLockedSuggestion = Boolean(post.suggestion?.admin_reply);
   const metadata = post.metadata ?? {};
   const isCouncilActivityEntry = metadata.show_in_council_activity === true;
@@ -236,6 +221,14 @@ export default function PostDetailScreen() {
       ? SUGGESTION_STATUSES.find((status) => status.value === post.suggestion?.status)?.label ?? "대기중"
       : board?.board_type === "activity_certification"
         ? (post.category?.trim() || board?.name || "활동")
+      : board?.slug === "comprehensive-exam" || post.category?.includes("종합")
+        ? "종합시험"
+      : board?.slug === "exam-archive"
+        ? "시험족보"
+      : board?.slug === "study-recruit"
+        ? String(metadata.recruitment_status ?? post.category ?? "").toLowerCase().includes("closed") || post.category?.includes("마감")
+          ? "마감"
+          : "진행중"
       : categoryLabel(post.category, isAdminParticipationGuide ? "모집중" : board?.board_type === "notice" ? "공지" : board?.name ?? "게시글");
   const tone = categoryTone(label);
   const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
@@ -243,7 +236,7 @@ export default function PostDetailScreen() {
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
   const canEditOwn = isMine && !hasLockedSuggestion && !isNotice;
   const showReportItem = !isMine;
-  const showBlockItem = post.author_id !== null && !isMine && !canManagePost;
+  const showBlockItem = post.author_id !== null && !isMine && !canManagePost && !isSuggestionRequest;
   const hasPostMenu = canEditOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
@@ -261,7 +254,13 @@ export default function PostDetailScreen() {
       : board?.board_type === "mutual_aid"
         ? [
             ["경조사 종류", post.mutual_aid?.event_type ?? post.category],
-            ["날짜", post.mutual_aid?.event_date ?? metadata.event_date],
+            [
+              "날짜",
+              formatBoardDate(
+                post.mutual_aid?.event_date ??
+                  (typeof metadata.event_date === "string" ? metadata.event_date : undefined),
+              ),
+            ],
             ["관계", post.mutual_aid?.relation ?? metadata.relation],
           ]
         : board?.slug === "study-recruit"
@@ -280,6 +279,7 @@ export default function PostDetailScreen() {
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
   const hasVisualHero = board?.board_type === "album" || isActivityCertification || isAdminParticipationGuide || isCouncilActivityEntry;
+  const hasNaturalHero = isActivityCertification || isCouncilActivityEntry;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -296,6 +296,10 @@ export default function PostDetailScreen() {
           ? "상조회 신청 상세"
         : board?.board_type === "activity_certification"
           ? "활동 인증"
+          : board?.slug === "lecture-reviews"
+            ? "강의후기"
+            : board?.slug === "exam-archive"
+              ? "시험족보"
           : board?.board_type === "notice"
             ? "공지사항"
             : board?.name ?? "게시글";
@@ -414,17 +418,27 @@ export default function PostDetailScreen() {
   };
 
   const handleDeleteComment = (commentId: number) => {
-    Alert.alert("댓글 삭제", "이 댓글을 삭제할까요?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: () =>
-          deleteCommentMutation.mutate(commentId, {
-            onError: () => Alert.alert("댓글 삭제 실패", "댓글을 삭제할 수 없습니다."),
-          }),
+    if (deleteCommentMutation.isPending) return;
+    setCommentDeleteError(null);
+    setPendingDeleteCommentId(commentId);
+  };
+
+  const closeCommentDeleteConfirm = () => {
+    if (deleteCommentMutation.isPending) return;
+    setPendingDeleteCommentId(null);
+    setCommentDeleteError(null);
+  };
+
+  const confirmDeleteComment = () => {
+    if (pendingDeleteCommentId === null || deleteCommentMutation.isPending) return;
+    deleteCommentMutation.mutate(pendingDeleteCommentId, {
+      onSuccess: () => {
+        setPendingDeleteCommentId(null);
+        setCommentDeleteError(null);
+        setReplyParentId(null);
       },
-    ]);
+      onError: () => setCommentDeleteError("댓글을 삭제할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    });
   };
 
   const handleCreateComment = () => {
@@ -478,15 +492,19 @@ export default function PostDetailScreen() {
       <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
         {hasVisualHero ? (
           <View style={styles.visualHeroBlock}>
-            <View style={styles.visualHero}>
+            <View style={hasNaturalHero ? styles.visualHeroNatural : styles.visualHero}>
               {heroAttachment ? (
-                <MediaImage media={heroAttachment} style={styles.visualHeroImage} />
+                hasNaturalHero ? (
+                  <NaturalAspectMediaImage media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                ) : (
+                  <MediaImage media={heroAttachment} style={styles.visualHeroImage} />
+                )
               ) : (
                 <LinearGradient
                   colors={board?.board_type === "album" ? ALBUM_FALLBACK_GRADIENTS[normalizedGalleryIndex % ALBUM_FALLBACK_GRADIENTS.length] : ["#2761FF", "#86C8FF"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.visualHeroFallback}
+                  style={[styles.visualHeroFallback, hasNaturalHero ? styles.visualHeroFallbackNatural : null]}
                 />
               )}
               {board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? (
@@ -547,24 +565,24 @@ export default function PostDetailScreen() {
             {!isActivityCertification ? (
               <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : (isAdminParticipationGuide || isStudyRecruit || isCouncilActivity) ? styles.titleGuide : null]}>{post.title}</Text>
             ) : null}
-            {!isAdminParticipationGuide && !isActivityCertification && !isCouncilActivity ? (
+            {!isAdminParticipationGuide && !isActivityCertification && !isCouncilActivity && !isCouncilActivityEntry ? (
               <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : null]}>
                 {board?.board_type === "notice"
-                  ? `${shortDate(post.created_at)} · 조회 ${post.view_count}`
+                  ? `${formatBoardDate(post.created_at)} · 조회 ${post.view_count}`
                   : isMutualAidRequest
-                    ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
+                    ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(post.created_at)}`
                   : commentsDisabled
-                    ? shortDate(post.created_at)
+                    ? formatBoardDate(post.created_at)
                   : isResource || isStudyRecruit
-                    ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${shortDate(post.created_at)}`
-                  : `${post.author_nickname} · ${shortDate(post.created_at)}`}
+                    ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(post.created_at)}`
+                  : `${post.author_nickname} · ${formatBoardDate(post.created_at)}`}
               </Text>
             ) : null}
 
             {!isAdminParticipationGuide && !isActivityCertification ? <View style={styles.bodyDivider} /> : null}
           </>
         ) : null}
-        {!isPhotoAlbum && post.content.trim() ? <Text style={[styles.body, isAdminParticipationGuide || isActivityCertification ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
+        {!isPhotoAlbum && !isMutualAidRequest && post.content.trim() ? <Text style={[styles.body, isAdminParticipationGuide || isActivityCertification ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
 
         {board?.board_type === "notice" && contentUrl ? (
           <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.externalLinkButton}>
@@ -579,7 +597,7 @@ export default function PostDetailScreen() {
             {typeof metadata.activity_date === "string" && metadata.activity_date.trim() ? (
               <View style={styles.certDateRow}>
                 <Ionicons name="calendar-outline" size={16} color={COLORS.muted} />
-                <Text style={styles.certDateText}>{formatDotDate(metadata.activity_date)}</Text>
+                <Text style={styles.certDateText}>{formatBoardDate(metadata.activity_date)}</Text>
               </View>
             ) : null}
             {typeof metadata.participants === "string" && metadata.participants.trim() ? (
@@ -602,25 +620,35 @@ export default function PostDetailScreen() {
         ) : isStudyRecruit ? (
           typeof metadata.contact === "string" && metadata.contact.trim() ? (
             <View style={styles.certDateRow}>
-              <Ionicons name="call-outline" size={15} color={COLORS.muted} />
+              <Ionicons name="mail-outline" size={15} color={COLORS.muted} />
               <Text style={styles.certDateText}>스터디장 연락수단 {metadata.contact}</Text>
             </View>
           ) : null
         ) : detailRows.length > 0 ? (
-          <View style={styles.infoBox}>
+          <View style={[styles.infoBox, isMutualAidRequest ? styles.mutualAidInfoBox : null]}>
             {detailRows
               .filter((row): row is [string, string] => typeof row[1] === "string" && row[1].trim().length > 0)
               .map(([rowLabel, value]) => (
-                <View key={rowLabel} style={styles.infoRow}>
+                <View key={rowLabel} style={[styles.infoRow, isMutualAidRequest ? styles.mutualAidInfoRow : null]}>
                   <Text style={styles.infoLabel}>{rowLabel}</Text>
-                  <Text style={styles.infoValue}>{value}</Text>
+                  <Text style={styles.infoValue}>
+                    {isMutualAidRequest && rowLabel === "날짜" ? formatBoardDate(value) : value}
+                  </Text>
                 </View>
               ))}
           </View>
         ) : null}
 
+        {isMutualAidRequest && post.content.trim() ? (
+          <View style={styles.mutualAidNote}>
+            <Text style={styles.mutualAidSectionLabel}>비고</Text>
+            <Text style={styles.mutualAidNoteValue}>{post.content}</Text>
+          </View>
+        ) : null}
+
         {visibleAttachments.length > 0 ? (
-          <View style={styles.attachments}>
+          <View style={[styles.attachments, isMutualAidRequest ? styles.mutualAidAttachments : null]}>
+            {isMutualAidRequest ? <Text style={styles.mutualAidSectionLabel}>증빙서류</Text> : null}
             {visibleAttachments.map((attachment) => {
               const isImage = attachment.content_type.startsWith("image/");
               return (
@@ -636,7 +664,7 @@ export default function PostDetailScreen() {
                   }}
                   style={isImage ? styles.imageAttachment : styles.fileAttachment}
                 >
-                  {isImage ? <MediaImage media={attachment} style={styles.attachmentImage} /> : null}
+                  {isImage ? <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} /> : null}
                   {!isImage ? (
                     <>
                       <Ionicons name="document-outline" size={18} color={COLORS.subtle} />
@@ -660,9 +688,12 @@ export default function PostDetailScreen() {
 
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
-            <Text style={styles.officialReplyTitle}>💬 원우회 답변</Text>
+            <View style={styles.officialReplyHeader}>
+              <Ionicons name="chatbubble-ellipses-outline" size={14} color={COLORS.primary} />
+              <Text style={styles.officialReplyTitle}>원우회 답변</Text>
+            </View>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
-            {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{shortDate(post.suggestion.replied_at)}</Text> : null}
+            {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{formatBoardDate(post.suggestion.replied_at)}</Text> : null}
           </View>
         ) : null}
 
@@ -710,7 +741,14 @@ export default function PostDetailScreen() {
           </View>
         ) : null}
 
-        {post.mutual_aid ? (
+        {post.mutual_aid?.rejection_reason && !isAdmin ? (
+          <View style={styles.mutualAidRejectionBox}>
+            <Text style={styles.mutualAidRejectionTitle}>반려 사유</Text>
+            <Text style={styles.mutualAidRejectionBody}>{post.mutual_aid.rejection_reason}</Text>
+          </View>
+        ) : null}
+
+        {post.mutual_aid && isAdmin ? (
           <View style={styles.suggestionBox}>
             <Text style={styles.suggestionTitle}>상조회 처리 상태</Text>
             <Text style={styles.suggestionStatus}>{currentMutualAidLabel}</Text>
@@ -832,64 +870,62 @@ export default function PostDetailScreen() {
       ) : null}
 
       {showPostMenu ? (
-        <Pressable accessibilityLabel="더보기 메뉴 닫기" onPress={() => setShowPostMenu(false)} style={styles.menuOverlay}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.menuCard, { marginTop: Math.max(insets.top, 10) + 44 }]}>
+        <Pressable accessibilityLabel="더보기 메뉴 닫기" onPress={() => setShowPostMenu(false)} style={styles.modalBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.menuSheet}>
+            <View style={styles.sheetHandle} />
             {canEditOwn ? (
               <>
                 <Pressable
                   onPress={() => {
                     setShowPostMenu(false);
-                    router.push(`/board/post/edit/${post.id}`);
+                    if (isActivityCertification) {
+                      router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
+                    } else {
+                      router.push(`/board/post/edit/${post.id}`);
+                    }
                   }}
-                  style={styles.menuItem}
+                  style={styles.sheetMenuItem}
                 >
                   <Ionicons name="create-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.menuItemText}>수정</Text>
+                  <Text style={styles.sheetMenuText}>수정</Text>
                 </Pressable>
-                <View style={styles.menuDivider} />
                 <Pressable
                   onPress={() => {
                     setShowPostMenu(false);
                     handleDeletePost();
                   }}
-                  style={styles.menuItem}
+                  style={styles.sheetMenuItem}
                 >
                   <Ionicons name="trash-outline" size={20} color="#D64545" />
-                  <Text style={[styles.menuItemText, styles.menuItemDanger]}>삭제</Text>
+                  <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
                 </Pressable>
               </>
             ) : null}
             {showReportItem ? (
-              <>
-                {canEditOwn ? <View style={styles.menuDivider} /> : null}
-                <Pressable
-                  disabled={reportedTargets[`post:${post.id}`]}
-                  onPress={() => {
-                    setShowPostMenu(false);
-                    startReport({ type: "post", id: post.id, label: "게시글" });
-                  }}
-                  style={styles.menuItem}
-                >
-                  <Ionicons name="flag-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.menuItemText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
-                </Pressable>
-              </>
+              <Pressable
+                disabled={reportedTargets[`post:${post.id}`]}
+                onPress={() => {
+                  setShowPostMenu(false);
+                  startReport({ type: "post", id: post.id, label: "게시글" });
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <Ionicons name="flag-outline" size={20} color={COLORS.text} />
+                <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
+              </Pressable>
             ) : null}
             {showBlockItem ? (
-              <>
-                {canEditOwn || showReportItem ? <View style={styles.menuDivider} /> : null}
-                <Pressable
-                  disabled={isBlockingAuthor}
-                  onPress={() => {
-                    setShowPostMenu(false);
-                    handleBlockAuthor();
-                  }}
-                  style={styles.menuItem}
-                >
-                  <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.menuItemText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
-                </Pressable>
-              </>
+              <Pressable
+                disabled={isBlockingAuthor}
+                onPress={() => {
+                  setShowPostMenu(false);
+                  handleBlockAuthor();
+                }}
+                style={[styles.sheetMenuItem, styles.sheetMenuItemLast]}
+              >
+                <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
+                <Text style={styles.sheetMenuText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
+              </Pressable>
             ) : null}
           </Pressable>
         </Pressable>
@@ -943,6 +979,32 @@ export default function PostDetailScreen() {
               </Pressable>
               <Pressable disabled={deletePostMutation.isPending} onPress={confirmDeletePost} style={[styles.confirmDeleteButton, deletePostMutation.isPending ? styles.buttonDisabled : null]}>
                 <Text style={styles.confirmDeleteText}>{deletePostMutation.isPending ? "삭제 중" : "삭제"}</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      ) : null}
+
+      {pendingDeleteCommentId !== null ? (
+        <Pressable accessibilityLabel="댓글 삭제 닫기" onPress={closeCommentDeleteConfirm} style={styles.confirmBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>댓글 삭제</Text>
+            <Text style={styles.confirmBody}>이 댓글을 삭제할까요?</Text>
+            {commentDeleteError ? (
+              <Text accessibilityRole="alert" style={styles.confirmErrorText}>
+                {commentDeleteError}
+              </Text>
+            ) : null}
+            <View style={styles.confirmActions}>
+              <Pressable disabled={deleteCommentMutation.isPending} onPress={closeCommentDeleteConfirm} style={styles.confirmCancelButton}>
+                <Text style={styles.confirmCancelText}>취소</Text>
+              </Pressable>
+              <Pressable
+                disabled={deleteCommentMutation.isPending}
+                onPress={confirmDeleteComment}
+                style={[styles.confirmDeleteButton, deleteCommentMutation.isPending ? styles.buttonDisabled : null]}
+              >
+                <Text style={styles.confirmDeleteText}>{deleteCommentMutation.isPending ? "삭제 중" : "삭제"}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -1210,6 +1272,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 16,
   },
+  sheetMenuItemLast: {
+    borderBottomWidth: 0,
+  },
+  confirmErrorText: {
+    color: COLORS.danger,
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 19,
+    marginTop: 12,
+    textAlign: "center",
+  },
   confirmActions: {
     flexDirection: "row",
     justifyContent: "center",
@@ -1305,12 +1378,26 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#EEF2F7",
   },
+  visualHeroNatural: {
+    position: "relative",
+    width: "100%",
+    overflow: "hidden",
+    backgroundColor: "#EEF2F7",
+  },
   visualHeroImage: {
     width: "100%",
     height: "100%",
   },
+  visualHeroNaturalImage: {
+    width: "100%",
+  },
   visualHeroFallback: {
     flex: 1,
+  },
+  visualHeroFallbackNatural: {
+    flex: 0,
+    width: "100%",
+    aspectRatio: 360 / 230,
   },
   galleryArrow: {
     position: "absolute",
@@ -1497,13 +1584,42 @@ const styles = StyleSheet.create({
   infoLabel: {
     color: COLORS.subtle,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   infoValue: {
     color: COLORS.text,
     fontSize: 14,
-    fontWeight: "800",
+    fontWeight: "400",
     marginTop: 5,
+  },
+  mutualAidInfoBox: {
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    marginTop: 0,
+  },
+  mutualAidInfoRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+    paddingVertical: 14,
+  },
+  mutualAidNote: {
+    marginTop: 16,
+  },
+  mutualAidSectionLabel: {
+    color: COLORS.subtle,
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 18,
+  },
+  mutualAidNoteValue: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 22,
+    marginTop: 5,
+  },
+  mutualAidAttachments: {
+    marginTop: 26,
   },
   attachments: {
     gap: 10,
@@ -1527,7 +1643,6 @@ const styles = StyleSheet.create({
   },
   attachmentImage: {
     width: "100%",
-    height: 220,
   },
   fileName: {
     flex: 1,
@@ -1586,6 +1701,24 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 22,
     marginTop: 9,
+  },
+  mutualAidRejectionBox: {
+    borderRadius: 8,
+    backgroundColor: COLORS.pink50,
+    padding: 14,
+    marginTop: 24,
+    gap: 7,
+  },
+  mutualAidRejectionTitle: {
+    color: COLORS.pink700,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  mutualAidRejectionBody: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 22,
   },
   adminReplyBox: {
     gap: 10,

@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: sogang_app_qa
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - qa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sogang_app_qa"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app_qa
+      APP_ENVIRONMENT: test
+      AUTH_SECRET_KEY: isolated-qa-secret-not-for-deployment
+      RATE_LIMIT_ENABLED: "false"
+      EXPO_PUSH_ENABLED: "false"
+      EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "0"
+      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "0"
+      MEDIA_UPLOAD_DIR: /tmp/qa_uploads
+      MEDIA_PRIVATE_UPLOAD_DIR: /tmp/qa_private_uploads
+    ports:
+      - "58000:8000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  notification-worker:
+    build:
+      context: ./backend
+    command: ["python", "scripts/run_notification_scheduler.py"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app_qa
+      APP_ENVIRONMENT: test
+      AUTH_SECRET_KEY: isolated-qa-secret-not-for-deployment
+      EXPO_PUSH_ENABLED: "false"
+      NOTIFICATION_JOB_HOUR: "9"
+      NOTIFICATION_JOB_MINUTE: "0"
+      NOTIFICATION_JOB_RUN_ON_START: "false"
+
+volumes:
+  qa_pgdata:

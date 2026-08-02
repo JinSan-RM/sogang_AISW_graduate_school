@@ -39,6 +39,7 @@ const BOARD_LABELS: Record<string, { name: string; description?: string }> = {
   "lecture-reviews": { name: "강의 후기", description: "강의 후기와 수강 경험을 공유하세요." },
   "exam-archive": { name: "시험 자료실", description: "시험 자료와 학습 자료를 공유하세요." },
   "comprehensive-exam": { name: "종합시험", description: "종합시험 정보와 준비 자료를 확인하세요." },
+  "graduation-thesis": { name: "졸업논문", description: "졸업논문 정보와 준비 자료를 공유하세요." },
   "club-activity": { name: "동아리 활동 인증", description: "동아리 활동 인증 게시글을 작성하고 확인하세요." },
   "study-activity": { name: "스터디 활동 인증", description: "스터디 활동 인증 게시글을 작성하고 확인하세요." },
   "networking-activity": { name: "네트워킹 활동 인증", description: "멘토링과 네트워킹 활동 기록을 확인하세요." },

@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../components/LoadingState";
 import { notificationApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { NotificationSettings } from "../../types";
@@ -39,7 +40,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   notify_council: true,
 };
 
-const SETTING_ROWS: Array<{ key: keyof NotificationSettings; label: string }> = [
+const SETTING_ROWS: { key: keyof NotificationSettings; label: string }[] = [
   { key: "notify_notice", label: "공지사항 알림" },
   { key: "notify_event", label: "일정 알림" },
   { key: "notify_comment", label: "커뮤니티 댓글 알림" },
@@ -51,19 +52,29 @@ export default function NotificationSettingsScreen() {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [savingKey, setSavingKey] = useState<keyof NotificationSettings | null>(null);
 
-  useEffect(() => {
+  const loadSettings = useCallback(async () => {
     if (!isAuthenticated) {
       setIsLoading(false);
       return;
     }
-    notificationApi
-      .getSettings()
-      .then((response) => setSettings(response.data))
-      .catch(() => Alert.alert("불러오기 실패", "알림 설정을 불러오지 못했습니다."))
-      .finally(() => setIsLoading(false));
+    setIsLoading(true);
+    setIsError(false);
+    try {
+      const response = await notificationApi.getSettings();
+      setSettings(response.data);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
     const next = { ...settings, [key]: value };
@@ -98,8 +109,13 @@ export default function NotificationSettingsScreen() {
       </View>
 
       {isLoading ? (
+        <LoadingState />
+      ) : isError ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
+          <Text style={styles.errorText}>알림 설정을 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void loadSettings()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
         </View>
       ) : (
         <View style={styles.list}>
@@ -153,6 +169,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
+  },
+  errorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   list: {
     paddingTop: 4,

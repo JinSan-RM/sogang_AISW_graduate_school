@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date
 
 import pytest
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -7,7 +8,10 @@ from starlette.requests import Request
 
 from app.errors import http_exception_handler, unhandled_exception_handler
 from app.models.comment import Comment
+from app.models.media import MediaAsset
 from app.models.post import Post
+from app.models.post_extension import PostMutualAid
+from app.routers import posts as posts_router
 from app.schemas.comment import COMMENT_MAX_LENGTH
 from app.schemas.post import POST_CONTENT_MAX_LENGTH, POST_TITLE_MAX_LENGTH
 
@@ -130,6 +134,73 @@ def test_post_title_and_content_validation(api, payload) -> None:
         json=payload,
         headers=api.headers["owner"],
     )
+    _assert_validation_error(response)
+
+
+def test_mutual_aid_optional_notes_can_be_empty(api, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(posts_router, "_minimum_mutual_aid_event_date", lambda: date(2026, 8, 1))
+
+    with api.session() as db:
+        evidence = MediaAsset(
+            owner_id=1,
+            original_filename="evidence.pdf",
+            stored_filename="private-evidence.pdf",
+            content_type="application/pdf",
+            file_size=123,
+            url="/private-uploads/private-evidence.pdf",
+            is_private=True,
+            status="ready",
+        )
+        db.add(evidence)
+        db.commit()
+        evidence_id = evidence.id
+
+    response = api.client.post(
+        "/api/boards/1/posts",
+        json={
+            "title": "Wedding mutual-aid request",
+            "content": "",
+            "category": "wedding",
+            "metadata": {"event_date": "2026-08-01", "relation": "self"},
+            "attachment_ids": [evidence_id],
+        },
+        headers=api.headers["owner"],
+    )
+
+    assert response.status_code == 200
+    post_id = response.json()["data"]["id"]
+
+    update_response = api.client.put(
+        f"/api/posts/{post_id}",
+        json={
+            "title": "Updated wedding mutual-aid request",
+            "content": "   ",
+            "category": "wedding",
+            "metadata": {"event_date": "2026-08-01", "relation": "self"},
+            "attachment_ids": [evidence_id],
+        },
+        headers=api.headers["owner"],
+    )
+
+    assert update_response.status_code == 200
+    with api.session() as db:
+        post = db.get(Post, post_id)
+        mutual_aid = db.query(PostMutualAid).filter(PostMutualAid.post_id == post_id).one()
+        assert post.content == ""
+        assert (mutual_aid.event_type, mutual_aid.event_date, mutual_aid.relation) == (
+            "wedding",
+            date(2026, 8, 1),
+            "self",
+        )
+
+
+def test_regular_post_update_still_requires_content(api) -> None:
+    response = api.client.put(
+        "/api/posts/3",
+        json={"title": "Public General Topic", "content": "   "},
+        headers=api.headers["owner"],
+    )
+
     _assert_validation_error(response)
 
 

@@ -1,0 +1,188 @@
+# Phase 2 Auth and Permission Spec
+
+2026-07-05 override: `정책_정의서_260705.md` changes the launch access model to a member-only app. `guest` users may use login, signup/email verification, password reset, public account-deletion request/verify, token refresh, registration options, legal/support screens, and health/docs only. Board, post, comment, search, event, FAQ, media, banner, notification, settings, and admin APIs require an authenticated user unless a later policy document explicitly re-opens a public route. A signed media file URL is a short-lived capability issued only after an authenticated authorization check.
+
+Status: implemented baseline, checked 2026-07-27
+
+## 1. Roles
+
+| Role | Meaning |
+| --- | --- |
+| `guest` | Not logged in |
+| `user` | Verified active student/alumni user |
+| `admin` | Student council/admin operator |
+
+Role hierarchy:
+
+`admin` includes `user` permissions.
+
+## 2. Session Strategy
+
+Use:
+
+- Short-lived JWT access token.
+- Long-lived opaque refresh token stored hashed in DB.
+- Refresh-token rotation on every refresh.
+- Logout revokes refresh token.
+
+Recommended expiry:
+
+- Access token: 15 minutes.
+- Refresh token: 30 days.
+- Email verification code and resend cooldown: 5 minutes.
+- Password reset token: 30 minutes.
+
+## 3. Password Rules
+
+Minimum:
+
+- 8 characters.
+- Include at least one ASCII letter, one number, and one special character.
+
+Recommended:
+
+- Reject common leaked passwords later.
+- New and changed passwords use Argon2id.
+- Existing PBKDF2 hashes remain readable and are upgraded to Argon2id after a successful login.
+
+## 4. School Email Rules
+
+Allowed domains:
+
+- `sogang.ac.kr`
+
+Implementation:
+
+- Domain check is case-insensitive.
+- Send a six-digit numeric verification code.
+- Store only code hash.
+- Never include verification or reset codes in API responses or client-visible development fields.
+- Expire codes and block verification after five failed attempts.
+- Rate limit request by email and IP.
+- Registration requires the currently active administrator-managed major option.
+- Registration requires the current privacy-policy version and stores both the accepted version and consent timestamp on the user.
+
+## 5. Permission Matrix
+
+| Feature | Guest | User | Admin |
+| --- | --- | --- | --- |
+| Read boards/content | No | Yes | Yes |
+| Read post detail | No | Yes | Yes |
+| Create regular post | No | Yes | Yes |
+| Create activity certification | No | Yes | Yes |
+| Create study recruitment | No | Yes | Yes |
+| Create club/networking guide post | No | No | Yes |
+| Create notice | No | No | Yes |
+| Create/update club guide posts | No | No | Yes |
+| Pin notice/post | No | No | Yes |
+| Update own post | No | Yes | Yes |
+| Update others' posts | No | No | Yes |
+| Delete own post | No | Yes | Yes |
+| Delete others' posts | No | No | Yes |
+| Comment | No | Yes | Yes |
+| Edit own comment | No | Yes | Yes |
+| Delete own comment | No | Yes | Yes |
+| Delete others' comments | No | No | Yes |
+| Like/bookmark | No | Yes | Yes |
+| Suggestion post | No | Yes | Yes |
+| Official suggestion reply | No | No | Yes |
+| Manage council content except suggestion/mutual aid submissions | No | No | Yes |
+| FAQ admin CRUD | No | No | Yes |
+| Event admin CRUD | No | No | Yes |
+| Guide/admin content CRUD | No | No | Yes |
+| Profile edit | No | Own only | Own/all if later needed |
+| Notification settings | No | Own only | Own only |
+| Read mutual-aid requests | No | Own only | All |
+| Read mutual-aid comments/evidence | No | Own only | All |
+| Issue media access URL | No | Authorized media only | All |
+
+## 6. Board Write Policy
+
+`boards.write_permission` values:
+
+- `guest`: public write. Avoid in Phase 2.
+- `user`: verified users.
+- `admin`: admins only.
+
+Rules:
+
+- Backend must enforce this, not frontend only.
+- Frontend may hide buttons based on permission, but hidden UI is not security.
+- The `club-promo` and `networking-programs` boards are seeded and migrated with `write_permission = admin`; the post API also applies an explicit admin guard for defense in depth.
+- `study-recruit` and all activity certification boards remain user-writable. Activity bank-account metadata is sensitive and may be read only by admins.
+- Every `council`/`gsa` board is admin-writable unless its board type is `suggestion` or `mutual_aid`.
+- Cohort-leader registration is stored through the admin-only board management API; members can read the configured cohort introductions but cannot create or edit them.
+- Past-council records use a separate admin-only board metadata area. FAQ remains a separate dedicated table/API; neither mutation path is available to members.
+- Suggestions remain anonymous in member and admin presentation. Only the admin reply endpoint can set an official answer and `answered` requires reply text.
+- Mutual-aid submissions are readable only by the requester and admins; board lists and global search are owner-scoped for non-admin users, and the same centralized post-read policy protects detail, reaction, comment, report, activity-history, and attachment paths. A non-owner receives `404 NOT_FOUND` so the API does not confirm the existence of another member's application.
+- Draft and hidden posts are author/admin only across the same paths, while `deleted` status is admin-only; changing a previously readable post to an unpublished state removes it from other members' activity history and media authorization.
+- The backend does not mount the upload directory. It issues short-lived signed media URLs only after an authenticated metadata/access request passes object-level policy. A post attachment inherits the post's read policy; mutual-aid evidence remains requester/admin only.
+
+## 7. Anonymous Writing
+
+Rules:
+
+- Allowed only when `boards.allow_anonymous = true`.
+- Store real `author_id`.
+- Return `author_id = null`, `author_nickname = "Anonymous"`, and no cohort to non-admin readers other than the author when `is_anonymous = true` or the board forces anonymous presentation. The author may receive their own ID for edit/delete controls, but their displayed name stays anonymous.
+- Non-admin author-name search never matches an anonymous post. Author blocking is not applied to anonymous or forced-anonymous posts because appearance/disappearance would reveal identity; those posts remain reportable.
+- Admins can still see moderation identity if needed.
+- An anonymized account-deletion author is different from an anonymous post. After deletion the real user row no longer exists, `author_id` is null for retained public content, and every reader sees `Deleted user`; administrators cannot recover the deleted identity from the content row.
+
+## 8. Comment Depth
+
+Notion scope says 2-depth comments.
+
+Rules:
+
+- Root comment: `parent_id = null`.
+- Reply: `parent_id` points to root comment.
+- Reply to reply is rejected with `BAD_REQUEST`.
+
+## 9. Backend Dependencies
+
+Required FastAPI dependencies:
+
+- `get_current_user_optional() -> User | None`
+- `get_current_user() -> User`
+- `require_admin() -> User`
+- `require_post_owner_or_admin(post_id) -> User`
+- `require_comment_owner_or_admin(comment_id) -> User`
+- `require_board_write_permission(board_id) -> User`
+
+Remove:
+
+- Fixed `CURRENT_USER_ID = 1` for write operations.
+
+## 10. Frontend Auth State
+
+Store:
+
+- `accessToken`
+- `refreshToken`
+- `user`
+- `isAuthenticated`
+
+Rules:
+
+- Attach access token through Axios interceptor.
+- On 401, attempt one refresh.
+- If refresh fails, clear auth state and route to login.
+- Logout clears local state and calls backend logout when possible.
+
+## 11. Login Identifier Recovery
+
+- The school email is the login ID.
+- v1 does not expose a separate "find ID" API because it would duplicate the email identifier and could enable account enumeration.
+- Users who know their school email use the password-reset flow; login/help copy explains this decision.
+
+## 12. Account Deletion Security
+
+- Authenticated deletion uses `DELETE /api/users/me` and requires the current password in the request body.
+- Signed-out deletion uses `POST /api/auth/account-deletion/request` followed by `/verify`; verification requires the school-email code and current password.
+- The request endpoint returns the same accepted response for existing and missing accounts. Invalid account, code, or password at verification returns one generic error.
+- Both paths are rate-limited. Verification codes are hashed, have attempt and expiry limits, and are never returned by the API or logged.
+- The operation hard-deletes account PII, sessions/tokens, private activity, private/draft/hidden/mutual-aid content, and private/non-retained media in one database transaction with staged-file rollback protection.
+- Public published posts/comments and their required public attachments may remain only after user/owner links and identifying filenames are removed.
+- Administrators must transfer operational responsibility and be demoted by another administrator before self-deletion.
+- The completion receipt is deliberately non-identifying. There is no fixed application-level legal retention claim; any receipt or backup interval requires explicit privacy-owner approval.

@@ -5,8 +5,16 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBoardsQuery } from "../../hooks/useApi";
-import { useBoardPosts } from "../../hooks/usePosts";
-import type { Board, PostListItem } from "../../types";
+import LoadingState from "../../components/LoadingState";
+import { useMultiBoardPosts } from "../../hooks/usePosts";
+import type { Board } from "../../types";
+import { formatBoardDate } from "../../utils/dateFormat";
+import {
+  isNoticeContentBoard,
+  NOTICE_FILTERS,
+  noticePostsForFilter,
+  type NoticeFilter,
+} from "../../utils/noticeFeed";
 
 const COLORS = {
   primary: "#2761FF",
@@ -28,7 +36,6 @@ const COLORS = {
   cyan700: "#14788A",
 };
 
-type NoticeFilter = "all" | "academic" | "event" | "other";
 type IconName = keyof typeof Ionicons.glyphMap;
 
 type NoticeRowModel = {
@@ -40,46 +47,8 @@ type NoticeRowModel = {
   isPinned?: boolean;
 };
 
-const FILTERS: { key: NoticeFilter; label: string; slugs: string[] }[] = [
-  { key: "all", label: "전체", slugs: ["all-notices", "academic-notices", "event-notices", "webinar-notices"] },
-  { key: "academic", label: "학사공지", slugs: ["academic-notices", "academic-calendar"] },
-  { key: "event", label: "행사공지", slugs: ["event-notices", "webinar-notices"] },
-  { key: "other", label: "기타공지", slugs: ["all-notices"] },
-];
-
 function flattenBoards(groups?: { boards: Board[] }[]) {
   return groups?.flatMap((group) => group.boards) ?? [];
-}
-
-function isNoticeBoard(board: Board) {
-  return board.category === "notices" || board.board_type === "notice" || board.slug.includes("notice");
-}
-
-function findBoardForFilter(boards: Board[], filter: NoticeFilter) {
-  const filterConfig = FILTERS.find((item) => item.key === filter) ?? FILTERS[0];
-  for (const slug of filterConfig.slugs) {
-    const board = boards.find((item) => item.slug === slug);
-    if (board) {
-      return board;
-    }
-  }
-  return filter === "all" ? boards[0] : undefined;
-}
-
-function formatNoticeDate(value?: string | null) {
-  if (!value) {
-    return "";
-  }
-  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
-  const date = new Date(value.includes("T") && !hasTimezone ? `${value}Z` : value);
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(2, 10).replace(/-/g, ".");
-  }
-  const year = String(date.getFullYear()).slice(2);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${year}.${month}.${day}(${weekday})`;
 }
 
 function deadlineLabel(value?: string | null) {
@@ -93,47 +62,6 @@ function deadlineLabel(value?: string | null) {
   if (days < 0) return "마감";
   if (days === 0) return "마감 D-day";
   return `마감 D-${days}`;
-}
-
-function normalizeNoticeCategory(value?: string | null) {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const rawCategory = trimmed.toLowerCase();
-  if (rawCategory.includes("event") || rawCategory.includes("행사")) {
-    return "행사공지";
-  }
-  if (rawCategory.includes("webinar") || rawCategory.includes("특강")) {
-    return "특강공지";
-  }
-  if (rawCategory.includes("academic") || rawCategory.includes("학사") || rawCategory.includes("calendar")) {
-    return "학사공지";
-  }
-  if (rawCategory.includes("all") || rawCategory.includes("전체")) {
-    return "기타공지";
-  }
-  if (rawCategory.includes("other") || rawCategory.includes("general") || rawCategory.includes("기타")) {
-    return "기타공지";
-  }
-  return trimmed.length <= 8 ? trimmed : "공지";
-}
-
-function categoryFromPost(post: PostListItem, board?: Board, filter?: NoticeFilter) {
-  const explicitCategory = normalizeNoticeCategory(post.category);
-  if (explicitCategory) {
-    return explicitCategory;
-  }
-  if (filter === "academic") {
-    return "학사공지";
-  }
-  if (filter === "event") {
-    return "행사공지";
-  }
-  if (filter === "other") {
-    return "기타공지";
-  }
-  return normalizeNoticeCategory(board?.slug) ?? "기타공지";
 }
 
 function rowTone(category: string) {
@@ -180,12 +108,7 @@ function NoticeRow({ item }: { item: NoticeRowModel }) {
 }
 
 function LoadingRows() {
-  return (
-    <View style={styles.loadingWrap}>
-      <ActivityIndicator color={COLORS.primary} />
-      <Text style={styles.loadingText}>공지 데이터를 불러오는 중입니다.</Text>
-    </View>
-  );
+  return <LoadingState compact />;
 }
 
 function EmptyState({ title, description }: { title: string; description?: string }) {
@@ -206,31 +129,28 @@ export default function NoticesScreen() {
   const noticeBoards = useMemo(
     () =>
       flattenBoards(boardData?.data)
-        .filter(isNoticeBoard)
-        .filter((board) => board.is_active !== false)
+        .filter(isNoticeContentBoard)
         .sort((left, right) => left.sort_order - right.sort_order),
     [boardData?.data]
   );
-  const selectedBoard = useMemo(() => findBoardForFilter(noticeBoards, selectedFilter), [noticeBoards, selectedFilter]);
-  const postsQuery = useBoardPosts(selectedBoard?.id ?? 0, {
+  const noticeBoardIds = useMemo(() => noticeBoards.map((board) => board.id), [noticeBoards]);
+  const postsQuery = useMultiBoardPosts(noticeBoardIds, {
     sort: "latest",
-    category: selectedFilter === "other" ? "other" : undefined,
   });
 
   const realRows = useMemo<NoticeRowModel[]>(() => {
-    const posts = postsQuery.data?.pages.flatMap((page) => page.data) ?? [];
-    return posts.map((post) => ({
-      key: `post-${post.id}`,
-      postId: post.id,
-      title: post.title,
-      category: categoryFromPost(post, selectedBoard, selectedFilter),
-      date: [formatNoticeDate(post.created_at), deadlineLabel(post.deadline_at)].filter(Boolean).join(" · "),
-      isPinned: post.is_pinned,
-    }));
-  }, [postsQuery.data?.pages, selectedBoard, selectedFilter]);
+    return noticePostsForFilter(postsQuery.data ?? [], noticeBoards, selectedFilter).map(({ post, category }) => ({
+        key: `post-${post.id}`,
+        postId: post.id,
+        title: post.title,
+        category,
+        date: [formatBoardDate(post.created_at), deadlineLabel(post.deadline_at)].filter(Boolean).join(" · "),
+        isPinned: post.is_pinned,
+      }));
+  }, [noticeBoards, postsQuery.data, selectedFilter]);
 
   const isOfflinePreview = boardsError || postsQuery.isError || (!boardsLoading && noticeBoards.length === 0);
-  const isLoading = boardsLoading || (Boolean(selectedBoard?.id) && postsQuery.isLoading);
+  const isLoading = boardsLoading || (noticeBoardIds.length > 0 && postsQuery.isLoading);
   const visibleRows = realRows;
 
   return (
@@ -252,7 +172,7 @@ export default function NoticesScreen() {
       </View>
 
       <View style={styles.filterWrap}>
-        {FILTERS.map((item) => {
+        {NOTICE_FILTERS.map((item) => {
           const active = selectedFilter === item.key;
           return (
             <Pressable
@@ -270,7 +190,7 @@ export default function NoticesScreen() {
         <Pressable
           onPress={() => {
             void refetchBoards();
-            if (selectedBoard?.id) {
+            if (noticeBoardIds.length > 0) {
               void postsQuery.refetch();
             }
           }}
@@ -283,7 +203,11 @@ export default function NoticesScreen() {
         </Pressable>
       ) : null}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.listContent}>
+      <ScrollView
+        style={styles.listScroller}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.listContent, !isLoading && visibleRows.length === 0 ? styles.listContentEmpty : null]}
+      >
         {isLoading ? <LoadingRows /> : null}
         {!isLoading && visibleRows.length > 0 ? (
           <View style={styles.list}>
@@ -385,6 +309,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 28,
   },
+  listScroller: {
+    flex: 1,
+  },
+  listContentEmpty: {
+    flexGrow: 1,
+  },
   list: {
     backgroundColor: COLORS.surface,
   },
@@ -454,7 +384,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   emptyState: {
-    minHeight: 170,
+    flex: 1,
+    minHeight: 300,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,

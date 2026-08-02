@@ -1,7 +1,8 @@
 import { router } from "expo-router";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import BoardMenuItem from "../../components/BoardMenuItem";
+import LoadingState from "../../components/LoadingState";
 import { useBoardsQuery } from "../../hooks/useApi";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -30,11 +31,7 @@ export default function BoardsScreen() {
   const { data, isLoading, isError } = useBoardsQuery();
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f7fb" }}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <LoadingState />;
   }
 
   const groups = data?.data ?? [];

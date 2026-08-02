@@ -24,6 +24,7 @@ class CommentNode(BaseModel):
     post_id: int
     author_id: int | None
     author_nickname: str
+    author_cohort: str | None = None
     parent_id: int | None = None
     content: str
     created_at: datetime

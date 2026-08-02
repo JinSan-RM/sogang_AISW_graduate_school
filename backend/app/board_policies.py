@@ -1,7 +1,7 @@
 from app.models.board import Board
 
 
-ANONYMOUS_NO_COMMENT_BOARD_SLUGS = frozenset({"lecture-reviews", "exam-archive"})
+ANONYMOUS_NO_COMMENT_BOARD_SLUGS = frozenset({"lecture-reviews"})
 
 
 def hides_author_identity(board: Board) -> bool:

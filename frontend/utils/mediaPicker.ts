@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 
 import { mediaApi } from "../services/api";
 import type { MediaAsset } from "../types";
+import { selectAndUploadProfileImage } from "./profileImagePicker";
 
 type UploadProgress = (progress: number) => void;
 
@@ -143,32 +144,27 @@ export async function pickAndUploadImages(onProgress?: UploadProgress): Promise<
 }
 
 export async function pickAndUploadImage(onProgress?: UploadProgress): Promise<MediaAsset | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error("MEDIA_PERMISSION_DENIED");
-  }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 0.85,
-  });
-  if (result.canceled) {
-    return null;
-  }
-
-  const asset = result.assets[0];
-  if (!asset) {
-    return null;
-  }
-  return uploadPickedFile(
-    {
-      uri: asset.uri,
-      name: asset.fileName || fileNameFromUri(asset.uri, "profile-image.jpg"),
-      type: asset.mimeType || "image/jpeg",
+  return selectAndUploadProfileImage({
+    platform: Platform.OS,
+    pickWebFile: async () => {
+      const [file] = await pickLocalFiles({ accept: "image/*" });
+      return file ?? null;
     },
-    onProgress
-  );
+    requestNativePermission: async () => {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      return permission.granted;
+    },
+    pickNativeImage: async () => {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      return result.canceled ? null : result.assets[0] ?? null;
+    },
+    upload: (file) => uploadPickedFile(file, onProgress),
+  });
 }
 
 export async function pickAndUploadBannerImage(onProgress?: UploadProgress): Promise<MediaAsset | null> {

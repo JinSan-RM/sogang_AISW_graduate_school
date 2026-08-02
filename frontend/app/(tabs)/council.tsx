@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../components/LoadingState";
 import { useBoardsQuery } from "../../hooks/useApi";
 import type { Board } from "../../types";
 
@@ -87,15 +88,11 @@ function MenuRow({ item, board }: { item: MenuItem; board?: Board }) {
 
 export default function CouncilScreen() {
   const insets = useSafeAreaInsets();
-  const { data, isLoading, isError } = useBoardsQuery();
+  const { data, isLoading, isError, refetch } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(data?.data), [data?.data]);
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.primary} />
-      </View>
-    );
+    return <LoadingState />;
   }
 
   return (
@@ -110,6 +107,9 @@ export default function CouncilScreen() {
         {isError ? (
           <View style={styles.messageBox}>
             <Text style={styles.errorText}>원우회 정보를 불러오지 못했습니다.</Text>
+            <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>다시 시도</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -179,6 +179,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   messageBox: {
+    gap: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "#FECACA",
@@ -189,5 +190,17 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#B91C1C",
     fontWeight: "800",
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

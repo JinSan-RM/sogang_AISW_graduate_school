@@ -9,9 +9,9 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: "#2761FF",
-          tabBarInactiveTintColor: "#9AA3B2",
+          tabBarInactiveTintColor: "#8A919C",
           tabBarIconStyle: { marginTop: 4 },
-          tabBarLabelStyle: { fontSize: 10, fontWeight: "700", lineHeight: 13, marginTop: 0, transform: [{ translateY: -2 }] },
+          tabBarLabelStyle: { fontSize: 10, fontWeight: "400", lineHeight: 14, marginTop: 0, transform: [{ translateY: -2 }] },
           tabBarItemStyle: { paddingVertical: 0 },
           tabBarStyle: {
             height: 68,
@@ -27,35 +27,35 @@ export default function TabsLayout() {
           name="home"
           options={{
             title: "홈",
-            tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "home" : "home-outline"} color={color} size={24} />,
+            tabBarIcon: ({ color }) => <Ionicons name="home-outline" color={color} size={22} />,
           }}
         />
         <Tabs.Screen
           name="notices"
           options={{
             title: "공지사항",
-            tabBarIcon: ({ color }) => <Ionicons name="megaphone-outline" color={color} size={23} />,
+            tabBarIcon: ({ color }) => <Ionicons name="megaphone-outline" color={color} size={22} />,
           }}
         />
         <Tabs.Screen
           name="community"
           options={{
             title: "커뮤니티",
-            tabBarIcon: ({ color }) => <Ionicons name="chatbubble-ellipses-outline" color={color} size={23} />,
+            tabBarIcon: ({ color }) => <Ionicons name="chatbubble-ellipses-outline" color={color} size={22} />,
           }}
         />
         <Tabs.Screen
           name="participation"
           options={{
             title: "참여활동",
-            tabBarIcon: ({ color }) => <Ionicons name="reader-outline" color={color} size={23} />,
+            tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" color={color} size={22} />,
           }}
         />
         <Tabs.Screen
           name="council"
           options={{
             title: "원우회",
-            tabBarIcon: ({ color }) => <Ionicons name="people-outline" color={color} size={24} />,
+            tabBarIcon: ({ color }) => <Ionicons name="people-outline" color={color} size={22} />,
           }}
         />
         <Tabs.Screen

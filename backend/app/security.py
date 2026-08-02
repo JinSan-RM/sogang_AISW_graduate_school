@@ -15,6 +15,7 @@ from app.errors import AppException
 
 PBKDF2_ITERATIONS = 120_000
 ARGON2_HASHER = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=2)
+VERIFICATION_CODE_HASH_PREFIX = "hmac-sha256:v1:"
 
 
 def utc_now() -> datetime:
@@ -60,6 +61,27 @@ def password_needs_rehash(password_hash: str) -> bool:
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_verification_code(code: str, *, email: str, purpose: str) -> str:
+    """Hash a low-entropy email code with a server-side secret and domain separation."""
+    message = f"email-verification-code:v1:{purpose}:{email.strip().lower()}:{code}"
+    digest = hmac.new(
+        settings.auth_secret_key.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{VERIFICATION_CODE_HASH_PREFIX}{digest}"
+
+
+def verify_verification_code(code: str, stored_hash: str, *, email: str, purpose: str) -> bool:
+    if stored_hash.startswith(VERIFICATION_CODE_HASH_PREFIX):
+        expected = hash_verification_code(code, email=email, purpose=purpose)
+        return hmac.compare_digest(expected, stored_hash)
+
+    # Compatibility for codes issued before keyed hashes were deployed. Their
+    # five-minute lifetime keeps the overlap deliberately short.
+    return hmac.compare_digest(hash_token(code), stored_hash)
 
 
 def generate_token_urlsafe() -> str:
