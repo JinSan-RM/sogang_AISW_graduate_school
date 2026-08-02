@@ -76,6 +76,22 @@ function Invoke-External {
     }
 }
 
+function Invoke-BestEffortDocker {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5 can promote harmless native stderr progress to
+        # NativeCommandError when the script-wide preference is Stop.
+        $ErrorActionPreference = "Continue"
+        $null = & docker @Arguments 2>&1
+    } catch {
+        # Cleanup must not replace the original export/restore result.
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
 function Get-TreeSummary {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -156,7 +172,7 @@ if ($Action -eq "Export") {
             "cp", "${SourceContainer}:${containerDump}", $databaseDump
         )
     } finally {
-        & docker exec $SourceContainer rm -f $containerDump 2>$null
+        Invoke-BestEffortDocker -Arguments @("exec", $SourceContainer, "rm", "-f", $containerDump)
     }
 
     Invoke-External -FilePath "tar.exe" -Arguments @("-C", $publicMedia, "-cf", $publicArchive, ".")
@@ -213,7 +229,7 @@ $composeArgs = @(
 # never targets the source database or a production Compose environment.
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "--wait", "--wait-timeout", "120", "db"))
-& docker @composeArgs stop backend frontend-web notification-worker 2>$null
+Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("stop", "backend", "frontend-web", "notification-worker"))
 
 $dbContainer = (& docker @composeArgs ps -q db).Trim()
 if (-not $dbContainer -or $dbContainer -notmatch "^[a-f0-9]+$") {
@@ -234,13 +250,13 @@ try {
         "--no-owner", "--no-privileges", "--exit-on-error", $containerDump
     )
 } finally {
-    & docker exec $dbContainer rm -f $containerDump 2>$null
+    Invoke-BestEffortDocker -Arguments @("exec", $dbContainer, "rm", "-f", $containerDump)
 }
 
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("build", "backend"))
 $restoreScript = @"
-find /data/media -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-find /data/private-media -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+find /data/media -mindepth 1 -delete
+find /data/private-media -mindepth 1 -delete
 tar -C /data/media -xf /snapshot/public-media.tar
 tar -C /data/private-media -xf /snapshot/private-media.tar
 python -m app.migrate
