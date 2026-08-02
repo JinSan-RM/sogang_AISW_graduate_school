@@ -90,6 +90,10 @@ outputs/
 # User-managed/generated exports
 AISW_app_architecture_gap_analysis.html
 
+# Local legacy migration sources (may contain personal data)
+data/*
+!data/README.md
+
 # OS / editor
 .DS_Store
 Thumbs.db
