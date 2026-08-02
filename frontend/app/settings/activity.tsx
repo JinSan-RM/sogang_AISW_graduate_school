@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../components/LoadingState";
 import { userApi } from "../../services/api";
 import type { UserActivityItem } from "../../types";
+import { formatBoardDate } from "../../utils/dateFormat";
 import { formatCohortName } from "../../utils/userLabel";
 
 const COLORS = {
@@ -17,8 +19,6 @@ const COLORS = {
   border: "#E1E4E9",
   bg: "#FFFFFF",
 };
-
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function categoryTone(label: string) {
   if (label.includes("종합")) return { bg: "#FAEEDA", fg: "#854F0B" };
@@ -36,13 +36,6 @@ const FILTERS = [
 
 type FilterValue = (typeof FILTERS)[number]["value"];
 
-function shortDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(0, 10).replace(/-/g, ".");
-  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
-  return `${base}(${WEEKDAYS[date.getDay()]})`;
-}
-
 function normalizeType(value?: string | string[]): FilterValue {
   const raw = Array.isArray(value) ? value[0] : value;
   return raw === "comments" || raw === "bookmarks" || raw === "posts" ? raw : "posts";
@@ -52,6 +45,14 @@ function itemLabel(item: UserActivityItem) {
   if (item.type === "bookmark") return "스크랩";
   if (item.type === "comment") return "댓글";
   return "게시글";
+}
+
+function activityCategoryLabel(item: UserActivityItem) {
+  const raw = item.category?.trim() || item.board_name?.trim() || itemLabel(item);
+  return {
+    "강의 후기": "강의후기",
+    "시험 자료실": "시험족보",
+  }[raw] ?? raw;
 }
 
 export default function ActivityScreen() {
@@ -93,9 +94,7 @@ export default function ActivityScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : (
         <FlatList
           data={items}
@@ -112,7 +111,7 @@ export default function ActivityScreen() {
           }
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
           renderItem={({ item }) => {
-            const label = item.board_name ?? itemLabel(item);
+            const label = activityCategoryLabel(item);
             const tone = categoryTone(label);
             return (
               <Pressable onPress={() => router.push(`/board/post/${item.post_id}` as never)} style={styles.row}>
@@ -125,8 +124,8 @@ export default function ActivityScreen() {
                   </Text>
                   <Text style={styles.meta}>
                     {item.type === "bookmark"
-                      ? [formatCohortName(item.author_cohort, item.author_nickname), shortDate(item.created_at)].filter(Boolean).join(" · ")
-                      : `${shortDate(item.created_at)} · 댓글 ${item.comment_count ?? 0} · 추천 ${item.like_count ?? 0}`}
+                      ? [formatCohortName(item.author_cohort, item.author_nickname), formatBoardDate(item.created_at)].filter(Boolean).join(" · ")
+                      : `${formatBoardDate(item.created_at)} · 댓글 ${item.comment_count ?? 0} · 추천 ${item.like_count ?? 0}`}
                   </Text>
                 </View>
                 {item.type === "bookmark" ? <Ionicons name="bookmark" size={18} color={COLORS.primary} style={styles.bookmark} /> : null}

@@ -1,9 +1,13 @@
-import axios from "axios";
+import { AxiosHeaders, isAxiosError } from "axios";
 
 export const MAJOR_OPTIONS = ["인공지능", "소프트웨어", "블록체인", "데이터사이언스·인공지능"] as const;
 
 export function composeSchoolEmail(emailId: string) {
   return `${emailId.trim().toLowerCase()}@sogang.ac.kr`;
+}
+
+export function isEmailDeliveryConfirmed(emailSent: unknown): emailSent is true {
+  return emailSent === true;
 }
 
 export function emailIdError(emailId: string) {
@@ -33,11 +37,30 @@ export function formatCountdown(totalSeconds: number) {
 }
 
 export function apiErrorCode(error: unknown) {
-  if (!axios.isAxiosError(error)) return undefined;
+  if (!isAxiosError(error)) return undefined;
   return error.response?.data?.code as string | undefined;
 }
 
+export function isApiResponseUncertain(error: unknown) {
+  if (!isAxiosError(error)) return false;
+  return error.response === undefined;
+}
+
+export function apiRetryAfterSeconds(error: unknown) {
+  if (!isAxiosError(error)) return undefined;
+  const headers = error.response?.headers;
+  const rawValue =
+    headers instanceof AxiosHeaders
+      ? headers.get("retry-after")
+      : (headers as Record<string, unknown> | undefined)?.["retry-after"];
+  const normalized = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof normalized !== "string" && typeof normalized !== "number") return undefined;
+  const parsed = typeof normalized === "string" ? Number(normalized.trim()) : normalized;
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 3600) return undefined;
+  return parsed;
+}
+
 export function apiErrorStatus(error: unknown) {
-  if (!axios.isAxiosError(error)) return undefined;
+  if (!isAxiosError(error)) return undefined;
   return error.response?.status;
 }

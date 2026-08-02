@@ -11,7 +11,7 @@ from app.models.event import Event
 from app.models.faq import FAQ
 from app.models.post_extension import PostLectureReview, PostMutualAid, PostSuggestion
 from app.models.notification import Notification, NotificationSetting, PushDelivery, PushToken
-from app.models.audit import AccountDeletionReceipt, OperationalAuditLog
+from app.models.audit import AccountDeletionReceipt, LegacyImportRecord, OperationalAuditLog
 from app.models.search import SearchHistory
 from app.models.report import Report
 from app.models.user_block import UserBlock

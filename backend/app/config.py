@@ -1,8 +1,10 @@
-from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
+from ipaddress import IPv4Address, IPv4Network, IPv6Network, ip_address, ip_network
 from pathlib import Path
 import re
+from typing import Literal
 from urllib.parse import urlparse
 
+from email_validator import EmailNotValidError, validate_email
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +16,11 @@ _PUBLIC_HOSTNAME_RE = re.compile(
     r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 )
 ProxyNetwork = IPv4Network | IPv6Network
+RFC1918_NETWORKS = (
+    IPv4Network("10.0.0.0/8"),
+    IPv4Network("172.16.0.0/12"),
+    IPv4Network("192.168.0.0/16"),
+)
 
 
 class Settings(BaseSettings):
@@ -32,16 +39,26 @@ class Settings(BaseSettings):
     # Deprecated compatibility flag. Authentication codes are never returned by the API.
     dev_auth_codes: bool = False
     smtp_host: str | None = None
-    smtp_port: int = 587
+    smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_username: str | None = None
     smtp_password: str | None = None
-    smtp_from_email: str = "no-reply@sogang-ai-sw.local"
+    smtp_from_email: str = ""
+    smtp_auth: Literal["password", "none"] = "password"
+    smtp_security: Literal["starttls", "ssl", "plain"] | None = None
+    smtp_timeout_seconds: int = Field(default=10, ge=1, le=30)
+    # Public because it is embedded in frontend builds; mirrored here so a
+    # production server cannot be deployed with a shorter client deadline.
+    expo_public_auth_email_timeout_ms: int = Field(default=120_000, ge=15_000, le=120_000)
+    # Deprecated compatibility flag. SMTP_SECURITY takes precedence when set.
     smtp_use_tls: bool = True
     smtp_required: bool = False
     expo_push_enabled: bool = True
     rate_limit_enabled: bool = True
     rate_limit_trust_proxy: bool = False
     rate_limit_trusted_proxy_ips: str = ""
+    cloudflare_enabled: bool = False
+    cloudflare_tunnel_subnet: IPv4Network = IPv4Network("172.30.250.0/28")
+    cloudflare_tunnel_ip: IPv4Address = IPv4Address("172.30.250.14")
     media_upload_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
     media_upload_chunk_bytes: int = Field(default=1024 * 1024, ge=4096, le=4 * 1024 * 1024)
     media_access_url_expire_seconds: int = Field(default=5 * 60, ge=30, le=15 * 60)
@@ -96,6 +113,12 @@ class Settings(BaseSettings):
         if not self.is_deployed_environment:
             return hosts or ("*",)
         return self._validated_public_hosts(hosts)
+
+    @property
+    def resolved_smtp_security(self) -> Literal["starttls", "ssl", "plain"]:
+        if self.smtp_security is not None:
+            return self.smtp_security
+        return "starttls" if self.smtp_use_tls else "plain"
 
     def _validated_public_hosts(self, hosts: tuple[str, ...] | None = None) -> tuple[str, ...]:
         normalized_hosts = self._csv_values(self.allowed_hosts) if hosts is None else hosts
@@ -169,6 +192,12 @@ class Settings(BaseSettings):
             or domain.endswith((".local", ".localhost", ".invalid", ".example", ".test"))
         ):
             raise RuntimeError(f"Deployment {name} must be a monitored provider-authorized email address.")
+        try:
+            validate_email(normalized, check_deliverability=False)
+        except EmailNotValidError as exc:
+            raise RuntimeError(
+                f"Deployment {name} must be a valid monitored provider-authorized email address."
+            ) from exc
 
     @staticmethod
     def _require_deployment_public_https_url(name: str, value: str | None) -> None:
@@ -184,6 +213,8 @@ class Settings(BaseSettings):
             or Settings._is_placeholder(value)
             or hostname in {"localhost", "127.0.0.1", "::1", "0.0.0.0", "example.com"}
             or hostname.endswith((".local", ".localhost", ".invalid", ".example", ".test"))
+            or hostname == "trycloudflare.com"
+            or hostname.endswith(".trycloudflare.com")
         ):
             raise RuntimeError(f"Deployment {name} must be a public HTTPS URL without embedded credentials.")
         try:
@@ -217,8 +248,16 @@ class Settings(BaseSettings):
             raise RuntimeError("Deployment DATABASE_URL must use explicit non-default, non-placeholder credentials.")
         if not self.smtp_required or not self.smtp_host or not self.smtp_from_email:
             raise RuntimeError("Deployment SMTP must be configured and SMTP_REQUIRED must be true.")
-        if (self.smtp_username is None) != (self.smtp_password is None):
-            raise RuntimeError("Deployment SMTP_USERNAME and SMTP_PASSWORD must either both be set or both be omitted.")
+        smtp_username = (self.smtp_username or "").strip()
+        smtp_password = self.smtp_password or ""
+        if self.smtp_auth == "password" and (not smtp_username or not smtp_password.strip()):
+            raise RuntimeError(
+                "Deployment SMTP_AUTH=password requires non-empty SMTP_USERNAME and SMTP_PASSWORD."
+            )
+        if self.smtp_auth == "none" and (smtp_username or smtp_password):
+            raise RuntimeError(
+                "Deployment SMTP_AUTH=none requires SMTP_USERNAME and SMTP_PASSWORD to be empty."
+            )
         smtp_host = self.smtp_host.strip().lower()
         if (
             self._is_placeholder(smtp_host)
@@ -226,10 +265,16 @@ class Settings(BaseSettings):
             or smtp_host.endswith((".local", ".localhost", ".invalid", ".example", ".test"))
         ):
             raise RuntimeError("Deployment SMTP_HOST must be a real provider endpoint.")
-        if self.smtp_username and (
-            self._is_placeholder(self.smtp_username) or self._is_placeholder(self.smtp_password)
+        if self.smtp_auth == "password" and (
+            self._is_placeholder(smtp_username) or self._is_placeholder(smtp_password)
         ):
             raise RuntimeError("Deployment SMTP credentials must not contain placeholder values.")
+        if self.resolved_smtp_security == "plain":
+            raise RuntimeError("Deployment SMTP_SECURITY must be starttls or ssl; plaintext SMTP is forbidden.")
+        if self.expo_public_auth_email_timeout_ms <= self.smtp_timeout_seconds * 1000:
+            raise RuntimeError(
+                "Deployment EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS must be longer than SMTP_TIMEOUT_SECONDS."
+            )
         self._require_deployment_email("SMTP_FROM_EMAIL", self.smtp_from_email)
         cors = self.cors_origin_regex.strip()
         try:
@@ -257,6 +302,35 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 "Deployment RATE_LIMIT_TRUSTED_PROXY_IPS must be empty when RATE_LIMIT_TRUST_PROXY is false."
             )
+        if environment == "production" and not self.rate_limit_trust_proxy:
+            raise RuntimeError(
+                "Production RATE_LIMIT_TRUST_PROXY must be true with the exact verified ingress peer allowlist."
+            )
+        if self.cloudflare_enabled:
+            if not any(self.cloudflare_tunnel_ip in network for network in RFC1918_NETWORKS):
+                raise RuntimeError(
+                    "Deployment CLOUDFLARE_TUNNEL_IP must be a private IPv4 address on the dedicated origin network."
+                )
+            if (
+                not any(self.cloudflare_tunnel_subnet.subnet_of(network) for network in RFC1918_NETWORKS)
+                or not 24 <= self.cloudflare_tunnel_subnet.prefixlen <= 29
+            ):
+                raise RuntimeError(
+                    "Deployment CLOUDFLARE_TUNNEL_SUBNET must be an RFC1918 /24 through /29 network."
+                )
+            if self.cloudflare_tunnel_ip not in self.cloudflare_tunnel_subnet or self.cloudflare_tunnel_ip in {
+                self.cloudflare_tunnel_subnet.network_address,
+                self.cloudflare_tunnel_subnet.broadcast_address,
+            }:
+                raise RuntimeError(
+                    "Deployment CLOUDFLARE_TUNNEL_IP must be a usable address inside CLOUDFLARE_TUNNEL_SUBNET."
+                )
+            expected_cloudflare_peer = ip_network(f"{self.cloudflare_tunnel_ip}/32")
+            if trusted_proxy_networks != (expected_cloudflare_peer,):
+                raise RuntimeError(
+                    "Deployment RATE_LIMIT_TRUSTED_PROXY_IPS must contain only "
+                    "CLOUDFLARE_TUNNEL_IP/32 when CLOUDFLARE_ENABLED is true."
+                )
         if not self.expo_push_enabled:
             raise RuntimeError("Deployment EXPO_PUSH_ENABLED must be true for the launch notification contract.")
         if self.account_deletion_receipt_retention_days is None:

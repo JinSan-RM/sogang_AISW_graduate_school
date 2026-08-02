@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 
 
-BRAND_NAME = "서강 AI-SW 커뮤니티"
+BRAND_NAME = "서강 AI-SW 대학원 커뮤니티"
 
 
 def _code_box(value: str, compact: bool = False) -> str:

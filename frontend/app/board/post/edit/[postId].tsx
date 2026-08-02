@@ -2,13 +2,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
+import LoadingState from "../../../../components/LoadingState";
 import type { MediaAsset } from "../../../../types";
 import { pickAndUploadImages } from "../../../../utils/mediaPicker";
 
@@ -44,6 +45,8 @@ export default function PostEditScreen() {
   const isStudyRecruit = board?.slug === "study-recruit";
   const isAdminParticipationPost = board?.slug === "club-promo" || board?.slug === "networking-programs";
   const isAlbum = board?.board_type === "album";
+  const isMutualAid = board?.board_type === "mutual_aid";
+  const isActivityCertification = board?.board_type === "activity_certification";
   const updateMutation = useUpdatePost(postId, post?.board_id ?? 0);
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -65,17 +68,18 @@ export default function PostEditScreen() {
     setAttachments(post.attachments);
   }, [post, reset]);
 
+  useEffect(() => {
+    if (!post || !isActivityCertification) return;
+    router.replace(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
+  }, [isActivityCertification, post]);
+
   const goBack = () => {
     if (router.canGoBack()) router.back();
     else router.replace(`/board/post/${postId}`);
   };
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.primary} />
-      </View>
-    );
+    return <LoadingState />;
   }
 
   if (isError || !post) {
@@ -89,9 +93,13 @@ export default function PostEditScreen() {
     );
   }
 
+  if (isActivityCertification) {
+    return <LoadingState message="활동인증 수정 화면으로 이동하고 있어요" />;
+  }
+
   const onSubmit = (values: FormValues) => {
     const content = values.content?.trim() ?? "";
-    if (!isAlbum && !content) {
+    if (!isAlbum && !isMutualAid && !content) {
       setError("content", { message: "내용을 입력해주세요" });
       return;
     }
@@ -139,7 +147,7 @@ export default function PostEditScreen() {
         is_anonymous: post.is_anonymous,
       },
       {
-        onSuccess: () => router.replace(`/board/post/${post.id}`),
+        onSuccess: goBack,
         onError: () => Alert.alert("저장 실패", "작성자 또는 관리자만 이 게시글을 수정할 수 있습니다."),
       }
     );
@@ -181,15 +189,18 @@ export default function PostEditScreen() {
             control={control}
             name="category"
             render={({ field }) => (
-              <View style={styles.statusRow}>
-                {["진행중", "마감"].map((status) => {
-                  const selected = field.value === status;
-                  return (
-                    <Pressable key={status} onPress={() => field.onChange(status)} style={[styles.statusButton, selected ? styles.statusButtonSelected : null]}>
-                      <Text style={[styles.statusText, selected ? styles.statusTextSelected : null]}>{status}</Text>
-                    </Pressable>
-                  );
-                })}
+              <View>
+                <Text style={styles.fieldLabel}>모집 상태</Text>
+                <View style={styles.statusRow}>
+                  {["진행중", "마감"].map((status) => {
+                    const selected = field.value === status;
+                    return (
+                      <Pressable key={status} onPress={() => field.onChange(status)} style={[styles.statusButton, selected ? styles.statusButtonSelected : null]}>
+                        <Text style={[styles.statusText, selected ? styles.statusTextSelected : null]}>{status}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             )}
           />
@@ -200,6 +211,7 @@ export default function PostEditScreen() {
           name="title"
           render={({ field, fieldState }) => (
             <View>
+              {isStudyRecruit ? <Text style={styles.fieldLabel}>제목</Text> : null}
               <TextInput
                 accessibilityLabel="제목"
                 multiline
@@ -222,6 +234,7 @@ export default function PostEditScreen() {
             name="content"
             render={({ field, fieldState }) => (
               <View>
+                {isStudyRecruit ? <Text style={styles.fieldLabel}>내용</Text> : null}
                 <TextInput
                   accessibilityLabel="내용"
                   multiline
@@ -245,6 +258,7 @@ export default function PostEditScreen() {
             name="contact"
             render={({ field, fieldState }) => (
               <View>
+                <Text style={styles.fieldLabel}>스터디장 연락수단</Text>
                 <TextInput
                   accessibilityLabel="연락 수단"
                   onBlur={field.onBlur}

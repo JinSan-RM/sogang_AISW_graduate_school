@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.deps import get_db, require_admin
-from app.models.audit import OperationalAuditLog
+from app.models.audit import LegacyImportRecord, OperationalAuditLog
 from app.models.comment import Comment
 from app.models.event import Event
 from app.models.notification import PushDelivery, PushToken
@@ -84,6 +84,93 @@ def get_audit_logs(
                 "created_at": item.created_at,
             }
             for item, actor_nickname in rows
+        ],
+        pagination={
+            "page": page,
+            "size": size,
+            "total": total,
+            "total_pages": math.ceil(total / size) if total else 0,
+        },
+    )
+
+
+@router.get("/legacy-import/summary")
+def get_legacy_import_summary(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    rows = db.execute(
+        select(
+            LegacyImportRecord.entity_type,
+            LegacyImportRecord.status,
+            LegacyImportRecord.action,
+            func.count(LegacyImportRecord.id),
+        )
+        .group_by(
+            LegacyImportRecord.entity_type,
+            LegacyImportRecord.status,
+            LegacyImportRecord.action,
+        )
+        .order_by(
+            LegacyImportRecord.entity_type,
+            LegacyImportRecord.status,
+            LegacyImportRecord.action,
+        )
+    ).all()
+    return success_response(
+        [
+            {"entity_type": entity_type, "status": status, "action": action, "count": count}
+            for entity_type, status, action, count in rows
+        ]
+    )
+
+
+@router.get("/legacy-import/records")
+def get_legacy_import_records(
+    page: int = Query(1, ge=1),
+    size: int = Query(50, ge=1, le=200),
+    status: str | None = None,
+    entity_type: str | None = None,
+    source_id: str | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    filters = []
+    if status:
+        filters.append(LegacyImportRecord.status == status)
+    if entity_type:
+        filters.append(LegacyImportRecord.entity_type == entity_type)
+    if source_id:
+        filters.append(LegacyImportRecord.source_id == source_id)
+    total = _count(db, select(func.count(LegacyImportRecord.id)).where(*filters))
+    records = db.scalars(
+        select(LegacyImportRecord)
+        .where(*filters)
+        .order_by(LegacyImportRecord.updated_at.desc(), LegacyImportRecord.id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    ).all()
+    return success_response(
+        [
+            {
+                "id": record.id,
+                "source_file": record.source_file,
+                "source_sheet": record.source_sheet,
+                "source_row": record.source_row,
+                "entity_type": record.entity_type,
+                "source_id": record.source_id,
+                "source_parent_id": record.source_parent_id,
+                "source_hash": record.source_hash,
+                "action": record.action,
+                "status": record.status,
+                "target_table": record.target_table,
+                "target_id": record.target_id,
+                "reason": record.reason,
+                "redacted_details": record.redacted_details,
+                "created_at": record.created_at,
+                "updated_at": record.updated_at,
+            }
+            for record in records
         ],
         pagination={
             "page": page,

@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 import BackButton from "../../components/BackButton";
+import LoadingState from "../../components/LoadingState";
 import { userApi } from "../../services/api";
 import type { BlockedUserItem } from "../../types";
 
@@ -69,7 +70,7 @@ export default function BlockedUsersScreen() {
         차단한 작성자의 게시글, 댓글, 검색 결과는 내 화면에서 숨겨집니다.
       </Text>
 
-      {isLoading ? <ActivityIndicator style={{ marginTop: 24 }} /> : null}
+      {isLoading ? <LoadingState compact style={{ backgroundColor: "transparent" }} /> : null}
       {!isLoading && blocks.length === 0 ? (
         <View style={{ marginTop: 14, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, backgroundColor: "#ffffff", padding: 18 }}>
           <Text style={{ color: COLORS.muted }}>차단한 작성자가 없습니다.</Text>

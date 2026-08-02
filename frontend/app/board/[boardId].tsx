@@ -6,13 +6,24 @@ import { ActivityIndicator, Alert, FlatList, Linking, Platform, Pressable, Scrol
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
+import LoadingState from "../../components/LoadingState";
 import PostCard from "../../components/PostCard";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useBoardPosts, useMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { Board, PostListItem } from "../../types";
+import { COMMUNITY_TAB_ROUTE } from "../../utils/appRoutes";
+import { formatBoardDate } from "../../utils/dateFormat";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
+import { pastCouncilActivitiesFromMetadata } from "../../utils/pastCouncil";
+import {
+  RESOURCE_ALL_SLUGS,
+  RESOURCE_FILTERS,
+  RESOURCE_FILTER_SLUGS,
+  RESOURCE_SLUG_FILTERS,
+} from "../../utils/resourceBoards";
+import { formatCohortName } from "../../utils/userLabel";
 
 const COLORS = {
   primary: "#2761FF",
@@ -37,6 +48,7 @@ const BOARD_DISPLAY: Record<string, { name: string; description?: string }> = {
   "lecture-reviews": { name: "커뮤니티" },
   "exam-archive": { name: "커뮤니티" },
   "comprehensive-exam": { name: "커뮤니티" },
+  "graduation-thesis": { name: "커뮤니티" },
   "club-activity": { name: "참여활동" },
   "study-activity": { name: "참여활동" },
   "networking-activity": { name: "참여활동" },
@@ -56,19 +68,9 @@ const BOARD_DISPLAY: Record<string, { name: string; description?: string }> = {
   accounting: { name: "회계장부" },
 };
 
-const RESOURCE_FILTERS = ["전체", "강의후기", "시험족보", "종합시험", "졸업논문"];
 const NOTICE_FILTERS = ["전체", "학사공지", "행사공지"];
 const STUDY_FILTERS = ["모집", "활동 인증"];
 const PARTICIPATION_FILTERS = ["안내", "활동 인증"];
-const RESOURCE_FILTER_SLUGS: Record<string, string> = {
-  강의후기: "lecture-reviews",
-  시험족보: "exam-archive",
-  종합시험: "comprehensive-exam",
-};
-const RESOURCE_ALL_SLUGS = Object.values(RESOURCE_FILTER_SLUGS);
-const RESOURCE_SLUG_FILTERS: Record<string, string> = Object.fromEntries(
-  Object.entries(RESOURCE_FILTER_SLUGS).map(([label, slug]) => [slug, label])
-);
 const PARTICIPATION_GROUPS = [
   { key: "club", label: "동아리", guideSlug: "club-promo", certificationSlug: "club-activity" },
   { key: "study", label: "스터디", guideSlug: "study-recruit", certificationSlug: "study-activity" },
@@ -80,19 +82,13 @@ const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#0E7B60", "#55C69A"],
   ["#B94A2F", "#F39A7D"],
 ];
-const DEFAULT_EXECUTIVES = [
-  { name: "김진산", cohort: "72기", role: "회장" },
-  { name: "김유림", cohort: "72기", role: "부회장" },
-  { name: "민지서", cohort: "72기", role: "기획국 국장" },
-  { name: "김태훈", cohort: "72기", role: "기획국 국원" },
-];
-
 type IconName = keyof typeof Ionicons.glyphMap;
 type ExecutiveMember = {
   name: string;
-  cohort: string;
+  cohort?: string;
   role: string;
   imageUrl?: string;
+  intro?: string;
 };
 type CohortLeaderSummary = {
   id: string;
@@ -128,14 +124,6 @@ function getBoardDisplay(board?: Board | null) {
     return { name: "게시판", description: undefined };
   }
   return BOARD_DISPLAY[board.slug] ?? { name: board.name, description: board.description };
-}
-
-function shortDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(0, 10).replace(/-/g, ".");
-  }
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function filterOptions(board?: Board | null) {
@@ -175,7 +163,7 @@ function findBoardBySlug(boards: Board[], slug: string) {
 function parentRouteForBoard(board?: Board | null) {
   if (!board) return "/(tabs)/home";
   if (board.board_type === "notice" || board.slug.includes("notice")) return "/(tabs)/notices";
-  if (board.slug === "event-album" || board.board_type === "resource" || board.category === "resources") return "/(tabs)/community";
+  if (board.slug === "event-album" || board.board_type === "resource" || board.category === "resources") return COMMUNITY_TAB_ROUTE;
   if (participationGroupKey(board)) return "/(tabs)/participation";
   if (board.slug === "suggestions" || board.slug === "mutual-aid" || board.category === "council" || board.category === "gsa") {
     return "/(tabs)/council";
@@ -252,7 +240,7 @@ function metadataString(metadata: Record<string, unknown> | null | undefined, ke
 function executivesFromMetadata(metadata: Record<string, unknown> | null | undefined): ExecutiveMember[] {
   const executives = metadata?.executives;
   if (!Array.isArray(executives)) {
-    return DEFAULT_EXECUTIVES;
+    return [];
   }
 
   const parsed = executives
@@ -263,11 +251,12 @@ function executivesFromMetadata(metadata: Record<string, unknown> | null | undef
       const cohort = typeof record.cohort === "string" ? record.cohort.trim() : "";
       const role = typeof record.role === "string" ? record.role.trim() : "";
       const imageUrl = typeof record.image_url === "string" ? record.image_url.trim() : undefined;
-      return name && cohort && role ? { name, cohort, role, imageUrl } : null;
+      const intro = typeof record.intro === "string" ? record.intro.trim() : undefined;
+      return name && role ? { name, cohort: cohort || undefined, role, imageUrl, intro } : null;
     })
     .filter(Boolean) as ExecutiveMember[];
 
-  return parsed.length > 0 ? parsed : DEFAULT_EXECUTIVES;
+  return parsed;
 }
 
 function cleanPostTitle(title: string) {
@@ -401,9 +390,7 @@ function CohortLeaderScreen({
         <View style={styles.iconButton} />
       </View>
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : selected ? (
         <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
           {imageUrl(selected.bannerImageUrl) ? (
@@ -411,10 +398,8 @@ function CohortLeaderScreen({
           ) : (
             <View style={styles.cohortBannerFallback} />
           )}
-          <Text style={styles.cohortGreeting}>{selected.greeting || `안녕하세요, ${selected.cohort} 기장 ${selected.captain}입니다!`}</Text>
-          <Text style={styles.cohortIntroText}>
-            {selected.intro || "동기들이 즐겁게 학교 생활을 할 수 있도록 다양한 모임과 행사를 기획하고 있어요."}
-          </Text>
+          {selected.greeting ? <Text style={styles.cohortGreeting}>{selected.greeting}</Text> : null}
+          {selected.intro ? <Text style={styles.cohortIntroText}>{selected.intro}</Text> : null}
           <View style={styles.executiveCard}>
             {imageUrl(selected.captainImageUrl) ? (
               <MediaImage media={{ url: selected.captainImageUrl }} style={styles.executiveAvatarImage} />
@@ -424,15 +409,17 @@ function CohortLeaderScreen({
               <Text style={styles.executiveRole}>{selected.cohort} 기장</Text>
             </View>
           </View>
-          <View style={styles.executiveCard}>
-            {imageUrl(selected.viceCaptainImageUrl) ? (
-              <MediaImage media={{ url: selected.viceCaptainImageUrl }} style={styles.executiveAvatarImage} />
-            ) : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
-            <View style={styles.executiveText}>
-              <Text style={styles.executiveName}>{selected.viceCaptain ?? "윤OO"}</Text>
-              <Text style={styles.executiveRole}>{selected.cohort} 부기장</Text>
+          {selected.viceCaptain ? (
+            <View style={styles.executiveCard}>
+              {imageUrl(selected.viceCaptainImageUrl) ? (
+                <MediaImage media={{ url: selected.viceCaptainImageUrl }} style={styles.executiveAvatarImage} />
+              ) : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
+              <View style={styles.executiveText}>
+                <Text style={styles.executiveName}>{selected.viceCaptain}</Text>
+                <Text style={styles.executiveRole}>{selected.cohort} 부기장</Text>
+              </View>
             </View>
-          </View>
+          ) : null}
         </ScrollView>
       ) : (
         <FlatList
@@ -489,18 +476,7 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
       bannerImageUrl: value("banner_image_url") || undefined,
       presidentImageUrl: value("president_image_url") || undefined,
       vicePresidentImageUrl: value("vice_president_image_url") || undefined,
-      activities: Array.isArray(record.activities)
-        ? record.activities.flatMap((activity): { date?: string; title: string }[] => {
-            if (typeof activity === "string" && activity.trim()) return [{ title: activity.trim() }];
-            if (activity && typeof activity === "object") {
-              const r = activity as Record<string, unknown>;
-              const title = typeof r.title === "string" ? r.title.trim() : "";
-              if (!title) return [];
-              return [{ title, date: typeof r.date === "string" && r.date.trim() ? r.date.trim() : undefined }];
-            }
-            return [];
-          })
-        : [],
+      activities: pastCouncilActivitiesFromMetadata(record.activities),
     }];
   }).sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
 }
@@ -539,7 +515,7 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
             <>
               {selected.activities.length > 0 ? selected.activities.map((activity, index) => (
                 <View key={`${activity.title}-${index}`} style={styles.pastActivityItem}>
-                  {activity.date ? <Text style={styles.pastActivityDate}>{activity.date}</Text> : null}
+                  {activity.date ? <Text style={styles.pastActivityDate}>{formatBoardDate(activity.date)}</Text> : null}
                   <Text style={styles.pastActivityTitle}>{activity.title}</Text>
                 </View>
               )) : <View style={styles.emptyBox}><Text style={styles.emptyText}>등록된 활동내역이 없습니다.</Text></View>}
@@ -566,8 +542,11 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
 
 function participationBadgeLabel(post: PostListItem, board?: Board | null) {
   const raw = post.category?.trim();
+  if (board?.slug === "study-recruit") {
+    const recruitmentStatus = String(post.metadata?.recruitment_status ?? raw ?? "").toLowerCase();
+    return recruitmentStatus.includes("closed") || recruitmentStatus.includes("마감") ? "마감" : "진행중";
+  }
   if (raw) return raw.length <= 8 ? raw : "동아리 홍보";
-  if (board?.slug === "study-recruit") return "진행중";
   if (board?.slug === "club-promo") return "모집중";
   return "안내";
 }
@@ -583,6 +562,13 @@ function ExecutiveIntroScreen({ board, topInset, onBack }: { board?: Board | nul
         <View style={styles.iconButton} />
       </View>
       <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.executiveContent}>
+        {executives.length === 0 ? (
+          <View style={styles.executiveEmptyState}>
+            <Ionicons name="people-outline" size={32} color="#AAB2BF" />
+            <Text style={styles.executiveEmptyTitle}>등록된 임원진 정보가 없어요</Text>
+            <Text style={styles.executiveEmptyDescription}>관리자에서 임원진 정보를 등록해주세요</Text>
+          </View>
+        ) : null}
         {executives.map((member) => (
           <View key={`${member.name}-${member.role}`} style={styles.executiveCard}>
             {imageUrl(member.imageUrl) ? (
@@ -594,9 +580,10 @@ function ExecutiveIntroScreen({ board, topInset, onBack }: { board?: Board | nul
             )}
             <View style={styles.executiveText}>
               <Text style={styles.executiveName}>
-                {member.name} · {member.cohort}
+                {[member.name, member.cohort].filter(Boolean).join(" · ")}
               </Text>
               <Text style={styles.executiveRole}>{member.role}</Text>
+              {member.intro ? <Text style={styles.executiveIntro}>{member.intro}</Text> : null}
             </View>
           </View>
         ))}
@@ -628,9 +615,7 @@ function CouncilActivityHistoryScreen({
         <View style={styles.iconButton} />
       </View>
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : (
         <FlatList
           data={posts}
@@ -650,19 +635,11 @@ function CouncilActivityHistoryScreen({
           }
           renderItem={({ item }) => (
             <Pressable onPress={() => router.push(`/board/post/${item.id}`)} style={styles.councilActivityRow}>
-              {imageUrl(item.thumbnail_url) ? (
-                <MediaImageBackground
-                  media={{ id: item.thumbnail_media_id, url: item.thumbnail_url }}
-                  imageStyle={styles.councilActivityImage}
-                  style={styles.councilActivityThumb}
-                />
-              ) : null}
               <View style={styles.councilActivityText}>
-                <Text style={styles.councilActivityDate}>{shortDate(item.created_at)}</Text>
+                <Text style={styles.councilActivityDate}>{formatBoardDate(item.created_at)}</Text>
                 <Text numberOfLines={1} style={styles.councilActivityTitle}>
                   {item.title}
                 </Text>
-                {item.content_preview ? <Text numberOfLines={2} style={styles.councilActivityPreview}>{item.content_preview}</Text> : null}
               </View>
             </Pressable>
           )}
@@ -736,7 +713,7 @@ function AlbumTile({ post, index, onPress }: { post: PostListItem; index: number
       <Text numberOfLines={1} style={styles.albumTitle}>
         {post.title}
       </Text>
-      <Text style={styles.albumDate}>{shortDate(post.created_at)}</Text>
+      <Text style={styles.albumDate}>{formatBoardDate(post.created_at)}</Text>
     </Pressable>
   );
 }
@@ -784,6 +761,10 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
   const preview = compactPreview(post);
   const thumbnailUrl = imageUrl(post.thumbnail_url);
+  const activityDate =
+    typeof post.metadata?.activity_date === "string" && post.metadata.activity_date.trim()
+      ? post.metadata.activity_date
+      : post.created_at;
 
   return (
     <Pressable onPress={() => onPress(post.id)} style={styles.activityCard}>
@@ -804,7 +785,7 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
           </Text>
         ) : null}
         <Text style={styles.activityDate}>
-          {`${post.author_cohort ? `${post.author_cohort}기 ` : ""}${post.author_nickname} · ${shortDate(post.created_at)}`}
+          {`${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(activityDate)}`}
         </Text>
       </View>
     </Pressable>
@@ -833,7 +814,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
   const isActivityCards = board?.board_type === "activity_certification";
   const isMutualAid = board?.board_type === "mutual_aid";
   const isSuggestion = board?.board_type === "suggestion";
-  const isParticipationGuideCards = Boolean(participationGroupKey(board)) && !isActivityCards;
+  const isStudyRecruit = board?.slug === "study-recruit";
+  const isParticipationGuideCards = Boolean(participationGroupKey(board)) && !isActivityCards && !isStudyRecruit;
   const tabs = sectionTabs(board, boards);
   const canWriteBoard = !board || board.write_permission !== "admin" || user?.role === "admin";
   const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit");
@@ -1041,10 +1023,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
       ) : null}
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-          <Text style={styles.centerText}>게시글을 불러오는 중입니다.</Text>
-        </View>
+        <LoadingState />
       ) : (
         <FlatList
           key={isAlbum ? "album" : isParticipationGuideCards ? "participation-guide" : isActivityCards ? "activity" : "list"}
@@ -1488,28 +1467,44 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   councilActivityContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 28,
   },
-  councilActivityRow: {
-    minHeight: 76,
-    flexDirection: "row",
+  executiveIntro: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  executiveEmptyState: {
+    flex: 1,
+    minHeight: 320,
     alignItems: "center",
-    gap: 12,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  executiveEmptyTitle: {
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+    marginTop: 8,
+  },
+  executiveEmptyDescription: {
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  councilActivityRow: {
+    minHeight: 60,
+    justifyContent: "center",
     borderBottomWidth: 1,
     borderBottomColor: COLORS.divider,
-    paddingVertical: 11,
-  },
-  councilActivityThumb: {
-    width: 74,
-    height: 56,
-    overflow: "hidden",
-    borderRadius: 7,
-    backgroundColor: COLORS.primary50,
-  },
-  councilActivityImage: {
-    borderRadius: 7,
+    paddingVertical: 12,
   },
   councilActivityText: {
     flex: 1,
@@ -1525,13 +1520,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "500",
-  },
-  councilActivityPreview: {
-    color: COLORS.muted,
-    fontSize: 13,
-    fontWeight: "400",
-    lineHeight: 18,
-    marginTop: 4,
   },
   cohortCard: {
     minHeight: 68,

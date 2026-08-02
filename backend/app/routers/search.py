@@ -104,7 +104,7 @@ def search(
     total_pages = math.ceil(total / size) if total > 0 else 0
 
     rows = db.execute(
-        select(Post, Board.name, Board.slug, User.nickname)
+        select(Post, Board.name, Board.slug, User.nickname, User.cohort)
         .join(Board, Board.id == Post.board_id)
         .outerjoin(User, User.id == Post.author_id)
         .where(*filters)
@@ -134,13 +134,18 @@ def search(
                 or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
                 else nickname
             ),
+            "author_cohort": None
+            if post.author_id is None
+            or post.is_anonymous
+            or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
+            else cohort,
             "created_at": post.created_at,
             "highlights": {
                 "title": _highlight(post.title, q),
                 "content_preview": _highlight(post.content[:100], q),
             },
         }
-        for post, board_name, board_slug, nickname in rows
+        for post, board_name, board_slug, nickname, cohort in rows
     ]
 
     return success_response(

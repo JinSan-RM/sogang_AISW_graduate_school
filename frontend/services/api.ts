@@ -41,6 +41,7 @@ import type {
 import {
   createKeyedSingleFlight,
   resolveApiBaseUrl,
+  resolveAuthEmailTimeoutMs,
   resolveMediaUploadTimeoutMs,
   shouldRetryWithCurrentAccessToken,
 } from "../utils/apiRuntime";
@@ -57,11 +58,15 @@ function getApiBaseUrl() {
     configuredUrl: process.env.EXPO_PUBLIC_API_URL,
     platform: Platform.OS,
     expoHostUri: typeof hostUri === "string" ? hostUri : null,
+    isDevelopment: __DEV__,
   });
 }
 
 export const API_BASE_URL = getApiBaseUrl();
 export const API_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
+export const AUTH_EMAIL_TIMEOUT_MS = resolveAuthEmailTimeoutMs(
+  process.env.EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS,
+);
 export const MEDIA_UPLOAD_TIMEOUT_MS = resolveMediaUploadTimeoutMs(
   process.env.EXPO_PUBLIC_MEDIA_UPLOAD_TIMEOUT_MS,
 );
@@ -187,9 +192,10 @@ export const authApi = {
     return response.data;
   },
   requestRegisterVerification: async (payload: { email: string }) => {
-    const response = await api.post<ApiSuccess<{ email: string; expires_in: number; resend_in?: number; email_sent?: boolean }>>(
+    const response = await api.post<ApiSuccess<{ email: string; expires_in: number; resend_in?: number; email_sent: boolean }>>(
       "/auth/register/request-verification",
-      payload
+      payload,
+      { timeout: AUTH_EMAIL_TIMEOUT_MS },
     );
     return response.data;
   },
@@ -225,7 +231,8 @@ export const authApi = {
   requestPasswordReset: async (payload: { email: string }) => {
     const response = await api.post<ApiSuccess<{ accepted: boolean; expires_in: number; resend_in: number; email_sent?: boolean }>>(
       "/auth/password-reset/request",
-      payload
+      payload,
+      { timeout: AUTH_EMAIL_TIMEOUT_MS },
     );
     return response.data;
   },
@@ -498,7 +505,8 @@ export const userApi = {
   requestAccountDeletion: async (payload: AccountDeletionEmailRequest) => {
     const response = await publicApi.post<ApiSuccess<AccountDeletionEmailRequestResult>>(
       "/auth/account-deletion/request",
-      payload
+      payload,
+      { timeout: AUTH_EMAIL_TIMEOUT_MS },
     );
     return response.data;
   },

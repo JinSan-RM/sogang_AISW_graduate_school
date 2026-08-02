@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import NotificationBootstrap from "../components/NotificationBootstrap";
+import LoadingState from "../components/LoadingState";
 import { useUserStore } from "../stores/userStore";
 import { INTER_FONTS, patchDefaultFontFamily } from "../utils/fonts";
 import { isAdminUser } from "../utils/permissions";
@@ -29,7 +30,7 @@ export default function RootLayout() {
   }, [hydrateSession]);
 
   if (!hasHydrated || !fontsLoaded) {
-    return <View style={styles.viewport} />;
+    return <LoadingState />;
   }
 
   return (
@@ -44,10 +45,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: "#FFFFFF" },
             }}
           >
-            <Stack.Screen name="legal/terms" options={{ headerShown: false }} />
-            <Stack.Screen name="legal/privacy" options={{ headerShown: false }} />
-            <Stack.Screen name="legal/account-deletion" options={{ headerShown: false }} />
-            <Stack.Screen name="legal/support" options={{ headerShown: false }} />
+            {/* Protected routes fall back to the first available screen, so keep login first for guests. */}
             <Stack.Protected guard={!isAuthenticated}>
               <Stack.Screen name="auth/login" options={{ headerShown: false }} />
               <Stack.Screen name="auth/register" options={{ headerShown: false }} />
@@ -80,6 +78,10 @@ export default function RootLayout() {
             <Stack.Protected guard={isAdmin}>
               <Stack.Screen name="admin/index" options={{ title: "관리자" }} />
             </Stack.Protected>
+            <Stack.Screen name="legal/terms" options={{ headerShown: false }} />
+            <Stack.Screen name="legal/privacy" options={{ headerShown: false }} />
+            <Stack.Screen name="legal/account-deletion" options={{ headerShown: false }} />
+            <Stack.Screen name="legal/support" options={{ headerShown: false }} />
           </Stack>
         </View>
       </View>

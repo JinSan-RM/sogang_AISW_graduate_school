@@ -29,6 +29,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const [emailId, setEmailId] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const setSession = useUserStore((state) => state.setSession);
@@ -86,14 +87,21 @@ export default function LoginScreen() {
         <View style={styles.field}>
           <Text style={styles.label}>비밀번호</Text>
           <TextInput
+            onBlur={() => setIsPasswordFocused(false)}
             onChangeText={(value) => {
               setPassword(value);
               setErrors((current) => ({ ...current, password: undefined, form: undefined }));
             }}
+            onFocus={() => setIsPasswordFocused(true)}
             placeholder="비밀번호"
             placeholderTextColor={COLORS.subtle}
             secureTextEntry
-            style={[styles.input, errors.password || errors.form ? styles.inputError : null]}
+            style={[
+              styles.input,
+              isPasswordFocused && !errors.password && !errors.form ? styles.inputFocused : null,
+              errors.password || errors.form ? styles.inputError : null,
+              { outlineStyle: "none" } as never,
+            ]}
             value={password}
           />
         </View>
@@ -174,6 +182,9 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: COLORS.danger,
     backgroundColor: "#FFF5F5",
+  },
+  inputFocused: {
+    borderColor: COLORS.primary,
   },
   primaryButton: {
     height: 48,

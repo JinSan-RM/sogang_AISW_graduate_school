@@ -1,4 +1,7 @@
 export const DEFAULT_API_BASE_URL = "http://localhost:8000/api";
+export const DEFAULT_AUTH_EMAIL_TIMEOUT_MS = 120_000;
+export const MIN_AUTH_EMAIL_TIMEOUT_MS = 15_000;
+export const MAX_AUTH_EMAIL_TIMEOUT_MS = 120_000;
 export const DEFAULT_MEDIA_UPLOAD_TIMEOUT_MS = 120_000;
 export const MIN_MEDIA_UPLOAD_TIMEOUT_MS = 30_000;
 export const MAX_MEDIA_UPLOAD_TIMEOUT_MS = 600_000;
@@ -7,6 +10,7 @@ type ApiBaseUrlOptions = {
   configuredUrl?: string;
   platform: string;
   expoHostUri?: string | null;
+  isDevelopment?: boolean;
 };
 
 function hostFromExpoUri(value?: string | null): string | null {
@@ -27,20 +31,85 @@ function hostForUrl(host: string): string {
   return host.includes(":") ? `[${host}]` : host;
 }
 
+function isPublicHttpsApiUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    const privateIpv4 =
+      /^(?:10|127)\./.test(hostname) ||
+      /^169\.254\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      /^172\.(?:1[6-9]|2\d|3[01])\./.test(hostname);
+    const privateIpv6 =
+      hostname === "::" ||
+      hostname === "::1" ||
+      /^(?:fc|fd)/.test(hostname) ||
+      /^fe[89ab]/.test(hostname);
+    const temporaryCloudflareHostname =
+      hostname === "trycloudflare.com" || hostname.endsWith(".trycloudflare.com");
+
+    return (
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      url.pathname.replace(/\/+$/, "").endsWith("/api") &&
+      !["localhost", "0.0.0.0", "example.com"].includes(hostname) &&
+      ![".local", ".localhost", ".internal", ".invalid", ".example", ".test"].some(
+        (suffix) => hostname.endsWith(suffix),
+      ) &&
+      !privateIpv4 &&
+      !privateIpv6 &&
+      !temporaryCloudflareHostname
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function resolveApiBaseUrl({
   configuredUrl,
   platform,
   expoHostUri,
+  isDevelopment = false,
 }: ApiBaseUrlOptions): string {
   const explicitUrl = configuredUrl?.trim();
-  if (explicitUrl) return explicitUrl;
+  if (explicitUrl) {
+    if (!isDevelopment && !isPublicHttpsApiUrl(explicitUrl)) {
+      throw new Error(
+        "EXPO_PUBLIC_API_URL must be a stable public HTTPS URL ending in /api outside development builds.",
+      );
+    }
+    return explicitUrl;
+  }
 
-  if (platform !== "web") {
+  if (isDevelopment && platform !== "web") {
     const host = hostFromExpoUri(expoHostUri);
     if (host) return `http://${hostForUrl(host)}:8000/api`;
   }
 
-  return DEFAULT_API_BASE_URL;
+  if (isDevelopment) return DEFAULT_API_BASE_URL;
+
+  throw new Error("EXPO_PUBLIC_API_URL is required outside development builds.");
+}
+
+export function resolveAuthEmailTimeoutMs(configuredValue?: string): number {
+  const normalized = configuredValue?.trim();
+  if (!normalized || !/^\d+$/.test(normalized)) {
+    return DEFAULT_AUTH_EMAIL_TIMEOUT_MS;
+  }
+
+  const parsed = Number(normalized);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < MIN_AUTH_EMAIL_TIMEOUT_MS ||
+    parsed > MAX_AUTH_EMAIL_TIMEOUT_MS
+  ) {
+    return DEFAULT_AUTH_EMAIL_TIMEOUT_MS;
+  }
+
+  return parsed;
 }
 
 export function resolveMediaUploadTimeoutMs(

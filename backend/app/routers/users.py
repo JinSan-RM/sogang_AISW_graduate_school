@@ -313,7 +313,7 @@ def get_my_activity(
                 if post.author_id is None
                 or (user.role != "admin" and (post.is_anonymous or hides_author_identity(board)))
                 else author_cohort,
-                "created_at": bookmark.created_at,
+                "created_at": post.created_at,
             }
             for bookmark, post, board, author_nickname, author_cohort in bookmarks
         ]

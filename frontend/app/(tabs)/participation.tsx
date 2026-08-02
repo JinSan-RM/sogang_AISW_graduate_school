@@ -2,10 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import BoardPostsScreen from "../board/[boardId]";
+import LoadingState from "../../components/LoadingState";
 import { useBoardsQuery } from "../../hooks/useApi";
 import type { Board } from "../../types";
 
@@ -117,7 +118,7 @@ export default function ParticipationScreen() {
   const insets = useSafeAreaInsets();
   const [activeGroup, setActiveGroup] = useState<GroupKey>("club");
   const [mode, setMode] = useState<ModeKey>("guide");
-  const { data, isLoading, isError } = useBoardsQuery();
+  const { data, isLoading, isError, refetch } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(data?.data), [data?.data]);
   const group = GROUPS.find((item) => item.key === activeGroup) ?? GROUPS[0];
   const guideBoards = group.guideSlugs.map((slug) => findBoard(boards, slug)).filter(Boolean) as Board[];
@@ -150,11 +151,7 @@ export default function ParticipationScreen() {
   };
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.primary} />
-      </View>
-    );
+    return <LoadingState />;
   }
 
   if (defaultBoard) {
@@ -201,6 +198,9 @@ export default function ParticipationScreen() {
         {isError ? (
           <View style={styles.messageBox}>
             <Text style={styles.errorText}>참여활동 정보를 불러오지 못했습니다.</Text>
+            <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>다시 시도</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -499,6 +499,7 @@ const styles = StyleSheet.create({
     borderColor: "#D8DDE6",
   },
   messageBox: {
+    gap: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -513,5 +514,17 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#B91C1C",
     fontWeight: "800",
+  },
+  retryButton: {
+    alignSelf: "flex-start",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

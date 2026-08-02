@@ -11,9 +11,12 @@ import { useUserStore } from "../../stores/userStore";
 import type { AuthSession } from "../../types";
 import {
   apiErrorCode,
+  apiRetryAfterSeconds,
   composeSchoolEmail,
   emailIdError,
   formatCountdown,
+  isApiResponseUncertain,
+  isEmailDeliveryConfirmed,
   passwordError,
   phoneError,
 } from "../../utils/authValidation";
@@ -32,8 +35,14 @@ const COLORS = {
 };
 
 type FieldErrors = Partial<Record<"email" | "code" | "nickname" | "cohort" | "major" | "phone" | "password" | "passwordConfirm" | "consent" | "form", string>>;
-type VerificationMessage = { type: "success" | "error"; text: string } | null;
+type VerificationMessage = { type: "success" | "pending" | "error"; text: string } | null;
 type VerificationFailureState = "expired" | "attempts" | null;
+
+const EMAIL_DELIVERY_FAILURE_MESSAGE = "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
+const EMAIL_DELIVERY_UNCERTAIN_MESSAGE =
+  "서버 응답이 늦어지고 있어요. 메일이 도착했다면 인증코드를 입력하고, 없으면 잠시 후 재전송해주세요.";
+const UNCERTAIN_VERIFICATION_SECONDS = 5 * 60;
+const UNCERTAIN_RESEND_SECONDS = 5 * 60;
 
 function StepDots({ step }: { step: number }) {
   return (
@@ -117,34 +126,63 @@ export default function RegisterScreen() {
       setErrors({ email: emailError });
       return;
     }
+    const requestStartedAt = Date.now();
     try {
       setIsSubmitting(true);
       setErrors({});
       setVerificationMessage(null);
       const response = await authApi.requestRegisterVerification({ email });
-      if (response.data.email_sent === false) {
-        setErrors({ email: "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요." });
+      if (!isEmailDeliveryConfirmed(response.data.email_sent)) {
+        if (resend) {
+          setVerificationMessage({ type: "error", text: EMAIL_DELIVERY_FAILURE_MESSAGE });
+        } else {
+          setErrors({ email: EMAIL_DELIVERY_FAILURE_MESSAGE });
+        }
         return;
       }
       setCode("");
       setVerificationToken("");
-      const requestedAt = Date.now();
-      verificationExpiresAtRef.current = requestedAt + response.data.expires_in * 1000;
+      verificationExpiresAtRef.current = requestStartedAt + response.data.expires_in * 1000;
       const resendIn = response.data.resend_in ?? response.data.expires_in;
-      resendAvailableAtRef.current = requestedAt + resendIn * 1000;
-      setCountdown(response.data.expires_in);
-      setResendCooldown(resendIn);
+      resendAvailableAtRef.current = requestStartedAt + resendIn * 1000;
+      const responseReceivedAt = Date.now();
+      setCountdown(
+        Math.max(0, Math.ceil((verificationExpiresAtRef.current - responseReceivedAt) / 1000)),
+      );
+      setResendCooldown(
+        Math.max(0, Math.ceil((resendAvailableAtRef.current - responseReceivedAt) / 1000)),
+      );
       setStep(1);
       setVerificationFailureState(null);
       setVerificationMessage({ type: "success", text: "새 인증코드가 발송되었어요." });
     } catch (error) {
+      if (isApiResponseUncertain(error)) {
+        const timeoutObservedAt = Date.now();
+        setCode("");
+        setVerificationToken("");
+        verificationExpiresAtRef.current = requestStartedAt + UNCERTAIN_VERIFICATION_SECONDS * 1000;
+        resendAvailableAtRef.current = timeoutObservedAt + UNCERTAIN_RESEND_SECONDS * 1000;
+        setCountdown(
+          Math.max(0, Math.ceil((verificationExpiresAtRef.current - timeoutObservedAt) / 1000)),
+        );
+        setResendCooldown(UNCERTAIN_RESEND_SECONDS);
+        setStep(1);
+        setVerificationFailureState(null);
+        setVerificationMessage({ type: "pending", text: EMAIL_DELIVERY_UNCERTAIN_MESSAGE });
+        return;
+      }
       const errorCode = apiErrorCode(error);
+      if (errorCode === "VERIFICATION_RESEND_COOLDOWN") {
+        const retryAfter = apiRetryAfterSeconds(error) ?? UNCERTAIN_RESEND_SECONDS;
+        resendAvailableAtRef.current = Date.now() + retryAfter * 1000;
+        setResendCooldown(retryAfter);
+      }
       const message =
         errorCode === "CONFLICT"
           ? "이미 가입된 이메일이에요."
           : errorCode === "VERIFICATION_RESEND_COOLDOWN"
             ? "인증코드는 5분 후 다시 요청할 수 있어요."
-            : "인증코드를 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
+            : EMAIL_DELIVERY_FAILURE_MESSAGE;
       if (resend) {
         setVerificationMessage({ type: "error", text: message });
       } else {
@@ -356,15 +394,21 @@ export default function RegisterScreen() {
                       <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
                       <Text style={styles.errorText}>{codeError}</Text>
                     </View>
-                  ) : verificationMessage?.type === "success" ? (
-                    <View style={styles.successRow}>
-                      <Ionicons name="checkmark-circle-outline" size={14} color="#3B6D11" />
-                      <Text style={styles.successText}>{verificationMessage.text}</Text>
+                  ) : verificationMessage ? (
+                    <View style={verificationMessage.type === "error" ? styles.errorRow : styles.successRow}>
+                      <Ionicons
+                        name={verificationMessage.type === "success" ? "checkmark-circle-outline" : verificationMessage.type === "pending" ? "time-outline" : "alert-circle-outline"}
+                        size={14}
+                        color={verificationMessage.type === "success" ? "#3B6D11" : verificationMessage.type === "pending" ? COLORS.muted : COLORS.danger}
+                      />
+                      <Text style={verificationMessage.type === "success" ? styles.successText : verificationMessage.type === "pending" ? styles.pendingText : styles.errorText}>
+                        {verificationMessage.text}
+                      </Text>
                     </View>
                   ) : null}
                 </View>
                 {verificationExpired || verificationAttemptsLocked ? null : resendCooldown > 0 ? (
-                  <Text style={styles.timerText}>{formatCountdown(countdown)}</Text>
+                  <Text style={styles.timerText}>{formatCountdown(resendCooldown)}</Text>
                 ) : (
                   <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
                     <Text style={styles.resendLink}>{isSubmitting ? "발송 중" : "재전송"}</Text>
@@ -453,7 +497,14 @@ export default function RegisterScreen() {
               </Pressable>
             ))}
             {registrationOptionsQuery.isLoading ? <Text style={styles.modalStateText}>전공 목록을 불러오는 중이에요.</Text> : null}
-            {registrationOptionsQuery.isError ? <Text style={styles.errorText}>전공 목록을 불러오지 못했어요.</Text> : null}
+            {registrationOptionsQuery.isError ? (
+              <View style={styles.modalRetry}>
+                <Text style={styles.errorText}>전공 목록을 불러오지 못했어요.</Text>
+                <Pressable accessibilityRole="button" onPress={() => void registrationOptionsQuery.refetch()} style={styles.modalRetryButton}>
+                  <Text style={styles.modalRetryText}>다시 시도</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
@@ -487,6 +538,7 @@ const styles = StyleSheet.create({
   resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular 12
   successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
+  pendingText: { flexShrink: 1, color: COLORS.muted, fontSize: 12, fontWeight: "400", lineHeight: 18 },
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
   selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: border 0.5, px14 py12
@@ -516,4 +568,7 @@ const styles = StyleSheet.create({
   modalOptionText: { color: COLORS.text, fontSize: 15, fontWeight: "400" }, // Figma: Regular 15
   modalOptionTextSelected: { color: COLORS.primary, fontWeight: "500" }, // Figma: selected = primary Medium
   modalStateText: { color: COLORS.muted, fontSize: 13, fontWeight: "700", paddingVertical: 14 },
+  modalRetry: { alignItems: "flex-start", gap: 8, paddingVertical: 10 },
+  modalRetryButton: { borderRadius: 7, backgroundColor: COLORS.primary50, paddingHorizontal: 12, paddingVertical: 8 },
+  modalRetryText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
 });

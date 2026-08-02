@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../components/LoadingState";
 import { eventApi } from "../services/api";
 import type { EventItem } from "../types";
+import { formatBoardDateTime } from "../utils/dateFormat";
 
 const COLORS = {
   primary: "#2761FF",
@@ -26,15 +28,6 @@ const EVENT_CATEGORY_LABELS: Record<string, string> = {
   other: "일정",
 };
 
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekdays[date.getDay()]}) · ${hour}:${minute}`;
-}
-
 function EventRow({ item }: { item: EventItem }) {
   return (
     <Pressable onPress={() => router.push(`/events/${item.id}` as never)} style={styles.eventRow}>
@@ -46,7 +39,7 @@ function EventRow({ item }: { item: EventItem }) {
       </Text>
       <View style={styles.metaRow}>
         <Ionicons name="calendar-outline" size={15} color={COLORS.subtle} />
-        <Text style={styles.metaText}>{formatDateTime(item.start_at)}</Text>
+        <Text style={styles.metaText}>{formatBoardDateTime(item.start_at)}</Text>
       </View>
       {item.location ? (
         <View style={styles.metaRow}>
@@ -88,9 +81,7 @@ export default function EventsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : (
         <FlatList
           data={events}

@@ -10,7 +10,6 @@ import {
   apiErrorCode,
   composeSchoolEmail,
   emailIdError,
-  formatCountdown,
   passwordError,
 } from "../../utils/authValidation";
 

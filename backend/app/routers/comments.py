@@ -63,8 +63,15 @@ def get_comments(
     comments = db.scalars(select(Comment).where(*filters).order_by(Comment.created_at.asc(), Comment.id.asc())).all()
 
     author_ids = list({comment.author_id for comment in comments if comment.author_id is not None})
-    user_rows = db.execute(select(User.id, User.nickname).where(User.id.in_(author_ids))).all() if author_ids else []
-    nickname_by_id = {user_id: nickname for user_id, nickname in user_rows}
+    user_rows = (
+        db.execute(select(User.id, User.nickname, User.cohort).where(User.id.in_(author_ids))).all()
+        if author_ids
+        else []
+    )
+    author_by_id = {
+        user_id: {"nickname": nickname, "cohort": cohort}
+        for user_id, nickname, cohort in user_rows
+    }
 
     nodes: dict[int, dict] = {}
     roots: list[dict] = []
@@ -74,7 +81,8 @@ def get_comments(
             "id": comment.id,
             "post_id": comment.post_id,
             "author_id": comment.author_id,
-            "author_nickname": nickname_by_id.get(comment.author_id, DELETED_USER_NICKNAME),
+            "author_nickname": author_by_id.get(comment.author_id, {}).get("nickname", DELETED_USER_NICKNAME),
+            "author_cohort": author_by_id.get(comment.author_id, {}).get("cohort"),
             "parent_id": comment.parent_id,
             "content": comment.content,
             "created_at": comment.created_at,

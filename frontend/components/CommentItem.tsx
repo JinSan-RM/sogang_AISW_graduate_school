@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import type { CommentNode } from "../types";
+import { formatBoardDate, formatRelativeTime } from "../utils/dateFormat";
+import { formatCohortName } from "../utils/userLabel";
 
 type CommentReportTarget = {
   type: "comment";
@@ -20,22 +22,8 @@ type Props = {
   reportedTargets?: Record<string, boolean>;
 };
 
-function relativeTime(date: Date) {
-  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (diffSec < 60) return "방금 전";
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}분 전`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}시간 전`;
-  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}일 전`;
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
 function formatCommentDate(value: string) {
-  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
-  const date = new Date(value.includes("T") && !hasTimezone ? `${value}Z` : value);
-  if (Number.isNaN(date.getTime())) return value.slice(2, 10).replace(/-/g, ".");
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  const base = `${String(date.getFullYear()).slice(2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday})`;
-  return `${base} · ${relativeTime(date)}`;
+  return [formatBoardDate(value), formatRelativeTime(value)].filter(Boolean).join(" · ");
 }
 
 export default function CommentItem({
@@ -67,7 +55,9 @@ export default function CommentItem({
       }}
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 27 }}>
-        <Text style={{ color: "#15171C", fontSize: 13, fontWeight: "500" }}>{comment.author_nickname}</Text>
+        <Text style={{ color: "#15171C", fontSize: 13, fontWeight: "500" }}>
+          {formatCohortName(comment.author_cohort, comment.author_nickname)}
+        </Text>
         {isReported ? (
           <Text style={{ color: "#15803D", fontSize: 11, fontWeight: "400" }}>신고됨</Text>
         ) : canReport ? (

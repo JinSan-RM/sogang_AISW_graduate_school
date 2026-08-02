@@ -1,8 +1,9 @@
 import logging
 from datetime import timedelta
+from math import ceil
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from app.account_deletion import ACCOUNT_DELETE_PURPOSE, delete_user_account
@@ -38,9 +39,11 @@ from app.security import (
     generate_verification_code,
     hash_password,
     hash_token,
+    hash_verification_code,
     password_needs_rehash,
     utc_now,
     verify_password,
+    verify_verification_code,
 )
 from app.user_validation import ensure_nickname_available
 
@@ -143,7 +146,7 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
         raise AppException(status_code=409, message="Email already registered.", code="CONFLICT")
 
     # Serialize requests for the same address so concurrent calls cannot issue multiple codes.
-    db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:email, 0))"), {"email": email})
+    _lock_email_request(db, email)
 
     previous_tokens = db.scalars(
         select(EmailVerificationToken).where(
@@ -158,16 +161,21 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
     if latest_token is not None:
         elapsed_seconds = (now - latest_token.created_at).total_seconds()
         if elapsed_seconds < settings.email_verification_resend_cooldown_seconds:
+            retry_after = max(
+                1,
+                ceil(settings.email_verification_resend_cooldown_seconds - elapsed_seconds),
+            )
             raise AppException(
                 status_code=429,
                 message="Verification code can be requested again after the cooldown.",
                 code="VERIFICATION_RESEND_COOLDOWN",
+                headers={"Retry-After": str(retry_after)},
             )
 
     code = generate_verification_code()
     token = EmailVerificationToken(
         email=email,
-        code_hash=hash_token(code),
+        code_hash=hash_verification_code(code, email=email, purpose="register"),
         purpose="register",
         expires_at=now + timedelta(minutes=settings.email_verification_expire_minutes),
     )
@@ -195,10 +203,14 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
             plain_body,
             html_body=html_body,
         )
-    except Exception:
+    except Exception as exc:
         db.delete(token)
         db.commit()
-        raise
+        raise AppException(
+            status_code=503,
+            message="Verification email delivery is temporarily unavailable.",
+            code="EMAIL_DELIVERY_UNAVAILABLE",
+        ) from exc
 
     if not email_sent:
         db.delete(token)
@@ -227,10 +239,30 @@ def verify_register_email(payload: EmailVerificationConfirm, request: Request, d
         )
         .order_by(EmailVerificationToken.created_at.desc(), EmailVerificationToken.id.desc())
         .limit(1)
+        .with_for_update()
     )
-    if token is None or token.expires_at < utc_now() or token.code_hash != hash_token(payload.code):
-        if token is not None and token.code_hash == hash_token(payload.code):
-            raise AppException(status_code=400, message="Verification code expired.", code="VERIFICATION_EXPIRED")
+    if token is None:
+        _verification_failure(
+            token,
+            db,
+            expired_code="VERIFICATION_EXPIRED",
+            invalid_code="VERIFICATION_CODE_INVALID",
+        )
+    if token.expires_at < utc_now():
+        raise AppException(status_code=400, message="Verification code expired.", code="VERIFICATION_EXPIRED")
+    if token.attempt_count >= MAX_VERIFICATION_ATTEMPTS:
+        _verification_failure(
+            token,
+            db,
+            expired_code="VERIFICATION_EXPIRED",
+            invalid_code="VERIFICATION_CODE_INVALID",
+        )
+    if not verify_verification_code(
+        payload.code,
+        token.code_hash,
+        email=email,
+        purpose="register",
+    ):
         _verification_failure(
             token,
             db,
@@ -275,26 +307,25 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         raise AppException(status_code=422, message="Active major option is required.", code="VALIDATION_ERROR")
 
     verification_token_hash = hash_token(payload.verification_token)
-    verification = db.scalar(
-        select(EmailVerificationToken)
-        .where(
+    claimed_verification = db.execute(
+        delete(EmailVerificationToken).where(
             EmailVerificationToken.code_hash == verification_token_hash,
             EmailVerificationToken.purpose == "register",
             EmailVerificationToken.consumed_at.is_not(None),
             EmailVerificationToken.expires_at >= utc_now(),
         )
-        .order_by(EmailVerificationToken.consumed_at.desc(), EmailVerificationToken.id.desc())
-        .limit(1)
-    )
-    if verification is None:
+        .returning(EmailVerificationToken.email)
+    ).first()
+    if claimed_verification is None:
         raise AppException(status_code=400, message="Invalid verification token.", code="BAD_REQUEST")
 
-    existing_user = db.scalar(select(User.id).where(User.email == verification.email))
+    verified_email = claimed_verification.email
+    existing_user = db.scalar(select(User.id).where(User.email == verified_email))
     if existing_user is not None:
         raise AppException(status_code=409, message="Email already registered.", code="CONFLICT")
 
     user = User(
-        username=verification.email,
+        username=verified_email,
         password_hash=hash_password(payload.password),
         nickname=nickname,
         cohort=payload.cohort,
@@ -303,7 +334,7 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
         company=payload.company,
         job_title=payload.job_title,
         position=payload.position,
-        email=verification.email,
+        email=verified_email,
         privacy_policy_version=active_policy.version,
         privacy_consented_at=utc_now(),
         role="user",
@@ -311,9 +342,6 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     db.add(user)
     db.flush()
     db.add(NotificationSetting(user_id=user.id))
-    db.commit()
-    db.refresh(user)
-
     return success_response(_issue_tokens(db, user))
 
 

@@ -42,10 +42,11 @@ export function useMultiBoardPosts(
   });
 }
 
-export function usePostDetail(postId: number) {
+export function usePostDetail(postId: number, enabled = true) {
   return useQuery({
     queryKey: ["post", postId],
     queryFn: () => postApi.getPostDetail(postId),
+    enabled: enabled && Number.isFinite(postId) && postId > 0,
   });
 }
 

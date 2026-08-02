@@ -12,14 +12,25 @@ logger = logging.getLogger(__name__)
 
 
 class AppException(Exception):
-    def __init__(self, status_code: int, message: str, code: str):
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        code: str,
+        headers: dict[str, str] | None = None,
+    ):
         self.status_code = status_code
         self.message = message
         self.code = code
+        self.headers = headers
 
 
 def app_exception_handler(_, exc: AppException) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content=error_response(exc.message, exc.code))
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_response(exc.message, exc.code),
+        headers=exc.headers,
+    )
 
 
 def request_validation_exception_handler(_: Request, __: RequestValidationError) -> JSONResponse:

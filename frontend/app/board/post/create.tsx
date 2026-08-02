@@ -1,18 +1,35 @@
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
 import { useBoardsQuery } from "../../../hooks/useApi";
-import { useCreatePost, useUpdatePost } from "../../../hooks/usePosts";
+import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/usePosts";
+import CompletionState from "../../../components/CompletionState";
+import LoadingState from "../../../components/LoadingState";
 import { MediaImageBackground } from "../../../components/MediaImage";
 import { postApi, userApi } from "../../../services/api";
 import type { MediaAsset, PostListItem, UserSearchItem } from "../../../types";
+import {
+  activityParticipantsFromMetadata,
+  activitySourcePostIdFromMetadata,
+  buildActivityCertificationMetadata,
+  formatActivityParticipant,
+} from "../../../utils/activityCertification";
+import { formatBoardDate } from "../../../utils/dateFormat";
+import {
+  calendarMonthFromDotDate,
+  formatDotDate,
+  isMutualAidEventDateAllowed,
+  minimumMutualAidEventDate,
+} from "../../../utils/dateSelection";
+import { createFormNotice, requiredFieldNotice, type FormNotice } from "../../../utils/formNotice";
 import { pickAndUploadDocuments, pickAndUploadImages } from "../../../utils/mediaPicker";
 
 const COLORS = {
@@ -83,18 +100,24 @@ function clean(value?: string) {
 }
 
 function todayDotDate() {
-  const date = new Date();
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return formatDotDate(new Date());
+}
+
+function mutualAidDateGuidance(minimumDate: string) {
+  return `오늘 기준 2일 후인 ${formatBoardDate(minimumDate)}부터 신청할 수 있어요.`;
+}
+
+function isMutualAidDateTooSoonError(error: unknown) {
+  return (
+    isAxiosError<{ code?: string }>(error) &&
+    error.response?.data?.code === "MUTUAL_AID_DATE_TOO_SOON"
+  );
 }
 
 function activitySelectPlaceholder(slug?: string) {
   if (slug?.includes("study")) return "모집글을 선택하세요";
   if (slug?.includes("networking")) return "네트워킹을 선택하세요";
   return "동아리명을 선택하세요";
-}
-
-function participantLabel(user: UserSearchItem) {
-  return [user.cohort ? `${user.cohort}기` : null, user.nickname].filter(Boolean).join(" ");
 }
 
 type SelectionOption = { key: string; label: string };
@@ -140,14 +163,39 @@ function SelectionSheet({
   );
 }
 
+function FormNoticeModal({ notice, onClose }: { notice: FormNotice | null; onClose: () => void }) {
+  return (
+    <Modal animationType="fade" transparent visible={Boolean(notice)} onRequestClose={onClose}>
+      <Pressable accessibilityViewIsModal onPress={onClose} style={styles.noticeBackdrop}>
+        <Pressable onPress={() => undefined} style={styles.noticeCard}>
+          <View style={styles.noticeIcon}>
+            <Ionicons name="alert-circle-outline" size={24} color={COLORS.primary} />
+          </View>
+          <Text accessibilityRole="header" style={styles.noticeTitle}>{notice?.title}</Text>
+          <Text style={styles.noticeMessage}>{notice?.message}</Text>
+          <Pressable accessibilityRole="button" onPress={onClose} style={styles.noticeButton}>
+            <Text style={styles.noticeButtonText}>확인</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 const CAL_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
-function InlineCalendar({ value, onSelect }: { value?: string; onSelect: (dateStr: string) => void }) {
+function InlineCalendar({
+  value,
+  minimumDate,
+  onSelect,
+}: {
+  value?: string;
+  minimumDate?: string;
+  onSelect: (dateStr: string) => void;
+}) {
   const [view, setView] = useState(() => {
-    const parts = (value ?? "").split(".").map((v) => Number(v));
-    if (parts[0] && parts[1]) return { y: parts[0], m: parts[1] - 1 };
-    const now = new Date();
-    return { y: now.getFullYear(), m: now.getMonth() };
+    const month = calendarMonthFromDotDate(value ?? minimumDate);
+    return { y: month.year, m: month.monthIndex };
   });
 
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
@@ -179,12 +227,19 @@ function InlineCalendar({ value, onSelect }: { value?: string; onSelect: (dateSt
       <View style={styles.calGrid}>
         {cells.map((day, index) => {
           if (day === null) return <View key={`e-${index}`} style={styles.calCell} />;
-          const dateStr = `${view.y}.${String(view.m + 1).padStart(2, "0")}.${String(day).padStart(2, "0")}`;
+          const dateStr = formatDotDate(new Date(view.y, view.m, day));
           const isSelected = dateStr === selected;
+          const isDisabled = Boolean(minimumDate && dateStr < minimumDate);
           return (
-            <Pressable key={dateStr} onPress={() => onSelect(dateStr)} style={styles.calCell}>
-              <View style={[styles.calDay, isSelected ? styles.calDaySelected : null]}>
-                <Text style={[styles.calDayText, isSelected ? styles.calDayTextSelected : null]}>{day}</Text>
+            <Pressable
+              accessibilityState={{ disabled: isDisabled, selected: isSelected }}
+              disabled={isDisabled}
+              key={dateStr}
+              onPress={() => onSelect(dateStr)}
+              style={styles.calCell}
+            >
+              <View style={[styles.calDay, isSelected ? styles.calDaySelected : null, isDisabled ? styles.calDayDisabled : null]}>
+                <Text style={[styles.calDayText, isSelected ? styles.calDayTextSelected : null, isDisabled ? styles.calDayTextDisabled : null]}>{day}</Text>
               </View>
             </Pressable>
           );
@@ -197,19 +252,26 @@ function InlineCalendar({ value, onSelect }: { value?: string; onSelect: (dateSt
 export default function PostCreateScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
-    boardId: string;
+    boardId?: string;
     postId?: string;
     title?: string;
     category?: string;
     content?: string;
   }>();
 
-  const [boardId, setBoardId] = useState(() => Number(params.boardId));
-  const postId = params.postId ? Number(params.postId) : null;
+  const parsedInitialBoardId = Number(params.boardId);
+  const [selectedBoardId, setBoardId] = useState(() =>
+    Number.isFinite(parsedInitialBoardId) && parsedInitialBoardId > 0 ? parsedInitialBoardId : 0,
+  );
+  const parsedPostId = Number(params.postId);
+  const postId = Number.isFinite(parsedPostId) && parsedPostId > 0 ? parsedPostId : null;
+  const editPostQuery = usePostDetail(postId ?? 0, postId !== null);
+  const existingPost = editPostQuery.data?.data;
+  const boardId = existingPost?.board_id ?? selectedBoardId;
 
   const createMutation = useCreatePost(boardId);
   const updateMutation = useUpdatePost(postId ?? 0, boardId);
-  const { data: boardsRes } = useBoardsQuery();
+  const { data: boardsRes, isError: isBoardsError, isLoading: isBoardsLoading, refetch: refetchBoards } = useBoardsQuery();
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -219,6 +281,8 @@ export default function PostCreateScreen() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [activitySourcePostId, setActivitySourcePostId] = useState<number | null>(null);
   const [createdPostId, setCreatedPostId] = useState<number | null>(null);
+  const [formNotice, setFormNotice] = useState<FormNotice | null>(null);
+  const hydratedPostId = useRef<number | null>(null);
   const boards = useMemo(() => boardsRes?.data.flatMap((group) => group.boards) ?? [], [boardsRes?.data]);
   const board = useMemo(
     () => boards.find((item) => item.id === boardId),
@@ -235,10 +299,12 @@ export default function PostCreateScreen() {
   const isSuggestion = boardType === "suggestion";
   const isActivity = boardType === "activity_certification";
   const isMutualAid = boardType === "mutual_aid";
+  const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
   const isStudyRecruit = board?.slug === "study-recruit";
   const isNetworkingProgram = board?.slug === "networking-programs";
   const isAdminParticipationPost = board?.slug === "club-promo" || isNetworkingProgram;
+  const canEditActivityBankAccount = !postId || typeof existingPost?.metadata?.bank_account === "string";
   const compactCreate = !isActivity && !isMutualAid;
   const requiresAttachment = isActivity || isMutualAid || isAlbum || isAdminParticipationPost;
   const canPickBoard =
@@ -269,7 +335,7 @@ export default function PostCreateScreen() {
     retry: false,
   });
 
-  const { control, handleSubmit, setValue } = useForm<FormValues>({
+  const { clearErrors, control, handleSubmit, reset, setError, setValue } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       title: params.title ?? "",
@@ -284,6 +350,30 @@ export default function PostCreateScreen() {
       applicationUrl: "",
     },
   });
+
+  useEffect(() => {
+    if (!postId || !existingPost || hydratedPostId.current === postId) return;
+
+    const metadata = existingPost.metadata ?? {};
+    const storedParticipants = activityParticipantsFromMetadata(metadata);
+    reset({
+      title: existingPost.title,
+      category: existingPost.category ?? "",
+      content: existingPost.content,
+      activityDate: typeof metadata.activity_date === "string" ? metadata.activity_date : "",
+      participants: typeof metadata.participants === "string" ? metadata.participants : "",
+      bankAccount: typeof metadata.bank_account === "string" ? metadata.bank_account : "",
+      eventDate: typeof metadata.event_date === "string" ? metadata.event_date : "",
+      relation: typeof metadata.relation === "string" ? metadata.relation : "",
+      contact: typeof metadata.contact === "string" ? metadata.contact : "",
+      applicationUrl: typeof metadata.application_url === "string" ? metadata.application_url : "",
+    });
+    setAttachments(existingPost.attachments);
+    setSelectedParticipants(storedParticipants);
+    setParticipantQuery("");
+    setActivitySourcePostId(activitySourcePostIdFromMetadata(metadata));
+    hydratedPostId.current = postId;
+  }, [existingPost, postId, reset]);
 
   useEffect(() => {
     if (isStudyRecruit && (!params.category || params.category === "모집")) {
@@ -306,7 +396,7 @@ export default function PostCreateScreen() {
   const attachmentIds = attachments.map((attachment) => attachment.id);
   const syncParticipants = (items: UserSearchItem[]) => {
     setSelectedParticipants(items);
-    setValue("participants", items.map(participantLabel).join(", "), { shouldValidate: true });
+    setValue("participants", items.map(formatActivityParticipant).join(", "), { shouldValidate: true });
   };
   const addParticipant = (participant: UserSearchItem) => {
     if (selectedParticipants.some((item) => item.id === participant.id)) {
@@ -395,14 +485,17 @@ export default function PostCreateScreen() {
   const isSubmitting = isUploading || createMutation.isPending || updateMutation.isPending;
 
   const buildMetadata = (values: FormValues) => {
-    const metadata: Record<string, string> = {};
     if (isActivity) {
-      if (clean(values.activityDate)) metadata.activity_date = clean(values.activityDate) as string;
-      if (clean(values.participants)) metadata.participants = clean(values.participants) as string;
-      if (clean(values.bankAccount)) metadata.bank_account = clean(values.bankAccount) as string;
-      if (selectedParticipants.length > 0) metadata.participant_user_ids = selectedParticipants.map((item) => String(item.id)).join(",");
-      if (activitySourcePostId) metadata.activity_source_post_id = String(activitySourcePostId);
+      return buildActivityCertificationMetadata({
+        existingMetadata: existingPost?.metadata,
+        activityDate: values.activityDate,
+        participants: values.participants,
+        bankAccount: values.bankAccount,
+        selectedParticipants,
+        activitySourcePostId,
+      });
     }
+    const metadata: Record<string, string> = {};
     if (isMutualAid) {
       if (clean(values.eventDate)) metadata.event_date = clean(values.eventDate) as string;
       if (clean(values.relation)) metadata.relation = clean(values.relation) as string;
@@ -421,8 +514,21 @@ export default function PostCreateScreen() {
     if (clean(value)) {
       return false;
     }
-    Alert.alert("필수 항목", `${label}을 입력하세요.`);
+    setFormNotice(requiredFieldNotice(label));
     return true;
+  };
+
+  const handleMutationError = (error: unknown) => {
+    if (isMutualAid && isMutualAidDateTooSoonError(error)) {
+      const message = mutualAidDateGuidance(minimumMutualAidEventDate());
+      setError("eventDate", { message });
+      setFormNotice(createFormNotice("신청 가능한 날짜", message));
+      return;
+    }
+    setFormNotice(createFormNotice(
+      postId ? "수정 실패" : isMutualAid ? "신청 실패" : "등록 실패",
+      "입력 내용과 첨부파일을 확인한 뒤 다시 시도하세요."
+    ));
   };
 
   const onSubmit = (values: FormValues) => {
@@ -437,13 +543,19 @@ export default function PostCreateScreen() {
         requireValue(values.category, "활동 대상") ||
         requireValue(values.activityDate, "활동일") ||
         requireValue(values.participants, "참가자") ||
-        requireValue(values.bankAccount, "입금 계좌")
+        (canEditActivityBankAccount && requireValue(values.bankAccount, "입금 계좌"))
       ) {
         return;
       }
     }
     if (isMutualAid) {
       if (requireValue(values.category, "경조사 종류") || requireValue(values.eventDate, "경조사 일자") || requireValue(values.relation, "관계")) {
+        return;
+      }
+      if (!isMutualAidEventDateAllowed(values.eventDate)) {
+        const message = mutualAidDateGuidance(minimumMutualAidEventDate());
+        setError("eventDate", { message });
+        setFormNotice(createFormNotice("신청 가능한 날짜", message));
         return;
       }
     }
@@ -459,12 +571,12 @@ export default function PostCreateScreen() {
         const parsed = new URL(applicationUrl as string);
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("INVALID_PROTOCOL");
       } catch {
-        Alert.alert("참여 버튼 링크", "http:// 또는 https://로 시작하는 올바른 주소를 입력하세요.");
+        setFormNotice(createFormNotice("참여 버튼 링크", "http:// 또는 https://로 시작하는 올바른 주소를 입력하세요."));
         return;
       }
     }
     if (requiresAttachment && (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0)) {
-      Alert.alert(labels.attachment, `${labels.attachmentHelp}을 첨부하세요.`);
+      setFormNotice(createFormNotice(labels.attachment, `${labels.attachmentHelp}을 첨부하세요.`));
       return;
     }
 
@@ -481,6 +593,7 @@ export default function PostCreateScreen() {
     if (postId) {
       updateMutation.mutate(payload, {
         onSuccess: () => router.replace(`/board/post/${postId}`),
+        onError: handleMutationError,
       });
       return;
     }
@@ -494,6 +607,7 @@ export default function PostCreateScreen() {
         }
         router.replace(target);
       },
+      onError: handleMutationError,
     });
   };
 
@@ -508,7 +622,7 @@ export default function PostCreateScreen() {
         setAttachments((current) => [...current, ...uploaded]);
       }
     } catch {
-      Alert.alert("업로드 실패", "파일 업로드를 다시 시도하세요.");
+      setFormNotice(createFormNotice("업로드 실패", "파일 업로드를 다시 시도하세요."));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -525,24 +639,31 @@ export default function PostCreateScreen() {
   const mutualAidRelationOptions: SelectionOption[] = ["본인", "배우자", "부모", "자녀", "형제/자매"].map((label) => ({ key: label, label }));
   const imageAttachments = attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
 
+  if (postId && (editPostQuery.isLoading || isBoardsLoading)) {
+    return <LoadingState message="활동인증 정보를 불러오는 중이에요" />;
+  }
+
+  if (postId && (editPostQuery.isError || isBoardsError || !existingPost || !board)) {
+    return (
+      <View style={styles.editStateScreen}>
+        <Text style={styles.editStateText}>수정할 활동인증을 불러오지 못했습니다.</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void Promise.all([editPostQuery.refetch(), refetchBoards()])}
+          style={styles.editRetryButton}
+        >
+          <Text style={styles.editRetryButtonText}>다시 시도</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if ((isActivity || isMutualAid || isSuggestion) && createdPostId) {
     return (
-      <View style={styles.successScreen}>
-        <View style={styles.successContent}>
-          <View style={styles.successIcon}>
-            <Ionicons name="checkmark" size={38} color="#22C55E" />
-          </View>
-          <Text style={styles.successTitle}>
-            {isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
-          </Text>
-          <Pressable
-            onPress={() => router.replace(isMutualAid || isSuggestion ? (`/board/${boardId}` as never) : (`/board/post/${createdPostId}` as never))}
-            style={styles.successButton}
-          >
-            <Text style={styles.successButtonText}>확인</Text>
-          </Pressable>
-        </View>
-      </View>
+      <CompletionState
+        title={isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
+        onConfirm={() => router.replace(isMutualAid || isSuggestion ? (`/board/${boardId}` as never) : (`/board/post/${createdPostId}` as never))}
+      />
     );
   }
 
@@ -634,16 +755,27 @@ export default function PostCreateScreen() {
               control={control}
               name="activityDate"
               render={({ field }) => (
-                <View style={styles.activityInputWithIcon}>
-                  <TextInput
-                    onChangeText={field.onChange}
-                    placeholder="YYYY.MM.DD"
-                    placeholderTextColor="#A6ACB7"
-                    style={styles.activityInlineInput}
-                    value={field.value}
-                  />
-                  <Ionicons name="calendar-outline" size={16} color={COLORS.subtle} />
-                </View>
+                <>
+                  <Pressable
+                    accessibilityHint="달력에서 실제 활동 날짜를 선택합니다"
+                    accessibilityLabel="활동일 선택"
+                    accessibilityRole="button"
+                    onPress={() => setDatePickerOpen((open) => !open)}
+                    style={styles.activityInputWithIcon}
+                  >
+                    <Text style={styles.activityDateValue}>{field.value ? formatBoardDate(field.value) : "활동일을 선택하세요"}</Text>
+                    <Ionicons name="calendar-outline" size={16} color={COLORS.subtle} />
+                  </Pressable>
+                  {datePickerOpen ? (
+                    <InlineCalendar
+                      value={field.value}
+                      onSelect={(dateStr) => {
+                        field.onChange(dateStr);
+                        setDatePickerOpen(false);
+                      }}
+                    />
+                  ) : null}
+                </>
               )}
             />
 
@@ -654,17 +786,20 @@ export default function PostCreateScreen() {
                 name="bankAccount"
                 render={({ field }) => (
                   <TextInput
+                    editable={canEditActivityBankAccount}
                     onChangeText={field.onChange}
-                    placeholder="은행 / 계좌번호를 입력하세요"
+                    placeholder={canEditActivityBankAccount ? "은행ㆍ계좌번호를 입력하세요." : "기존 계좌 정보가 유지됩니다"}
                     placeholderTextColor="#A6ACB7"
-                    style={styles.input}
-                    value={field.value}
+                    style={[styles.input, !canEditActivityBankAccount ? styles.inputDisabled : null]}
+                    value={field.value ?? ""}
                   />
                 )}
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
-                <Text style={styles.activityWarningText}>계좌는 본인 명의로만 등록 가능해요</Text>
+                <Text style={styles.activityWarningText}>
+                  {canEditActivityBankAccount ? "계좌는 본인 명의로만 등록 가능해요" : "보안을 위해 기존 계좌는 표시하지 않고 그대로 유지해요"}
+                </Text>
               </View>
             </View>
 
@@ -705,7 +840,7 @@ export default function PostCreateScreen() {
                                   <Text style={styles.participantAvatarText}>{participant.nickname.slice(0, 1)}</Text>
                                 </View>
                                 <View style={styles.participantTextBlock}>
-                                  <Text style={styles.participantName}>{participantLabel(participant)}</Text>
+                                  <Text style={styles.participantName}>{formatActivityParticipant(participant)}</Text>
                                   {participant.major ? <Text style={styles.participantMeta}>{participant.major}</Text> : null}
                                 </View>
                                 <Ionicons name={selected ? "checkmark-circle" : "add-circle-outline"} size={18} color={selected ? COLORS.primary : COLORS.subtle} />
@@ -718,7 +853,7 @@ export default function PostCreateScreen() {
                         <View style={styles.activityChipRow}>
                           {selectedParticipants.map((participant) => (
                             <Pressable key={participant.id} onPress={() => removeParticipant(participant.id)} style={styles.activityMemberChip}>
-                              <Text style={styles.activityMemberChipText}>{participantLabel(participant)}</Text>
+                              <Text style={styles.activityMemberChipText}>{formatActivityParticipant(participant)}</Text>
                               <Ionicons name="close" size={12} color={COLORS.muted} />
                             </Pressable>
                           ))}
@@ -927,19 +1062,26 @@ export default function PostCreateScreen() {
           <Controller
             control={control}
             name="eventDate"
-            render={({ field }) => (
-              <FormField label="날짜" requiredStar>
+            render={({ field, fieldState }) => (
+              <FormField
+                error={fieldState.error?.message}
+                helper={mutualAidDateGuidance(mutualAidMinimumDate)}
+                label="날짜"
+                requiredStar
+              >
                 <Pressable onPress={() => setDatePickerOpen((open) => !open)} style={styles.selectionField}>
                   <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>
-                    {field.value || "경조사 날짜를 선택하세요"}
+                    {field.value ? formatBoardDate(field.value) : "경조사 날짜를 선택하세요"}
                   </Text>
                   <Ionicons name="calendar-outline" size={17} color={COLORS.subtle} />
                 </Pressable>
                 {datePickerOpen ? (
                   <InlineCalendar
+                    minimumDate={mutualAidMinimumDate}
                     value={field.value}
                     onSelect={(dateStr) => {
                       field.onChange(dateStr);
+                      clearErrors("eventDate");
                       setDatePickerOpen(false);
                     }}
                   />
@@ -987,7 +1129,7 @@ export default function PostCreateScreen() {
             control={control}
             name="content"
             render={({ field }) => (
-              <FormField label="비고" optional>
+              <FormField label="비고" optional helper="원우회에 전달할 내용이 있을 때 입력해주세요.">
                 <TextInput
                   multiline
                   onChangeText={field.onChange}
@@ -1181,6 +1323,7 @@ export default function PostCreateScreen() {
         title={activitySelectPlaceholder(board?.slug)}
         options={activityOptions}
         emptyText={activitySourceQuery.isLoading ? "활동 대상을 불러오는 중입니다." : "선택할 수 있는 활동이 없습니다."}
+        selectedKey={activitySourcePostId ? String(activitySourcePostId) : undefined}
         onClose={() => setSelectionSheet(null)}
         onSelect={(option) => {
           setValue("category", option.label, { shouldValidate: true });
@@ -1210,6 +1353,7 @@ export default function PostCreateScreen() {
           setSelectionSheet(null);
         }}
       />
+      <FormNoticeModal notice={formNotice} onClose={() => setFormNotice(null)} />
     </View>
   );
 }
@@ -1260,6 +1404,32 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.bg,
+  },
+  editStateScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 24,
+  },
+  editStateText: {
+    color: COLORS.muted,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  editRetryButton: {
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+  },
+  editRetryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   appBar: {
     minHeight: 62,
@@ -1571,6 +1741,65 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     paddingVertical: 0,
   },
+  noticeBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.42)",
+    paddingHorizontal: 24,
+  },
+  noticeCard: {
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+    borderRadius: 16,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 20,
+  },
+  noticeIcon: {
+    width: 46,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 23,
+    backgroundColor: COLORS.primary50,
+  },
+  noticeTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 14,
+    textAlign: "center",
+  },
+  noticeMessage: {
+    color: COLORS.muted,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  noticeButton: {
+    width: "100%",
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    marginTop: 20,
+  },
+  noticeButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  activityDateValue: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "400",
+  },
   participantResultBox: {
     overflow: "hidden",
     borderWidth: 1,
@@ -1816,8 +2045,10 @@ const styles = StyleSheet.create({
   calCell: { width: `${100 / 7}%`, alignItems: "center", justifyContent: "center", paddingVertical: 4 },
   calDay: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18 },
   calDaySelected: { backgroundColor: COLORS.primary },
+  calDayDisabled: { backgroundColor: "#F7F8FA" },
   calDayText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
   calDayTextSelected: { color: "#FFFFFF", fontWeight: "600" },
+  calDayTextDisabled: { color: "#C7CBD2" },
   optionalMark: {
     color: "#A6ACB7",
     fontSize: 12,
@@ -1835,6 +2066,10 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  inputDisabled: {
+    backgroundColor: "#F3F4F6",
+    color: COLORS.muted,
   },
   inputError: {
     borderColor: COLORS.danger,

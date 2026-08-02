@@ -10,9 +10,11 @@ class PostMutationBase(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     title: str = Field(min_length=1, max_length=POST_TITLE_MAX_LENGTH)
+    # Mutual-aid requests reuse content for optional remarks, so the router
+    # applies the board-aware required check after resolving the target board.
     # Album requests still carry a validated body (the client uses the title);
     # the router discards it when persisting image-only album posts.
-    content: str = Field(min_length=1, max_length=POST_CONTENT_MAX_LENGTH)
+    content: str = Field(max_length=POST_CONTENT_MAX_LENGTH)
     is_anonymous: bool = False
     category: str | None = None
     metadata: dict | None = None

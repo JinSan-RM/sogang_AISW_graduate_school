@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../components/LoadingState";
 import { eventApi } from "../../services/api";
 import type { EventItem } from "../../types";
+import { formatTime24 } from "../../utils/dateFormat";
 
 const COLORS = {
   primary: "#2761FF",
@@ -57,12 +59,6 @@ function buildMonthCells(month: Date) {
   return cells;
 }
 
-function formatTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
 function EventRow({ item }: { item: EventItem }) {
   return (
     <Pressable onPress={() => router.push(`/events/${item.id}` as never)} style={styles.eventRow}>
@@ -70,7 +66,7 @@ function EventRow({ item }: { item: EventItem }) {
       <Text numberOfLines={2} style={styles.eventTitle}>
         {item.title}
       </Text>
-      <Text style={styles.eventMeta}>{formatTime(item.start_at)}</Text>
+      <Text style={styles.eventMeta}>{formatTime24(item.start_at)}</Text>
     </Pressable>
   );
 }
@@ -80,7 +76,7 @@ export default function EventCalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
   const range = useMemo(() => monthRange(currentMonth), [currentMonth]);
-  const { data, isLoading } = useQuery({
+  const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ["events", range.start, range.end],
     queryFn: () => eventApi.getEvents({ from_date: range.start, to_date: range.end }),
   });
@@ -125,8 +121,13 @@ export default function EventCalendarScreen() {
       </View>
 
       {isLoading ? (
+        <LoadingState />
+      ) : isError ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
+          <Text style={styles.errorText}>일정을 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
         </View>
       ) : (
         <View style={styles.content}>
@@ -221,6 +222,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
+  },
+  errorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   content: {
     flex: 1,

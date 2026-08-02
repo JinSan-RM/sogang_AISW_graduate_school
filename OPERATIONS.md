@@ -1,9 +1,12 @@
 # Runtime Operations
 
-This runbook applies only to `docker-compose.production.example.yml`. Commands
-must be run from the repository root in Windows PowerShell. The verification
-evidence at the end is historical evidence, not an operating procedure or proof
-that the current host is ready for public traffic.
+This runbook applies to the shared `docker-compose.yml` plus the
+`docker-compose.production.example.yml` production overlay. Commands must be
+run from the repository root. Never run the production overlay by itself.
+Windows examples use PowerShell; the production helper also has a Bash version
+for Linux servers. The verification evidence at the end is historical evidence,
+not an operating procedure or proof that the current host is ready for public
+traffic.
 
 ## Production environment gate
 
@@ -31,15 +34,31 @@ Required production values:
 - `CORS_ORIGIN_REGEX`: an anchored HTTPS expression matching only approved web
   origins. Native applications do not need a CORS entry.
 - `RATE_LIMIT_ENABLED=true`.
-- `RATE_LIMIT_TRUST_PROXY=false` until the host-local ingress is verified to
-  discard client-supplied `Forwarded` and `X-Forwarded-*` headers and set its
-  own canonical client address. Only then may this be changed to `true`.
-- `RATE_LIMIT_TRUSTED_PROXY_IPS`: leave empty while proxy trust is `false`.
-  When enabling trust, set the narrow comma-separated IP/CIDR addresses
-  actually observed as the ingress source by the backend. Never use a wildcard
-  or an all-addresses CIDR.
+- `CLOUDFLARE_ENABLED=true` starts the optional Compose-managed connector;
+  `false` stops that connector during the next helper `Up`. This flag does not
+  create a tunnel, DNS record, or dashboard route.
+- Compose-managed Cloudflare requires an operator-created remotely managed
+  Named Tunnel, a one-line token file outside the checkout, a non-overlapping
+  private `CLOUDFLARE_TUNNEL_SUBNET`, and the fixed
+  `CLOUDFLARE_TUNNEL_IP` trusted as an exact `/32` only.
+- When using an external host-local ingress instead of the Compose connector,
+  measure it in staging with `RATE_LIMIT_TRUST_PROXY=false` and an empty
+  allowlist. Confirm it discards client-supplied forwarding headers, provides
+  its canonical client address, and note the direct peer observed by the
+  backend.
+- Production requires `RATE_LIMIT_TRUST_PROXY=true` and
+  `RATE_LIMIT_TRUSTED_PROXY_IPS` set to only those exact, verified IP/CIDR
+  addresses. Never use a wildcard or all-addresses CIDR; leaving trust disabled
+  would put all tunnel users in one shared IP rate-limit bucket.
 - `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, and
-  `SMTP_REQUIRED=true`.
+  `SMTP_REQUIRED=true`. Set `SMTP_SECURITY=starttls` with provider port 587 or
+  `SMTP_SECURITY=ssl` with provider port 465, and set a bounded
+  `SMTP_TIMEOUT_SECONDS`. Set `SMTP_AUTH=password`; an approved
+  IP-authenticated relay must explicitly use `SMTP_AUTH=none` with both
+  credential fields empty. Plaintext SMTP is rejected in deployment.
+- `EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS`: public frontend deadline in milliseconds.
+  It must be 15000-120000 and longer than `SMTP_TIMEOUT_SECONDS`; set the same
+  value in the selected EAS environment.
 - `MEDIA_UPLOAD_DIR` and `MEDIA_PRIVATE_UPLOAD_DIR`: the production Compose
   values `/data/media` and `/data/private-media`.
 - `MEDIA_UPLOAD_MAX_BYTES`, `MEDIA_UPLOAD_CHUNK_BYTES`,
@@ -64,6 +83,11 @@ environment file: configure `EXPO_PUBLIC_API_URL` separately in the selected
 EAS environment, using the same HTTPS API URL. This URL is public configuration,
 not a secret.
 
+Use a stable operator-controlled hostname. Staging and production reject
+Cloudflare Quick Tunnel `*.trycloudflare.com` URLs. Set
+`EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS` to a value longer than the backend SMTP
+timeout (the documented defaults are 120000 ms and 10 seconds respectively).
+
 The upload volumes must never be exposed by the reverse proxy or a static-file
 mount. Downloads go through the authenticated media API and short-lived signed
 URLs. Rotating `AUTH_SECRET_KEY` invalidates outstanding signed URLs.
@@ -71,11 +95,12 @@ URLs. Rotating `AUTH_SECRET_KEY` invalidates outstanding signed URLs.
 ## Public ingress boundary
 
 Production Compose intentionally publishes no PostgreSQL port and binds the API
-and static web ports only to host loopback:
+and static web ports only to host loopback. The optional connector reaches the
+services through a separate internal Docker origin network:
 
 ```text
-remote device -> HTTPS :443 ingress/tunnel -> 127.0.0.1:8000 API
-                                           -> 127.0.0.1:8080 web
+Compose tunnel: remote -> Cloudflare -> cloudflared -> backend:8000 / frontend-web:8080
+External ingress: remote -> HTTPS ingress -> 127.0.0.1:8000 / 127.0.0.1:8080
 PostgreSQL   -> Compose network only; no host or router port
 ```
 
@@ -87,13 +112,25 @@ of the following:
   443 (optionally 80 solely for an HTTPS redirect); or
 - an authenticated outbound tunnel with fixed HTTPS hostnames.
 
+Cloudflare Tunnel is inbound HTTPS transport only. Authentication email leaves
+the backend directly through the SMTP provider, so the production host must
+allow provider DNS and outbound TCP 587 or 465. Before go-live, verify the
+named tunnel routes, trusted proxy IPs, SMTP preflight, external signup inbox,
+and signup again after a backend restart.
+
+The Compose connector also needs outbound DNS plus TCP or UDP 7844 to
+Cloudflare. It needs no inbound firewall rule. Do not run an OS-installed
+`cloudflared` service and the Compose connector at the same time; Cloudflare can
+treat them as replicas, while an OS process cannot resolve the Compose-only
+`backend` and `frontend-web` names.
+
 `frontend/nginx.conf` serves static files only; it is not the public TLS reverse
-proxy. The operator must provision the host ingress or tunnel separately. It
-must reject unapproved Host values, overwrite forwarding headers, forward only
-to the loopback ports, and set an upload-body limit and timeout compatible with
-`MEDIA_UPLOAD_MAX_BYTES`. Keep `RATE_LIMIT_TRUST_PROXY=false` if these properties
-or the exact `RATE_LIMIT_TRUSTED_PROXY_IPS` source addresses have not been
-verified.
+proxy. When `CLOUDFLARE_ENABLED=false`, the operator must provision any desired
+host ingress separately. It must reject unapproved Host values, overwrite
+forwarding headers, forward only to the loopback ports, and set an upload-body
+limit and timeout compatible with `MEDIA_UPLOAD_MAX_BYTES`. Do not switch the
+deployment from staging to production until these properties and the exact
+`RATE_LIMIT_TRUSTED_PROXY_IPS` source addresses have been verified.
 
 Keep Windows Firewall enabled for every active network profile. A host reverse
 proxy needs an inbound rule only for 443 (and optionally 80 for redirect);
@@ -102,22 +139,43 @@ normally needs no inbound rule at all.
 
 ## Start and inspect production Compose
 
-Use the same argument list for every production operation:
+Use the helper so changing `CLOUDFLARE_ENABLED` also changes the Compose profile,
+recreates the backend with the matching trust policy, and stops a previously
+running connector when the flag becomes `false`:
+
+```powershell
+./scripts/production-compose.ps1 -Action Config
+./scripts/production-compose.ps1 -Action Up
+./scripts/production-compose.ps1 -Action Ps
+./scripts/production-compose.ps1 -Action Logs
+```
+
+On a Linux server, use the equivalent Bash helper:
+
+```bash
+bash scripts/production-compose.sh Config
+bash scripts/production-compose.sh Up
+bash scripts/production-compose.sh Ps
+bash scripts/production-compose.sh Logs
+```
+
+Both helpers accept alternate environment files. PowerShell uses `-EnvFile` and
+`-WorkerEnvFile`; Bash positional arguments are action, environment file, then
+worker environment file. They never pass the token value on the command line.
+The token is a normal Compose file-backed secret, not an encrypted Swarm or
+cloud secret; protect its host file with an operator-only ACL.
+
+For later manual operations in this PowerShell runbook, define:
 
 ```powershell
 $composeArgs = @(
   '--env-file', '.env.production',
+  '-f', 'docker-compose.yml',
   '-f', 'docker-compose.production.example.yml'
 )
 
-docker compose @composeArgs config --quiet
-if ($LASTEXITCODE -ne 0) { throw 'Production Compose validation failed.' }
-
-docker compose @composeArgs up -d --build
-if ($LASTEXITCODE -ne 0) { throw 'Production Compose startup failed.' }
-
-docker compose @composeArgs ps
-docker compose @composeArgs logs --tail=100 backend notification-worker
+# Verify provider DNS/TCP/TLS/auth from inside the deployed backend container.
+docker compose @composeArgs exec backend python scripts/send_test_email.py --check-only
 ```
 
 Before opening public HTTPS traffic, verify that the external API hostname is
@@ -144,9 +202,12 @@ failure and recovery before launch.
 ## Production seed and initial administrator
 
 Production startup calls non-authoritative `seed_reference_data`. It creates
-missing reference boards, FAQs, and the home banner only; it creates no user,
+missing reference boards, FAQs, and an inactive home-banner placeholder only; it creates no user,
 never overwrites operator-edited reference content, and never deactivates custom
 boards. Deterministic demo credentials remain non-production only.
+
+Home banners are image-only. An administrator must upload at least one responsive
+image and activate the placeholder before it can appear in the member app.
 
 For a new production deployment:
 

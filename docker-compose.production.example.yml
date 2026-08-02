@@ -1,8 +1,8 @@
 name: aisw-production
 
+# Production-only overlay. Combine with docker-compose.yml.
 services:
   db:
-    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env.production}
@@ -10,11 +10,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
     volumes:
       - production_pgdata:/var/lib/postgresql/data
-    # Intentionally no host port: PostgreSQL is reachable only on the Compose network.
+    # PostgreSQL is reachable only on the private Compose network.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
-      timeout: 5s
       retries: 10
     security_opt:
       - no-new-privileges:true
@@ -25,22 +23,28 @@ services:
         max-file: "5"
 
   backend:
-    build: ./backend
-    init: true
     read_only: true
     restart: unless-stopped
     env_file:
       - ${PRODUCTION_ENV_FILE:-.env.production}
-    depends_on:
-      db:
-        condition: service_healthy
-    # Keep the host binding on loopback. A host-local HTTPS reverse proxy or
-    # authenticated tunnel is the only supported public ingress.
+    # Keep the connector toggle and trusted peer identical between Compose
+    # interpolation and the backend runtime, including explicit shell overrides.
+    environment:
+      CLOUDFLARE_ENABLED: ${CLOUDFLARE_ENABLED:-false}
+      CLOUDFLARE_TUNNEL_SUBNET: ${CLOUDFLARE_TUNNEL_SUBNET:-172.30.250.0/28}
+      CLOUDFLARE_TUNNEL_IP: ${CLOUDFLARE_TUNNEL_IP:-172.30.250.14}
+      RATE_LIMIT_TRUST_PROXY: ${RATE_LIMIT_TRUST_PROXY:?Set RATE_LIMIT_TRUST_PROXY in .env.production}
+      RATE_LIMIT_TRUSTED_PROXY_IPS: ${RATE_LIMIT_TRUSTED_PROXY_IPS?Set RATE_LIMIT_TRUSTED_PROXY_IPS in .env.production}
+    # A host-local HTTPS reverse proxy or authenticated tunnel is the only
+    # supported public ingress.
     ports:
       - "127.0.0.1:${BACKEND_BIND_PORT:-8000}:8000"
     volumes:
       - production_media:/data/media
       - production_private_media:/data/private-media
+    networks:
+      - default
+      - cloudflare_origin
     tmpfs:
       - /tmp
     healthcheck:
@@ -68,6 +72,7 @@ services:
       dockerfile: Dockerfile.web
       args:
         EXPO_PUBLIC_API_URL: ${PUBLIC_API_URL:?Set PUBLIC_API_URL in .env.production}
+        EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS: ${EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS:-120000}
         EXPO_PUBLIC_SUPPORT_URL: ${SUPPORT_URL:?Set SUPPORT_URL in .env.production}
         EXPO_PUBLIC_PRIVACY_POLICY_URL: ${PRIVACY_POLICY_URL:?Set PRIVACY_POLICY_URL in .env.production}
         EXPO_PUBLIC_ACCOUNT_DELETION_URL: ${ACCOUNT_DELETION_URL:?Set ACCOUNT_DELETION_URL in .env.production}
@@ -81,9 +86,12 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-    # Static web output also stays host-local and must be published through HTTPS.
+    # Static web output stays host-local and must be published through HTTPS.
     ports:
       - "127.0.0.1:${FRONTEND_BIND_PORT:-8080}:8080"
+    networks:
+      - default
+      - cloudflare_origin
     tmpfs:
       - /tmp
     healthcheck:
@@ -104,17 +112,65 @@ services:
         max-size: 10m
         max-file: "5"
 
-  notification-worker:
-    build: ./backend
+  cloudflared:
+    image: cloudflare/cloudflared@sha256:e39ee8da81ad5e05d77f38d2f51c60ca51bf2a8450ac3abab50c17fdb91d91bf
+    profiles:
+      - cloudflare
     init: true
     read_only: true
-    command: ["python", "scripts/run_notification_scheduler.py"]
     restart: unless-stopped
-    env_file:
-      - ${PRODUCTION_WORKER_ENV_FILE:-.env.production.worker}
+    command:
+      - tunnel
+      - --metrics
+      - 0.0.0.0:2000
+      - --loglevel
+      - info
+      - run
+      - --token-file
+      - /run/secrets/cloudflare_tunnel_token
+    secrets:
+      - source: cloudflare_tunnel_token
+        target: cloudflare_tunnel_token
     depends_on:
       backend:
         condition: service_healthy
+      frontend-web:
+        condition: service_healthy
+    networks:
+      cloudflare_origin:
+        ipv4_address: ${CLOUDFLARE_TUNNEL_IP:-172.30.250.14}
+      cloudflare_egress:
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD
+        - cloudflared
+        - --no-autoupdate
+        - tunnel
+        - --metrics
+        - 127.0.0.1:2000
+        - ready
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 35s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  notification-worker:
+    read_only: true
+    restart: unless-stopped
+    env_file:
+      - ${PRODUCTION_WORKER_ENV_FILE:-.env.production.worker}
     volumes:
       - production_media:/data/media
       - production_private_media:/data/private-media
@@ -136,3 +192,17 @@ volumes:
     name: ${PRODUCTION_MEDIA_VOLUME_NAME:-aisw-production_production_media}
   production_private_media:
     name: ${PRODUCTION_PRIVATE_MEDIA_VOLUME_NAME:-aisw-production_production_private_media}
+
+networks:
+  # Origin traffic stays on this private bridge. Only cloudflared has the
+  # separate egress network needed to reach Cloudflare on outbound port 7844.
+  cloudflare_origin:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${CLOUDFLARE_TUNNEL_SUBNET:-172.30.250.0/28}
+  cloudflare_egress:
+
+secrets:
+  cloudflare_tunnel_token:
+    file: ${CLOUDFLARE_TUNNEL_TOKEN_FILE:-../aisw-production-secrets/cloudflare-tunnel-token}

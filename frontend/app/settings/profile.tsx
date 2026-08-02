@@ -2,13 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../components/LoadingState";
 import MediaImage from "../../components/MediaImage";
 import { registrationApi, userApi } from "../../services/api";
 import { pickAndUploadImage } from "../../utils/mediaPicker";
 import { apiErrorCode, phoneError } from "../../utils/authValidation";
+import { buildProfileUpdatePayload } from "../../utils/profileUpdate";
 
 const COLORS = {
   primary: "#2761FF",
@@ -39,6 +41,7 @@ export default function ProfileSettingsScreen() {
   const profileQuery = useQuery({
     queryKey: ["me"],
     queryFn: userApi.getMe,
+    refetchOnWindowFocus: false,
   });
   const majorOptions = registrationOptionsQuery.data?.data.majors ?? [];
   const [fields, setFields] = useState<FieldValues>({
@@ -74,7 +77,9 @@ export default function ProfileSettingsScreen() {
       setUploadProgress(0);
       const image = await pickAndUploadImage(setUploadProgress);
       if (image) {
-        setProfileImageUrl(image.url ?? null);
+        const profileImageReference = image.url?.trim();
+        if (!profileImageReference) throw new Error("MEDIA_REFERENCE_MISSING");
+        setProfileImageUrl(profileImageReference);
         setProfileImageMediaId(image.id);
       }
     } catch {
@@ -86,23 +91,34 @@ export default function ProfileSettingsScreen() {
   };
 
   const save = async () => {
-    if (!fields.major || !majorOptions.some((option) => option.name === fields.major)) {
+    const currentProfile = profileQuery.data?.data;
+    if (!currentProfile) return;
+
+    const updatePayload = buildProfileUpdatePayload(currentProfile, {
+      major: fields.major,
+      phone: fields.phone,
+      profile_image_url: profileImageUrl,
+    });
+    if (
+      "major" in updatePayload &&
+      (!updatePayload.major || !majorOptions.some((option) => option.name === updatePayload.major))
+    ) {
       setFieldError("관리자가 등록한 전공 중 하나를 선택해주세요.");
       return;
     }
-    const nextPhoneError = fields.phone ? phoneError(fields.phone.replace(/\D/g, "")) : null;
+    const changedPhone = "phone" in updatePayload ? updatePayload.phone ?? "" : "";
+    const nextPhoneError = changedPhone ? phoneError(changedPhone.replace(/\D/g, "")) : null;
     if (nextPhoneError) {
       setFieldError(nextPhoneError);
       return;
     }
     try {
       setIsSubmitting(true);
-      await userApi.updateMe({
-        major: fields.major,
-        phone: fields.phone,
-        profile_image_url: profileImageUrl,
-      });
-      queryClient.invalidateQueries({ queryKey: ["me"] });
+      if (Object.keys(updatePayload).length > 0) {
+        await userApi.updateMe(updatePayload);
+        const refreshedProfile = await userApi.getMe();
+        queryClient.setQueryData(["me"], refreshedProfile);
+      }
       Alert.alert("저장 완료", "프로필이 저장되었습니다.");
       router.replace("/(tabs)/settings");
     } catch (error) {
@@ -122,7 +138,7 @@ export default function ProfileSettingsScreen() {
       ? fields.cohort
       : `${fields.cohort}기`
     : "-";
-  const saveDisabled = isSubmitting || registrationOptionsQuery.isLoading || majorOptions.length === 0;
+  const saveDisabled = isSubmitting || isUploadingImage;
 
   return (
     <View style={styles.screen}>
@@ -142,9 +158,7 @@ export default function ProfileSettingsScreen() {
       </View>
 
       {profileQuery.isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : profileQuery.isError ? (
         <View style={styles.center}>
           <Text style={styles.loadErrorText}>프로필을 불러오지 못했습니다.</Text>
@@ -168,7 +182,7 @@ export default function ProfileSettingsScreen() {
             </View>
           </Pressable>
           {isUploadingImage ? <Text style={styles.uploadText}>업로드 {uploadProgress || 0}%</Text> : null}
-          {profileImageUrl ? (
+          {hasProfileImage ? (
             <Pressable
               onPress={() => {
                 setProfileImageUrl(null);

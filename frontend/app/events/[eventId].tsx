@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import LoadingState from "../../components/LoadingState";
 import { eventApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
+import { formatBoardDateTime } from "../../utils/dateFormat";
 
 const COLORS = {
   primary: "#2761FF",
@@ -36,31 +38,30 @@ const EVENT_CATEGORY_TONES: Record<string, { backgroundColor: string; color: str
   other: { backgroundColor: "#F1F3F6", color: "#667085" },
 };
 
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${String(date.getFullYear()).slice(-2)}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}(${weekday}) · ${hour}:${minute}`;
-}
-
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ eventId: string }>();
   const insets = useSafeAreaInsets();
   const eventId = Number(params.eventId);
   const user = useUserStore((state) => state.user);
-  const { data, isLoading } = useQuery({
+  const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ["event", eventId],
     queryFn: () => eventApi.getEvent(eventId),
+    enabled: Number.isInteger(eventId) && eventId > 0,
   });
 
   const event = data?.data;
 
-  if (isLoading || !event) {
+  if (isLoading) {
+    return <LoadingState />;
+  }
+
+  if (isError || !event) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={COLORS.primary} />
+        <Text style={styles.errorText}>일정을 불러오지 못했습니다.</Text>
+        <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+          <Text style={styles.retryButtonText}>다시 시도</Text>
+        </Pressable>
       </View>
     );
   }
@@ -100,7 +101,7 @@ export default function EventDetailScreen() {
 
         <View style={styles.metaRow}>
           <Ionicons name="calendar-outline" size={15} color={COLORS.muted} />
-          <Text style={styles.metaText}>{formatDateTime(event.start_at)}</Text>
+          <Text style={styles.metaText}>{formatBoardDateTime(event.start_at)}</Text>
         </View>
 
         <Text style={styles.title}>{event.title}</Text>
@@ -108,7 +109,7 @@ export default function EventDetailScreen() {
 
         {event.description ? <Text style={styles.body}>{event.description}</Text> : null}
         {event.location ? <Text style={styles.body}>장소: {event.location}</Text> : null}
-        {event.end_at ? <Text style={styles.body}>종료: {formatDateTime(event.end_at)}</Text> : null}
+        {event.end_at ? <Text style={styles.body}>종료: {formatBoardDateTime(event.end_at)}</Text> : null}
 
         {user?.role === "admin" ? (
           <View style={styles.adminActions}>
@@ -134,7 +135,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    gap: 12,
     backgroundColor: COLORS.bg,
+  },
+  errorText: {
+    color: COLORS.muted,
+    fontSize: 14,
+  },
+  retryButton: {
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
   appBar: {
     minHeight: 62,

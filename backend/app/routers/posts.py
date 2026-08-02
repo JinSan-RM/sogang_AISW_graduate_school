@@ -1,6 +1,7 @@
 import math
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import and_, func, or_, select
@@ -30,6 +31,8 @@ router = APIRouter()
 
 ADMIN_PARTICIPATION_BOARD_SLUGS = frozenset({"club-promo", "networking-programs"})
 COUNCIL_MEMBER_WRITABLE_TYPES = frozenset({"suggestion", "mutual_aid"})
+MUTUAL_AID_MIN_LEAD_DAYS = 2
+SEOUL_TIME_ZONE = ZoneInfo("Asia/Seoul")
 
 
 def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False) -> dict | None:
@@ -39,6 +42,17 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
     if board.board_type == "activity_certification" and not include_sensitive:
         metadata.pop("bank_account", None)
     return metadata
+
+
+def _metadata_for_update(post: Post, board: Board | None, incoming_metadata: dict | None) -> dict | None:
+    if board is None or board.board_type != "activity_certification":
+        return incoming_metadata
+
+    metadata = dict(incoming_metadata or {})
+    existing_metadata = dict(post.metadata_json or {})
+    if "bank_account" in existing_metadata and "bank_account" not in metadata:
+        metadata["bank_account"] = existing_metadata["bank_account"]
+    return metadata or None
 
 
 def _hide_post_author(post: Post, board: Board, current_user: User) -> bool:
@@ -82,6 +96,12 @@ def _enforce_council_management_policy(board: Board, current_user: User) -> None
         return
     if current_user.role != "admin":
         raise AppException(status_code=403, message="Only admins can manage council content.", code="FORBIDDEN")
+
+
+def _validate_post_content(board: Board, content: str) -> None:
+    if board.board_type == "mutual_aid" or content:
+        return
+    raise AppException(status_code=422, message="Post content is required.", code="VALIDATION_ERROR")
 
 
 @router.get("/boards/{board_id}/posts")
@@ -385,6 +405,23 @@ def _parse_event_date(value: object) -> date:
         ) from exc
 
 
+def _minimum_mutual_aid_event_date(now: datetime | None = None) -> date:
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current.astimezone(SEOUL_TIME_ZONE).date() + timedelta(days=MUTUAL_AID_MIN_LEAD_DAYS)
+
+
+def _validate_mutual_aid_event_date(event_date: date) -> None:
+    if event_date >= _minimum_mutual_aid_event_date():
+        return
+    raise AppException(
+        status_code=422,
+        message="Mutual-aid event date must be at least two days from today.",
+        code="MUTUAL_AID_DATE_TOO_SOON",
+    )
+
+
 def _upsert_mutual_aid_extension(db: Session, post: Post, board: Board, category: str | None, metadata: dict | None) -> None:
     if board.board_type != "mutual_aid":
         return
@@ -399,6 +436,7 @@ def _upsert_mutual_aid_extension(db: Session, post: Post, board: Board, category
     event_date = _parse_event_date((metadata or {}).get("event_date"))
     mutual_aid = db.scalar(select(PostMutualAid).where(PostMutualAid.post_id == post.id))
     if mutual_aid is None:
+        _validate_mutual_aid_event_date(event_date)
         mutual_aid = PostMutualAid(
             post_id=post.id,
             event_type=event_type,
@@ -414,6 +452,8 @@ def _upsert_mutual_aid_extension(db: Session, post: Post, board: Board, category
             message="Completed or rejected mutual-aid requests cannot be edited.",
             code="BAD_REQUEST",
         )
+    if event_date != mutual_aid.event_date:
+        _validate_mutual_aid_event_date(event_date)
     mutual_aid.event_type = event_type
     mutual_aid.event_date = event_date
     mutual_aid.relation = relation
@@ -660,6 +700,7 @@ def create_post(
     _enforce_council_management_policy(board, current_user)
     if not can_write_board(current_user, board.write_permission):
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
+    _validate_post_content(board, payload.content)
     _validate_admin_participation_post(board, payload.metadata, current_user)
     if payload.is_anonymous and not board.allow_anonymous and board.board_type != "suggestion":
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
@@ -718,6 +759,8 @@ def update_post(
         _validate_admin_participation_post(board, payload.metadata, current_user)
     if post.author_id != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
+    if board is not None:
+        _validate_post_content(board, payload.content)
     if board is not None and board.board_type == "suggestion" and current_user.role != "admin":
         if _suggestion_has_admin_reply(db, post.id):
             raise AppException(status_code=403, message="Answered suggestions cannot be edited.", code="FORBIDDEN")
@@ -729,7 +772,7 @@ def update_post(
     post.content = "" if board is not None and board.board_type == "album" else payload.content
     post.is_anonymous = is_anonymous
     post.category = None if board is not None and board.board_type == "album" else payload.category
-    post.metadata_json = payload.metadata
+    post.metadata_json = _metadata_for_update(post, board, payload.metadata)
     post.deadline_at = payload.deadline_at if board is not None and board.board_type == "notice" else None
     if board is not None:
         _upsert_suggestion_extension(db, post, board, payload.category)

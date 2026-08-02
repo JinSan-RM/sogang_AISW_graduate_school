@@ -25,6 +25,8 @@ import { useBoardsQuery } from "../../hooks/useApi";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
+import { COMMUNITY_TAB_ROUTE } from "../../utils/appRoutes";
+import { formatBoardDate, formatHomeScheduleDate } from "../../utils/dateFormat";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 
 const COLORS = {
@@ -48,14 +50,6 @@ const CARD_ELEVATION = {
   shadowOpacity: 0.04,
   shadowRadius: 12,
   elevation: 1,
-};
-
-const BANNER_THEMES: Record<BannerItem["theme"], { bg: string; badge: string; text: string; muted: string; border?: string }> = {
-  none: { bg: "#FFFFFF", badge: COLORS.primary, text: COLORS.text, muted: COLORS.muted, border: COLORS.border },
-  blue: { bg: "#2761FF", badge: "#D5E0FE", text: "#FFFFFF", muted: "#EAF1FF" },
-  navy: { bg: "#0B1F56", badge: "#D8E4FF", text: "#FFFFFF", muted: "#C9DAFF" },
-  cyan: { bg: "#1FA9BD", badge: "#E6F9FB", text: "#FFFFFF", muted: "#E6FBFF" },
-  purple: { bg: "#6C4FCB", badge: "#F1EAFB", text: "#FFFFFF", muted: "#F5EFFF" },
 };
 
 const NOTICE_BOARD_SLUGS = ["all-notices", "academic-notices", "general-notices", "webinar-notices"];
@@ -103,35 +97,6 @@ function monthLabel(date: Date) {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
 }
 
-function monthDayLabel(value?: string | null) {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const day = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const dateOfMonth = String(date.getDate()).padStart(2, "0");
-  return `${month}.${dateOfMonth}.(${day})`;
-}
-
-function yearMonthDayLabel(value?: string | null) {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = String(date.getFullYear()).slice(-2);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const dateOfMonth = String(date.getDate()).padStart(2, "0");
-  const day = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${year}.${month}.${dateOfMonth}(${day})`;
-}
-
 function noticeCategoryLabel(value?: string | null) {
   const category = value?.trim().toLowerCase();
   if (!category || category === "all") return "공지";
@@ -147,19 +112,6 @@ function noticeDotColor(value?: string | null) {
     return "#E25576";
   }
   return COLORS.primary;
-}
-
-function shortDateTime(value?: string | null) {
-  if (!value) {
-    return "";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${date.getMonth() + 1}.${date.getDate()} ${hour}:${minute}`;
 }
 
 function dDayLabel(value?: string | null) {
@@ -309,22 +261,16 @@ function HomeBanner({
   total,
   width,
 }: {
-  banner?: BannerItem;
+  banner: BannerItem;
   index: number;
   total: number;
   width: number;
 }) {
   const { width: windowWidth } = useWindowDimensions();
-  const theme = BANNER_THEMES[banner?.theme ?? "navy"];
-  const isPlain = banner?.theme === "none";
   const imageUrl = pickBannerImage(banner, Platform.OS === "web" ? MOBILE_WEB_WIDTH : windowWidth);
-  const title = banner?.title;
-  const description = banner?.subtitle ?? "";
-  const deadline = banner?.deadline_at ? `${shortDateTime(banner.deadline_at)} 마감` : "";
-  const badge = banner?.badge_text ?? dDayLabel(banner?.deadline_at);
   const pageTotal = Math.max(total, 1);
   const pageIndex = Math.min(index + 1, pageTotal);
-  const linkHref = banner?.cta_href?.trim();
+  const linkHref = banner.cta_href?.trim();
   const handlePress = () => {
     if (!linkHref) {
       return;
@@ -335,69 +281,22 @@ function HomeBanner({
     }
     router.push(linkHref as never);
   };
-  const gradientColors: readonly [string, string, string] = isPlain
-    ? ["rgba(255,255,255,0)", "rgba(255,255,255,0)", "rgba(255,255,255,0)"]
-    : imageUrl
-    ? ["rgba(7,20,74,0.82)", "rgba(20,55,174,0.74)", "rgba(39,97,255,0.68)"]
-    : ["#07144A", "#1437AE", "#2761FF"];
 
-  const content = (
-    <View style={[styles.bannerContent, imageUrl && !isPlain ? styles.bannerImageOverlay : null]}>
-      {!isPlain ? (
-        <>
-          <LinearGradient
-            pointerEvents="none"
-            colors={gradientColors}
-            locations={[0, 0.48, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.bannerGradient}
-          />
-        </>
-      ) : null}
-      <View style={styles.bannerTopRow}>
-        {badge ? (
-          <View style={styles.bannerBadge}>
-            <Ionicons name="location-outline" size={13} color={theme.badge} />
-            <Text style={[styles.bannerBadgeText, { color: theme.badge }]} numberOfLines={1}>
-              {badge}
-            </Text>
-          </View>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
-      </View>
-      <View style={styles.bannerTextBlock}>
-        {title ? (
-          <Text style={[styles.bannerTitle, { color: theme.text }]} numberOfLines={2}>
-            {title}
-          </Text>
-        ) : null}
-        {description ? (
-          <Text style={[styles.bannerSubtitle, !title ? { marginTop: 0 } : null, { color: theme.muted }]} numberOfLines={2}>
-            {description}
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.bannerBottomRow}>
-        {deadline ? <Text style={[styles.bannerDate, { color: theme.muted }]}>{deadline}</Text> : <View />}
-        <View style={[styles.bannerPager, isPlain ? styles.plainBannerPager : null]}>
-          <Text style={[styles.bannerPagerText, isPlain ? styles.plainBannerPagerText : null]}>{pageIndex}/{pageTotal}</Text>
-        </View>
-      </View>
-    </View>
-  );
+  if (!imageUrl) return null;
 
-  const bannerView = imageUrl ? (
+  const bannerView = (
     <MediaImageBackground
       media={{ url: imageUrl }}
       imageStyle={styles.bannerImage}
-      style={[styles.banner, isPlain ? styles.plainBanner : null, { width, backgroundColor: theme.bg, borderColor: theme.border ?? "transparent" }]}
+      resizeMode="cover"
+      style={[styles.banner, { width }]}
     >
-      {content}
+      <View pointerEvents="none" style={styles.bannerPagerPosition}>
+        <View style={styles.bannerPager}>
+          <Text style={styles.bannerPagerText}>{pageIndex}/{pageTotal}</Text>
+        </View>
+      </View>
     </MediaImageBackground>
-  ) : (
-    <View style={[styles.banner, isPlain ? styles.plainBanner : null, { width, backgroundColor: theme.bg, borderColor: theme.border ?? "transparent" }]}>{content}</View>
   );
 
   if (!linkHref) {
@@ -405,7 +304,7 @@ function HomeBanner({
   }
 
   return (
-    <Pressable accessibilityRole="link" accessibilityLabel={banner?.title ?? "배너 바로가기"} onPress={handlePress}>
+    <Pressable accessibilityRole="link" accessibilityLabel="홈 배너 바로가기" onPress={handlePress}>
       {bannerView}
     </Pressable>
   );
@@ -417,7 +316,8 @@ function HomeBannerCarousel({ banners }: { banners: BannerItem[] }) {
   const [measuredWidth, setMeasuredWidth] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const bannerWidth = measuredWidth || getHomeContentWidth(windowWidth);
-  const carouselItems = banners;
+  const imageSelectionWidth = Platform.OS === "web" ? MOBILE_WEB_WIDTH : windowWidth;
+  const carouselItems = banners.filter((banner) => Boolean(pickBannerImage(banner, imageSelectionWidth)));
   const carouselCount = carouselItems.length;
   const isSwipeable = carouselItems.length > 1;
   const snapInterval = bannerWidth + 12;
@@ -536,8 +436,8 @@ function NoticeList({
               {post.title}
             </Text>
             <Text style={styles.noticeMeta} numberOfLines={1}>
-              {noticeCategoryLabel(post.category)} · {yearMonthDayLabel(post.created_at)}
-              {post.deadline_at ? ` · ${dDayLabel(post.deadline_at)}` : ""}
+              {noticeCategoryLabel(post.category)} · {formatBoardDate(post.created_at)}
+              {post.deadline_at ? ` · 마감 ${dDayLabel(post.deadline_at)}` : ""}
             </Text>
           </View>
           {boardId ? null : <Ionicons name="remove" size={0} color={COLORS.subtle} />}
@@ -605,7 +505,7 @@ function CalendarCard({ events, month }: { events: EventItem[]; month: Date }) {
         <View style={styles.eventDot} />
         <View style={{ flex: 1 }}>
           <Text style={styles.nextEventTitle} numberOfLines={1}>
-            {nextEvent ? `${monthDayLabel(nextEvent.start_at)} · ${nextEvent.title}` : "예정된 일정이 없습니다"}
+            {nextEvent ? `${formatHomeScheduleDate(nextEvent.start_at)} · ${nextEvent.title}` : "예정된 일정이 없습니다"}
           </Text>
         </View>
         {nextEvent ? <Text style={styles.nextEventDday}>{dDayLabel(nextEvent.start_at)}</Text> : null}
@@ -633,9 +533,9 @@ function PopularPosts({ posts, compact }: { posts: PostListItem[]; compact: bool
             {post.title}
           </Text>
           <View style={styles.postStats}>
-            <Ionicons name="chatbubble-outline" size={13} color={COLORS.muted} />
+            <Ionicons name="chatbubble-outline" size={11} color={COLORS.muted} />
             <Text style={styles.statText}>{post.comment_count}</Text>
-            <Ionicons name="heart" size={13} color={COLORS.muted} />
+            <Ionicons name="heart-outline" size={11} color={COLORS.muted} />
             <Text style={styles.statText}>{post.like_count}</Text>
           </View>
         </Pressable>
@@ -685,7 +585,7 @@ function AlbumStrip({ posts }: { posts: PostListItem[] }) {
             <Text style={styles.albumTitle} numberOfLines={2}>
               {post.title}
             </Text>
-            <Text style={styles.albumMeta}>{yearMonthDayLabel(post.created_at)}</Text>
+            <Text style={styles.albumMeta}>{formatBoardDate(post.created_at)}</Text>
           </Pressable>
         );
       })}
@@ -809,7 +709,7 @@ export default function HomeScreen() {
         <PopularPosts posts={popularPosts} compact={compact} />
       )}
 
-      <SectionHeader title="📸 행사 사진첩" onPress={() => router.push((albumBoardId ? `/board/${albumBoardId}` : "/(tabs)/boards") as never)} />
+      <SectionHeader title="📸 행사 사진첩" onPress={() => router.push(COMMUNITY_TAB_ROUTE as never)} />
       {albumQuery.isLoading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color={COLORS.primary} />
@@ -888,51 +788,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   banner: {
-    minHeight: 200,
+    aspectRatio: 8 / 5,
     borderRadius: 16,
-    borderWidth: 0,
+    backgroundColor: "#EEF1F6",
     overflow: "hidden",
     ...CARD_ELEVATION,
-  },
-  plainBanner: {
-    borderWidth: 1,
   },
   bannerImage: {
     borderRadius: 16,
   },
-  bannerImageOverlay: {
-    backgroundColor: "rgba(11,31,86,0.62)",
-  },
-  bannerGradient: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
-  bannerContent: {
+  bannerPagerPosition: {
     flex: 1,
-    minHeight: 200,
-    justifyContent: "flex-start",
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 20,
-  },
-  bannerTopRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  bannerBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    flex: 1,
-  },
-  bannerBadgeText: {
-    fontSize: 13,
-    fontWeight: "500",
+    alignItems: "flex-end",
+    justifyContent: "flex-end",
+    padding: 20,
   },
   bannerPager: {
     borderRadius: 999,
@@ -946,53 +815,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "400",
-  },
-  plainBannerPager: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  plainBannerPagerText: {
-    color: COLORS.muted,
-  },
-  bannerTextBlock: {
-    marginTop: 8,
-  },
-  bannerTitle: {
-    fontSize: 19,
-    fontWeight: "500",
-    lineHeight: 27,
-  },
-  bannerSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 8,
-    fontWeight: "400",
-  },
-  bannerBottomRow: {
-    position: "absolute",
-    left: 20,
-    right: 20,
-    bottom: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  bannerDate: {
-    fontSize: 13,
-    fontWeight: "400",
-  },
-  bannerCta: {
-    borderRadius: 6,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  bannerCtaText: {
-    color: "#FFFFFF",
-    fontWeight: "900",
-    fontSize: 12,
   },
   sectionHeader: {
     marginTop: 24,
@@ -1189,9 +1011,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#E6F1FB",
   },
   dayText: {
+    width: 28,
+    height: 28,
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 28,
+    textAlign: "center",
+    textAlignVertical: "center",
+    includeFontPadding: false,
   },
   dayTextActive: {
     color: "#FFFFFF",
@@ -1281,14 +1109,15 @@ const styles = StyleSheet.create({
   postStats: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
     marginTop: 10,
   },
   statText: {
     color: COLORS.muted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "400",
-    marginRight: 8,
+    lineHeight: 14,
+    marginRight: 6,
   },
   albumContent: {
     gap: 10,

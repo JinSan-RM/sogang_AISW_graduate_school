@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 
 type Props = {
   value: string;
@@ -10,17 +11,22 @@ type Props = {
 export const SCHOOL_EMAIL_DOMAIN = "@sogang.ac.kr";
 
 export default function SchoolEmailInput({ value, onChangeText, placeholder = "이메일 ID", hasError = false }: Props) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <View style={[styles.container, hasError ? styles.containerError : null]}>
+    <View style={[styles.container, isFocused && !hasError ? styles.containerFocused : null, hasError ? styles.containerError : null]}>
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
-        keyboardType="email-address"
+        inputMode={Platform.OS === "web" ? "text" : "email"}
+        keyboardType={Platform.OS === "web" ? "default" : "email-address"}
         maxLength={64}
+        onBlur={() => setIsFocused(false)}
         onChangeText={(next) => onChangeText(next.replace(/@.*$/, "").replace(/\s/g, ""))}
+        onFocus={() => setIsFocused(true)}
         placeholder={placeholder}
         placeholderTextColor="#A6ACB7"
-        style={styles.input}
+        style={[styles.input, { outlineStyle: "none" } as never]}
         value={value}
       />
       <View style={styles.divider} />
@@ -45,6 +51,9 @@ const styles = StyleSheet.create({
   containerError: {
     borderColor: "#D64545", // error/500 (Figma)
     backgroundColor: "#FFF5F5",
+  },
+  containerFocused: {
+    borderColor: "#2761FF",
   },
   input: {
     flex: 1,

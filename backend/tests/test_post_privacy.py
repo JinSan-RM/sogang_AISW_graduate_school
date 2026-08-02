@@ -3,7 +3,7 @@ from app.models.board import Board
 from app.models.comment import Comment
 from app.models.notification import Notification
 from app.models.post import Post
-from app.models.post_extension import PostMutualAid
+from app.models.post_extension import PostMutualAid, PostSuggestion
 from app.models.report import Report
 from app.models.user_block import UserBlock
 
@@ -53,6 +53,55 @@ def test_admin_can_update_mutual_aid_status(api) -> None:
         mutual_aid = db.query(PostMutualAid).filter(PostMutualAid.post_id == 1).one()
         assert mutual_aid.status == "completed"
         assert mutual_aid.reviewed_by == 3
+
+
+def test_members_cannot_update_council_admin_fields(api) -> None:
+    with api.session() as db:
+        suggestion_board = Board(
+            name="Suggestions",
+            slug="suggestions",
+            category="council",
+            board_type="suggestion",
+            read_permission="user",
+            write_permission="user",
+        )
+        db.add(suggestion_board)
+        db.flush()
+        suggestion_post = Post(
+            board_id=suggestion_board.id,
+            author_id=1,
+            title="Anonymous suggestion",
+            content="Please review this suggestion",
+            is_anonymous=True,
+        )
+        db.add(suggestion_post)
+        db.flush()
+        db.add(PostSuggestion(post_id=suggestion_post.id, suggestion_category="general"))
+        db.commit()
+        suggestion_post_id = suggestion_post.id
+
+    requests = [
+        ("/api/posts/1/mutual-aid", {"status": "completed"}),
+        (f"/api/posts/{suggestion_post_id}/suggestion", {"status": "answered", "admin_reply": "Official reply"}),
+    ]
+
+    for path, payload in requests:
+        response = api.client.put(path, json=payload, headers=api.headers["owner"])
+        assert response.status_code == 403
+        assert response.json() == {
+            "status": "error",
+            "message": "Admin permission required.",
+            "code": "FORBIDDEN",
+        }
+
+    with api.session() as db:
+        mutual_aid = db.query(PostMutualAid).filter(PostMutualAid.post_id == 1).one()
+        assert mutual_aid.status == "processing"
+        assert mutual_aid.reviewed_by is None
+        suggestion = db.query(PostSuggestion).filter(PostSuggestion.post_id == suggestion_post_id).one()
+        assert suggestion.status == "received"
+        assert suggestion.admin_reply is None
+        assert suggestion.replied_by is None
 
 
 def test_mutual_aid_search_is_owner_scoped_for_members(api) -> None:
@@ -380,6 +429,19 @@ def test_mutual_aid_comments_remain_available_to_owner_and_admin(api) -> None:
     assert delete_response.status_code == 200
     with api.session() as db:
         assert db.get(Comment, 1) is None
+
+
+def test_comment_author_can_delete_own_comment(api) -> None:
+    response = api.client.delete("/api/comments/1", headers=api.headers["owner"])
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "success",
+        "data": {"id": 1, "deleted_count": 1},
+    }
+    with api.session() as db:
+        assert db.get(Comment, 1) is None
+        assert db.get(Post, 1).comment_count == 0
 
 
 def test_comment_replies_stop_at_two_depths(api) -> None:

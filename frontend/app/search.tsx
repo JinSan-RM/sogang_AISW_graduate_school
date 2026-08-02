@@ -6,7 +6,10 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { searchApi } from "../services/api";
+import LoadingState from "../components/LoadingState";
 import type { SearchResult } from "../types";
+import { formatBoardDate } from "../utils/dateFormat";
+import { formatCohortName } from "../utils/userLabel";
 
 const COLORS = {
   primary: "#2761FF",
@@ -31,17 +34,6 @@ const NOTICE_FILTERS: { key: NoticeFilter; label: string }[] = [
   { key: "other", label: "기타공지" },
 ];
 
-function formatNoticeDate(value: string) {
-  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/.test(value);
-  const date = new Date(value.includes("T") && !hasTimezone ? `${value}Z` : value);
-  if (Number.isNaN(date.getTime())) return value.slice(2, 10).replace(/-/g, ".");
-  const year = String(date.getFullYear()).slice(-2);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
-  return `${year}.${month}.${day}(${weekday})`;
-}
-
 function noticeCategoryLabel(item: SearchResult) {
   const raw = (item.category ?? item.board_name).trim();
   const lower = raw.toLowerCase();
@@ -50,7 +42,7 @@ function noticeCategoryLabel(item: SearchResult) {
   return "기타공지";
 }
 
-function NoticeEmptyState({ searched }: { searched: boolean }) {
+function NoticeEmptyState() {
   return (
     <View style={styles.noticeEmptyState}>
       <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
@@ -146,7 +138,7 @@ export default function SearchScreen() {
     <View style={styles.screen}>
       {isNoticeSearch ? (
         <View style={[styles.noticeSearchHeader, { paddingTop: Math.max(insets.top, 10) }]}>
-          <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/notices"))} style={styles.iconButton}>
+          <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/notices"))} style={[styles.iconButton, styles.noticeBackButton]}>
             <Ionicons name="chevron-back" size={24} color={COLORS.text} />
           </Pressable>
           {searchInput}
@@ -200,11 +192,9 @@ export default function SearchScreen() {
         </View>
       ) : null}
 
-      {isNoticeSearch && !hasSearched && !isLoading ? <NoticeEmptyState searched={false} /> : null}
+      {isNoticeSearch && !hasSearched && !isLoading ? <NoticeEmptyState /> : null}
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
-        </View>
+        <LoadingState />
       ) : null}
       {!isLoading && hasSearched ? (
         <FlatList
@@ -215,19 +205,20 @@ export default function SearchScreen() {
             if (page < totalPages && !isLoadingMore) void runSearch(page + 1, searchedQuery);
           }}
           onEndReachedThreshold={0.4}
-          ListEmptyComponent={isNoticeSearch ? <NoticeEmptyState searched /> : <View style={styles.center}><Text style={styles.emptyText}>검색 결과가 없습니다.</Text></View>}
+          ListEmptyComponent={isNoticeSearch ? <NoticeEmptyState /> : <View style={styles.center}><Text style={styles.emptyText}>검색 결과가 없습니다.</Text></View>}
           ListFooterComponent={isLoadingMore ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
           renderItem={({ item }) => {
             if (isNoticeSearch) {
               const label = noticeCategoryLabel(item);
               const eventTone = label === "행사공지";
+              const otherTone = label === "기타공지";
               return (
                 <Pressable onPress={() => router.push(`/board/post/${item.id}` as never)} style={styles.noticeResultRow}>
-                  <View style={[styles.noticeCategoryPill, eventTone ? styles.noticeCategoryPillEvent : null]}>
-                    <Text style={[styles.noticeCategoryText, eventTone ? styles.noticeCategoryTextEvent : null]}>{label}</Text>
+                  <View style={[styles.noticeCategoryPill, eventTone ? styles.noticeCategoryPillEvent : null, otherTone ? styles.noticeCategoryPillOther : null]}>
+                    <Text style={[styles.noticeCategoryText, eventTone ? styles.noticeCategoryTextEvent : null, otherTone ? styles.noticeCategoryTextOther : null]}>{label}</Text>
                   </View>
                   <Text numberOfLines={2} style={styles.noticeResultTitle}>{item.title}</Text>
-                  <Text style={styles.noticeResultDate}>{formatNoticeDate(item.created_at)}</Text>
+                  <Text style={styles.noticeResultDate}>{formatBoardDate(item.created_at)}</Text>
                 </Pressable>
               );
             }
@@ -237,9 +228,9 @@ export default function SearchScreen() {
                 <Text numberOfLines={2} style={styles.resultTitle}>{item.title}</Text>
                 <Text numberOfLines={2} style={styles.preview}>{item.content_preview}</Text>
                 <Text style={styles.meta}>
-                  {item.board_slug === "lecture-reviews" || item.board_slug === "exam-archive"
-                    ? item.created_at.slice(0, 10).replace(/-/g, ".")
-                    : `${item.author_nickname} · ${item.created_at.slice(0, 10).replace(/-/g, ".")}`}
+                  {item.board_slug === "lecture-reviews"
+                    ? formatBoardDate(item.created_at)
+                    : `${formatCohortName(item.author_cohort, item.author_nickname)} · ${formatBoardDate(item.created_at)}`}
                 </Text>
               </Pressable>
             );
@@ -255,7 +246,8 @@ const styles = StyleSheet.create({
   appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 18, paddingBottom: 10 },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
-  noticeSearchHeader: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingBottom: 14 },
+  noticeSearchHeader: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 0, paddingLeft: 10, paddingRight: 16, paddingBottom: 14 },
+  noticeBackButton: { width: 26, height: 44 },
   searchRow: { flexDirection: "row", gap: 8, paddingHorizontal: 20, paddingBottom: 12 },
   inputWrap: { flex: 1, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: COLORS.border, borderRadius: 9, paddingHorizontal: 13 },
   noticeInputWrap: { minHeight: 44, borderWidth: 0, borderRadius: 22, backgroundColor: "#F7F8FA" },
@@ -281,12 +273,14 @@ const styles = StyleSheet.create({
   listContent: { paddingBottom: 32 },
   emptyContent: { flexGrow: 1 },
   noticeResultRow: { borderBottomWidth: 1, borderBottomColor: COLORS.divider, paddingHorizontal: 24, paddingVertical: 14 },
-  noticeCategoryPill: { alignSelf: "flex-start", borderRadius: 5, backgroundColor: COLORS.primary50, paddingHorizontal: 8, paddingVertical: 4 },
+  noticeCategoryPill: { alignSelf: "flex-start", borderRadius: 8, backgroundColor: COLORS.primary50, paddingHorizontal: 8, paddingVertical: 2 },
   noticeCategoryPillEvent: { backgroundColor: COLORS.pink50 },
-  noticeCategoryText: { color: COLORS.primary, fontSize: 11, fontWeight: "900" },
+  noticeCategoryPillOther: { backgroundColor: "#F0EEF9" },
+  noticeCategoryText: { color: COLORS.primary, fontSize: 11, fontWeight: "400" },
   noticeCategoryTextEvent: { color: COLORS.pink700 },
-  noticeResultTitle: { color: COLORS.text, fontSize: 15, fontWeight: "800", lineHeight: 21, marginTop: 7 },
-  noticeResultDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "700", marginTop: 5 },
+  noticeCategoryTextOther: { color: "#5A4C8B" },
+  noticeResultTitle: { color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 20, marginTop: 6 },
+  noticeResultDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", marginTop: 6 },
   resultRow: { borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingHorizontal: 22, paddingVertical: 15 },
   boardPill: { alignSelf: "flex-start", borderRadius: 6, backgroundColor: COLORS.primary50, paddingHorizontal: 8, paddingVertical: 4 },
   boardPillText: { color: COLORS.primary, fontSize: 11, fontWeight: "900" },

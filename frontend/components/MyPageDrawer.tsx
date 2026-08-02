@@ -192,7 +192,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
                     />
                   ) : (
                     <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{me?.nickname?.slice(0, 1) ?? "?"}</Text>
+                      <Ionicons name="person" size={23} color={COLORS.primary} />
                     </View>
                   )}
                   <View style={styles.profileText}>
@@ -301,11 +301,6 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     backgroundColor: COLORS.avatar,
-  },
-  avatarText: {
-    color: COLORS.primary,
-    fontSize: 20,
-    fontWeight: "500",
   },
   profileText: {
     flex: 1,

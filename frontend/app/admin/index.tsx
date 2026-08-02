@@ -14,6 +14,7 @@ import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi
 import { useUserStore } from "../../stores/userStore";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
+import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
 import { formatCohortName } from "../../utils/userLabel";
 import type {
   AdminReportItem,
@@ -127,6 +128,7 @@ type ExecutiveFormMember = {
   cohort: string;
   role: string;
   image_url: string;
+  intro: string;
 };
 
 type CohortLeaderForm = {
@@ -173,13 +175,13 @@ const emptyEvent: EventForm = {
 const emptyBanner: BannerForm = {
   title: "",
   subtitle: "",
-  badge_text: "SOGANG AI-SW",
+  badge_text: "",
   cta_label: "",
   cta_href: "",
   mobile_image_url: "",
   tablet_image_url: "",
   desktop_image_url: "",
-  theme: "navy",
+  theme: "none",
   sort_order: "0",
   is_active: true,
   starts_at: "",
@@ -214,6 +216,7 @@ const emptyExecutiveMember: ExecutiveFormMember = {
   cohort: "",
   role: "",
   image_url: "",
+  intro: "",
 };
 
 const emptyCohortLeader: CohortLeaderForm = {
@@ -240,13 +243,6 @@ const PAST_COUNCIL_IMAGE_FIELDS: { field: PastCouncilImageField; label: string }
   { field: "banner_image_url", label: "대표 이미지" },
   { field: "president_image_url", label: "회장 프로필" },
   { field: "vice_president_image_url", label: "부회장 프로필" },
-];
-
-const defaultExecutiveMembers: ExecutiveFormMember[] = [
-  { name: "김진산", cohort: "72기", role: "회장", image_url: "" },
-  { name: "김유림", cohort: "72기", role: "부회장", image_url: "" },
-  { name: "민지서", cohort: "72기", role: "기획국 국장", image_url: "" },
-  { name: "김태훈", cohort: "72기", role: "기획국 국원", image_url: "" },
 ];
 
 const emptyFAQ: FAQForm = {
@@ -378,18 +374,10 @@ const USER_ROLE_LABELS: Record<AdminUserItem["role"], string> = {
 };
 
 const BANNER_IMAGE_SLOTS: { key: BannerImageSlot; label: string; hint: string }[] = [
-  { key: "mobile", label: "모바일", hint: "권장 390x180" },
-  { key: "tablet", label: "태블릿", hint: "권장 768x260" },
-  { key: "desktop", label: "데스크톱", hint: "권장 1200x360" },
+  { key: "mobile", label: "모바일", hint: "권장 640x400 · 8:5" },
+  { key: "tablet", label: "태블릿", hint: "권장 960x600 · 8:5" },
+  { key: "desktop", label: "데스크톱", hint: "권장 1280x800 · 8:5" },
 ];
-
-const BANNER_THEMES: Record<BannerItem["theme"], { bg: string; badge: string; text: string; muted: string; border?: string }> = {
-  none: { bg: "#ffffff", badge: COLORS.primary, text: COLORS.text, muted: COLORS.muted, border: COLORS.border },
-  blue: { bg: "#2761FF", badge: "#D5E0FE", text: "#ffffff", muted: "#EAF1FF" },
-  navy: { bg: "#0B1F56", badge: "#D5E0FE", text: "#ffffff", muted: "#D5E0FE" },
-  cyan: { bg: "#1FA9BD", badge: "#E6F9FB", text: "#ffffff", muted: "#E6FBFF" },
-  purple: { bg: "#6C4FCB", badge: "#F1EAFB", text: "#ffffff", muted: "#F5EFFF" },
-};
 
 function cleanOptional(value: string) {
   const trimmed = value.trim();
@@ -465,7 +453,8 @@ function executiveMembersFromMetadata(metadata?: Record<string, unknown> | null)
     const cohort = typeof record.cohort === "string" ? record.cohort : "";
     const role = typeof record.role === "string" ? record.role : "";
     const imageUrl = typeof record.image_url === "string" ? record.image_url : "";
-    return name || cohort || role || imageUrl ? [{ name, cohort, role, image_url: imageUrl }] : [];
+    const intro = typeof record.intro === "string" ? record.intro : "";
+    return name || cohort || role || imageUrl || intro ? [{ name, cohort, role, image_url: imageUrl, intro }] : [];
   });
 }
 
@@ -500,7 +489,7 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
     const parsed: PastCouncilForm = {
       cohort: value("cohort"), president_name: value("president_name"), president_cohort: value("president_cohort"),
       vice_president_name: value("vice_president_name"), vice_president_cohort: value("vice_president_cohort"), intro: value("intro"),
-      activities_text: Array.isArray(record.activities) ? record.activities.filter((entry): entry is string => typeof entry === "string").join("\n") : "",
+      activities_text: formatPastCouncilActivitiesForEditing(record.activities),
       banner_image_url: value("banner_image_url"), president_image_url: value("president_image_url"), vice_president_image_url: value("vice_president_image_url"),
     };
     return parsed.cohort || parsed.president_name ? [parsed] : [];
@@ -962,113 +951,48 @@ function BannerImageControl({
 }
 
 function BannerPreview({ form, index = 0, total = 1 }: { form: BannerForm; index?: number; total?: number }) {
-  const theme = BANNER_THEMES[form.theme];
   const imageUrl = mediaUrl(cleanOptional(form.mobile_image_url) ?? cleanOptional(form.tablet_image_url) ?? cleanOptional(form.desktop_image_url));
-  const isPlain = form.theme === "none";
-  const title = cleanOptional(form.title);
-  const subtitle = cleanOptional(form.subtitle);
-  const badge = cleanOptional(form.badge_text);
   const pageTotal = Math.max(total, 1);
   const pageIndex = Math.min(index + 1, pageTotal);
 
-  const content = (
-    <View
-      style={{
-        minHeight: 162,
-        justifyContent: "space-between",
-        padding: 16,
-        backgroundColor: imageUrl && !isPlain ? "rgba(11,31,86,0.62)" : "transparent",
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        {badge ? (
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <Ionicons name="sparkles-outline" size={13} color={theme.badge} />
-            <Text style={{ color: theme.badge, fontSize: 12, fontWeight: "900" }} numberOfLines={1}>
-              {badge}
-            </Text>
-          </View>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
-        <View
-          style={{
-            minWidth: 38,
-            height: 24,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-            borderWidth: isPlain ? 1 : 0,
-            borderColor: isPlain ? COLORS.border : "transparent",
-            backgroundColor: isPlain ? COLORS.surfaceAlt : "rgba(255,255,255,0.18)",
-            paddingHorizontal: 9,
-          }}
-        >
-          <Text style={{ color: isPlain ? COLORS.muted : "#ffffff", fontSize: 12, fontWeight: "900" }}>{pageIndex}/{pageTotal}</Text>
-        </View>
-      </View>
-      <View>
-        {title ? (
-          <Text style={{ color: theme.text, fontSize: 24, fontWeight: "900", lineHeight: 31 }} numberOfLines={2}>
-            {title}
-          </Text>
-        ) : null}
-        {subtitle ? (
-          <Text style={{ color: theme.muted, fontSize: 13, fontWeight: "700", lineHeight: 19, marginTop: title ? 7 : 0 }} numberOfLines={2}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "800" }}>앱 홈 상단 미리보기</Text>
-        {form.cta_label.trim() ? (
-          <View
-            style={{
-              borderRadius: RADIUS.button,
-              borderWidth: isPlain ? 1 : 0,
-              borderColor: isPlain ? COLORS.border : "transparent",
-              backgroundColor: isPlain ? COLORS.surfaceAlt : "rgba(255,255,255,0.18)",
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-            }}
-          >
-            <Text style={{ color: isPlain ? COLORS.text : "#ffffff", fontSize: 12, fontWeight: "900" }}>{form.cta_label.trim()}</Text>
-          </View>
-        ) : null}
-      </View>
-    </View>
-  );
-
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: COLORS.primary900, fontSize: 13, fontWeight: "900" }}>홈 배너 미리보기</Text>
+      <Text style={{ color: COLORS.primary900, fontSize: 13, fontWeight: "900" }}>등록 이미지 미리보기</Text>
       {imageUrl ? (
         <MediaImageBackground
           media={{ url: imageUrl }}
           imageStyle={{ borderRadius: RADIUS.card }}
+          resizeMode="cover"
           style={{
+            aspectRatio: 8 / 5,
             borderRadius: RADIUS.card,
             overflow: "hidden",
-            borderWidth: isPlain ? 1 : 0,
-            borderColor: theme.border ?? "transparent",
-            backgroundColor: theme.bg,
+            backgroundColor: COLORS.surfaceAlt,
             ...ELEVATION,
           }}
         >
-          {content}
+          <View style={{ flex: 1, alignItems: "flex-end", justifyContent: "flex-end", padding: 16 }}>
+            <View style={{ borderRadius: 999, backgroundColor: "rgba(0,0,0,0.28)", paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ color: "#ffffff", fontSize: 12, fontWeight: "900" }}>{pageIndex}/{pageTotal}</Text>
+            </View>
+          </View>
         </MediaImageBackground>
       ) : (
         <View
           style={{
+            aspectRatio: 8 / 5,
+            alignItems: "center",
+            justifyContent: "center",
             borderRadius: RADIUS.card,
             overflow: "hidden",
-            borderWidth: isPlain ? 1 : 0,
-            borderColor: theme.border ?? "transparent",
-            backgroundColor: theme.bg,
-            ...ELEVATION,
+            borderWidth: 1,
+            borderStyle: "dashed",
+            borderColor: COLORS.borderStrong,
+            backgroundColor: COLORS.surfaceAlt,
           }}
         >
-          {content}
+          <Ionicons name="image-outline" size={28} color={COLORS.subtle} />
+          <Text style={{ color: COLORS.muted, fontSize: 13, marginTop: 8 }}>배너 이미지를 등록해주세요.</Text>
         </View>
       )}
     </View>
@@ -1740,7 +1664,7 @@ export default function AdminScreen() {
   useEffect(() => {
     if (!executivesBoard) return;
     const parsed = executiveMembersFromMetadata(executivesBoard.metadata);
-    setExecutiveMembers(parsed.length > 0 ? parsed : defaultExecutiveMembers.map((item) => ({ ...item })));
+    setExecutiveMembers(parsed);
   }, [executivesBoard]);
 
   useEffect(() => {
@@ -1933,21 +1857,27 @@ export default function AdminScreen() {
       Object.entries(rawImageUrls).filter((entry): entry is [string, string] => Boolean(entry[1]))
     );
     const primaryImage = imageUrls.desktop ?? imageUrls.tablet ?? imageUrls.mobile;
+    if (!primaryImage) {
+      const text = "홈 배너는 이미지 등록이 필수입니다. 모바일·태블릿·데스크톱 중 하나 이상 업로드해주세요.";
+      setBannerSaveMessage({ tone: "error", text });
+      Alert.alert("배너 이미지 필요", text);
+      return;
+    }
     const payload = {
       placement: "home" as const,
-      title: cleanNullable(bannerForm.title),
-      subtitle: cleanNullable(bannerForm.subtitle),
-      badge_text: cleanNullable(bannerForm.badge_text),
-      cta_label: cleanNullable(bannerForm.cta_label),
+      title: null,
+      subtitle: null,
+      badge_text: null,
+      cta_label: null,
       cta_href: cleanNullable(bannerForm.cta_href),
-      image_url: primaryImage ?? null,
+      image_url: primaryImage,
       image_urls: Object.keys(imageUrls).length > 0 ? imageUrls : null,
-      theme: bannerForm.theme,
+      theme: "none" as const,
       sort_order: parseSort(bannerForm.sort_order),
       is_active: bannerForm.is_active,
       starts_at: cleanNullable(bannerForm.starts_at),
       ends_at: cleanNullable(bannerForm.ends_at),
-      deadline_at: cleanNullable(bannerForm.deadline_at),
+      deadline_at: null,
     };
 
     try {
@@ -2210,6 +2140,7 @@ export default function AdminScreen() {
       cohort: item.cohort.trim(),
       role: item.role.trim(),
       image_url: item.image_url.trim(),
+      intro: item.intro.trim(),
     }));
     if (normalized.length === 0 || normalized.some((item) => !item.name || !item.cohort || !item.role)) {
       Alert.alert("임원진 저장", "모든 임원진의 이름, 기수, 직책을 입력하세요.");
@@ -2311,7 +2242,7 @@ export default function AdminScreen() {
     const normalized = pastCouncils.map((item) => ({
       cohort: item.cohort.trim().replace(/기$/, ""), president_name: item.president_name.trim(), president_cohort: item.president_cohort.trim().replace(/기$/, ""),
       vice_president_name: item.vice_president_name.trim(), vice_president_cohort: item.vice_president_cohort.trim().replace(/기$/, ""), intro: item.intro.trim(),
-      activities: item.activities_text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean), banner_image_url: item.banner_image_url.trim(),
+      activities: parsePastCouncilActivitiesForStorage(item.activities_text), banner_image_url: item.banner_image_url.trim(),
       president_image_url: item.president_image_url.trim(), vice_president_image_url: item.vice_president_image_url.trim(),
     }));
     if (normalized.length === 0 || normalized.some((item) => !item.cohort || !item.president_name)) {
@@ -2862,11 +2793,13 @@ export default function AdminScreen() {
                     </Text>
                   </View>
                 ) : null}
-                <Field value={bannerForm.title} onChangeText={(value) => setBannerForm((current) => ({ ...current, title: value }))} placeholder="배너 제목" />
-                <Field value={bannerForm.subtitle} onChangeText={(value) => setBannerForm((current) => ({ ...current, subtitle: value }))} placeholder="설명" multiline />
-                <Field value={bannerForm.badge_text} onChangeText={(value) => setBannerForm((current) => ({ ...current, badge_text: value }))} placeholder="배지 문구" />
+                <View style={{ borderRadius: RADIUS.button, backgroundColor: COLORS.primary50, padding: 12 }}>
+                  <Text style={{ color: COLORS.primary900, fontSize: 13, lineHeight: 19 }}>
+                    홈에서는 등록한 이미지를 그대로 표시합니다. 제목·날짜·배지 문구는 이미지 제작 시 포함해주세요.
+                  </Text>
+                </View>
                 <View style={{ gap: 6 }}>
-                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>노출 및 마감 일정</Text>
+                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>노출 일정</Text>
                   <Text style={{ color: COLORS.muted, fontSize: 12 }}>형식: 2026-07-31T18:00</Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <View style={{ flex: 1 }}>
@@ -2876,16 +2809,8 @@ export default function AdminScreen() {
                       <Field value={bannerForm.ends_at} onChangeText={(value) => setBannerForm((current) => ({ ...current, ends_at: value }))} placeholder="노출 종료" />
                     </View>
                   </View>
-                  <Field value={bannerForm.deadline_at} onChangeText={(value) => setBannerForm((current) => ({ ...current, deadline_at: value }))} placeholder="배너 대상 마감일" />
                 </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={bannerForm.cta_label} onChangeText={(value) => setBannerForm((current) => ({ ...current, cta_label: value }))} placeholder="버튼 문구" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field value={bannerForm.cta_href} onChangeText={(value) => setBannerForm((current) => ({ ...current, cta_href: value }))} placeholder="링크 예: /faq" />
-                  </View>
-                </View>
+                <Field value={bannerForm.cta_href} onChangeText={(value) => setBannerForm((current) => ({ ...current, cta_href: value }))} placeholder="배너 선택 시 이동 링크 예: /faq (선택)" />
                 <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12, gap: 10 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                     <View style={{ flex: 1 }}>
@@ -2959,11 +2884,6 @@ export default function AdminScreen() {
                   })}
                 </View>
                 <BannerPreview form={bannerForm} index={previewBannerPosition - 1} total={previewBannerTotal} />
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {(["none", "navy", "blue", "cyan", "purple"] as const).map((theme) => (
-                    <Chip key={theme} active={bannerForm.theme === theme} label={theme} onPress={() => setBannerForm((current) => ({ ...current, theme }))} />
-                  ))}
-                </View>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <Field value={bannerForm.sort_order} onChangeText={(value) => setBannerForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
@@ -3255,7 +3175,7 @@ export default function AdminScreen() {
               <View style={{ gap: 10 }}>
                 <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 임원진 소개 관리</Text>
                 <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  이름, 기수, 직책과 프로필 이미지를 등록하면 원우회 임원진 소개 화면에 바로 반영됩니다.
+                  이름, 기수, 직책, 소개와 프로필 이미지를 등록하면 원우회 임원진 소개 화면에 바로 반영됩니다.
                 </Text>
               </View>
             </Panel>
@@ -3299,6 +3219,7 @@ export default function AdminScreen() {
                         <Field value={member.role} onChangeText={(value) => updateExecutiveMember(index, { role: value })} placeholder="직책" />
                       </View>
                     </View>
+                    <Field value={member.intro} onChangeText={(value) => updateExecutiveMember(index, { intro: value })} placeholder="소개" multiline />
                     <ActionButton
                       icon="trash-outline"
                       label="임원 삭제"
