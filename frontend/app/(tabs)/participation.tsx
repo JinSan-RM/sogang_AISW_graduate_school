@@ -155,7 +155,7 @@ export default function ParticipationScreen() {
   }
 
   if (defaultBoard) {
-    return <BoardPostsScreen initialBoardId={defaultBoard.id} isTabRoot />;
+    return <BoardPostsScreen initialBoardId={defaultBoard.id} />;
   }
 
   return (
