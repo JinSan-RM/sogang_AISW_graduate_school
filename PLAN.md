@@ -141,7 +141,7 @@ Phase 5 QA can start when:
 - All P0 mobile routes are reachable.
 - Guest/user/admin permissions, mutual-aid owner scope, and media access are verified by API tests.
 - Backend compile checks and frontend typecheck pass.
-- Alembic has one head at `0023_registration_major_options`; its migration regression passes, while deployment PostgreSQL rehearsal remains part of QA.
+- Alembic has one head at `0024_faq_attachments`; the local migration/model regression and isolated PostgreSQL `0023`→`0024`→`0023`→`0024` rehearsal pass.
 - Known issues are tagged as `Phase 5 QA`, `v1.1`, or `blocked`.
 
 Checked on 2026-07-27: these local entry conditions pass. This is not a store-release approval. Signed mobile artifacts, physical-device checks, live-host checks, the 18 external release inputs, and the frontend dependency-risk decision remain open and are tracked in `CODEX.md`.
@@ -149,3 +149,10 @@ Checked on 2026-07-27: these local entry conditions pass. This is not a store-re
 Checked on 2026-08-02: the backend suite passes 185 tests, and isolated PostgreSQL clean upgrade plus
 `0021`→`0022`→`0021`→`0022` migration rehearsal passes. Legacy source workbooks and CSV exports
 remain local-only migration inputs because they contain personal data and the repository is public.
+
+Checked on 2026-08-04: the local backend suite passes 203 tests, Alembic reports the single
+`0024_faq_attachments` head, and the frontend typecheck/lint plus focused legacy-media display tests
+pass. An isolated PostgreSQL database passed the clean upgrade and `0023`→`0024`→`0023`→`0024`
+rehearsal. The full 605-file legacy source was imported into an isolated PostgreSQL review database;
+594 supported files passed DB/filesystem verification and the live web review loaded the 14-image
+deduplicated photo post plus the 1-image and 2-image FAQ entries successfully.

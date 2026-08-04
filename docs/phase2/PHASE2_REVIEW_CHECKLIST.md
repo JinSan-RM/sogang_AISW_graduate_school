@@ -61,7 +61,7 @@ Note: The design gate is not blocking Phase 3 entry by product decision. Current
 Checked on: 2026-08-02.
 
 - [x] Original Docker Compose runtime smoke test passed historically.
-- [x] Current Alembic head is `0023`; its migration regression passes. Earlier `0019` and exact-legacy recovery checks remain valid, and deployment PostgreSQL rehearsal remains in QA.
+- [x] Current Alembic head is `0024`; the local migration/model test passes and an isolated PostgreSQL database passed clean upgrade plus `0023`→`0024`→`0023`→`0024` rehearsal on 2026-08-04.
 - [x] Unknown unversioned schema remains fail-closed without stamping or mutation.
 - [x] Seed board IA is present.
 - [x] Production startup creates no demo user, preserves operator-edited reference content, and does not deactivate custom boards.

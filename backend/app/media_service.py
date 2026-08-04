@@ -20,6 +20,7 @@ from app.deps import can_read_board
 from app.errors import AppException
 from app.models.banner import Banner
 from app.models.board import Board
+from app.models.faq import FAQ, FAQAttachment
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
 from app.models.user import User
@@ -351,6 +352,21 @@ def _is_readable_board_metadata_asset(db: Session, media: MediaAsset, user: User
     return False
 
 
+def _is_readable_faq_asset(db: Session, media: MediaAsset) -> bool:
+    return (
+        db.scalar(
+            select(FAQAttachment.id)
+            .join(FAQ, FAQ.id == FAQAttachment.faq_id)
+            .where(
+                FAQAttachment.media_id == media.id,
+                FAQ.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def _readable_linked_post_exists(db: Session, media: MediaAsset, user: User) -> tuple[bool, bool]:
     posts = db.scalars(
         select(Post)
@@ -387,6 +403,7 @@ def require_media_access(db: Session, media: MediaAsset | None, user: User) -> M
         _is_owner_profile_asset(db, media)
         or _is_visible_banner_asset(db, media, user)
         or _is_readable_board_metadata_asset(db, media, user)
+        or _is_readable_faq_asset(db, media)
     ):
         return media
     if not has_post_links and media.owner_id == user.id:

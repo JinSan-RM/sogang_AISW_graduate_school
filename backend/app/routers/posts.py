@@ -298,6 +298,9 @@ def _post_attachments(db: Session, post_id: int, current_user: User) -> list[dic
 
 
 def _replace_attachments(db: Session, post_id: int, attachment_ids: list[int], current_user: User) -> None:
+    # Preserve the submitted order while preventing duplicate IDs from creating
+    # repeated rows or tripping the post/media unique constraint.
+    attachment_ids = list(dict.fromkeys(attachment_ids))
     post = db.get(Post, post_id)
     board = db.get(Board, post.board_id) if post is not None else None
     requires_private = board is not None and board.board_type == "mutual_aid"

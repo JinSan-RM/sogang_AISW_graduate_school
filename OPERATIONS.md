@@ -239,6 +239,73 @@ docker compose @composeArgs ps notification-worker
 docker compose @composeArgs logs --tail=100 notification-worker
 ```
 
+## Legacy local-media import and server transfer
+
+Legacy workbook files and `data/attachments/attachments` are private migration inputs. Keep them
+outside Git and do not copy them to the production server. Run the reconciliation against an
+isolated PostgreSQL database whose name contains `migration_review`, writing media to two explicit
+directories that match the public/private runtime split:
+
+```powershell
+$reviewDatabaseUrl = $env:AISW_MIGRATION_REVIEW_DATABASE_URL
+$migrationOutput = (Resolve-Path -LiteralPath $env:AISW_MIGRATION_OUTPUT).Path
+$publicMedia = Join-Path $migrationOutput 'media'
+$privateMedia = Join-Path $migrationOutput 'private-media'
+$reportDirectory = Join-Path $migrationOutput 'reports'
+
+python backend/scripts/import_legacy_articles.py `
+  --database-url $reviewDatabaseUrl `
+  --attachment-source-dir data/attachments/attachments `
+  --public-media-dir $publicMedia `
+  --private-media-dir $privateMedia `
+  --report-dir $reportDirectory `
+  --apply
+```
+
+Local files are selected strictly by `fileStorageId`; a missing file aborts before database work.
+The importer copies allowed files atomically, stores only stable `/api/media/{id}/access-url`
+references, links media to posts or FAQ records, and removes same-content duplicate links within a
+post. Legacy ZIP, MP4, text, and notebook files remain in the private source archive and are listed
+as `archived_unsupported_attachments`; they are not exposed through the application media endpoint.
+Any unexpected missing, orphaned, invalid, or failed attachment rolls back the database transaction.
+
+Verify the review database and both media directories before packaging them:
+
+```powershell
+python backend/scripts/verify_legacy_media.py `
+  --database-url $reviewDatabaseUrl `
+  --public-media-dir $publicMedia `
+  --private-media-dir $privateMedia `
+  --report (Join-Path $reportDirectory 'media-verification.json')
+```
+
+Record the reported `manifest_sha256`. Create one coordinated transfer set consisting of a
+PostgreSQL custom-format dump, a tar archive of each media directory, the redacted migration
+reports, and SHA-256 hashes for every artifact. Transfer that set to encrypted operator-only
+storage on the server. Restore the database into a new database and both tar files into new media
+volumes using the reversible restore procedures below; never extract over live volumes.
+
+After switching the backend to the restored database and volumes, run the verifier inside the
+backend container with the local manifest hash. This checks the restored DB rows, post/FAQ links,
+file sizes, per-file hashes, content types, stable references, and the complete manifest before
+public traffic is opened:
+
+```powershell
+$expectedManifest = '<manifest_sha256 recorded before transfer>'
+docker compose @composeArgs exec -T `
+  -e "EXPECTED_MANIFEST=$expectedManifest" `
+  backend sh -ceu 'python scripts/verify_legacy_media.py --database-url "$DATABASE_URL" --public-media-dir "$MEDIA_UPLOAD_DIR" --private-media-dir "$MEDIA_PRIVATE_UPLOAD_DIR" --expected-manifest-sha256 "$EXPECTED_MANIFEST"'
+```
+
+Database-only transfer is insufficient: image rows restored without both media archives will pass
+SQL restore but return `404 Media file not found`. Keep the database dump and both media archives
+under the same timestamp and retention decision.
+
+Rehearsal record, 2026-08-04: a coordinated dump/archive set restored into a fresh isolated
+PostgreSQL database and fresh public/private directories. The verifier reproduced 594 files,
+635,375,068 bytes, and manifest
+`fb13f086d87fbd390003ed3f596a40742f4b2b323d38d412615cdea7d76bf42a` with zero failures.
+
 ## Backup prerequisites and consistency
 
 Create PostgreSQL custom-format and both media-volume backups with the same

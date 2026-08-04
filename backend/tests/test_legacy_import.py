@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 
 from app.legacy_import import (
     ARTICLE_HEADERS,
+    CANONICAL_DUPLICATE_ARTICLE_SHEETS,
     SPECIAL_SHEETS,
     SourceRow,
     _detected_content_type,
@@ -16,7 +17,9 @@ from app.legacy_import import (
     _attach_media_to_special_entry,
     _activity_certification_metadata,
     import_articles_and_specials,
+    import_attachments,
     import_comments,
+    index_local_attachment_files,
     load_article_workbook,
     normalize_author,
     redact_text,
@@ -26,7 +29,9 @@ from app.legacy_import import (
 from app.models.audit import LegacyImportRecord
 from app.models.board import Board
 from app.models.comment import Comment
+from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
+from scripts.verify_legacy_media import verify_legacy_media
 
 
 def test_author_normalization_removes_duplicate_cohort_prefixes() -> None:
@@ -271,6 +276,243 @@ def test_headerless_staging_sheet_and_duplicate_article_are_parsed(tmp_path: Pat
     assert articles[0].sheet == "자유게시판"
     assert len(parsed_attachments) == 1
     assert len(duplicates) == 1
+
+
+def test_known_duplicate_article_prefers_canonical_photo_album_sheet(tmp_path: Path) -> None:
+    source_id, canonical_sheet = next(iter(CANONICAL_DUPLICATE_ARTICLE_SHEETS.items()))
+    path = tmp_path / "board_articles_ver2.xlsx"
+    workbook = Workbook()
+    noncanonical = workbook.active
+    noncanonical.title = "기타공지"
+    noncanonical.append(ARTICLE_HEADERS)
+    first = [None] * len(ARTICLE_HEADERS)
+    first[ARTICLE_HEADERS.index("writeId")] = source_id
+    first[ARTICLE_HEADERS.index("title")] = "duplicate"
+    noncanonical.append(first)
+    canonical = workbook.create_sheet(canonical_sheet)
+    canonical.append(ARTICLE_HEADERS)
+    second = [None] * len(ARTICLE_HEADERS)
+    second[ARTICLE_HEADERS.index("writeId")] = source_id
+    second[ARTICLE_HEADERS.index("title")] = "canonical album"
+    canonical.append(second)
+    workbook.save(path)
+
+    articles, _, duplicates = load_article_workbook(path)
+
+    assert len(articles) == 1
+    assert articles[0].sheet == canonical_sheet
+    assert articles[0].data["title"] == "canonical album"
+    assert len(duplicates) == 1
+    assert duplicates[0].sheet == "기타공지"
+
+
+def test_local_attachment_import_links_one_copy_per_post_and_serves_it(
+    api,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.config import settings
+
+    source_dir = tmp_path / "attachment-source"
+    public_dir = tmp_path / "public-media"
+    private_dir = tmp_path / "private-media"
+    source_dir.mkdir()
+    jpeg = b"\xff\xd8\xff\xe0" + b"legacy-jpeg-content"
+    (source_dir / "9001.jpg").write_bytes(jpeg)
+    (source_dir / "9002.jpg").write_bytes(jpeg)
+    monkeypatch.setattr(settings, "media_upload_dir", public_dir)
+    monkeypatch.setattr(settings, "media_private_upload_dir", private_dir)
+
+    rows = [
+        SourceRow(
+            "board_articles_ver2.xlsx",
+            "첨부파일",
+            row_number,
+            {
+                "writeId": "article-1",
+                "fileStorageId": storage_id,
+                "subject": filename,
+                "sequence": sequence,
+                "regiDatetime": datetime(2025, 1, 1, 9, 0, 0),
+            },
+        )
+        for row_number, storage_id, filename, sequence in (
+            (2, "9001", "first.jpg", 0),
+            (3, "9002", "duplicate.jpg", 1),
+        )
+    ]
+
+    assert set(index_local_attachment_files(source_dir)) == {"9001", "9002"}
+    with api.session() as db:
+        post = db.get(Post, 3)
+        stats = import_attachments(
+            db,
+            rows,
+            {},
+            {"article-1": post},
+            public_media_dir=public_dir,
+            private_media_dir=private_dir,
+            attachment_source_dir=source_dir,
+            apply=True,
+            skip_downloads=False,
+        )
+        db.commit()
+
+        imported_media = db.scalars(
+            select(MediaAsset)
+            .where(MediaAsset.stored_filename.like("legacy-900%"))
+            .order_by(MediaAsset.id)
+        ).all()
+        imported_links = db.scalars(
+            select(PostAttachment)
+            .where(
+                PostAttachment.post_id == post.id,
+                PostAttachment.media_id.in_([media.id for media in imported_media]),
+            )
+        ).all()
+        verification = verify_legacy_media(
+            db,
+            public_media_dir=public_dir,
+            private_media_dir=private_dir,
+        )
+
+    assert len(imported_media) == 2
+    assert len(imported_links) == 1
+    assert stats["deduplicated_post_attachment_links"] == 1
+    assert all(media.url == f"/api/media/{media.id}/access-url" for media in imported_media)
+    assert all((public_dir / media.stored_filename).is_file() for media in imported_media)
+    assert verification["status"] == "ok"
+    assert verification["counts"]["verified_records"] == 2
+    assert verification["counts"]["verified_files"] == 2
+
+    detail = api.client.get("/api/posts/3", headers=api.headers["owner"])
+    assert detail.status_code == 200
+    imported_payloads = [
+        attachment
+        for attachment in detail.json()["data"]["attachments"]
+        if attachment["id"] in {media.id for media in imported_media}
+    ]
+    assert len(imported_payloads) == 1
+
+    access = api.client.get(
+        imported_payloads[0]["url"],
+        headers=api.headers["owner"],
+    )
+    assert access.status_code == 200
+    file_response = api.client.get(access.json()["data"]["url"])
+    assert file_response.status_code == 200
+    assert file_response.content == jpeg
+
+
+def test_local_faq_image_is_returned_and_authorized(
+    api,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.config import settings
+
+    source_dir = tmp_path / "faq-source"
+    public_dir = tmp_path / "faq-public"
+    private_dir = tmp_path / "faq-private"
+    source_dir.mkdir()
+    png = b"\x89PNG\r\n\x1a\n" + b"legacy-faq-image"
+    (source_dir / "4322320.png").write_bytes(png)
+    monkeypatch.setattr(settings, "media_upload_dir", public_dir)
+    monkeypatch.setattr(settings, "media_private_upload_dir", private_dir)
+    faq_sheet = next(sheet for sheet, kind in SPECIAL_SHEETS.items() if kind == "faq")
+    article = SourceRow(
+        "board_articles_ver2.xlsx",
+        faq_sheet,
+        2,
+        {"writeId": "faq-1", "title": "FAQ question", "content": "FAQ answer"},
+    )
+    attachment = SourceRow(
+        "board_articles_ver2.xlsx",
+        "첨부파일",
+        3,
+        {
+            "writeId": "faq-1",
+            "fileStorageId": "4322320",
+            "subject": "faq.png",
+            "sequence": 0,
+        },
+    )
+
+    with api.session() as db:
+        posts, _, _ = import_articles_and_specials(db, [article], [], apply=True)
+        stats = import_attachments(
+            db,
+            [attachment],
+            {},
+            posts,
+            public_media_dir=public_dir,
+            private_media_dir=private_dir,
+            attachment_source_dir=source_dir,
+            apply=True,
+            skip_downloads=False,
+        )
+        db.commit()
+
+    assert stats["created_attachments"] == 1
+    response = api.client.get("/api/faqs", headers=api.headers["owner"])
+    assert response.status_code == 200
+    faq_payload = next(item for item in response.json()["data"] if item["question"] == "FAQ question")
+    assert len(faq_payload["attachments"]) == 1
+    media = faq_payload["attachments"][0]
+    assert media["content_type"] == "image/png"
+
+    access = api.client.get(media["url"], headers=api.headers["owner"])
+    assert access.status_code == 200
+    file_response = api.client.get(access.json()["data"]["url"])
+    assert file_response.status_code == 200
+    assert file_response.content == png
+
+
+def test_unsupported_legacy_download_is_archived_without_exposing_media(api, tmp_path: Path) -> None:
+    source_dir = tmp_path / "unsupported-source"
+    public_dir = tmp_path / "unsupported-public"
+    private_dir = tmp_path / "unsupported-private"
+    source_dir.mkdir()
+    (source_dir / "12621604.zip").write_bytes(b"PK\x03\x04legacy-archive")
+    row = SourceRow(
+        "board_articles_ver2.xlsx",
+        "첨부파일",
+        2,
+        {
+            "writeId": "article-1",
+            "fileStorageId": "12621604",
+            "subject": "source.zip",
+            "sequence": 0,
+        },
+    )
+
+    with api.session() as db:
+        post = db.get(Post, 3)
+        media_count_before = db.scalar(select(func.count(MediaAsset.id)))
+        stats = import_attachments(
+            db,
+            [row],
+            {},
+            {"article-1": post},
+            public_media_dir=public_dir,
+            private_media_dir=private_dir,
+            attachment_source_dir=source_dir,
+            apply=True,
+            skip_downloads=False,
+        )
+        db.commit()
+        media_count_after = db.scalar(select(func.count(MediaAsset.id)))
+        record = db.scalar(
+            select(LegacyImportRecord).where(
+                LegacyImportRecord.entity_type == "attachment",
+                LegacyImportRecord.source_id == "12621604",
+            )
+        )
+
+    assert stats["archived_unsupported_attachments"] == 1
+    assert media_count_after == media_count_before
+    assert record.status == "archived"
+    assert record.reason == "legacy_attachment_type_not_supported"
 
 
 def test_article_import_is_idempotent(api) -> None:

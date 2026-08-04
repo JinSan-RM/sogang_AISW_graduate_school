@@ -90,7 +90,7 @@ Mutual-aid lists and search results show only the signed-in member's own request
 The admin console has a dedicated mutual-aid queue with processing/completed/rejected filters. Opening a request exposes the private evidence to admins and allows `processing`, `completed` (shown as `처리 완료`), or `rejected`; rejection requires a reason.
 Suggestion lists use `대기중` and `답변완료` status pills and preserve anonymous presentation. Creation ends on a dedicated completion screen. The admin console has a suggestion queue where admins open a suggestion and write the official reply; saving a reply marks it answered and notifies the author.
 The admin console has a cohort-leader section for managing multiple cohorts, captain/vice-captain names, greeting, introduction, representative image, and profile images. The member council screen reads this structured metadata and keeps legacy post parsing only as a fallback.
-Past councils and FAQ are separate admin sections. Past councils render a council-number list and member/activity detail tabs from `past_councils` metadata; FAQ renders from its dedicated API and table.
+Past councils and FAQ are separate admin sections. Past councils render a council-number list and member/activity detail tabs from `past_councils` metadata; FAQ renders from its dedicated API and table. Expanded FAQ answers render ordered protected image attachments at their natural aspect ratio.
 
 Notification delivery surfaces:
 

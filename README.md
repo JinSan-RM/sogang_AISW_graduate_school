@@ -43,7 +43,7 @@ docker compose --env-file .env.qa.example -p aisw_p0qa -f docker-compose.yml -f 
 docker compose --env-file .env.qa.example -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml exec backend alembic heads
 ```
 
-Expected single Alembic head: `0023_registration_major_options`.
+Expected single Alembic head: `0024_faq_attachments`.
 
 3. Open `http://localhost:58081`. The QA frontend runs `npm ci` on every
 container start and uses Expo Fast Refresh for changes under `frontend/`.
@@ -108,6 +108,8 @@ Do not use `Base.metadata.create_all()` as a migration substitute. Do not manual
 Migration `0015_p0_admin_alignment` moves mutual-aid evidence out of the public upload path. After upgrading, start the backend once so legacy evidence files are relocated from `uploads/` to `private_uploads/`. Private files are served only through short-lived signed download links for the post author or an admin.
 
 Migrations `0020_account_hard_delete` and `0021_account_deletion_receipts` implement irreversible account deletion. Public published posts/comments can remain only with the author link removed; private, draft, hidden, mutual-aid content and private media are deleted. The completion receipt contains only a UUID, channel, result, and completion time. It does not contain a user ID, email, IP address, or deletion counts.
+
+Migration `0024_faq_attachments` registers legacy FAQ illustrations in the protected media registry. FAQ and post images are served from persistent media storage through authorized signed URLs; the database stores stable media references rather than CDN URLs or file binaries.
 
 The current media policy is member-only for ordinary attachments and profile images as well. `/uploads` is not a public static route. The client requests a short-lived signed access URL after the API verifies membership and, for post attachments, post read permission.
 
@@ -280,7 +282,7 @@ npm run doctor
 npm run export:web
 ```
 
-Run the backend test suite and the QA/production Compose checks above. Historical results at revisions `0016`, `0019`, `0021`, and `0022` do not close the current `0023` gate.
+Run the backend test suite and the QA/production Compose checks above. Historical results at revisions `0016`, `0019`, `0021`, and `0022` do not close the current `0024` gate.
 
 Checked on 2026-07-27 against the current worktree:
 

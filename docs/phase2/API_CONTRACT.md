@@ -1200,6 +1200,8 @@ FAQ:
 - `POST /faqs` admin
 - `PUT /faqs/{faq_id}` admin
 - `DELETE /faqs/{faq_id}` admin
+- FAQ response items include ordered `attachments` using the normal media payload. Active FAQ
+  images are member-readable through `/api/media/{id}/access-url`; no CDN or public static URL is returned.
 
 Guide content does not have a separate `/guides` domain in v1. Club and networking guides use protected board/post APIs and administrator dependencies; study recruitment uses the member-writable board policy. A dedicated guide CRUD domain is deferred to v1.1.
 

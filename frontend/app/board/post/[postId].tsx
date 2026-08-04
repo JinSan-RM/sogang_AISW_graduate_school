@@ -589,7 +589,7 @@ export default function PostDetailScreen() {
                 </>
               ) : null}
             </View>
-            {board?.board_type === "album" ? (
+            {board?.board_type === "album" && imageAttachments.length > 1 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbs}>
                 {(imageAttachments.length > 0 ? imageAttachments : [null, null, null, null]).map((attachment, index) => {
                   return (

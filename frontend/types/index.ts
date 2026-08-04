@@ -305,6 +305,7 @@ export type FAQItem = {
   category?: string;
   sort_order: number;
   is_active: boolean;
+  attachments: MediaAsset[];
   created_at: string;
   updated_at: string;
 };
