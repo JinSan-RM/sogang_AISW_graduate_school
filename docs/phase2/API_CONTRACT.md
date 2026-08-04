@@ -1163,6 +1163,8 @@ Query:
 - `to_date`: required or default last day of current month
 - `category`: optional
 
+Date bounds use overlap semantics: an event is returned when it starts before the exclusive end of the requested range and its `end_at` (or `start_at` when no end exists) is on or after the range start. Date-only `to_date` values include that full calendar day, so month and single-day queries include multi-day events that began earlier and are still in progress.
+
 Response item:
 
 ```json

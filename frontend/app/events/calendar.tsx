@@ -9,6 +9,14 @@ import LoadingState from "../../components/LoadingState";
 import { eventApi } from "../../services/api";
 import type { EventItem } from "../../types";
 import { formatTime24 } from "../../utils/dateFormat";
+import {
+  calendarMonthRange,
+  currentKoreaMonth,
+  eventDaysForMonth,
+  eventOccursOnCalendarDate,
+  koreaCalendarDate,
+  shiftCalendarMonth,
+} from "../../utils/eventCalendar";
 
 const COLORS = {
   primary: "#2761FF",
@@ -28,16 +36,6 @@ const EVENT_CATEGORY_LABELS: Record<string, string> = {
   event: "행사",
   external: "외부",
 };
-
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function monthRange(date: Date) {
-  const start = new Date(date.getFullYear(), date.getMonth(), 1);
-  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
-  return { start: dateKey(start), end: dateKey(end) };
-}
 
 function monthLabel(date: Date) {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
@@ -73,23 +71,27 @@ function EventRow({ item }: { item: EventItem }) {
 
 export default function EventCalendarScreen() {
   const insets = useSafeAreaInsets();
-  const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
-  const range = useMemo(() => monthRange(currentMonth), [currentMonth]);
+  const [currentMonth, setCurrentMonth] = useState(() => currentKoreaMonth());
+  const [selectedDay, setSelectedDay] = useState(() => koreaCalendarDate().day);
+  const range = useMemo(() => calendarMonthRange(currentMonth), [currentMonth]);
   const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ["events", range.start, range.end],
     queryFn: () => eventApi.getEvents({ from_date: range.start, to_date: range.end }),
   });
 
   const events = data?.data ?? [];
-  const selectedEvents = events.filter((event) => {
-    const date = new Date(event.start_at);
-    return !Number.isNaN(date.getTime()) && date.getDate() === selectedDay;
-  });
+  const selectedEvents = events.filter((event) =>
+    eventOccursOnCalendarDate(event, {
+      year: currentMonth.getFullYear(),
+      month: currentMonth.getMonth() + 1,
+      day: selectedDay,
+    })
+  );
+  const markedDays = eventDaysForMonth(events, currentMonth);
   const cells = buildMonthCells(currentMonth);
 
   const changeMonth = (delta: number) => {
-    setCurrentMonth((value) => new Date(value.getFullYear(), value.getMonth() + delta, 1));
+    setCurrentMonth((value) => shiftCalendarMonth(value, delta));
     setSelectedDay(1);
   };
 
@@ -138,7 +140,7 @@ export default function EventCalendarScreen() {
               </Text>
             ))}
             {cells.map((cell) => {
-              const hasEvent = cell.day ? events.some((event) => new Date(event.start_at).getDate() === cell.day) : false;
+              const hasEvent = cell.day ? markedDays.has(cell.day) : false;
               const selected = selectedDay === cell.day;
               return (
                 <Pressable

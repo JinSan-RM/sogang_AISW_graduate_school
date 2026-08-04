@@ -69,6 +69,8 @@ Quick menu:
 - Exam archive
 - Suggestions
 
+The Home schedule card changes its displayed month and `GET /events` range in place when the previous/next arrows are pressed. Empty upcoming-schedule copy is not interactive. Multi-day events mark every KST calendar date from `start_at` through `end_at`, inclusive, in both the Home card and full calendar; day routes rely on the same overlap behavior from the events API.
+
 ## 4. Board List Screen Requirements
 
 Community tab opens the `event-album` board when available and exposes `행사 사진첩 / 자료공유` as section tabs. Resource sharing offers `강의후기`, `시험족보`, `종합시험`, and `졸업논문`; `graduation-thesis` is a member-writable resource board. Participation activity certification uses a source-post selection sheet instead of free-text activity names.
