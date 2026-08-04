@@ -1,4 +1,5 @@
 import ssl
+from email.utils import parsedate_to_datetime
 
 import pytest
 
@@ -23,6 +24,7 @@ class FakeSMTP:
         self.starttls_context: ssl.SSLContext | None = None
         self.login_credentials: tuple[str, str] | None = None
         self.sent_messages = []
+        self.sent_envelopes: list[tuple[str | None, list[str] | None]] = []
         self.noop_count = 0
         self.closed = False
 
@@ -41,8 +43,14 @@ class FakeSMTP:
     def login(self, username: str, password: str) -> None:
         self.login_credentials = (username, password)
 
-    def send_message(self, message) -> None:
+    def send_message(
+        self,
+        message,
+        from_addr: str | None = None,
+        to_addrs: list[str] | None = None,
+    ) -> None:
         self.sent_messages.append(message)
+        self.sent_envelopes.append((from_addr, to_addrs))
 
     def noop(self) -> tuple[int, bytes]:
         self.noop_count += 1
@@ -60,6 +68,8 @@ def smtp_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "smtp_password", "secret")
     monkeypatch.setattr(settings, "smtp_auth", "password")
     monkeypatch.setattr(settings, "smtp_from_email", "no-reply@aisw.sogang.ac.kr")
+    monkeypatch.setattr(settings, "smtp_from_name", "서강 AI-SW 대학원 커뮤니티")
+    monkeypatch.setattr(settings, "smtp_reply_to", "support@aisw.sogang.ac.kr")
     monkeypatch.setattr(settings, "smtp_required", True)
     monkeypatch.setattr(settings, "smtp_timeout_seconds", 12)
 
@@ -98,8 +108,32 @@ def test_starttls_delivery_uses_verified_tls_and_configured_timeout(
     assert connection.starttls_context.verify_mode == ssl.CERT_REQUIRED
     assert connection.ehlo_count == 2
     assert connection.login_credentials == ("mailer", "secret")
-    assert connection.sent_messages[0]["To"] == "member@sogang.ac.kr"
+    message = connection.sent_messages[0]
+    assert message["From"] == "서강 AI-SW 대학원 커뮤니티 <no-reply@aisw.sogang.ac.kr>"
+    assert message["To"] == "member@sogang.ac.kr"
+    assert message["Reply-To"] == "support@aisw.sogang.ac.kr"
+    assert parsedate_to_datetime(message["Date"]).tzinfo is not None
+    assert message["Message-ID"].endswith("@aisw.sogang.ac.kr>")
+    assert message["Auto-Submitted"] == "auto-generated"
+    assert message.get_content_type() == "multipart/alternative"
+    assert connection.sent_envelopes == [
+        ("no-reply@aisw.sogang.ac.kr", ["member@sogang.ac.kr"])
+    ]
     assert connection.closed is True
+
+
+def test_delivery_rejects_header_injection_before_connecting(
+    monkeypatch: pytest.MonkeyPatch,
+    smtp_settings: None,
+) -> None:
+    monkeypatch.setattr(settings, "smtp_from_name", "Trusted sender\r\nBcc: attacker@example.com")
+
+    with pytest.raises(RuntimeError, match="SMTP_FROM_NAME"):
+        email_module.send_email(
+            "member@sogang.ac.kr",
+            "Authentication code",
+            "Your code is 123456.",
+        )
 
 
 def test_implicit_tls_connection_check_uses_same_authenticated_transport(

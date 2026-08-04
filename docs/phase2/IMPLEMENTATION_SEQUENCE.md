@@ -144,7 +144,7 @@ Checklist:
 
 2026-07-27 implementation addendum:
 
-- Current Alembic head is `0022_legacy_import_records`.
+- Current Alembic head is `0023_registration_major_options`.
 - Account deletion uses server-verified current-password hard deletion and a non-enumerating public email flow; it is not account deactivation.
 - SQLite and isolated PostgreSQL each pass 104/104 backend tests.
 - Local production Compose, web deep-link, migration, and backup/restore rehearsals pass.

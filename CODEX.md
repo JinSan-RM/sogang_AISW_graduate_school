@@ -128,6 +128,7 @@ P0 launch-candidate hardening:
 - Implemented in CI: pytest uses a separate PostgreSQL test database and the frontend job verifies lint, focused tests, typecheck, Expo Doctor, and web export.
 - Decided for v1: guide content continues to use protected board/post administration; a dedicated guide CRUD domain is deferred to v1.1.
 - Completed in code: authentication codes are keyed, email-only, one-time and attempt-limited; deployed SMTP requires verified STARTTLS/implicit TLS, bounded timeouts, and `SMTP_REQUIRED=true`. A digest-pinned optional Compose Cloudflare connector now follows `CLOUDFLARE_ENABLED` with token-file and exact-proxy validation. External gate: create the Named Tunnel/routes, install real token/provider values, and pass the connector/container/inbox/restart signup runbook.
+- Completed in code: transactional authentication emails use a provider-aligned SMTP envelope sender and explicit branded From, monitored Reply-To, Date, Message-ID, and automated-message headers. Header-injection and transport behavior have regression coverage; SPF/DKIM/DMARC results and Sogang inbox placement remain external deployment checks.
 - Completed: add production rate limiting for login, verification, password reset, reports, post/comment writes, and media upload.
 - Completed in code: native token storage uses SecureStore. Physical-device refresh/logout verification remains Phase 5 QA.
 - Run full route audit for guest/user/admin on iOS, Android, and web.
@@ -145,7 +146,8 @@ P1 strongly recommended:
 - Completed: Expo Push ticket/receipt logging, two-attempt transport retry, and invalid-token deactivation.
 - Completed: immediate notice notifications and idempotent event D-day/D-1 dispatch.
 - Completed: admin statistics dashboard and operational audit log.
-- Completed: nickname conflict enforcement with profile inline status.
+- Completed: signup display names allow duplicate real names while school email remains the unique account identity.
+- Completed: signup privacy consent reuses the My Page policy content, requires scrolling to the end before the sheet can close, and keeps the final checkbox choice explicit.
 - Completed: pagination and empty/error/loading states for notifications, search, and activity lists.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
 - Completed P1 bug #47: mutual-aid event dates are disabled and revalidated before KST D+2 in the mobile form, and the API rejects direct create/date-change bypasses while allowing unchanged historical dates during other edits.
@@ -225,7 +227,7 @@ Scope:
 - Add profile view/edit screen.
 - Add account screen for password change and irreversible account deletion.
 - Add profile image upload using the media foundation.
-- Add nickname duplicate-check behavior or server-side conflict handling.
+- Keep signup name/nickname required and normalized, but allow duplicate real names.
 - Decide whether banned-word filtering is required for launch.
 
 Definition of done:

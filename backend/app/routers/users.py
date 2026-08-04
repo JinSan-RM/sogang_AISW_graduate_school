@@ -21,7 +21,7 @@ from app.rate_limit import enforce_rate_limit
 from app.response import success_response
 from app.schemas.user import AdminUserUpdate, UserBlockCreate, UserDeleteRequest, UserMeUpdate, UserPasswordUpdate, UserPasswordVerify
 from app.security import ensure_password_policy, hash_password, utc_now, verify_password
-from app.user_validation import nickname_is_taken, normalize_nickname
+from app.user_validation import normalize_nickname
 from app.audit import log_admin_action
 
 router = APIRouter()
@@ -30,14 +30,15 @@ router = APIRouter()
 @router.get("/nickname-availability")
 def nickname_availability(
     nickname: str = Query(..., min_length=1, max_length=50),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
 ):
     normalized = normalize_nickname(nickname)
     return success_response(
         {
             "nickname": normalized,
-            "available": bool(normalized) and not nickname_is_taken(db, normalized, exclude_user_id=user.id),
+            # Kept for older clients. Display names represent real names, so
+            # duplicates are valid and this endpoint now checks only presence.
+            "available": bool(normalized),
         }
     )
 

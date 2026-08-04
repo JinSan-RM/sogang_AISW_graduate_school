@@ -141,6 +141,8 @@ def test_unknown_runtime_environment_cannot_bypass_deployment_validation() -> No
         ),
         ({"smtp_host": "replace-with-smtp-host"}, "SMTP_HOST"),
         ({"smtp_from_email": "no-reply@sogang-ai-sw.local"}, "SMTP_FROM_EMAIL"),
+        ({"smtp_from_name": "Trusted sender\r\nBcc: attacker@example.com"}, "SMTP_FROM_NAME"),
+        ({"smtp_reply_to": "not-an-email"}, "SMTP_REPLY_TO"),
         ({"smtp_security": "plain"}, "SMTP_SECURITY"),
         (
             {

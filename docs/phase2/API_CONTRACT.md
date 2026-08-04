@@ -210,7 +210,7 @@ Response: same as login response.
 Rules:
 
 - `password`: min 8 characters including a letter, number, and special character.
-- `nickname`: required, max 50.
+- `nickname`: required, max 50, normalized for surrounding/repeated whitespace. Duplicate real names are allowed.
 - `cohort`: required, one to three numeric characters.
 - `major`: required and must match a currently active administrator-managed major option.
 - `phone`: required, Korean mobile number without separators.
@@ -1281,7 +1281,7 @@ Auth: user
 
 Query: `nickname`
 
-Nickname conflicts are also enforced by registration and profile update APIs with `NICKNAME_CONFLICT`.
+This endpoint remains for older clients and reports a nonblank normalized name as available. Names are real-name display fields, so duplicates are valid; email is the unique account identifier.
 
 ## 12. Reports and Moderation
 

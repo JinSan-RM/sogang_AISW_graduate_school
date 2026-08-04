@@ -1,6 +1,6 @@
 # Phase 2 DB Schema Decisions
 
-Status: implemented baseline through `0022_legacy_import_records`, checked 2026-08-02
+Status: implemented baseline through `0023_registration_major_options`, checked 2026-08-04
 
 ## 1. Core Decisions
 
@@ -9,6 +9,7 @@ Status: implemented baseline through `0022_legacy_import_records`, checked 2026-
 Decision:
 
 - Keep `nickname` as the public display field because the current code already uses it.
+- Treat `nickname` as the signup real-name display field and allow duplicate values; `email` remains the unique account identity.
 - Add `cohort` for the required signup field.
 - Do not add `student_id` as required in Phase 2. It may be optional later.
 - Keep `email` unique and required.
@@ -461,6 +462,17 @@ Columns:
 
 Existing user major text is preserved when an option is renamed or deactivated.
 
+Migration `0023_registration_major_options` activates the current eight-option baseline while preserving administrator management after deployment:
+
+- 데이터사이언스ㆍ인공지능
+- 데이터사이언스
+- 인공지능
+- 소프트웨어공학
+- 소프트웨어공학 및 컴퓨터시스템
+- 정보보호
+- 블록체인
+- 보안 및 블록체인
+
 ### `privacy_policy_versions`
 
 Purpose: preserve the active signup consent version and its activation history.
@@ -547,7 +559,7 @@ The receipt deliberately has no user ID, email, IP address, free-form reason, or
 
 ## 6. Existing Database Bootstrap Safety
 
-- The Alembic graph must have one head, currently `0022_legacy_import_records`.
+- The Alembic graph must have one head, currently `0023_registration_major_options`.
 - A database without `alembic_version` is never stamped directly to `head` merely because a few tables or columns exist.
 - The bootstrap helper may stamp only a revision whose complete, versioned schema signature is recognized. Known legacy signatures and their target revisions are covered by tests.
 - An unknown or mixed signature fails without changing data and prints recovery guidance: back up the database, inspect the schema, and perform an explicit operator-approved stamp/migration.
