@@ -3,6 +3,7 @@ export const NOTICES_TAB_ROUTE = "/(tabs)/notices" as const;
 export const COMMUNITY_TAB_ROUTE = "/(tabs)/community" as const;
 export const PARTICIPATION_TAB_ROUTE = "/(tabs)/participation" as const;
 export const COUNCIL_TAB_ROUTE = "/(tabs)/council" as const;
+export const MY_PAGE_ROUTE = "/(tabs)/settings" as const;
 
 type BoardRouteInfo = {
   slug: string;

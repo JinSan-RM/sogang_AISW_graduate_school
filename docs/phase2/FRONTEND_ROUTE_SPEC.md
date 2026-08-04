@@ -229,6 +229,7 @@ My activity:
 - My posts.
 - My comments.
 - Bookmarks.
+- Header and Android hardware back return to `/(tabs)/settings` so opening My activity from the profile drawer never falls through to the previously visible main tab.
 
 ## 9. Design Gate
 
