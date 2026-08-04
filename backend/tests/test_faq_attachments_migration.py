@@ -5,6 +5,8 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
+from app.models.faq import FAQAttachment
+
 
 MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]
@@ -44,3 +46,9 @@ def test_faq_attachment_migration_creates_and_drops_the_relation_table() -> None
         )
         migration.downgrade()
         assert "faq_attachments" not in sa.inspect(connection).get_table_names()
+
+
+def test_faq_attachment_model_declares_the_migration_index() -> None:
+    indexes = {index.name: tuple(column.name for column in index.columns) for index in FAQAttachment.__table__.indexes}
+
+    assert indexes["ix_faq_attachments_faq_sort"] == ("faq_id", "sort_order")

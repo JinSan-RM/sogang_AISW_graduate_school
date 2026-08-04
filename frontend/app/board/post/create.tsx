@@ -1566,7 +1566,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "400",
   },
   selectionPlaceholder: {
     color: COLORS.subtle,

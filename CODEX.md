@@ -91,7 +91,7 @@ P0 already covered:
 - Completed council content alignment: only suggestions and mutual-aid submissions are member-writable; admins manage executive profiles/images and opt notice photo/text posts into the council activity history without duplicate content.
 - Completed mutual-aid privacy/UI alignment: members only see their own applications, admins can review all, private evidence is API-required, and the list/status/empty/completion states follow the Figma flow.
 - Completed P0 bug #28 alignment: mutual-aid remarks are optional end to end, while ordinary post content remains required by board-aware API validation.
-- Completed web keyboard-submit alignment for bug-report item #53: the multiline comment field submits on Enter, preserves Shift+Enter newlines, ignores Korean IME composition Enter/229 events, rejects whitespace-only text, and uses a synchronous ref lock against rapid duplicate submissions.
+- Completed web keyboard-submit alignment for bug-report items #52 and #53: Enter on the login password field runs the guarded login action; the multiline comment field submits on Enter, preserves Shift+Enter newlines, ignores Korean IME composition Enter/229 events, rejects whitespace-only text, and uses a synchronous ref lock against rapid duplicate submissions.
 - Completed P0 bug #13 alignment: comment authors can delete their own comments through an in-app confirmation that works on native and web; backend author permission and comment-count updates have regression coverage.
 - Completed bug #16 navigation alignment: post links opened from a board retain the originating board ID, direct post links fall back to the post's own board, header and Android hardware back share that behavior, and no user-facing fallback routes to the hidden all-boards tab.
 - Completed bug #12 schedule alignment: Home month arrows update the embedded calendar and its API range without navigating, empty upcoming-schedule rows are inert, and inclusive multi-day overlap rules are shared by the Home calendar, full calendar, and day API queries.
@@ -153,8 +153,8 @@ P1 strongly recommended:
 - Completed: pagination and empty/error/loading states for notifications, search, and activity lists.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
 - Completed P1 bug #47: mutual-aid event dates are disabled and revalidated before KST D+2 in the mobile form, and the API rejects direct create/date-change bypasses while allowing unchanged historical dates during other edits.
-- Completed P1 bug #46: missing required fields, attachments, invalid dates/links, upload failures, and server rejections use an in-app notice modal that renders consistently on native and web instead of relying on React Native Web's no-op `Alert.alert()`.
 - Completed mutual-aid status/edit alignment: completed requests cannot be deleted, rejected requests can be deleted, and processing-request edits reuse the full application form with existing private-evidence open/remove/add support.
+- Completed P1 bug #46: missing required fields, attachments, invalid dates/links, upload failures, and server rejections use an in-app notice modal that renders consistently on native and web instead of relying on React Native Web's no-op `Alert.alert()`.
 
 P2 or v1.1:
 

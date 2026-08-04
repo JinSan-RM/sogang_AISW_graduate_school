@@ -8,6 +8,7 @@ const postCreateSource = readFileSync("app/board/post/create.tsx", "utf8");
 const boardDetailSource = readFileSync("app/board/[boardId].tsx", "utf8");
 const homeSource = readFileSync("app/(tabs)/home.tsx", "utf8");
 const communitySource = readFileSync("app/(tabs)/community.tsx", "utf8");
+const loginSource = readFileSync("app/auth/login.tsx", "utf8");
 
 test("#14·15 행사 사진첩 더보기는 커뮤니티 탭 루트를 사용한다", () => {
   assert.match(homeSource, /router\.push\(COMMUNITY_TAB_ROUTE as never\)/);
@@ -36,6 +37,12 @@ test("#27 상조회 목록은 처리중·완료·반려 상태를 표시한다",
   assert.match(postCardSource, /processing: "처리중"/);
   assert.match(postCardSource, /completed: "완료"/);
   assert.match(postCardSource, /rejected: "반려"/);
+});
+
+test("#52 로그인 비밀번호 입력창은 Enter로 로그인을 실행한다", () => {
+  assert.match(loginSource, /onSubmitEditing=\{\(\) => void handleLogin\(\)\}/);
+  assert.match(loginSource, /returnKeyType="go"/);
+  assert.match(loginSource, /submitBehavior="submit"/);
 });
 
 test("#53 댓글 입력창은 Enter로 댓글을 등록한다", () => {

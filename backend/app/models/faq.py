@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -21,7 +21,10 @@ class FAQ(Base):
 
 class FAQAttachment(Base):
     __tablename__ = "faq_attachments"
-    __table_args__ = (UniqueConstraint("faq_id", "media_id", name="uq_faq_attachments_faq_media"),)
+    __table_args__ = (
+        UniqueConstraint("faq_id", "media_id", name="uq_faq_attachments_faq_media"),
+        Index("ix_faq_attachments_faq_sort", "faq_id", "sort_order"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     faq_id: Mapped[int] = mapped_column(ForeignKey("faqs.id", ondelete="CASCADE"), nullable=False)
