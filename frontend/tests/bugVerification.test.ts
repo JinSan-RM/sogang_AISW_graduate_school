@@ -28,6 +28,14 @@ test("#27 상조회 목록은 처리중·완료·반려 상태를 표시한다",
   assert.match(postCardSource, /rejected: "반려"/);
 });
 
+test("#53 댓글 입력창은 Enter로 댓글을 등록한다", () => {
+  assert.match(postDetailSource, /onKeyPress=\{handleCommentKeyPress\}/);
+  assert.match(postDetailSource, /onSubmitEditing=\{Platform\.OS === "web" \? undefined : handleCreateComment\}/);
+  assert.match(postDetailSource, /returnKeyType="send"/);
+  assert.match(postDetailSource, /submitBehavior=\{Platform\.OS === "web" \? "newline" : "submit"\}/);
+  assert.match(postDetailSource, /commentSubmitLockRef\.current/);
+});
+
 test("#32 회원 화면은 반려 사유를 분홍색 박스로 표시한다", () => {
   assert.match(postDetailSource, /post\.mutual_aid\?\.rejection_reason && !isAdmin/);
   assert.match(postDetailSource, /mutualAidRejectionBox:[\s\S]*backgroundColor: COLORS\.pink50/);
