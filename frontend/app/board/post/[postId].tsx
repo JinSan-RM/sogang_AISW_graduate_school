@@ -29,6 +29,7 @@ import type { MutualAidStatus } from "../../../types";
 import { postDetailBackAction, postDetailBackRoute } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
+import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
 import { formatCohortName } from "../../../utils/userLabel";
 
@@ -268,10 +269,19 @@ export default function PostDetailScreen() {
   const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
   const contentUrl = firstUrlFromText(post.content);
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
-  const canEditOwn = isMine && !hasLockedSuggestion && !isNotice;
+  const canEditOwn =
+    isMine &&
+    !hasLockedSuggestion &&
+    !isNotice &&
+    (!isMutualAidRequest || canEditMutualAidRequest(post.mutual_aid?.status));
+  const canDeleteOwn =
+    isMine &&
+    !hasLockedSuggestion &&
+    !isNotice &&
+    (!isMutualAidRequest || canDeleteMutualAidRequest(post.mutual_aid?.status));
   const showReportItem = !isMine;
   const showBlockItem = post.author_id !== null && !isMine && !canManagePost && !isSuggestionRequest;
-  const hasPostMenu = canEditOwn || showReportItem || showBlockItem;
+  const hasPostMenu = canEditOwn || canDeleteOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
     post.suggestion?.status ??
@@ -938,32 +948,32 @@ export default function PostDetailScreen() {
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.menuSheet}>
             <View style={styles.sheetHandle} />
             {canEditOwn ? (
-              <>
-                <Pressable
-                  onPress={() => {
-                    setShowPostMenu(false);
-                    if (isActivityCertification) {
-                      router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
-                    } else {
-                      router.push(`/board/post/edit/${post.id}`);
-                    }
-                  }}
-                  style={styles.sheetMenuItem}
-                >
-                  <Ionicons name="create-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.sheetMenuText}>수정</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setShowPostMenu(false);
-                    handleDeletePost();
-                  }}
-                  style={styles.sheetMenuItem}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#D64545" />
-                  <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
-                </Pressable>
-              </>
+              <Pressable
+                onPress={() => {
+                  setShowPostMenu(false);
+                  if (isActivityCertification || isMutualAidRequest) {
+                    router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
+                  } else {
+                    router.push(`/board/post/edit/${post.id}`);
+                  }
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <Ionicons name="create-outline" size={20} color={COLORS.text} />
+                <Text style={styles.sheetMenuText}>수정</Text>
+              </Pressable>
+            ) : null}
+            {canDeleteOwn ? (
+              <Pressable
+                onPress={() => {
+                  setShowPostMenu(false);
+                  handleDeletePost();
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <Ionicons name="trash-outline" size={20} color="#D64545" />
+                <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
+              </Pressable>
             ) : null}
             {showReportItem ? (
               <Pressable

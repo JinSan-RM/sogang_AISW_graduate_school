@@ -866,6 +866,7 @@ Auth: author or admin
 Request: same as create.
 
 For mutual-aid requests, changing `metadata.event_date` applies the same KST D+2 rule as creation. An unchanged historical date may be retained while other editable fields are updated, so an existing processing request does not become uneditable merely because time passed.
+Members may update their own mutual-aid request only while its workflow status is `processing`. A `completed` or `rejected` request is immutable; administrators change workflow status only through the dedicated mutual-aid endpoint.
 
 For activity certifications, authors can update `metadata.activity_date`, `metadata.participants`, `metadata.participant_user_ids`, and `metadata.activity_source_post_id`. If the member-facing edit payload omits the hidden `metadata.bank_account`, the stored value is preserved; explicitly providing the key updates it.
 
@@ -887,6 +888,10 @@ Allowed status:
 - `processing`
 - `completed`
 - `rejected`
+
+### DELETE `/posts/{post_id}` mutual-aid policy
+
+For a member deleting their own mutual-aid request, `processing` and `rejected` are allowed. A `completed` request returns `403 FORBIDDEN` and remains stored. The API enforces this independently of whether the mobile UI displays the delete action. Administrator moderation keeps its existing delete authority.
 
 Rules:
 

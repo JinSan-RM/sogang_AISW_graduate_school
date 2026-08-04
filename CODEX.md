@@ -153,6 +153,7 @@ P1 strongly recommended:
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
 - Completed P1 bug #47: mutual-aid event dates are disabled and revalidated before KST D+2 in the mobile form, and the API rejects direct create/date-change bypasses while allowing unchanged historical dates during other edits.
 - Completed P1 bug #46: missing required fields, attachments, invalid dates/links, upload failures, and server rejections use an in-app notice modal that renders consistently on native and web instead of relying on React Native Web's no-op `Alert.alert()`.
+- Completed mutual-aid status/edit alignment: completed requests cannot be deleted, rejected requests can be deleted, and processing-request edits reuse the full application form with existing private-evidence open/remove/add support.
 
 P2 or v1.1:
 

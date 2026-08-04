@@ -115,6 +115,7 @@ Rules:
 - Past-council records use a separate admin-only board metadata area. FAQ remains a separate dedicated table/API; neither mutation path is available to members.
 - Suggestions remain anonymous in member and admin presentation. Only the admin reply endpoint can set an official answer and `answered` requires reply text.
 - Mutual-aid submissions are readable only by the requester and admins; board lists and global search are owner-scoped for non-admin users, and the same centralized post-read policy protects detail, reaction, comment, report, activity-history, and attachment paths. A non-owner receives `404 NOT_FOUND` so the API does not confirm the existence of another member's application.
+- A requester may edit a mutual-aid submission only while it is `processing`. They may delete a `processing` or `rejected` submission, but never a `completed` submission; the API enforces the state rule even when called directly.
 - Draft and hidden posts are author/admin only across the same paths, while `deleted` status is admin-only; changing a previously readable post to an unpublished state removes it from other members' activity history and media authorization.
 - The backend does not mount the upload directory. It issues short-lived signed media URLs only after an authenticated metadata/access request passes object-level policy. A post attachment inherits the post's read policy; mutual-aid evidence remains requester/admin only.
 
