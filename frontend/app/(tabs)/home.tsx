@@ -703,7 +703,7 @@ export default function HomeScreen() {
         <CalendarCard events={events} month={month} />
       )}
 
-      <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((popularBoardId ? `/board/${popularBoardId}` : "/(tabs)/boards") as never)} />
+      <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((popularBoardId ? `/board/${popularBoardId}` : COMMUNITY_TAB_ROUTE) as never)} />
       {popularQuery.isLoading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color={COLORS.primary} />

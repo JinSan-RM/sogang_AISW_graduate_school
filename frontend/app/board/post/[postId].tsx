@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
@@ -26,6 +26,7 @@ import {
 import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
+import { postDetailBackAction, postDetailBackRoute } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import { isAdminUser } from "../../../utils/permissions";
@@ -138,7 +139,7 @@ function IconButton({ icon, onPress, label, size = 24, color = COLORS.text }: { 
 }
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{ postId: string }>();
+  const params = useLocalSearchParams<{ postId: string; fromBoardId?: string }>();
   const insets = useSafeAreaInsets();
   const postId = Number(params.postId);
   const userId = useUserStore((state) => state.userId);
@@ -204,6 +205,27 @@ export default function PostDetailScreen() {
   useEffect(() => {
     setGalleryIndex(0);
   }, [postId]);
+
+  const postBackTarget = post ? postDetailBackRoute(post.board_id, params.fromBoardId) : null;
+  const handlePostBack = useCallback(() => {
+    if (!postBackTarget) return;
+    if (postDetailBackAction(params.fromBoardId, router.canGoBack()) === "back") {
+      router.back();
+      return;
+    }
+    router.replace(postBackTarget as never);
+  }, [params.fromBoardId, postBackTarget]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android" || !postBackTarget) return undefined;
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        handlePostBack();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [handlePostBack, postBackTarget])
+  );
 
   if (isLoading) {
     return <LoadingState />;
@@ -498,10 +520,7 @@ export default function PostDetailScreen() {
         <IconButton
           icon="chevron-back"
           label="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace(`/board/${post.board_id}` as never);
-          }}
+          onPress={handlePostBack}
         />
         <Text numberOfLines={1} style={styles.appBarTitle}>
           {appBarTitle}

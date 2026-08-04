@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, BackHandler, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
@@ -13,7 +13,7 @@ import { useBoardPosts, useMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { Board, PostListItem } from "../../types";
-import { COMMUNITY_TAB_ROUTE } from "../../utils/appRoutes";
+import { boardParentRoute, postDetailRoute } from "../../utils/appRoutes";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { pastCouncilActivitiesFromMetadata } from "../../utils/pastCouncil";
@@ -158,17 +158,6 @@ function categoryForFilter(filter: string, board?: Board | null) {
 
 function findBoardBySlug(boards: Board[], slug: string) {
   return boards.find((item) => item.slug === slug);
-}
-
-function parentRouteForBoard(board?: Board | null) {
-  if (!board) return "/(tabs)/home";
-  if (board.board_type === "notice" || board.slug.includes("notice")) return "/(tabs)/notices";
-  if (board.slug === "event-album" || board.board_type === "resource" || board.category === "resources") return COMMUNITY_TAB_ROUTE;
-  if (participationGroupKey(board)) return "/(tabs)/participation";
-  if (board.slug === "suggestions" || board.slug === "mutual-aid" || board.category === "council" || board.category === "gsa") {
-    return "/(tabs)/council";
-  }
-  return "/(tabs)/boards";
 }
 
 function participationGroupKey(board?: Board | null) {
@@ -598,6 +587,7 @@ function CouncilActivityHistoryScreen({
   isError,
   onRetry,
   onBack,
+  originBoardId,
   topInset,
 }: {
   posts: PostListItem[];
@@ -605,6 +595,7 @@ function CouncilActivityHistoryScreen({
   isError: boolean;
   onRetry: () => void;
   onBack: () => void;
+  originBoardId: number;
   topInset: number;
 }) {
   return (
@@ -634,7 +625,7 @@ function CouncilActivityHistoryScreen({
             )
           }
           renderItem={({ item }) => (
-            <Pressable onPress={() => router.push(`/board/post/${item.id}`)} style={styles.councilActivityRow}>
+            <Pressable onPress={() => router.push(postDetailRoute(item.id, originBoardId) as never)} style={styles.councilActivityRow}>
               <View style={styles.councilActivityText}>
                 <Text style={styles.councilActivityDate}>{formatBoardDate(item.created_at)}</Text>
                 <Text numberOfLines={1} style={styles.councilActivityTitle}>
@@ -877,10 +868,21 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
     }
   };
 
-  const exitBoardDepth = () => {
+  const exitBoardDepth = useCallback(() => {
     if (isTabRoot) return;
-    router.replace(parentRouteForBoard(board) as never);
-  };
+    router.replace(boardParentRoute(board) as never);
+  }, [board, isTabRoot]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android" || isTabRoot) return undefined;
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        exitBoardDepth();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [exitBoardDepth, isTabRoot])
+  );
 
   const handleFilterPress = (item: string) => {
     const groupKey = participationGroupKey(board);
@@ -944,6 +946,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
         isLoading={isLoading || councilNoticeQuery.isLoading}
         isError={isError || councilNoticeQuery.isError}
         onRetry={() => void Promise.all([refetch(), councilNoticeQuery.refetch()])}
+        originBoardId={boardId}
         topInset={insets.top}
         onBack={exitBoardDepth}
       />
@@ -1056,13 +1059,13 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: 
           renderItem={({ item, index }) => {
             const itemBoard = boards.find((candidate) => candidate.id === item.board_id) ?? board;
             return isAlbum ? (
-              <AlbumTile post={item} index={index} onPress={(postId) => router.push(`/board/post/${postId}`)} />
+              <AlbumTile post={item} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             ) : isParticipationGuideCards ? (
-              <ParticipationGuideTile post={item} board={itemBoard} index={index} onPress={(postId) => router.push(`/board/post/${postId}`)} />
+              <ParticipationGuideTile post={item} board={itemBoard} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             ) : isActivityCards ? (
-              <ActivityTile post={item} index={index} onPress={(postId) => router.push(`/board/post/${postId}`)} />
+              <ActivityTile post={item} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             ) : (
-              <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} onPress={(postId) => router.push(`/board/post/${postId}`)} />
+              <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             );
           }}
           onEndReached={() => {

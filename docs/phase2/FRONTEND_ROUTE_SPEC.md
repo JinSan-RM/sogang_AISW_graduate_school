@@ -75,6 +75,8 @@ Community tab opens the `event-album` board when available and exposes `행사 �
 
 The participation club and networking guide lists are backed by `club-promo` and `networking-programs`. Only admins see their create entry points. Create/edit requires a representative image and an HTTP(S) participation URL; detail binds the `가입 신청` or `참가 신청` button to that URL.
 
+Board and post back navigation never uses the hidden `/(tabs)/boards` screen as a user-facing destination. A post opened from a board records that board as its origin and returns to the same list; a directly opened post falls back to its own `/board/[boardId]` list. Android hardware back uses the same rule. Leaving a standalone board returns to its product hub, while legacy community boards such as `community-major` return to Home because they are entered there.
+
 Study recruitment is backed by `study-recruit` and remains writable by every authenticated member, including recruitment status and contact metadata.
 The recruitment list follows the approved Figma text-row layout: status pill, title, up to two preview lines, and `cohort + author · YY.MM.DD(weekday)`. It does not use the image-heavy club/networking guide card and does not show reaction counts in the list.
 
