@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from_email: str = ""
+    smtp_from_name: str = "서강 AI-SW 대학원 커뮤니티"
+    smtp_reply_to: str | None = None
     smtp_auth: Literal["password", "none"] = "password"
     smtp_security: Literal["starttls", "ssl", "plain"] | None = None
     smtp_timeout_seconds: int = Field(default=10, ge=1, le=30)
@@ -212,6 +214,12 @@ class Settings(BaseSettings):
             ) from exc
 
     @staticmethod
+    def _require_safe_header_text(name: str, value: str | None) -> None:
+        normalized = (value or "").strip()
+        if not normalized or "\r" in normalized or "\n" in normalized:
+            raise RuntimeError(f"Deployment {name} must be a non-empty single-line value.")
+
+    @staticmethod
     def _require_deployment_public_https_url(name: str, value: str | None) -> None:
         if not value:
             raise RuntimeError(f"Deployment {name} must be configured.")
@@ -290,6 +298,9 @@ class Settings(BaseSettings):
                 "Deployment EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS must be longer than SMTP_TIMEOUT_SECONDS."
             )
         self._require_deployment_email("SMTP_FROM_EMAIL", self.smtp_from_email)
+        self._require_safe_header_text("SMTP_FROM_NAME", self.smtp_from_name)
+        if self.smtp_reply_to:
+            self._require_deployment_email("SMTP_REPLY_TO", self.smtp_reply_to)
         cors = self.cors_origin_regex.strip()
         try:
             re.compile(cors)

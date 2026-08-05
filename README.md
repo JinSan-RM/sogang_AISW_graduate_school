@@ -43,7 +43,7 @@ docker compose --env-file .env.qa.example -p aisw_p0qa -f docker-compose.yml -f 
 docker compose --env-file .env.qa.example -p aisw_p0qa -f docker-compose.yml -f docker-compose.qa.yml exec backend alembic heads
 ```
 
-Expected single Alembic head: `0022_legacy_import_records`.
+Expected single Alembic head: `0024_faq_attachments`.
 
 3. Open `http://localhost:58081`. The QA frontend runs `npm ci` on every
 container start and uses Expo Fast Refresh for changes under `frontend/`.
@@ -109,6 +109,8 @@ Migration `0015_p0_admin_alignment` moves mutual-aid evidence out of the public 
 
 Migrations `0020_account_hard_delete` and `0021_account_deletion_receipts` implement irreversible account deletion. Public published posts/comments can remain only with the author link removed; private, draft, hidden, mutual-aid content and private media are deleted. The completion receipt contains only a UUID, channel, result, and completion time. It does not contain a user ID, email, IP address, or deletion counts.
 
+Migration `0024_faq_attachments` registers legacy FAQ illustrations in the protected media registry. FAQ and post images are served from persistent media storage through authorized signed URLs; the database stores stable media references rather than CDN URLs or file binaries.
+
 The current media policy is member-only for ordinary attachments and profile images as well. `/uploads` is not a public static route. The client requests a short-lived signed access URL after the API verifies membership and, for post attachments, post read permission.
 
 Upload defaults:
@@ -142,6 +144,10 @@ SMTP sender and recipient rules are separate:
 - SMTP can use another provider account such as Gmail, Naver, SendGrid, AWS SES, or a custom domain.
 - `SMTP_FROM_EMAIL` should be a sender address that the SMTP provider allows for that account. Do not spoof
   `@sogang.ac.kr` unless that domain is configured and authorized for the SMTP provider.
+- `SMTP_FROM_NAME` controls the visible product name. `SMTP_REPLY_TO` is optional and defaults to
+  `SMTP_FROM_EMAIL`; when set, it must be a monitored provider-authorized mailbox.
+- Gmail SMTP deployments should keep `SMTP_FROM_EMAIL` identical to the authenticated Gmail account unless
+  Google has explicitly verified the alias. SMTP acceptance does not guarantee inbox placement.
 
 Local setup:
 
@@ -157,6 +163,13 @@ cd backend
 python scripts/send_test_email.py --check-only
 python scripts/send_test_email.py your-id@sogang.ac.kr
 ```
+
+After a real inbox test, inspect the received message source and require `spf=pass`, `dkim=pass`, and
+`dmarc=pass`. If all three pass but Sogang webmail still classifies the message as spam, record the
+`Message-ID` and delivery time and ask the university mail administrator to review or allow the approved
+sender. The application emits a single-line branded From header, Reply-To, Date, Message-ID,
+`Auto-Submitted: auto-generated`, and an explicit SMTP envelope sender; recipient-side reputation and
+filtering remain external release checks.
 
 Run the same commands inside the deployed backend container. A Cloudflare
 Tunnel exposes inbound HTTPS but does not carry outbound SMTP. The fixed-domain
@@ -269,7 +282,7 @@ npm run doctor
 npm run export:web
 ```
 
-Run the backend test suite and the QA/production Compose checks above. Historical results at revisions `0016`, `0019`, and `0021` do not close the current `0022` gate.
+Run the backend test suite and the QA/production Compose checks above. Historical results at revisions `0016`, `0019`, `0021`, and `0022` do not close the current `0024` gate.
 
 Checked on 2026-07-27 against the current worktree:
 

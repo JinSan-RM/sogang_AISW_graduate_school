@@ -298,6 +298,9 @@ def _post_attachments(db: Session, post_id: int, current_user: User) -> list[dic
 
 
 def _replace_attachments(db: Session, post_id: int, attachment_ids: list[int], current_user: User) -> None:
+    # Preserve the submitted order while preventing duplicate IDs from creating
+    # repeated rows or tripping the post/media unique constraint.
+    attachment_ids = list(dict.fromkeys(attachment_ids))
     post = db.get(Post, post_id)
     board = db.get(Board, post.board_id) if post is not None else None
     requires_private = board is not None and board.board_type == "mutual_aid"
@@ -806,10 +809,10 @@ def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User 
             raise AppException(status_code=403, message="Answered suggestions cannot be deleted.", code="FORBIDDEN")
     if board is not None and board.board_type == "mutual_aid" and current_user.role != "admin":
         mutual_aid = db.scalar(select(PostMutualAid).where(PostMutualAid.post_id == post.id))
-        if mutual_aid is not None and mutual_aid.status != "processing":
+        if mutual_aid is not None and mutual_aid.status == "completed":
             raise AppException(
                 status_code=403,
-                message="Completed or rejected mutual-aid requests cannot be deleted.",
+                message="Completed mutual-aid requests cannot be deleted.",
                 code="FORBIDDEN",
             )
 

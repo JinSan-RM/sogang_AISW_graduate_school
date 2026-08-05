@@ -5,11 +5,12 @@ import { isAxiosError } from "axios";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
 import { useBoardsQuery } from "../../../hooks/useApi";
+import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/usePosts";
 import CompletionState from "../../../components/CompletionState";
 import LoadingState from "../../../components/LoadingState";
@@ -31,6 +32,13 @@ import {
 } from "../../../utils/dateSelection";
 import { createFormNotice, requiredFieldNotice, type FormNotice } from "../../../utils/formNotice";
 import { pickAndUploadDocuments, pickAndUploadImages } from "../../../utils/mediaPicker";
+import {
+  canEditMutualAidRequest,
+  isUnchangedMutualAidEventDate,
+  mutualAidEventTypeLabel,
+  mutualAidRelationLabel,
+  normalizeMutualAidEventDate,
+} from "../../../utils/mutualAid";
 
 const COLORS = {
   primary: "#2761FF",
@@ -358,13 +366,19 @@ export default function PostCreateScreen() {
     const storedParticipants = activityParticipantsFromMetadata(metadata);
     reset({
       title: existingPost.title,
-      category: existingPost.category ?? "",
+      category: mutualAidEventTypeLabel(existingPost.mutual_aid?.event_type ?? existingPost.category),
       content: existingPost.content,
       activityDate: typeof metadata.activity_date === "string" ? metadata.activity_date : "",
       participants: typeof metadata.participants === "string" ? metadata.participants : "",
       bankAccount: typeof metadata.bank_account === "string" ? metadata.bank_account : "",
-      eventDate: typeof metadata.event_date === "string" ? metadata.event_date : "",
-      relation: typeof metadata.relation === "string" ? metadata.relation : "",
+      eventDate: normalizeMutualAidEventDate(
+        existingPost.mutual_aid?.event_date ??
+          (typeof metadata.event_date === "string" ? metadata.event_date : undefined),
+      ),
+      relation: mutualAidRelationLabel(
+        existingPost.mutual_aid?.relation ??
+          (typeof metadata.relation === "string" ? metadata.relation : undefined),
+      ),
       contact: typeof metadata.contact === "string" ? metadata.contact : "",
       applicationUrl: typeof metadata.application_url === "string" ? metadata.application_url : "",
     });
@@ -410,7 +424,7 @@ export default function PostCreateScreen() {
     syncParticipants(selectedParticipants.filter((item) => item.id !== participantId));
   };
   const labels = {
-    screenTitle: postId ? (isAlbum ? "사진 수정" : "게시글 수정") : isAlbum ? "사진 등록" : isMutualAid ? "상조회 신청" : isActivity ? "활동 인증" : isSuggestion ? "건의사항 작성" : isStudyRecruit ? "스터디 모집" : isNetworkingProgram ? "네트워킹 등록" : isAdminParticipationPost ? "동아리 등록" : "글쓰기",
+    screenTitle: postId ? (isMutualAid ? "상조회 신청 수정" : isActivity ? "활동 인증 수정" : isAlbum ? "사진 수정" : "게시글 수정") : isAlbum ? "사진 등록" : isMutualAid ? "상조회 신청" : isActivity ? "활동 인증" : isSuggestion ? "건의사항 작성" : isStudyRecruit ? "스터디 모집" : isNetworkingProgram ? "네트워킹 등록" : isAdminParticipationPost ? "동아리 등록" : "글쓰기",
     title: isAlbum ? "행사명" : isMutualAid ? "신청 제목" : isActivity ? "인증 제목" : isSuggestion ? "건의 제목" : "제목",
     titlePlaceholder: isMutualAid
       ? "신청 내용을 한 줄로 입력하세요"
@@ -552,7 +566,12 @@ export default function PostCreateScreen() {
       if (requireValue(values.category, "경조사 종류") || requireValue(values.eventDate, "경조사 일자") || requireValue(values.relation, "관계")) {
         return;
       }
-      if (!isMutualAidEventDateAllowed(values.eventDate)) {
+      const storedEventDate = existingPost?.mutual_aid?.event_date ??
+        (typeof existingPost?.metadata?.event_date === "string" ? existingPost.metadata.event_date : undefined);
+      if (
+        !isUnchangedMutualAidEventDate(values.eventDate, storedEventDate) &&
+        !isMutualAidEventDateAllowed(values.eventDate)
+      ) {
         const message = mutualAidDateGuidance(minimumMutualAidEventDate());
         setError("eventDate", { message });
         setFormNotice(createFormNotice("신청 가능한 날짜", message));
@@ -629,6 +648,16 @@ export default function PostCreateScreen() {
     }
   };
 
+  const openAttachment = async (attachment: MediaAsset) => {
+    try {
+      const accessUrl = await resolveMediaAccessUrl(attachment);
+      if (!accessUrl) throw new Error("MISSING_MEDIA_URL");
+      await Linking.openURL(accessUrl);
+    } catch {
+      setFormNotice(createFormNotice("파일 열기 실패", "첨부 파일에 접근할 수 없습니다. 잠시 후 다시 시도해주세요."));
+    }
+  };
+
   const participantResults = participantSearch.data?.data ?? [];
   const activitySourcePosts: PostListItem[] = activitySourceQuery.data?.data ?? [];
   const activityOptions: SelectionOption[] = activitySourcePosts.map((post) => ({ key: String(post.id), label: post.title }));
@@ -658,6 +687,21 @@ export default function PostCreateScreen() {
     );
   }
 
+  if (postId && isMutualAid && !canEditMutualAidRequest(existingPost?.mutual_aid?.status)) {
+    return (
+      <View style={styles.editStateScreen}>
+        <Text style={styles.editStateText}>처리 완료되었거나 반려된 상조회 신청은 수정할 수 없습니다.</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.replace(`/board/post/${postId}` as never)}
+          style={styles.editRetryButton}
+        >
+          <Text style={styles.editRetryButtonText}>신청 상세로 돌아가기</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if ((isActivity || isMutualAid || isSuggestion) && createdPostId) {
     return (
       <CompletionState
@@ -680,7 +724,7 @@ export default function PostCreateScreen() {
         >
           <Ionicons name={isActivity ? "chevron-back" : "close"} size={24} color={COLORS.text} />
         </Pressable>
-        <Text style={styles.appBarTitle}>{postId ? "글 수정" : labels.screenTitle}</Text>
+        <Text style={styles.appBarTitle}>{labels.screenTitle}</Text>
         <View style={styles.iconButton} />
       </View>
 
@@ -1116,8 +1160,20 @@ export default function PostCreateScreen() {
               <View style={styles.compactAttachmentList}>
                 {attachments.map((attachment) => (
                   <View key={attachment.id} style={styles.compactAttachmentItem}>
-                    <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
-                    <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                    <Pressable
+                      accessibilityLabel={`${attachment.original_filename} 열기`}
+                      accessibilityRole="link"
+                      onPress={() => void openAttachment(attachment)}
+                      style={styles.compactAttachmentOpen}
+                    >
+                      <Ionicons name="document-outline" size={16} color={COLORS.primary} />
+                      <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityLabel={`${attachment.original_filename} 삭제`}
+                      hitSlop={8}
+                      onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                    >
                       <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
                     </Pressable>
                   </View>
@@ -1510,7 +1566,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "400",
   },
   selectionPlaceholder: {
     color: COLORS.subtle,
@@ -2247,6 +2303,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#F8FAFC",
     paddingHorizontal: 10,
+  },
+  compactAttachmentOpen: {
+    minHeight: 34,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   compactAttachmentName: {
     flex: 1,

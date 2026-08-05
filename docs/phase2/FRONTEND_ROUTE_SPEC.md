@@ -69,11 +69,15 @@ Quick menu:
 - Exam archive
 - Suggestions
 
+The Home schedule card changes its displayed month and `GET /events` range in place when the previous/next arrows are pressed. Empty upcoming-schedule copy is not interactive. Multi-day events mark every KST calendar date from `start_at` through `end_at`, inclusive, in both the Home card and full calendar; day routes rely on the same overlap behavior from the events API.
+
 ## 4. Board List Screen Requirements
 
 Community tab opens the `event-album` board when available and exposes `행사 사진첩 / 자료공유` as section tabs. Resource sharing offers `강의후기`, `시험족보`, `종합시험`, and `졸업논문`; `graduation-thesis` is a member-writable resource board. Participation activity certification uses a source-post selection sheet instead of free-text activity names.
 
 The participation club and networking guide lists are backed by `club-promo` and `networking-programs`. Only admins see their create entry points. Create/edit requires a representative image and an HTTP(S) participation URL; detail binds the `가입 신청` or `참가 신청` button to that URL.
+
+Board and post back navigation never uses the hidden `/(tabs)/boards` screen as a user-facing destination. A post opened from a board records that board as its origin and returns to the same list; a directly opened post falls back to its own `/board/[boardId]` list. Android hardware back uses the same rule. Leaving a standalone board returns to its product hub, while legacy community boards such as `community-major` return to Home because they are entered there.
 
 Study recruitment is backed by `study-recruit` and remains writable by every authenticated member, including recruitment status and contact metadata.
 The recruitment list follows the approved Figma text-row layout: status pill, title, up to two preview lines, and `cohort + author · YY.MM.DD(weekday)`. It does not use the image-heavy club/networking guide card and does not show reaction counts in the list.
@@ -82,11 +86,11 @@ Club, study, and networking activity certification remains available to every au
 
 Council content is managed by admins except suggestion and mutual-aid submissions. Admins manage executive name/cohort/role/profile images from the executive section. Notice create/edit can opt into council activity-history linkage; linked notices reuse their title, body, date, and image attachments in the council list and detail screens.
 
-Mutual-aid lists and search results show only the signed-in member's own requests (admins see all), use processing/completed/rejected status pills, require private evidence, allow the remarks field to be left empty, and end creation on a dedicated completion screen. Its calendar disables every date before KST D+2, opens on the first selectable month when necessary, and displays the first selectable date beside the field. Submission repeats the validation and maps the server's `MUTUAL_AID_DATE_TOO_SOON` response to the same user-facing guidance. Opening another member's request, comments, or attachments by guessed ID must render the same not-found state as a missing object.
+Mutual-aid lists and search results show only the signed-in member's own requests (admins see all), use processing/completed/rejected status pills, require private evidence, allow the remarks field to be left empty, and end creation on a dedicated completion screen. Its calendar disables every date before KST D+2, opens on the first selectable month when necessary, and displays the first selectable date beside the field. Submission repeats the validation and maps the server's `MUTUAL_AID_DATE_TOO_SOON` response to the same user-facing guidance. Processing requests expose edit and delete; completed requests expose neither; rejected requests expose delete only. Edit reuses the full application form, hydrates the canonical event type/date/relation, and lets the requester open, remove, and add private evidence while keeping at least one attachment. Opening another member's request, comments, or attachments by guessed ID must render the same not-found state as a missing object.
 The admin console has a dedicated mutual-aid queue with processing/completed/rejected filters. Opening a request exposes the private evidence to admins and allows `processing`, `completed` (shown as `처리 완료`), or `rejected`; rejection requires a reason.
 Suggestion lists use `대기중` and `답변완료` status pills and preserve anonymous presentation. Creation ends on a dedicated completion screen. The admin console has a suggestion queue where admins open a suggestion and write the official reply; saving a reply marks it answered and notifies the author.
 The admin console has a cohort-leader section for managing multiple cohorts, captain/vice-captain names, greeting, introduction, representative image, and profile images. The member council screen reads this structured metadata and keeps legacy post parsing only as a fallback.
-Past councils and FAQ are separate admin sections. Past councils render a council-number list and member/activity detail tabs from `past_councils` metadata; FAQ renders from its dedicated API and table.
+Past councils and FAQ are separate admin sections. Past councils render a council-number list and member/activity detail tabs from `past_councils` metadata; FAQ renders from its dedicated API and table. Expanded FAQ answers render ordered protected image attachments at their natural aspect ratio.
 
 Notification delivery surfaces:
 
@@ -176,6 +180,7 @@ Register:
 - Step 2: six-digit email verification code.
 - Step 3: name/nickname, cohort, active major, phone, password/confirmation, and current privacy-policy consent.
 - Major options and privacy-policy version come from the public registration-options API and are managed by admins.
+- Privacy consent opens the same full document used by the My Page legal screen. The sheet cannot close until the user reaches the end; returning to signup does not auto-check consent, so the user still makes an explicit checkbox choice.
 
 Password reset:
 
@@ -224,6 +229,7 @@ My activity:
 - My posts.
 - My comments.
 - Bookmarks.
+- Header and Android hardware back return to `/(tabs)/settings` so opening My activity from the profile drawer never falls through to the previously visible main tab.
 
 ## 9. Design Gate
 

@@ -37,7 +37,7 @@ export default function CommunityScreen() {
     );
   }
 
-  return <BoardPostsScreen initialBoardId={initialBoard.id} />;
+  return <BoardPostsScreen initialBoardId={initialBoard.id} isTabRoot />;
 }
 
 const styles = StyleSheet.create({

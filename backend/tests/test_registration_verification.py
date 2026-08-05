@@ -223,6 +223,53 @@ def test_registration_token_is_deleted_after_first_successful_use(api) -> None:
         assert user_count == 1
 
 
+def test_registration_allows_duplicate_real_names(api) -> None:
+    email = "same-name-signup@sogang.ac.kr"
+    verification_token = "same-name-verification-token"
+    policy_version = "same-name-policy-v1"
+    major = "데이터사이언스"
+    with api.session() as db:
+        db.add_all(
+            [
+                MajorOption(name=major, sort_order=1, is_active=True),
+                PrivacyPolicyVersion(
+                    version=policy_version,
+                    effective_at=utc_now(),
+                    is_active=True,
+                ),
+                EmailVerificationToken(
+                    email=email,
+                    code_hash=hash_token(verification_token),
+                    purpose="register",
+                    expires_at=utc_now() + timedelta(minutes=15),
+                    consumed_at=utc_now(),
+                ),
+            ]
+        )
+        db.commit()
+
+    response = api.client.post(
+        "/api/auth/register",
+        json={
+            "verification_token": verification_token,
+            "password": "SameNamePassword1!",
+            "nickname": "  Owner  ",
+            "cohort": "74",
+            "major": major,
+            "phone": "01011112222",
+            "privacy_policy_version": policy_version,
+            "privacy_consent": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["user"]["nickname"] == "Owner"
+    with api.session() as db:
+        assert db.scalar(
+            select(func.count()).select_from(User).where(User.nickname == "Owner")
+        ) == 2
+
+
 def test_full_email_verification_and_registration_flow_uses_one_time_token(
     api,
     monkeypatch,

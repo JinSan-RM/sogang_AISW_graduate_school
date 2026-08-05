@@ -210,7 +210,7 @@ Response: same as login response.
 Rules:
 
 - `password`: min 8 characters including a letter, number, and special character.
-- `nickname`: required, max 50.
+- `nickname`: required, max 50, normalized for surrounding/repeated whitespace. Duplicate real names are allowed.
 - `cohort`: required, one to three numeric characters.
 - `major`: required and must match a currently active administrator-managed major option.
 - `phone`: required, Korean mobile number without separators.
@@ -866,6 +866,7 @@ Auth: author or admin
 Request: same as create.
 
 For mutual-aid requests, changing `metadata.event_date` applies the same KST D+2 rule as creation. An unchanged historical date may be retained while other editable fields are updated, so an existing processing request does not become uneditable merely because time passed.
+Members may update their own mutual-aid request only while its workflow status is `processing`. A `completed` or `rejected` request is immutable; administrators change workflow status only through the dedicated mutual-aid endpoint.
 
 For activity certifications, authors can update `metadata.activity_date`, `metadata.participants`, `metadata.participant_user_ids`, and `metadata.activity_source_post_id`. If the member-facing edit payload omits the hidden `metadata.bank_account`, the stored value is preserved; explicitly providing the key updates it.
 
@@ -887,6 +888,10 @@ Allowed status:
 - `processing`
 - `completed`
 - `rejected`
+
+### DELETE `/posts/{post_id}` mutual-aid policy
+
+For a member deleting their own mutual-aid request, `processing` and `rejected` are allowed. A `completed` request returns `403 FORBIDDEN` and remains stored. The API enforces this independently of whether the mobile UI displays the delete action. Administrator moderation keeps its existing delete authority.
 
 Rules:
 
@@ -1163,6 +1168,8 @@ Query:
 - `to_date`: required or default last day of current month
 - `category`: optional
 
+Date bounds use overlap semantics: an event is returned when it starts before the exclusive end of the requested range and its `end_at` (or `start_at` when no end exists) is on or after the range start. Date-only `to_date` values include that full calendar day, so month and single-day queries include multi-day events that began earlier and are still in progress.
+
 Response item:
 
 ```json
@@ -1193,6 +1200,8 @@ FAQ:
 - `POST /faqs` admin
 - `PUT /faqs/{faq_id}` admin
 - `DELETE /faqs/{faq_id}` admin
+- FAQ response items include ordered `attachments` using the normal media payload. Active FAQ
+  images are member-readable through `/api/media/{id}/access-url`; no CDN or public static URL is returned.
 
 Guide content does not have a separate `/guides` domain in v1. Club and networking guides use protected board/post APIs and administrator dependencies; study recruitment uses the member-writable board policy. A dedicated guide CRUD domain is deferred to v1.1.
 
@@ -1279,7 +1288,7 @@ Auth: user
 
 Query: `nickname`
 
-Nickname conflicts are also enforced by registration and profile update APIs with `NICKNAME_CONFLICT`.
+This endpoint remains for older clients and reports a nonblank normalized name as available. Names are real-name display fields, so duplicates are valid; email is the unique account identifier.
 
 ## 12. Reports and Moderation
 

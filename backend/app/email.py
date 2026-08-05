@@ -1,11 +1,31 @@
+from datetime import datetime, timezone
 from email.message import EmailMessage
+from email.utils import format_datetime, formataddr, make_msgid
 import logging
 import smtplib
 import ssl
 
+from email_validator import EmailNotValidError, validate_email
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _single_line(value: str, setting_name: str) -> str:
+    normalized = value.strip()
+    if not normalized or "\r" in normalized or "\n" in normalized:
+        raise RuntimeError(f"{setting_name} must be a non-empty single-line value.")
+    return normalized
+
+
+def _mailbox(value: str, setting_name: str) -> tuple[str, str]:
+    normalized = _single_line(value, setting_name)
+    try:
+        result = validate_email(normalized, check_deliverability=False)
+    except EmailNotValidError as exc:
+        raise RuntimeError(f"{setting_name} must be a valid email address.") from exc
+    return result.normalized, result.ascii_domain
 
 
 def is_email_configured() -> bool:
@@ -72,17 +92,30 @@ def send_email(to_email: str, subject: str, body: str, html_body: str | None = N
             raise RuntimeError("SMTP_REQUIRED is true, but SMTP_HOST or SMTP_FROM_EMAIL is not configured.")
         return False
 
+    from_email, message_id_domain = _mailbox(settings.smtp_from_email, "SMTP_FROM_EMAIL")
+    recipient_email, _ = _mailbox(to_email, "recipient email")
+    reply_to, _ = _mailbox(settings.smtp_reply_to or from_email, "SMTP_REPLY_TO")
+    from_name = _single_line(settings.smtp_from_name, "SMTP_FROM_NAME")
+
     message = EmailMessage()
-    message["From"] = settings.smtp_from_email
-    message["To"] = to_email
-    message["Subject"] = subject
+    message["From"] = formataddr((from_name, from_email), charset="utf-8")
+    message["To"] = recipient_email
+    message["Reply-To"] = reply_to
+    message["Date"] = format_datetime(datetime.now(timezone.utc), usegmt=True)
+    message["Message-ID"] = make_msgid(domain=message_id_domain)
+    message["Auto-Submitted"] = "auto-generated"
+    message["Subject"] = _single_line(subject, "email subject")
     message.set_content(body)
     if html_body:
         message.add_alternative(html_body, subtype="html")
 
     try:
         with _connect_smtp() as smtp:
-            smtp.send_message(message)
+            smtp.send_message(
+                message,
+                from_addr=from_email,
+                to_addrs=[recipient_email],
+            )
         return True
     except (OSError, smtplib.SMTPException):
         logger.exception("SMTP delivery failed")

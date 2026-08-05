@@ -55,6 +55,39 @@ def test_admin_can_update_mutual_aid_status(api) -> None:
         assert mutual_aid.reviewed_by == 3
 
 
+def test_owner_cannot_delete_completed_mutual_aid_request(api) -> None:
+    with api.session() as db:
+        mutual_aid = db.query(PostMutualAid).filter(PostMutualAid.post_id == 1).one()
+        mutual_aid.status = "completed"
+        db.commit()
+
+    response = api.client.delete("/api/posts/1", headers=api.headers["owner"])
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "status": "error",
+        "message": "Completed mutual-aid requests cannot be deleted.",
+        "code": "FORBIDDEN",
+    }
+    with api.session() as db:
+        assert db.get(Post, 1).deleted_at is None
+
+
+def test_owner_can_delete_rejected_mutual_aid_request(api) -> None:
+    with api.session() as db:
+        mutual_aid = db.query(PostMutualAid).filter(PostMutualAid.post_id == 1).one()
+        mutual_aid.status = "rejected"
+        mutual_aid.rejection_reason = "Please submit a clearer document."
+        db.commit()
+
+    response = api.client.delete("/api/posts/1", headers=api.headers["owner"])
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "data": {"id": 1}}
+    with api.session() as db:
+        assert db.get(Post, 1).deleted_at is not None
+
+
 def test_members_cannot_update_council_admin_fields(api) -> None:
     with api.session() as db:
         suggestion_board = Board(

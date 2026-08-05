@@ -27,6 +27,15 @@ import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
 import { COMMUNITY_TAB_ROUTE } from "../../utils/appRoutes";
 import { formatBoardDate, formatHomeScheduleDate } from "../../utils/dateFormat";
+import {
+  calendarDateKey,
+  calendarMonthRange,
+  currentKoreaMonth,
+  eventDaysForMonth,
+  eventIsCurrentOrUpcoming,
+  koreaCalendarDate,
+  shiftCalendarMonth,
+} from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 
 const COLORS = {
@@ -89,13 +98,6 @@ function pickBannerImage(banner: BannerItem | undefined, width: number) {
     return mediaUrl(banner.image_urls?.tablet ?? banner.image_urls?.desktop ?? banner.image_urls?.mobile ?? banner.image_url);
   }
   return mediaUrl(banner.image_urls?.mobile ?? banner.image_urls?.tablet ?? banner.image_urls?.desktop ?? banner.image_url);
-}
-
-function dateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function monthLabel(date: Date) {
@@ -162,17 +164,6 @@ function thumbnailUrl(post: PostListItem) {
     }
   }
   return null;
-}
-
-function eventDays(events: EventItem[], month: Date) {
-  const days = new Set<number>();
-  for (const event of events) {
-    const date = new Date(event.start_at);
-    if (!Number.isNaN(date.getTime()) && date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth()) {
-      days.add(date.getDate());
-    }
-  }
-  return days;
 }
 
 function buildMonthCells(month: Date, activeDay: number, markedDays: Set<number>) {
@@ -452,28 +443,24 @@ function NoticeList({
   );
 }
 
-function CalendarCard({ events, month }: { events: EventItem[]; month: Date }) {
-  const today = new Date();
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; month: Date; onChangeMonth: (delta: number) => void }) {
+  const today = koreaCalendarDate();
   const visibleEvents = events;
-  const activeDay = today.getFullYear() === month.getFullYear() && today.getMonth() === month.getMonth() ? today.getDate() : 1;
-  const markedDays = eventDays(visibleEvents, month);
+  const activeDay = today.year === month.getFullYear() && today.month === month.getMonth() + 1 ? today.day : 1;
+  const markedDays = eventDaysForMonth(visibleEvents, month);
   const cells = buildMonthCells(month, activeDay, markedDays);
   const nextEvent = [...visibleEvents]
-    .filter((event) => {
-      const date = new Date(event.start_at);
-      return !Number.isNaN(date.getTime()) && new Date(date.getFullYear(), date.getMonth(), date.getDate()) >= todayStart;
-    })
+    .filter((event) => eventIsCurrentOrUpcoming(event))
     .sort((left, right) => +new Date(left.start_at) - +new Date(right.start_at))[0];
 
   return (
     <View style={styles.calendarCard}>
       <View style={styles.calendarHeader}>
-        <Pressable onPress={() => router.push("/events/calendar" as never)} style={styles.calendarArrow}>
+        <Pressable accessibilityLabel="이전 달" onPress={() => onChangeMonth(-1)} style={styles.calendarArrow}>
           <Ionicons name="chevron-back" size={15} color={COLORS.subtle} />
         </Pressable>
         <Text style={styles.calendarMonth}>{monthLabel(month)}</Text>
-        <Pressable onPress={() => router.push("/events/calendar" as never)} style={styles.calendarArrow}>
+        <Pressable accessibilityLabel="다음 달" onPress={() => onChangeMonth(1)} style={styles.calendarArrow}>
           <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
         </Pressable>
       </View>
@@ -491,7 +478,7 @@ function CalendarCard({ events, month }: { events: EventItem[]; month: Date }) {
             onPress={() => {
               if (!cell.day) return;
               const selectedDate = new Date(month.getFullYear(), month.getMonth(), cell.day);
-              router.push(`/events/day/${dateKey(selectedDate)}` as never);
+              router.push(`/events/day/${calendarDateKey(selectedDate)}` as never);
             }}
             style={styles.dayCell}
           >
@@ -503,18 +490,24 @@ function CalendarCard({ events, month }: { events: EventItem[]; month: Date }) {
           </Pressable>
         ))}
       </View>
-      <Pressable
-        onPress={() => (nextEvent ? router.push(`/events/${nextEvent.id}` as never) : router.push("/events" as never))}
-        style={styles.nextEvent}
-      >
-        <View style={styles.eventDot} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.nextEventTitle} numberOfLines={1}>
-            {nextEvent ? `${formatHomeScheduleDate(nextEvent.start_at)} · ${nextEvent.title}` : "예정된 일정이 없습니다"}
-          </Text>
+      {nextEvent ? (
+        <Pressable onPress={() => router.push(`/events/${nextEvent.id}` as never)} style={styles.nextEvent}>
+          <View style={styles.eventDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nextEventTitle} numberOfLines={1}>
+              {`${formatHomeScheduleDate(nextEvent.start_at)} · ${nextEvent.title}`}
+            </Text>
+          </View>
+          <Text style={styles.nextEventDday}>{dDayLabel(nextEvent.end_at ?? nextEvent.start_at)}</Text>
+        </Pressable>
+      ) : (
+        <View accessibilityLabel="예정된 일정이 없습니다" style={styles.nextEvent}>
+          <View style={styles.eventDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nextEventTitle} numberOfLines={1}>예정된 일정이 없습니다</Text>
+          </View>
         </View>
-        {nextEvent ? <Text style={styles.nextEventDday}>{dDayLabel(nextEvent.start_at)}</Text> : null}
-      </Pressable>
+      )}
     </View>
   );
 }
@@ -603,10 +596,9 @@ export default function HomeScreen() {
   const user = useUserStore((state) => state.user);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const { openDrawer } = useMyPageDrawer();
-  const month = useMemo(() => new Date(), []);
+  const [month, setMonth] = useState(() => currentKoreaMonth());
   const compact = false;
-  const monthStart = dateKey(new Date(month.getFullYear(), month.getMonth(), 1));
-  const monthEnd = dateKey(new Date(month.getFullYear(), month.getMonth() + 1, 0));
+  const monthRange = useMemo(() => calendarMonthRange(month), [month]);
   const {
     data: boardGroups,
     isError: boardsError,
@@ -628,8 +620,8 @@ export default function HomeScreen() {
     enabled: Boolean(noticeBoardId),
   });
   const eventsQuery = useQuery({
-    queryKey: ["home", "events", monthStart, monthEnd],
-    queryFn: () => eventApi.getEvents({ from_date: monthStart, to_date: monthEnd }),
+    queryKey: ["home", "events", monthRange.start, monthRange.end],
+    queryFn: () => eventApi.getEvents({ from_date: monthRange.start, to_date: monthRange.end }),
   });
   const popularQuery = useQuery({
     queryKey: ["home", "popular", popularBoardId],
@@ -700,10 +692,14 @@ export default function HomeScreen() {
       ) : eventsQuery.isError ? (
         <HomeErrorState label="일정" onRetry={() => void eventsQuery.refetch()} />
       ) : (
-        <CalendarCard events={events} month={month} />
+        <CalendarCard
+          events={events}
+          month={month}
+          onChangeMonth={(delta) => setMonth((value) => shiftCalendarMonth(value, delta))}
+        />
       )}
 
-      <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((popularBoardId ? `/board/${popularBoardId}` : "/(tabs)/boards") as never)} />
+      <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((popularBoardId ? `/board/${popularBoardId}` : COMMUNITY_TAB_ROUTE) as never)} />
       {popularQuery.isLoading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color={COLORS.primary} />

@@ -1,6 +1,6 @@
 # Phase 2 DB Schema Decisions
 
-Status: implemented baseline through `0022_legacy_import_records`, checked 2026-08-02
+Status: implemented baseline through `0024_faq_attachments`, checked 2026-08-04
 
 ## 1. Core Decisions
 
@@ -9,6 +9,7 @@ Status: implemented baseline through `0022_legacy_import_records`, checked 2026-
 Decision:
 
 - Keep `nickname` as the public display field because the current code already uses it.
+- Treat `nickname` as the signup real-name display field and allow duplicate values; `email` remains the unique account identity.
 - Add `cohort` for the required signup field.
 - Do not add `student_id` as required in Phase 2. It may be optional later.
 - Keep `email` unique and required.
@@ -263,6 +264,24 @@ Unique:
 
 - `(post_id, media_id)`
 
+### `faq_attachments`
+
+Purpose: retain legacy FAQ illustrations without embedding CDN URLs in answer text.
+
+Columns:
+
+- `id`
+- `faq_id FK faqs.id ON DELETE CASCADE`
+- `media_id FK media_assets.id ON DELETE CASCADE`
+- `sort_order INT NOT NULL DEFAULT 0`
+- `created_at DATETIME NOT NULL`
+
+Unique:
+
+- `(faq_id, media_id)`
+
+FAQ images use the same protected signed-media access flow as post attachments.
+
 ### `events`
 
 Columns:
@@ -461,6 +480,17 @@ Columns:
 
 Existing user major text is preserved when an option is renamed or deactivated.
 
+Migration `0023_registration_major_options` activates the current eight-option baseline while preserving administrator management after deployment:
+
+- 데이터사이언스ㆍ인공지능
+- 데이터사이언스
+- 인공지능
+- 소프트웨어공학
+- 소프트웨어공학 및 컴퓨터시스템
+- 정보보호
+- 블록체인
+- 보안 및 블록체인
+
 ### `privacy_policy_versions`
 
 Purpose: preserve the active signup consent version and its activation history.
@@ -547,7 +577,7 @@ The receipt deliberately has no user ID, email, IP address, free-form reason, or
 
 ## 6. Existing Database Bootstrap Safety
 
-- The Alembic graph must have one head, currently `0022_legacy_import_records`.
+- The Alembic graph must have one head, currently `0024_faq_attachments`.
 - A database without `alembic_version` is never stamped directly to `head` merely because a few tables or columns exist.
 - The bootstrap helper may stamp only a revision whose complete, versioned schema signature is recognized. Known legacy signatures and their target revisions are covered by tests.
 - An unknown or mixed signature fails without changing data and prints recovery guidance: back up the database, inspect the schema, and perform an explicit operator-approved stamp/migration.
@@ -557,3 +587,7 @@ Checked on 2026-07-27: clean upgrade, `0019`→head, `0021`→`0019`→`0021`, e
 
 Checked on 2026-08-02: a clean isolated PostgreSQL database upgraded to `0022`, and the
 `0021`→`0022`→`0021`→`0022` round trip passed. The current backend suite passes 185 tests.
+
+Checked on 2026-08-04: the local backend suite passes 203 tests and Alembic reports the single
+`0024_faq_attachments` head. The `0024` migration has SQLite create/drop regression coverage and
+an isolated PostgreSQL database passed clean upgrade plus `0023`→`0024`→`0023`→`0024` rehearsal.

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   composeSchoolEmail,
   apiRetryAfterSeconds,
+  formatCountdown,
   isApiResponseUncertain,
   isEmailDeliveryConfirmed,
 } from "../utils/authValidation";
@@ -18,6 +19,12 @@ test("verification email delivery advances only on an explicit true response", (
   assert.equal(isEmailDeliveryConfirmed(undefined), false);
   assert.equal(isEmailDeliveryConfirmed(null), false);
   assert.equal(isEmailDeliveryConfirmed("true"), false);
+});
+
+test("verification countdown keeps the AISW two-digit minute and second format", () => {
+  assert.equal(formatCountdown(300), "05:00");
+  assert.equal(formatCountdown(299), "04:59");
+  assert.equal(formatCountdown(0), "00:00");
 });
 
 test("remote SMTP request timeouts are distinguishable from delivery rejection", () => {

@@ -1,13 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../components/LoadingState";
 import { userApi } from "../../services/api";
 import type { UserActivityItem } from "../../types";
+import { MY_PAGE_ROUTE } from "../../utils/appRoutes";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { formatCohortName } from "../../utils/userLabel";
 
@@ -75,16 +76,26 @@ export default function ActivityScreen() {
 
   const items = data?.pages.flatMap((page) => page.data) ?? [];
   const title = FILTERS.find((item) => item.value === type)?.label ?? "내 활동";
+  const goBackToMyPage = useCallback(() => {
+    router.replace(MY_PAGE_ROUTE as never);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        goBackToMyPage();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [goBackToMyPage])
+  );
 
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(tabs)/settings");
-          }}
+          onPress={goBackToMyPage}
           style={styles.iconButton}
         >
           <Ionicons name="chevron-back" size={24} color={COLORS.text} />

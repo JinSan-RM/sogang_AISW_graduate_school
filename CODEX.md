@@ -50,7 +50,7 @@ Known gaps:
 - Admin route now covers banners, launch-critical notice posts, board settings, accounts, reports, FAQ, and events.
 - My activity screen exists; guide cards are not fully implemented.
 - Figma function-alignment pass 1-5 is implemented: five-tab IA (Home, Notices, Community, Participation, Student Council), direct community feed, private activity bank-account metadata, dedicated council notification setting, structured mutual-aid status/rejection workflow, activity source selection sheets, and study recruitment status/contact fields.
-- Legacy Swing2App reconciliation now uses the cleaned article/comment workbooks, explicit dry-run/apply modes, isolated-target guards, idempotent source hashes, PII redaction, attachment validation, and an admin-only provenance ledger at Alembic `0022`. The 2026-08-02 backend suite passes 185 tests and the isolated PostgreSQL `0021`→`0022`→`0021`→`0022` round trip passes. Raw XLSX/CSV sources remain local-only because this repository is public and the files contain personal data.
+- Legacy Swing2App reconciliation now uses the cleaned article/comment workbooks, strict local `fileStorageId` attachment lookup, explicit dry-run/apply modes, isolated-target guards, idempotent source hashes, PII redaction, same-post content-hash deduplication, FAQ media links, and an admin-only provenance ledger. Alembic head is `0024_faq_attachments`; the 2026-08-04 local backend suite passes 203 tests. Raw XLSX/CSV/attachment sources remain local-only because this repository is public and the files contain personal data.
 - Board IA now includes legacy notice, webinar, academic schedule, alumni directory, GSA intro/cohort, and roadmap/benefit boards from the production app review.
 - Post/report UX now includes post and comment report submission hooks plus admin report review/status handling.
 - Author blocking API/UI is now implemented for post lists, comments, and search results.
@@ -91,7 +91,11 @@ P0 already covered:
 - Completed council content alignment: only suggestions and mutual-aid submissions are member-writable; admins manage executive profiles/images and opt notice photo/text posts into the council activity history without duplicate content.
 - Completed mutual-aid privacy/UI alignment: members only see their own applications, admins can review all, private evidence is API-required, and the list/status/empty/completion states follow the Figma flow.
 - Completed P0 bug #28 alignment: mutual-aid remarks are optional end to end, while ordinary post content remains required by board-aware API validation.
+- Completed web keyboard-submit alignment for bug-report items #52 and #53: Enter on the login password field runs the guarded login action; the multiline comment field submits on Enter, preserves Shift+Enter newlines, ignores Korean IME composition Enter/229 events, rejects whitespace-only text, and uses a synchronous ref lock against rapid duplicate submissions.
 - Completed P0 bug #13 alignment: comment authors can delete their own comments through an in-app confirmation that works on native and web; backend author permission and comment-count updates have regression coverage.
+- Completed bug #16 navigation alignment: post links opened from a board retain the originating board ID, direct post links fall back to the post's own board, header and Android hardware back share that behavior, and no user-facing fallback routes to the hidden all-boards tab.
+- Completed bug #12 schedule alignment: Home month arrows update the embedded calendar and its API range without navigating, empty upcoming-schedule rows are inert, and inclusive multi-day overlap rules are shared by the Home calendar, full calendar, and day API queries.
+- Completed bug #51 navigation alignment: My Posts, My Comments, and Bookmarks return to My Page from both the header and Android hardware back instead of exposing the tab that happened to be behind the profile drawer.
 - Completed P0 bugs #10, #12, #20, #24, #34, and #37 alignment: exam-archive tags are normalized to `시험족보`, duplicate cohort prefixes are removed from author labels, edit success no longer stacks duplicate detail routes, the activity account placeholder matches the approved copy, suggestion details omit author blocking, and mutual-aid detail labels use regular font weight.
 - Completed P1 bugs #69 and #70 alignment: activity-certification edits hydrate and update the participant picker and activity calendar while preserving attachments, source linkage, and hidden bank-account metadata.
 - Completed P1 bug #36 alignment: profile photo selection uploads a real browser `File` on web and a native file descriptor on iOS/Android; image-only changes no longer resubmit or validate unchanged legacy profile fields, and the refreshed profile cache is committed before returning to My Page.
@@ -125,10 +129,12 @@ P0 launch-candidate hardening:
 - Implemented in CI: pytest uses a separate PostgreSQL test database and the frontend job verifies lint, focused tests, typecheck, Expo Doctor, and web export.
 - Decided for v1: guide content continues to use protected board/post administration; a dedicated guide CRUD domain is deferred to v1.1.
 - Completed in code: authentication codes are keyed, email-only, one-time and attempt-limited; deployed SMTP requires verified STARTTLS/implicit TLS, bounded timeouts, and `SMTP_REQUIRED=true`. A digest-pinned optional Compose Cloudflare connector now follows `CLOUDFLARE_ENABLED` with token-file and exact-proxy validation. External gate: create the Named Tunnel/routes, install real token/provider values, and pass the connector/container/inbox/restart signup runbook.
+- Completed in code: transactional authentication emails use a provider-aligned SMTP envelope sender and explicit branded From, monitored Reply-To, Date, Message-ID, and automated-message headers. Header-injection and transport behavior have regression coverage; SPF/DKIM/DMARC results and Sogang inbox placement remain external deployment checks.
 - Completed: add production rate limiting for login, verification, password reset, reports, post/comment writes, and media upload.
 - Completed in code: native token storage uses SecureStore. Physical-device refresh/logout verification remains Phase 5 QA.
 - Run full route audit for guest/user/admin on iOS, Android, and web.
-- Completed locally: isolated Docker/API smoke reached `0021_account_deletion_receipts` on 2026-07-27; the current 2026-08-02 migration rehearsal reaches `0022_legacy_import_records`.
+- Completed locally: isolated Docker/API smoke reached `0021_account_deletion_receipts` on 2026-07-27 and the 2026-08-02 PostgreSQL migration rehearsal reached `0022_legacy_import_records`. On 2026-08-04 an isolated PostgreSQL database passed clean upgrade and `0023`→`0024`→`0023`→`0024`; the full local legacy-media import, 594-file manifest verification, API fetch, and web image-render smoke also passed.
+- Completed locally: the coordinated legacy transfer set (`database.dump`, public/private media archives, redacted reports, and SHA-256 manifest) restored into a fresh PostgreSQL database and fresh media directories; all 594 files and 635,375,068 bytes reproduced the pre-transfer manifest exactly.
 - Completed locally: PostgreSQL `pg_dump`/restore reproduced 30 tables with identical all-table row counts and column/index/constraint fingerprints; protected-media tar/restore reproduced identical checksums.
 - Completed locally: an unsigned Android release AAB built and passed bundletool, API 36, 16 KB page-alignment, merged-manifest, and extracted-artifact secret checks. It is not a production candidate because official release inputs and signing are absent and placeholder/development strings remain.
 - External release gate: `npm run release:check` remains blocked by 18 approved identifiers, assets, Firebase, URL, contact, operator, and policy inputs. EAS production variables, remote versions, production AAB, and iOS archive do not exist yet.
@@ -142,10 +148,12 @@ P1 strongly recommended:
 - Completed: Expo Push ticket/receipt logging, two-attempt transport retry, and invalid-token deactivation.
 - Completed: immediate notice notifications and idempotent event D-day/D-1 dispatch.
 - Completed: admin statistics dashboard and operational audit log.
-- Completed: nickname conflict enforcement with profile inline status.
+- Completed: signup display names allow duplicate real names while school email remains the unique account identity.
+- Completed: signup privacy consent reuses the My Page policy content, requires scrolling to the end before the sheet can close, and keeps the final checkbox choice explicit.
 - Completed: pagination and empty/error/loading states for notifications, search, and activity lists.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
 - Completed P1 bug #47: mutual-aid event dates are disabled and revalidated before KST D+2 in the mobile form, and the API rejects direct create/date-change bypasses while allowing unchanged historical dates during other edits.
+- Completed mutual-aid status/edit alignment: completed requests cannot be deleted, rejected requests can be deleted, and processing-request edits reuse the full application form with existing private-evidence open/remove/add support.
 - Completed P1 bug #46: missing required fields, attachments, invalid dates/links, upload failures, and server rejections use an in-app notice modal that renders consistently on native and web instead of relying on React Native Web's no-op `Alert.alert()`.
 
 P2 or v1.1:
@@ -222,7 +230,7 @@ Scope:
 - Add profile view/edit screen.
 - Add account screen for password change and irreversible account deletion.
 - Add profile image upload using the media foundation.
-- Add nickname duplicate-check behavior or server-side conflict handling.
+- Keep signup name/nickname required and normalized, but allow duplicate real names.
 - Decide whether banned-word filtering is required for launch.
 
 Definition of done:

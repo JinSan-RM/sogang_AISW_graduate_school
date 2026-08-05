@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../components/LoadingState";
+import NaturalAspectMediaImage from "../components/NaturalAspectMediaImage";
 import { faqApi } from "../services/api";
 import type { FAQItem } from "../types";
 
@@ -92,7 +93,18 @@ export default function FAQScreen() {
                     <View style={styles.answerBadge}>
                       <Text style={styles.answerBadgeText}>A</Text>
                     </View>
-                    <Text style={styles.answerText}>{item.answer}</Text>
+                    <View style={styles.answerContent}>
+                      <Text style={styles.answerText}>{item.answer}</Text>
+                      {item.attachments
+                        .filter((attachment) => attachment.content_type.startsWith("image/"))
+                        .map((attachment) => (
+                          <NaturalAspectMediaImage
+                            key={attachment.id}
+                            media={attachment}
+                            style={styles.answerImage}
+                          />
+                        ))}
+                    </View>
                   </View>
                 ) : null}
               </View>
@@ -174,6 +186,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 8,
   },
+  answerContent: {
+    flex: 1,
+    gap: 10,
+  },
+  answerImage: {
+    borderRadius: 8,
+    overflow: "hidden",
+  },
   questionBadge: {
     width: 20,
     height: 20,
@@ -210,7 +230,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   answerText: {
-    flex: 1,
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "400", // Figma: Regular

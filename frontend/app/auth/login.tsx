@@ -35,6 +35,7 @@ export default function LoginScreen() {
   const setSession = useUserStore((state) => state.setSession);
 
   const handleLogin = async () => {
+    if (isSubmitting) return;
     const nextEmailError = emailIdError(emailId);
     const nextPasswordError = password ? undefined : "비밀번호를 입력해주세요.";
     if (nextEmailError || nextPasswordError) {
@@ -93,8 +94,10 @@ export default function LoginScreen() {
               setErrors((current) => ({ ...current, password: undefined, form: undefined }));
             }}
             onFocus={() => setIsPasswordFocused(true)}
+            onSubmitEditing={() => void handleLogin()}
             placeholder="비밀번호"
             placeholderTextColor={COLORS.subtle}
+            returnKeyType="go"
             secureTextEntry
             style={[
               styles.input,
@@ -102,6 +105,7 @@ export default function LoginScreen() {
               errors.password || errors.form ? styles.inputError : null,
               { outlineStyle: "none" } as never,
             ]}
+            submitBehavior="submit"
             value={password}
           />
         </View>
