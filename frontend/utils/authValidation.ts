@@ -18,15 +18,13 @@ export function emailIdError(emailId: string) {
 }
 
 export function passwordError(password: string) {
-  if (!password) return "비밀번호를 입력해주세요.";
-  if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-    return "영문, 숫자, 특수문자를 포함해 8자 이상 입력해주세요.";
+  if (!password || password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+    return "영문, 숫자, 특수문자 포함 8자 이상 입력해주세요.";
   }
   return null;
 }
 
 export function phoneError(phone: string) {
-  if (!phone) return "연락처를 입력해주세요.";
   if (!/^01[016789]\d{7,8}$/.test(phone)) return "올바른 연락처 형식이 아니에요.";
   return null;
 }

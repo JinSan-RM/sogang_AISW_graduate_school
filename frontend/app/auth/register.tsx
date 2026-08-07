@@ -35,7 +35,7 @@ const COLORS = {
 };
 
 type FieldErrors = Partial<Record<"email" | "code" | "nickname" | "cohort" | "major" | "phone" | "password" | "passwordConfirm" | "consent" | "form", string>>;
-type VerificationMessage = { type: "success" | "pending" | "error"; text: string } | null;
+type VerificationMessage = { type: "pending" | "error"; text: string } | null;
 type VerificationFailureState = "expired" | "attempts" | null;
 
 const EMAIL_DELIVERY_FAILURE_MESSAGE = "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
@@ -154,7 +154,7 @@ export default function RegisterScreen() {
       );
       setStep(1);
       setVerificationFailureState(null);
-      setVerificationMessage({ type: "success", text: "새 인증코드가 발송되었어요." });
+      setVerificationMessage(null);
     } catch (error) {
       if (isApiResponseUncertain(error)) {
         const timeoutObservedAt = Date.now();
@@ -182,7 +182,9 @@ export default function RegisterScreen() {
           ? "이미 가입된 이메일이에요."
           : errorCode === "VERIFICATION_RESEND_COOLDOWN"
             ? "인증코드는 5분 후 다시 요청할 수 있어요."
-            : EMAIL_DELIVERY_FAILURE_MESSAGE;
+            : errorCode === "RATE_LIMITED"
+              ? "인증 요청이 너무 많아요. 잠시 후 다시 시도해주세요."
+              : EMAIL_DELIVERY_FAILURE_MESSAGE;
       if (resend) {
         setVerificationMessage({ type: "error", text: message });
       } else {
@@ -243,8 +245,7 @@ export default function RegisterScreen() {
     if (nextPhoneError) nextErrors.phone = nextPhoneError;
     const nextPasswordError = passwordError(password);
     if (nextPasswordError) nextErrors.password = nextPasswordError;
-    if (!passwordConfirm) nextErrors.passwordConfirm = "비밀번호를 다시 입력해주세요.";
-    else if (password !== passwordConfirm) nextErrors.passwordConfirm = "비밀번호가 일치하지 않아요.";
+    if (password !== passwordConfirm) nextErrors.passwordConfirm = "비밀번호가 일치하지 않아요.";
     if (!consented) nextErrors.consent = "개인정보 수집 및 이용 동의가 필요해요.";
     if (!privacyPolicy) nextErrors.consent = "개인정보 처리방침 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.";
     setErrors(nextErrors);
@@ -395,23 +396,23 @@ export default function RegisterScreen() {
                       <Text style={styles.errorText}>{codeError}</Text>
                     </View>
                   ) : verificationMessage ? (
-                    <View style={verificationMessage.type === "error" ? styles.errorRow : styles.successRow}>
+                    <View style={styles.errorRow}>
                       <Ionicons
-                        name={verificationMessage.type === "success" ? "checkmark-circle-outline" : verificationMessage.type === "pending" ? "time-outline" : "alert-circle-outline"}
+                        name={verificationMessage.type === "pending" ? "time-outline" : "alert-circle-outline"}
                         size={14}
-                        color={verificationMessage.type === "success" ? "#3B6D11" : verificationMessage.type === "pending" ? COLORS.muted : COLORS.danger}
+                        color={verificationMessage.type === "pending" ? COLORS.muted : COLORS.danger}
                       />
-                      <Text style={verificationMessage.type === "success" ? styles.successText : verificationMessage.type === "pending" ? styles.pendingText : styles.errorText}>
+                      <Text style={verificationMessage.type === "pending" ? styles.pendingText : styles.errorText}>
                         {verificationMessage.text}
                       </Text>
                     </View>
                   ) : null}
                 </View>
-                {verificationExpired || verificationAttemptsLocked ? null : resendCooldown > 0 ? (
-                  <Text style={styles.timerText}>{formatCountdown(resendCooldown)}</Text>
-                ) : (
-                  <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
-                    <Text style={styles.resendLink}>{isSubmitting ? "발송 중" : "재전송"}</Text>
+                {verificationExpired || verificationAttemptsLocked ? null : (
+                  <Pressable disabled={isSubmitting || resendCooldown > 0} onPress={() => void requestCode(true)} hitSlop={8}>
+                    <Text style={[styles.resendLink, resendCooldown > 0 ? styles.resendLinkWaiting : null]}>
+                      {isSubmitting ? "발송 중" : resendCooldown > 0 ? `재전송 (${formatCountdown(resendCooldown)})` : "재전송"}
+                    </Text>
                   </Pressable>
                 )}
               </View>
@@ -471,10 +472,19 @@ export default function RegisterScreen() {
                 <TextInput value={passwordConfirm} onChangeText={(value) => { setPasswordConfirm(value); setErrors((current) => ({ ...current, passwordConfirm: undefined })); }} secureTextEntry placeholder="비밀번호 확인" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.passwordConfirm ? styles.profileInputError : null]} />
                 <FieldError message={errors.passwordConfirm} />
               </View>
-              <Pressable disabled={!privacyPolicy} onPress={() => { setConsented((value) => !value); setErrors((current) => ({ ...current, consent: undefined })); }} style={styles.consentRow}>
-                <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><Ionicons name="checkmark" size={13} color="#FFFFFF" /></View>
-                <Text style={styles.consentText}>개인정보 수집 및 이용 동의 (필수)</Text>
-              </Pressable>
+              <View style={styles.consentRow}>
+                <Pressable
+                  disabled={!privacyPolicy}
+                  onPress={() => { setConsented((value) => !value); setErrors((current) => ({ ...current, consent: undefined })); }}
+                  style={styles.consentToggle}
+                >
+                  <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><Ionicons name="checkmark" size={13} color="#FFFFFF" /></View>
+                  <Text style={styles.consentText}>이용약관 및 개인정보 처리방침 동의 (필수)</Text>
+                </Pressable>
+                <Pressable accessibilityLabel="이용약관 및 개인정보 처리방침 보기" onPress={() => router.push("/legal/terms")} style={styles.consentLinkButton}>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
+                </Pressable>
+              </View>
               <FieldError message={errors.consent} />
               <FieldError message={errors.form} />
               <Pressable disabled={isSubmitting} onPress={register} style={[styles.primaryButton, registerBlocked ? styles.validationDisabledButton : null]}>
@@ -532,14 +542,12 @@ const styles = StyleSheet.create({
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
   errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, marginTop: -12 },
+  statusRow: { alignItems: "flex-start", width: "100%", gap: 8, marginTop: -12 },
   statusLeft: { flexShrink: 1, minWidth: 0 },
-  timerText: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
   resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  resendLinkWaiting: { opacity: 0.6 },
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular 12
-  successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
   pendingText: { flexShrink: 1, color: COLORS.muted, fontSize: 12, fontWeight: "400", lineHeight: 18 },
-  successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
   selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: border 0.5, px14 py12
   selectText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
@@ -551,12 +559,12 @@ const styles = StyleSheet.create({
   resendButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 8 },
   resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, primary/500
   resendTextDisabled: { color: COLORS.subtle },
-  consentRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
+  consentRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  consentToggle: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+  consentLinkButton: { paddingLeft: 8, paddingVertical: 4 },
   checkBox: { width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 5, backgroundColor: "#C7CCD4" }, // Figma: 20, radius 5, gray/300 unchecked
   checkBoxActive: { backgroundColor: COLORS.primary }, // Figma: primary/500 checked
   consentText: { color: COLORS.text, fontSize: 14, fontWeight: "400" }, // Figma: Regular 14
-  legalLinks: { flexDirection: "row", flexWrap: "wrap", gap: 14, paddingLeft: 30, marginTop: -4 },
-  legalLinkText: { color: COLORS.primary, fontSize: 12, fontWeight: "800", textDecorationLine: "underline" },
   completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
   completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
   completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280
