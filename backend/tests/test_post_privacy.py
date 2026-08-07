@@ -26,18 +26,21 @@ def _assert_comment_hidden(response) -> None:
     }
 
 
-def test_mutual_aid_detail_is_owner_or_admin_only(api) -> None:
-    owner_response = api.client.get("/api/posts/1", headers=api.headers["owner"])
-    _assert_hidden(api.client.get("/api/posts/1", headers=api.headers["other"]))
-    admin_responses = [
-        api.client.get("/api/posts/1", headers=api.headers["admin"]),
-        api.client.get("/api/posts/2", headers=api.headers["admin"]),
-    ]
+def test_mutual_aid_posts_are_visible_to_every_member(api) -> None:
+    """상조회 신청은 원우 전체 공개다. 작성자/관리자만 보는 제한은 없다."""
 
-    assert owner_response.status_code == 200
-    assert owner_response.json()["data"]["id"] == 1
-    assert [response.status_code for response in admin_responses] == [200, 200]
-    assert [response.json()["data"]["id"] for response in admin_responses] == [1, 2]
+    responses = {
+        "owner": api.client.get("/api/posts/1", headers=api.headers["owner"]),
+        "other": api.client.get("/api/posts/1", headers=api.headers["other"]),
+        "admin": api.client.get("/api/posts/1", headers=api.headers["admin"]),
+    }
+
+    assert [response.status_code for response in responses.values()] == [200, 200, 200]
+    assert {response.json()["data"]["id"] for response in responses.values()} == {1}
+    # 목록에서도 남의 신청이 함께 보인다.
+    listing = api.client.get("/api/boards/1/posts", headers=api.headers["other"])
+    assert listing.status_code == 200
+    assert {post["id"] for post in listing.json()["data"]} == {1, 2}
 
 
 def test_admin_can_update_mutual_aid_status(api) -> None:
@@ -104,14 +107,12 @@ def test_members_cannot_update_council_admin_fields(api) -> None:
         assert suggestion.replied_by is None
 
 
-def test_mutual_aid_search_is_owner_scoped_for_members(api) -> None:
-    owner_response = api.client.get("/api/search", params={"q": "Need"}, headers=api.headers["owner"])
-    other_response = api.client.get("/api/search", params={"q": "Need"}, headers=api.headers["other"])
-    admin_response = api.client.get("/api/search", params={"q": "Need"}, headers=api.headers["admin"])
+def test_mutual_aid_search_returns_every_request_for_members(api) -> None:
+    """상조회가 전체 공개이므로 검색 결과도 신청자에 따라 잘리지 않는다."""
 
-    assert [item["id"] for item in owner_response.json()["data"]] == [1]
-    assert [item["id"] for item in other_response.json()["data"]] == [2]
-    assert {item["id"] for item in admin_response.json()["data"]} == {1, 2}
+    for role in ("owner", "other", "admin"):
+        response = api.client.get("/api/search", params={"q": "Need"}, headers=api.headers[role])
+        assert {item["id"] for item in response.json()["data"]} == {1, 2}, role
 
 
 def test_unpublished_posts_are_author_or_admin_only_across_detail_list_and_search(api) -> None:
@@ -323,52 +324,44 @@ def test_post_list_exposes_thumbnail_media_id_for_access_url_resolution(api) -> 
     assert item["thumbnail_media_id"] == 1
 
 
-def test_mutual_aid_comment_routes_hide_post_from_other_member(api) -> None:
-    _assert_hidden(api.client.get("/api/posts/1/comments", headers=api.headers["other"]))
-    _assert_hidden(
-        api.client.post(
-            "/api/posts/1/comments",
-            json={"content": "Should not be accepted"},
-            headers=api.headers["other"],
-        )
-    )
-    _assert_comment_hidden(
-        api.client.put(
-            "/api/comments/1",
-            json={"content": "Should not be accepted"},
-            headers=api.headers["other"],
-        )
-    )
-    _assert_comment_hidden(api.client.delete("/api/comments/1", headers=api.headers["other"]))
+def test_mutual_aid_comment_routes_are_open_but_still_author_scoped(api) -> None:
+    """다른 원우도 상조회 댓글을 읽고 쓸 수 있지만, 남의 댓글을 고치지는 못한다."""
+
+    assert api.client.get("/api/posts/1/comments", headers=api.headers["other"]).status_code == 200
+    assert api.client.post(
+        "/api/posts/1/comments",
+        json={"content": "삼가 조의를 표합니다"},
+        headers=api.headers["other"],
+    ).status_code == 200
+
+    for response in (
+        api.client.put("/api/comments/1", json={"content": "Should not be accepted"}, headers=api.headers["other"]),
+        api.client.delete("/api/comments/1", headers=api.headers["other"]),
+    ):
+        assert response.status_code == 403
+        assert response.json()["code"] == "FORBIDDEN"
 
 
-def test_mutual_aid_report_routes_hide_post_and_comment_from_other_member(api) -> None:
-    payload = {"reason": "spam", "detail": "Must remain private"}
+def test_mutual_aid_report_routes_are_open_to_other_members(api) -> None:
+    payload = {"reason": "spam", "detail": "광고성 신청입니다"}
 
-    _assert_hidden(
-        api.client.post(
-            "/api/posts/1/report",
-            json=payload,
-            headers=api.headers["other"],
-        )
-    )
-    _assert_comment_hidden(
-        api.client.post(
-            "/api/comments/1/report",
-            json=payload,
-            headers=api.headers["other"],
-        )
-    )
+    assert api.client.post("/api/posts/1/report", json=payload, headers=api.headers["other"]).status_code == 200
+    assert api.client.post("/api/comments/1/report", json=payload, headers=api.headers["other"]).status_code == 200
 
 
 def test_hidden_and_missing_comment_ids_are_indistinguishable_without_side_effects(api) -> None:
+    # 상조회는 전체 공개이므로, 읽을 수 없는 댓글은 비공개 글(post 4)에 달린 것으로 만든다.
     with api.session() as db:
-        original_content = db.get(Comment, 1).content
+        hidden_comment = Comment(post_id=4, author_id=1, content="Hidden board comment")
+        db.add(hidden_comment)
+        db.commit()
+        hidden_comment_id = hidden_comment.id
+        original_content = hidden_comment.content
         original_report_count = db.query(Report).count()
         original_notification_count = db.query(Notification).count()
 
     hidden_update = api.client.put(
-        "/api/comments/1",
+        f"/api/comments/{hidden_comment_id}",
         json={"content": "Must not change"},
         headers=api.headers["other"],
     )
@@ -377,11 +370,11 @@ def test_hidden_and_missing_comment_ids_are_indistinguishable_without_side_effec
         json={"content": "Must not change"},
         headers=api.headers["other"],
     )
-    hidden_delete = api.client.delete("/api/comments/1", headers=api.headers["other"])
+    hidden_delete = api.client.delete(f"/api/comments/{hidden_comment_id}", headers=api.headers["other"])
     missing_delete = api.client.delete("/api/comments/999999", headers=api.headers["other"])
     report_payload = {"reason": "spam", "detail": "Must not create a report"}
     hidden_report = api.client.post(
-        "/api/comments/1/report",
+        f"/api/comments/{hidden_comment_id}/report",
         json=report_payload,
         headers=api.headers["other"],
     )
@@ -405,7 +398,7 @@ def test_hidden_and_missing_comment_ids_are_indistinguishable_without_side_effec
         assert hidden.json() == missing.json() == expected
 
     with api.session() as db:
-        assert db.get(Comment, 1).content == original_content
+        assert db.get(Comment, hidden_comment_id).content == original_content
         assert db.query(Report).count() == original_report_count
         assert db.query(Notification).count() == original_notification_count
 

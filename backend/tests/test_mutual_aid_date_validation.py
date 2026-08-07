@@ -110,3 +110,42 @@ def test_mutual_aid_update_validates_only_a_changed_event_date(
     with api.session() as db:
         assert db.get(Post, post_id).content == "updated remarks"
         assert db.query(PostMutualAid).filter(PostMutualAid.post_id == post_id).one().event_date == date(2026, 8, 4)
+
+
+def test_mutual_aid_accepts_evidence_link_instead_of_file(api, monkeypatch: pytest.MonkeyPatch) -> None:
+    """증빙은 파일 첨부와 링크 첨부 중 하나면 된다."""
+
+    monkeypatch.setattr(posts_router, "_minimum_mutual_aid_event_date", lambda: date(2026, 8, 4))
+    base = {
+        "title": "Wedding mutual-aid request",
+        "content": "",
+        "category": "wedding",
+        "attachment_ids": [],
+    }
+
+    with_link = api.client.post(
+        "/api/boards/1/posts",
+        json={**base, "metadata": {"event_date": "2026-08-10", "relation": "self", "proof_url": "https://example.com/invite"}},
+        headers=api.headers["owner"],
+    )
+    without_any = api.client.post(
+        "/api/boards/1/posts",
+        json={**base, "metadata": {"event_date": "2026-08-10", "relation": "self"}},
+        headers=api.headers["owner"],
+    )
+    bad_scheme = api.client.post(
+        "/api/boards/1/posts",
+        json={**base, "metadata": {"event_date": "2026-08-10", "relation": "self", "proof_url": "javascript:alert(1)"}},
+        headers=api.headers["owner"],
+    )
+
+    assert with_link.status_code == 200, with_link.text
+    assert without_any.status_code == 400
+    assert without_any.json()["code"] == "EVIDENCE_REQUIRED"
+    assert bad_scheme.status_code == 422
+    assert bad_scheme.json()["code"] == "VALIDATION_ERROR"
+
+    with api.session() as db:
+        post = db.get(Post, with_link.json()["data"]["id"])
+        assert post.metadata_json["proof_url"] == "https://example.com/invite"
+        assert db.query(PostMutualAid).filter(PostMutualAid.post_id == post.id).one().event_type == "wedding"

@@ -103,6 +103,11 @@ function todayDotDate() {
   return formatDotDate(new Date());
 }
 
+const EVIDENCE_MODES = [
+  { key: "file" as const, label: "파일 첨부" },
+  { key: "link" as const, label: "링크 첨부" },
+];
+
 function mutualAidDateGuidance(minimumDate: string) {
   return `오늘 기준 2일 후인 ${formatBoardDate(minimumDate)}부터 신청할 수 있어요.`;
 }
@@ -279,6 +284,9 @@ export default function PostCreateScreen() {
   const [selectedParticipants, setSelectedParticipants] = useState<UserSearchItem[]>([]);
   const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | "board" | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  // 증빙서류는 파일 업로드와 링크 입력 중 하나만 사용한다.
+  const [evidenceMode, setEvidenceMode] = useState<"file" | "link">("file");
+  const [evidenceLink, setEvidenceLink] = useState("");
   const [activitySourcePostId, setActivitySourcePostId] = useState<number | null>(null);
   const [createdPostId, setCreatedPostId] = useState<number | null>(null);
   const [formNotice, setFormNotice] = useState<FormNotice | null>(null);
@@ -302,6 +310,8 @@ export default function PostCreateScreen() {
   const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
   const isStudyRecruit = board?.slug === "study-recruit";
+  // 처음 올릴 때부터 마감 상태인 모집글을 막는다. 마감 전환은 등록 후 수정에서만.
+  const canCloseRecruitment = Boolean(postId);
   const isNetworkingProgram = board?.slug === "networking-programs";
   const isAdminParticipationPost = board?.slug === "club-promo" || isNetworkingProgram;
   const canEditActivityBankAccount = !postId || typeof existingPost?.metadata?.bank_account === "string";
@@ -369,6 +379,10 @@ export default function PostCreateScreen() {
       applicationUrl: typeof metadata.application_url === "string" ? metadata.application_url : "",
     });
     setAttachments(existingPost.attachments);
+    // 링크로 신청했던 글이면 링크 탭으로 열린다.
+    const storedProofUrl = typeof metadata.proof_url === "string" ? metadata.proof_url : "";
+    setEvidenceLink(storedProofUrl);
+    setEvidenceMode(storedProofUrl ? "link" : "file");
     setSelectedParticipants(storedParticipants);
     setParticipantQuery("");
     setActivitySourcePostId(activitySourcePostIdFromMetadata(metadata));
@@ -499,6 +513,7 @@ export default function PostCreateScreen() {
     if (isMutualAid) {
       if (clean(values.eventDate)) metadata.event_date = clean(values.eventDate) as string;
       if (clean(values.relation)) metadata.relation = clean(values.relation) as string;
+      if (evidenceMode === "link" && evidenceLink.trim()) metadata.proof_url = evidenceLink.trim();
     }
     if (isStudyRecruit) {
       metadata.recruitment_status = values.category === "마감" ? "closed" : "open";
@@ -575,7 +590,20 @@ export default function PostCreateScreen() {
         return;
       }
     }
-    if (requiresAttachment && (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0)) {
+    if (isMutualAid && evidenceMode === "link") {
+      const link = evidenceLink.trim();
+      if (!link) {
+        setFormNotice(createFormNotice("증빙서류 첨부", "청첩장·부고장 링크를 입력하세요."));
+        return;
+      }
+      try {
+        const parsed = new URL(link);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("INVALID_PROTOCOL");
+      } catch {
+        setFormNotice(createFormNotice("증빙서류 첨부", "http:// 또는 https://로 시작하는 올바른 주소를 입력하세요."));
+        return;
+      }
+    } else if (requiresAttachment && (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0)) {
       setFormNotice(createFormNotice(labels.attachment, `${labels.attachmentHelp}을 첨부하세요.`));
       return;
     }
@@ -925,15 +953,31 @@ export default function PostCreateScreen() {
             <View style={styles.studyStatusWrap}>
               <Text style={styles.label}>모집 상태</Text>
               <View style={styles.recruitmentStatusRow}>
-                {["진행중", "마감"].map((status) => (
-                  <Pressable
-                    key={status}
-                    onPress={() => field.onChange(status)}
-                    style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
-                  >
-                    <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
-                  </Pressable>
-                ))}
+                {["진행중", "마감"].map((status) => {
+                  const disabled = status === "마감" && !canCloseRecruitment;
+                  return (
+                    <Pressable
+                      key={status}
+                      disabled={disabled}
+                      onPress={() => field.onChange(status)}
+                      style={[
+                        styles.recruitmentStatusButton,
+                        field.value === status ? styles.recruitmentStatusButtonActive : null,
+                        disabled ? styles.recruitmentStatusButtonDisabled : null,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.recruitmentStatusText,
+                          field.value === status ? styles.recruitmentStatusTextActive : null,
+                          disabled ? styles.recruitmentStatusTextDisabled : null,
+                        ]}
+                      >
+                        {status}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
           )}
@@ -971,15 +1015,31 @@ export default function PostCreateScreen() {
                 </Pressable>
               ) : isStudyRecruit ? (
                 <View style={styles.recruitmentStatusRow}>
-                  {["진행중", "마감"].map((status) => (
-                    <Pressable
-                      key={status}
-                      onPress={() => field.onChange(status)}
-                      style={[styles.recruitmentStatusButton, field.value === status ? styles.recruitmentStatusButtonActive : null]}
-                    >
-                      <Text style={[styles.recruitmentStatusText, field.value === status ? styles.recruitmentStatusTextActive : null]}>{status}</Text>
-                    </Pressable>
-                  ))}
+                  {["진행중", "마감"].map((status) => {
+                    const disabled = status === "마감" && !canCloseRecruitment;
+                    return (
+                      <Pressable
+                        key={status}
+                        disabled={disabled}
+                        onPress={() => field.onChange(status)}
+                        style={[
+                          styles.recruitmentStatusButton,
+                          field.value === status ? styles.recruitmentStatusButtonActive : null,
+                          disabled ? styles.recruitmentStatusButtonDisabled : null,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.recruitmentStatusText,
+                            field.value === status ? styles.recruitmentStatusTextActive : null,
+                            disabled ? styles.recruitmentStatusTextDisabled : null,
+                          ]}
+                        >
+                          {status}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               ) : board?.slug === "club-promo" ? (
                 <View style={styles.recruitmentStatusRow}>
@@ -1063,12 +1123,7 @@ export default function PostCreateScreen() {
             control={control}
             name="eventDate"
             render={({ field, fieldState }) => (
-              <FormField
-                error={fieldState.error?.message}
-                helper={mutualAidDateGuidance(mutualAidMinimumDate)}
-                label="날짜"
-                requiredStar
-              >
+              <FormField error={fieldState.error?.message} label="날짜" requiredStar>
                 <Pressable onPress={() => setDatePickerOpen((open) => !open)} style={styles.selectionField}>
                   <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>
                     {field.value ? formatBoardDate(field.value) : "경조사 날짜를 선택하세요"}
@@ -1108,28 +1163,68 @@ export default function PostCreateScreen() {
               <Text style={styles.label}>증빙서류 첨부</Text>
               <Text style={styles.requiredStar}>*</Text>
             </View>
-            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
-              <Ionicons name="document-outline" size={16} color={COLORS.muted} />
-              <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
-            </Pressable>
-            {attachments.length > 0 ? (
-              <View style={styles.compactAttachmentList}>
-                {attachments.map((attachment) => (
-                  <View key={attachment.id} style={styles.compactAttachmentItem}>
-                    <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
-                    <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                      <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
-                    </Pressable>
+            <View style={styles.evidenceModeRow}>
+              {EVIDENCE_MODES.map((mode) => {
+                const active = evidenceMode === mode.key;
+                return (
+                  <Pressable
+                    key={mode.key}
+                    onPress={() => {
+                      setEvidenceMode(mode.key);
+                      // 한 가지 증빙만 남긴다.
+                      if (mode.key === "file") setEvidenceLink("");
+                      else setAttachments([]);
+                    }}
+                    style={[styles.evidenceModeTab, active ? styles.evidenceModeTabActive : null]}
+                  >
+                    <Text style={[styles.evidenceModeText, active ? styles.evidenceModeTextActive : null]}>{mode.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {evidenceMode === "file" ? (
+              <>
+                <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
+                  <Ionicons name="document-outline" size={16} color={COLORS.muted} />
+                  <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
+                </Pressable>
+                {attachments.length > 0 ? (
+                  <View style={styles.compactAttachmentList}>
+                    {attachments.map((attachment) => (
+                      <View key={attachment.id} style={styles.compactAttachmentItem}>
+                        <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
+                        <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                          <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
+                        </Pressable>
+                      </View>
+                    ))}
                   </View>
-                ))}
+                ) : null}
+              </>
+            ) : (
+              <View style={styles.evidenceLinkField}>
+                <Ionicons name="link-outline" size={16} color={COLORS.muted} />
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="url"
+                  onChangeText={setEvidenceLink}
+                  placeholder="청첩장·부고장 링크를 입력해주세요"
+                  placeholderTextColor="#A6ACB7"
+                  style={styles.evidenceLinkInput}
+                  value={evidenceLink}
+                />
               </View>
-            ) : null}
+            )}
+            <View style={styles.evidenceNotice}>
+              <Ionicons name="lock-closed" size={17} color="#0C447C" />
+              <Text style={styles.evidenceNoticeText}>증빙자료는 원우회 관리자만 확인하며, 앱 화면에는 표시되지 않아요.</Text>
+            </View>
           </View>
           <Controller
             control={control}
             name="content"
             render={({ field }) => (
-              <FormField label="비고" optional helper="원우회에 전달할 내용이 있을 때 입력해주세요.">
+              <FormField label="비고" optional>
                 <TextInput
                   multiline
                   onChangeText={field.onChange}
@@ -1399,7 +1494,7 @@ const styles = StyleSheet.create({
   successButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "400",
   },
   screen: {
     flex: 1,
@@ -1429,7 +1524,7 @@ const styles = StyleSheet.create({
   editRetryButtonText: {
     color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "400",
   },
   appBar: {
     minHeight: 62,
@@ -1495,22 +1590,24 @@ const styles = StyleSheet.create({
     color: "#A6ACB7",
   },
   selectionField: {
-    minHeight: 52,
+    minHeight: 41, // Figma: 41h, border 0.5, padding 12/14
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   selectionValue: {
     flex: 1,
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: 14, // Figma: Regular 14/17
+    fontWeight: "400",
+    lineHeight: 17,
   },
   selectionPlaceholder: {
     color: COLORS.subtle,
@@ -1545,6 +1642,12 @@ const styles = StyleSheet.create({
   },
   recruitmentStatusTextActive: {
     color: COLORS.primary,
+  },
+  recruitmentStatusButtonDisabled: {
+    opacity: 0.45,
+  },
+  recruitmentStatusTextDisabled: {
+    color: COLORS.subtle,
   },
   sheetBackdrop: {
     flex: 1,
@@ -1792,7 +1895,7 @@ const styles = StyleSheet.create({
   noticeButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "400",
   },
   activityDateValue: {
     flex: 1,
@@ -2001,9 +2104,10 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   label: {
-    color: COLORS.muted,
+    color: COLORS.text, // Figma: #15171C Medium 13/16
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
   },
   requiredPill: {
     borderRadius: 4,
@@ -2021,6 +2125,69 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
     marginLeft: -4, // 라벨 글씨에 붙이기 (labelRow gap 상쇄)
+  },
+  evidenceModeRow: {
+    flexDirection: "row",
+    gap: 8, // Figma: 토글 gap 8
+  },
+  evidenceModeTab: {
+    flex: 1,
+    height: 34, // Figma: 34h, padding 9/0
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+  },
+  evidenceModeTabActive: {
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    backgroundColor: "#E8EEFF", // Figma: 선택 탭 배경
+  },
+  evidenceModeText: {
+    color: COLORS.muted, // Figma: #6B7280 Medium 13/16
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 16,
+  },
+  evidenceModeTextActive: {
+    color: COLORS.primary,
+  },
+  evidenceLinkField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6, // Figma 첨부버튼과 동일한 형태
+    height: 36,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 12,
+  },
+  evidenceLinkInput: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 15,
+  },
+  evidenceNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: "#E6F1FB", // Figma: 비공개안내 배경
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  evidenceNoticeText: {
+    flex: 1,
+    color: "#0C447C", // Figma: navy Regular 12/15
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 15,
   },
   calCard: {
     marginTop: 8,
@@ -2056,7 +2223,7 @@ const styles = StyleSheet.create({
   },
   input: {
     width: "100%",
-    minHeight: 52,
+    minHeight: 41, // Figma: 41h (textArea가 덮어씀)
     borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
@@ -2075,7 +2242,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.danger,
   },
   textArea: {
-    minHeight: 132,
+    minHeight: 70, // Figma: 비고필드 70h
   },
   contactInput: {
     minHeight: 60,
@@ -2129,7 +2296,7 @@ const styles = StyleSheet.create({
   attachButtonText: {
     color: COLORS.primary,
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "400",
   },
   uploadText: {
     color: COLORS.primary,
@@ -2206,8 +2373,9 @@ const styles = StyleSheet.create({
   },
   compactAttachText: {
     color: COLORS.muted,
-    fontSize: 13,
+    fontSize: 12, // Figma: Regular 12/15
     fontWeight: "400",
+    lineHeight: 15,
   },
   writeImageGrid: {
     flexDirection: "row",
@@ -2272,8 +2440,9 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: "#FFFFFF",
-    fontSize: 15,
+    fontSize: 15, // Figma: Medium 15/18
     fontWeight: "500",
+    lineHeight: 18,
   },
   activitySubmitText: {
     fontSize: 14,

@@ -23,7 +23,7 @@ import {
   useUpdateMutualAid,
   useUpdateSuggestion,
 } from "../../../hooks/usePosts";
-import { reportApi, userApi } from "../../../services/api";
+import { reportApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
 import { formatBoardDate } from "../../../utils/dateFormat";
@@ -103,6 +103,7 @@ function categoryTone(label: string) {
   if (label.includes("행사") || label.includes("시험") || label.includes("족보")) return { bg: "#FBEAF0", fg: "#993556" };
   if (label.includes("진행중")) return { bg: "#EAF3DE", fg: "#3B6D11" };
   if (label === "마감") return { bg: "#F1F3F5", fg: COLORS.muted };
+  if (label.includes("졸업") || label.includes("논문")) return { bg: "#EAF3DE", fg: "#3B6D11" };
   if (label.includes("인증") || label.includes("완료")) return { bg: COLORS.green50, fg: COLORS.green700 };
   if (label.includes("대기")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
   if (label.includes("건의") || label.includes("답변")) return { bg: COLORS.cyan50, fg: COLORS.cyan700 };
@@ -157,7 +158,6 @@ export default function PostDetailScreen() {
   const [reportReason, setReportReason] = useState(REPORT_REASONS[0].value);
   const [reportDetail, setReportDetail] = useState("");
   const [isReporting, setIsReporting] = useState(false);
-  const [isBlockingAuthor, setIsBlockingAuthor] = useState(false);
   const [reportedTargets, setReportedTargets] = useState<Record<string, boolean>>({});
   const [suggestionStatus, setSuggestionStatus] = useState("received");
   const [suggestionReply, setSuggestionReply] = useState("");
@@ -225,6 +225,8 @@ export default function PostDetailScreen() {
         ? "종합시험"
       : board?.slug === "exam-archive"
         ? "시험족보"
+      : board?.slug === "graduation-thesis"
+        ? "졸업논문"
       : board?.slug === "study-recruit"
         ? String(metadata.recruitment_status ?? post.category ?? "").toLowerCase().includes("closed") || post.category?.includes("마감")
           ? "마감"
@@ -235,9 +237,10 @@ export default function PostDetailScreen() {
   const contentUrl = firstUrlFromText(post.content);
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
   const canEditOwn = isMine && !hasLockedSuggestion && !isNotice;
-  const showReportItem = !isMine;
-  const showBlockItem = post.author_id !== null && !isMine && !canManagePost && !isSuggestionRequest;
-  const hasPostMenu = canEditOwn || showReportItem || showBlockItem;
+  // 관리자만 작성하는 게시판(공지사항, 동아리 홍보, 네트워킹, 원우회 활동내역 등)은 신고 대상이 아니다.
+  const isAdminOnlyBoard = board?.write_permission === "admin";
+  const showReportItem = !isMine && !isAdminOnlyBoard;
+  const hasPostMenu = canEditOwn || showReportItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
     post.suggestion?.status ??
@@ -266,6 +269,10 @@ export default function PostDetailScreen() {
         : board?.slug === "study-recruit"
           ? [["스터디장 연락수단", metadata.contact]]
         : [];
+  const visibleDetailRows = detailRows.filter(
+    (row): row is [string, string] => typeof row[1] === "string" && row[1].trim().length > 0,
+  );
+  const hasMutualAidNote = isMutualAidRequest && post.content.trim().length > 0;
   const imageAttachments = post.attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
   const normalizedGalleryIndex = Math.min(galleryIndex, Math.max(imageAttachments.length - 1, 0));
   const isActivityCertification = board?.board_type === "activity_certification";
@@ -329,13 +336,16 @@ export default function PostDetailScreen() {
     setReportDetail("");
   };
 
+  // "기타"는 구체적인 사유를 적어야 제출할 수 있다.
+  const canSubmitReport = reportReason !== "other" || reportDetail.trim().length > 0;
+
   const submitReport = async () => {
-    if (!reportTarget || !requireLogin()) return;
+    if (!reportTarget || !canSubmitReport || !requireLogin()) return;
     try {
       setIsReporting(true);
       const payload = {
         reason: reportReason,
-        detail: reportReason === "other" ? reportDetail.trim() || undefined : undefined,
+        detail: reportReason === "other" ? reportDetail.trim() : undefined,
       };
       const response =
         reportTarget.type === "post" ? await reportApi.reportPost(reportTarget.id, payload) : await reportApi.reportComment(reportTarget.id, payload);
@@ -348,30 +358,6 @@ export default function PostDetailScreen() {
     } finally {
       setIsReporting(false);
     }
-  };
-
-  const handleBlockAuthor = () => {
-    const authorId = post.author_id;
-    if (!requireLogin() || authorId === null || isMine || isBlockingAuthor) return;
-    Alert.alert("작성자 차단", "이 작성자의 게시글과 댓글을 내 화면에서 숨길까요?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "차단",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setIsBlockingAuthor(true);
-            await userApi.blockUser({ blocked_user_id: authorId, reason: "post_detail" });
-            Alert.alert("차단 완료", "차단한 작성자의 콘텐츠를 숨겼습니다.");
-            router.replace(`/board/${post.board_id}`);
-          } catch {
-            Alert.alert("차단 실패", "잠시 후 다시 시도하세요.");
-          } finally {
-            setIsBlockingAuthor(false);
-          }
-        },
-      },
-    ]);
   };
 
   const handleLike = async () => {
@@ -475,7 +461,7 @@ export default function PostDetailScreen() {
           <View style={styles.iconButton} />
         ) : (
           <View style={styles.appBarActions}>
-            {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit && !isCouncilActivity ? (
+            {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit && !isCouncilActivity && !isMutualAidRequest ? (
               <IconButton
                 icon={isBookmarked ? "bookmark" : "bookmark-outline"}
                 label="북마크"
@@ -497,7 +483,7 @@ export default function PostDetailScreen() {
                 hasNaturalHero ? (
                   <NaturalAspectMediaImage media={heroAttachment} style={styles.visualHeroNaturalImage} />
                 ) : (
-                  <MediaImage media={heroAttachment} style={styles.visualHeroImage} />
+                  <MediaImage media={heroAttachment} resizeMode={isPhotoAlbum ? "contain" : "cover"} style={styles.visualHeroImage} />
                 )
               ) : (
                 <LinearGradient
@@ -557,16 +543,16 @@ export default function PostDetailScreen() {
             {isActivityCertification && isStudyActivity ? (
               <Text style={styles.activityStudyTitle}>{label}</Text>
             ) : isCouncilActivity ? null : (
-              <View style={[styles.categoryPill, { backgroundColor: tone.bg }]}>
-                <Text style={[styles.categoryText, { color: tone.fg }]}>{label}</Text>
+              <View style={[styles.categoryPill, isMutualAidRequest ? styles.mutualAidPill : null, { backgroundColor: tone.bg }]}>
+                <Text style={[styles.categoryText, isMutualAidRequest ? styles.mutualAidPillText : null, { color: tone.fg }]}>{label}</Text>
               </View>
             )}
 
             {!isActivityCertification ? (
-              <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : (isAdminParticipationGuide || isStudyRecruit || isCouncilActivity) ? styles.titleGuide : null]}>{post.title}</Text>
+              <Text style={[styles.title, board?.board_type === "notice" ? styles.titleNotice : isMutualAidRequest ? styles.titleMutualAid : (isAdminParticipationGuide || isStudyRecruit || isCouncilActivity) ? styles.titleGuide : null]}>{post.title}</Text>
             ) : null}
             {!isAdminParticipationGuide && !isActivityCertification && !isCouncilActivity && !isCouncilActivityEntry ? (
-              <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : null]}>
+              <Text style={[styles.meta, board?.board_type === "notice" ? styles.metaNotice : isMutualAidRequest ? styles.metaMutualAid : null]}>
                 {board?.board_type === "notice"
                   ? `${formatBoardDate(post.created_at)} · 조회 ${post.view_count}`
                   : isMutualAidRequest
@@ -579,7 +565,9 @@ export default function PostDetailScreen() {
               </Text>
             ) : null}
 
-            {!isAdminParticipationGuide && !isActivityCertification ? <View style={styles.bodyDivider} /> : null}
+            {!isAdminParticipationGuide && !isActivityCertification ? (
+              <View style={[styles.bodyDivider, isMutualAidRequest ? styles.mutualAidBodyDivider : null]} />
+            ) : null}
           </>
         ) : null}
         {!isPhotoAlbum && !isMutualAidRequest && post.content.trim() ? <Text style={[styles.body, isAdminParticipationGuide || isActivityCertification ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
@@ -626,12 +614,20 @@ export default function PostDetailScreen() {
           ) : null
         ) : detailRows.length > 0 ? (
           <View style={[styles.infoBox, isMutualAidRequest ? styles.mutualAidInfoBox : null]}>
-            {detailRows
-              .filter((row): row is [string, string] => typeof row[1] === "string" && row[1].trim().length > 0)
-              .map(([rowLabel, value]) => (
-                <View key={rowLabel} style={[styles.infoRow, isMutualAidRequest ? styles.mutualAidInfoRow : null]}>
-                  <Text style={styles.infoLabel}>{rowLabel}</Text>
-                  <Text style={styles.infoValue}>
+            {visibleDetailRows
+              .map(([rowLabel, value], index) => (
+                <View
+                  key={rowLabel}
+                  style={[
+                    styles.infoRow,
+                    isMutualAidRequest ? styles.mutualAidInfoRow : null,
+                    isMutualAidRequest && !hasMutualAidNote && index === visibleDetailRows.length - 1
+                      ? styles.mutualAidInfoRowLast
+                      : null,
+                  ]}
+                >
+                  <Text style={[styles.infoLabel, isMutualAidRequest ? styles.mutualAidInfoLabel : null]}>{rowLabel}</Text>
+                  <Text style={[styles.infoValue, isMutualAidRequest ? styles.mutualAidInfoValue : null]}>
                     {isMutualAidRequest && rowLabel === "날짜" ? formatBoardDate(value) : value}
                   </Text>
                 </View>
@@ -640,9 +636,9 @@ export default function PostDetailScreen() {
         ) : null}
 
         {isMutualAidRequest && post.content.trim() ? (
-          <View style={styles.mutualAidNote}>
-            <Text style={styles.mutualAidSectionLabel}>비고</Text>
-            <Text style={styles.mutualAidNoteValue}>{post.content}</Text>
+          <View style={[styles.infoRow, styles.mutualAidInfoRow, styles.mutualAidInfoRowLast]}>
+            <Text style={[styles.infoLabel, styles.mutualAidInfoLabel]}>비고</Text>
+            <Text style={[styles.infoValue, styles.mutualAidInfoValue]}>{post.content}</Text>
           </View>
         ) : null}
 
@@ -755,6 +751,13 @@ export default function PostDetailScreen() {
             {post.mutual_aid.rejection_reason ? (
               <Text style={styles.suggestionBody}>반려 사유: {post.mutual_aid.rejection_reason}</Text>
             ) : null}
+            {typeof metadata.proof_url === "string" && metadata.proof_url.trim() ? (
+              <Pressable onPress={() => Linking.openURL(metadata.proof_url as string)} style={styles.externalLinkButton}>
+                <Ionicons name="link-outline" size={18} color={COLORS.primary} />
+                <Text numberOfLines={1} style={styles.externalLinkText}>{metadata.proof_url}</Text>
+                <Ionicons name="open-outline" size={17} color={COLORS.primary} />
+              </Pressable>
+            ) : null}
             {isAdmin ? (
               <View style={styles.adminReplyBox}>
                 <View style={styles.statusRow}>
@@ -860,6 +863,9 @@ export default function PostDetailScreen() {
               onChangeText={setCommentText}
               placeholder="댓글을 남겨보세요"
               placeholderTextColor="#A6ACB7"
+              returnKeyType="send"
+              blurOnSubmit={false}
+              onSubmitEditing={handleCreateComment}
               style={[styles.commentInput, { outlineStyle: "none" } as never]}
             />
             <Pressable disabled={createCommentMutation.isPending} onPress={handleCreateComment} style={styles.sendButton}>
@@ -908,23 +914,10 @@ export default function PostDetailScreen() {
                   setShowPostMenu(false);
                   startReport({ type: "post", id: post.id, label: "게시글" });
                 }}
-                style={styles.sheetMenuItem}
+                style={[styles.sheetMenuItem, styles.sheetMenuItemLast]}
               >
                 <Ionicons name="flag-outline" size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
-              </Pressable>
-            ) : null}
-            {showBlockItem ? (
-              <Pressable
-                disabled={isBlockingAuthor}
-                onPress={() => {
-                  setShowPostMenu(false);
-                  handleBlockAuthor();
-                }}
-                style={[styles.sheetMenuItem, styles.sheetMenuItemLast]}
-              >
-                <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
-                <Text style={styles.sheetMenuText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
               </Pressable>
             ) : null}
           </Pressable>
@@ -961,7 +954,11 @@ export default function PostDetailScreen() {
                 textAlignVertical="top"
               />
             ) : null}
-            <Pressable disabled={isReporting} onPress={submitReport} style={[styles.reportPrimaryButton, isReporting ? styles.buttonDisabled : null]}>
+            <Pressable
+              disabled={isReporting || !canSubmitReport}
+              onPress={submitReport}
+              style={[styles.reportPrimaryButton, isReporting || !canSubmitReport ? styles.buttonDisabled : null]}
+            >
               <Text style={styles.reportPrimaryButtonText}>{isReporting ? "제출 중" : "제출"}</Text>
             </Pressable>
           </Pressable>
@@ -1462,8 +1459,13 @@ const styles = StyleSheet.create({
   },
   titleNotice: {
     fontSize: 20,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 28,
+  },
+  titleMutualAid: {
+    fontSize: 19, // Figma: Medium 19/23
+    fontWeight: "500",
+    lineHeight: 23,
   },
   titleGuide: {
     fontWeight: "500",
@@ -1478,11 +1480,31 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 13,
   },
+  metaMutualAid: {
+    color: "#A6ACB7", // Figma: Regular 12/15
+    fontSize: 12,
+    lineHeight: 15,
+    marginTop: 8,
+  },
+  mutualAidInfoLabel: {
+    color: "#A6ACB7", // Figma: Regular 12/15
+    fontSize: 12,
+    lineHeight: 15,
+  },
+  mutualAidInfoValue: {
+    fontSize: 14, // Figma: Regular 14/17, label과 gap 6
+    lineHeight: 17,
+    marginTop: 6,
+  },
   bodyDivider: {
     height: 1,
     backgroundColor: "#E1E4E9",
     marginTop: 16,
     marginBottom: 16,
+  },
+  mutualAidBodyDivider: {
+    height: 0.5, // Figma: 메타래퍼 border-bottom 0.5, 곧바로 정보목록 시작
+    marginBottom: 0,
   },
   body: {
     color: COLORS.text,
@@ -1598,25 +1620,28 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   mutualAidInfoRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomWidth: 0.5, // Figma: 0.5 #E1E4E9
+    borderBottomColor: "#E1E4E9",
     paddingVertical: 14,
   },
-  mutualAidNote: {
-    marginTop: 16,
+  mutualAidInfoRowLast: {
+    borderBottomWidth: 0,
+  },
+  mutualAidPill: {
+    borderRadius: 999, // Figma: 25h, padding 5/10
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  mutualAidPillText: {
+    fontSize: 12, // Figma: Medium 12/15
+    fontWeight: "500",
+    lineHeight: 15,
   },
   mutualAidSectionLabel: {
     color: COLORS.subtle,
     fontSize: 12,
     fontWeight: "400",
     lineHeight: 18,
-  },
-  mutualAidNoteValue: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "400",
-    lineHeight: 22,
-    marginTop: 5,
   },
   mutualAidAttachments: {
     marginTop: 26,
@@ -1703,16 +1728,16 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
   mutualAidRejectionBox: {
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: COLORS.pink50,
-    padding: 14,
+    padding: 16,
     marginTop: 24,
-    gap: 7,
+    gap: 8,
   },
   mutualAidRejectionTitle: {
     color: COLORS.pink700,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "500",
   },
   mutualAidRejectionBody: {
     color: COLORS.text,

@@ -19,7 +19,13 @@ from app.models.post import Post
 from app.models.post_extension import PostMutualAid, PostSuggestion
 from app.models.user import User
 from app.models.user_block import UserBlock
-from app.notifications import create_notification
+from app.notifications import (
+    ADMIN_REPLY_MESSAGE,
+    MUTUAL_AID_MESSAGES,
+    create_notification,
+    like_message,
+    notice_message,
+)
 from app.post_access import post_status_read_filter, require_post_read
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
@@ -124,8 +130,6 @@ def get_posts(
 
     filters = [Post.board_id == board_id, Post.deleted_at.is_(None)]
     filters.append(post_status_read_filter(current_user))
-    if board.board_type == "mutual_aid" and current_user.role != "admin":
-        filters.append(Post.author_id == current_user.id)
     if q:
         keyword = f"%{q}%"
         if hides_author_identity(board) and current_user.role != "admin":
@@ -297,14 +301,20 @@ def _post_attachments(db: Session, post_id: int, current_user: User) -> list[dic
     ]
 
 
-def _replace_attachments(db: Session, post_id: int, attachment_ids: list[int], current_user: User) -> None:
+def _replace_attachments(
+    db: Session,
+    post_id: int,
+    attachment_ids: list[int],
+    current_user: User,
+    evidence_link: str | None = None,
+) -> None:
     post = db.get(Post, post_id)
     board = db.get(Board, post.board_id) if post is not None else None
     requires_private = board is not None and board.board_type == "mutual_aid"
     requires_album_images = board is not None and board.board_type == "album"
     requires_activity_images = board is not None and board.board_type == "activity_certification"
     requires_admin_participation_image = board is not None and board.slug in ADMIN_PARTICIPATION_BOARD_SLUGS
-    if requires_private and not attachment_ids:
+    if requires_private and not attachment_ids and not (evidence_link or "").strip():
         raise AppException(
             status_code=400,
             message="Mutual-aid requests require private evidence.",
@@ -332,6 +342,20 @@ def _replace_attachments(db: Session, post_id: int, attachment_ids: list[int], c
     for index, media in enumerate(media_assets):
         media_id = media.id
         db.add(PostAttachment(post_id=post_id, media_id=media_id, sort_order=index))
+
+
+def _reject_closed_study_recruit(board: Board, category: str | None, metadata: dict | None) -> None:
+    """스터디 모집글은 마감 상태로 처음부터 등록할 수 없다. 마감은 등록 후 수정으로만 전환한다."""
+
+    if board.slug != "study-recruit":
+        return
+    is_closed = (category or "").strip() == "마감" or str((metadata or {}).get("recruitment_status") or "").strip() == "closed"
+    if is_closed:
+        raise AppException(
+            status_code=400,
+            message="A study recruitment post cannot be created as closed.",
+            code="BAD_REQUEST",
+        )
 
 
 def _validate_admin_participation_post(board: Board, metadata: dict | None, current_user: User) -> None:
@@ -422,6 +446,26 @@ def _validate_mutual_aid_event_date(event_date: date) -> None:
     )
 
 
+def _evidence_link(metadata: dict | None) -> str | None:
+    """증빙 링크(청첩장/부고장 URL). 파일 첨부 대신 사용할 수 있다."""
+
+    value = (metadata or {}).get("proof_url")
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _validate_evidence_link(metadata: dict | None) -> None:
+    link = _evidence_link(metadata)
+    if link is None:
+        return
+    parsed = urlparse(link)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or len(link) > 500:
+        raise AppException(
+            status_code=422,
+            message="Evidence link must be an http(s) URL.",
+            code="VALIDATION_ERROR",
+        )
+
+
 def _upsert_mutual_aid_extension(db: Session, post: Post, board: Board, category: str | None, metadata: dict | None) -> None:
     if board.board_type != "mutual_aid":
         return
@@ -433,6 +477,7 @@ def _upsert_mutual_aid_extension(db: Session, post: Post, board: Board, category
             message="Mutual-aid event type and relation are required.",
             code="VALIDATION_ERROR",
         )
+    _validate_evidence_link(metadata)
     event_date = _parse_event_date((metadata or {}).get("event_date"))
     mutual_aid = db.scalar(select(PostMutualAid).where(PostMutualAid.post_id == post.id))
     if mutual_aid is None:
@@ -706,6 +751,7 @@ def create_post(
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
     _validate_post_content(board, payload.content)
     _validate_admin_participation_post(board, payload.metadata, current_user)
+    _reject_closed_study_recruit(board, payload.category, payload.metadata)
     if payload.is_anonymous and not board.allow_anonymous and board.board_type != "suggestion":
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
 
@@ -725,7 +771,7 @@ def create_post(
     db.flush()
     _upsert_suggestion_extension(db, post, board, payload.category)
     _upsert_mutual_aid_extension(db, post, board, payload.category, payload.metadata)
-    _replace_attachments(db, post.id, payload.attachment_ids or [], current_user)
+    _replace_attachments(db, post.id, payload.attachment_ids or [], current_user, _evidence_link(payload.metadata))
     if post.is_notice:
         active_user_ids = db.scalars(select(User.id).where(User.is_active.is_(True))).all()
         for user_id in active_user_ids:
@@ -734,7 +780,7 @@ def create_post(
                 user_id=user_id,
                 actor_id=current_user.id,
                 notification_type="notice",
-                message=f"새 공지: {post.title}",
+                message=notice_message(post.title),
                 post_id=post.id,
                 setting_field="notify_notice",
                 dedupe_key=f"notice:{post.id}:{user_id}",
@@ -782,7 +828,7 @@ def update_post(
         _upsert_suggestion_extension(db, post, board, payload.category)
         _upsert_mutual_aid_extension(db, post, board, payload.category, payload.metadata)
     if payload.attachment_ids is not None:
-        _replace_attachments(db, post.id, payload.attachment_ids, current_user)
+        _replace_attachments(db, post.id, payload.attachment_ids, current_user, _evidence_link(payload.metadata))
     if board is not None:
         _ensure_admin_participation_image(db, post, board)
     db.commit()
@@ -867,7 +913,7 @@ def toggle_like(post_id: int, db: Session = Depends(get_db), current_user: User 
             user_id=post.author_id,
             actor_id=current_user.id,
             notification_type="like",
-            message=f"{current_user.nickname} liked your post.",
+            message=like_message(post.title),
             post_id=post.id,
             setting_field="notify_like",
         )
@@ -943,7 +989,7 @@ def update_suggestion(
             user_id=post.author_id,
             actor_id=current_user.id,
             notification_type="admin_reply",
-            message="원우회에서 건의사항에 답변을 등록했어요.",
+            message=ADMIN_REPLY_MESSAGE,
             post_id=post.id,
             setting_field="notify_council",
         )
@@ -998,13 +1044,12 @@ def update_mutual_aid(
     mutual_aid.reviewed_at = utc_now()
 
     if previous_status != payload.status:
-        status_label = {"processing": "처리중", "completed": "처리 완료", "rejected": "반려"}[payload.status]
         create_notification(
             db,
             user_id=post.author_id,
             actor_id=current_user.id,
             notification_type="council",
-            message=f"상조회 신청 상태가 {status_label}(으)로 변경되었어요.",
+            message=MUTUAL_AID_MESSAGES[payload.status],
             post_id=post.id,
             setting_field="notify_council",
         )
