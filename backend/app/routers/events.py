@@ -2,7 +2,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db, require_admin
@@ -10,7 +10,7 @@ from app.errors import AppException
 from app.models.event import Event
 from app.models.post import Post
 from app.models.user import User
-from app.notifications import create_notification
+from app.notifications import create_notification, deadline_message, event_message
 from app.audit import log_admin_action
 from app.response import success_response
 from app.schemas.event import EventCreate, EventUpdate
@@ -29,7 +29,7 @@ def _dispatch_for_date(db: Session, target_date: date) -> dict:
             select(Event).where(Event.start_at >= window_start, Event.start_at < window_end)
         ).all()
         for event in events:
-            message = f"[{label}] {event.title} 일정이 {'오늘' if days_before == 0 else '내일'} 예정되어 있어요."
+            message = event_message(event.title, days_before)
             for user_id in active_user_ids:
                 notification = create_notification(
                     db,
@@ -53,7 +53,7 @@ def _dispatch_for_date(db: Session, target_date: date) -> dict:
             )
         ).all()
         for notice in notices:
-            message = f"[{label}] {notice.title} 마감이 {'오늘' if days_before == 0 else '내일'}이에요."
+            message = deadline_message(notice.title, days_before)
             for user_id in active_user_ids:
                 notification = create_notification(
                     db,
@@ -97,7 +97,8 @@ def get_events(
 ):
     filters = []
     if from_date is not None:
-        filters.append(Event.start_at >= from_date)
+        # 종료일(없으면 시작일)이 조회 시작 이후면 포함 → 여러 날에 걸친 일정도 모든 날에 조회된다.
+        filters.append(func.coalesce(Event.end_at, Event.start_at) >= from_date)
     if to_date is not None:
         exclusive_end = to_date + timedelta(days=1) if to_date.time() == time.min else to_date
         filters.append(Event.start_at < exclusive_end)

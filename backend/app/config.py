@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
     smtp_required: bool = False
     expo_push_enabled: bool = True
+    # ponytail: NOTIFY_SELF=true lets you comment/like your own post and get the notification,
+    # so notification wording can be verified with a single account. Keep false in production.
+    notify_self: bool = False
     rate_limit_enabled: bool = True
     rate_limit_trust_proxy: bool = False
     rate_limit_trusted_proxy_ips: str = ""

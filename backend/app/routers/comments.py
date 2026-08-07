@@ -12,7 +12,7 @@ from app.models.comment import Comment
 from app.models.post import Post
 from app.models.user import User
 from app.models.user_block import UserBlock
-from app.notifications import create_notification
+from app.notifications import comment_message, create_notification
 from app.post_access import require_comment_read, require_post_read
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
@@ -140,7 +140,7 @@ def create_comment(
         user_id=post.author_id,
         actor_id=current_user.id,
         notification_type="comment",
-        message=f"{current_user.nickname} commented on your post.",
+        message=comment_message(payload.content),
         post_id=post.id,
         setting_field="notify_comment",
     )

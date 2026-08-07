@@ -1,9 +1,55 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.notification import Notification, NotificationSetting
 from app.models.user import User
 from app.push import send_push_to_user
+
+
+def quoted_preview(text: str, limit: int = 40) -> str:
+    """Collapse whitespace and quote a title/body snippet for notification messages."""
+    collapsed = " ".join(text.split())
+    if len(collapsed) > limit:
+        collapsed = f"{collapsed[:limit]}…"
+    return f'"{collapsed}"'
+
+
+def _dday_suffix(days_before: int) -> str:
+    return "오늘이에요" if days_before == 0 else f"{days_before}일 남았어요"
+
+
+# Message wording lives here so routers and scripts/send_test_notifications.py cannot drift apart.
+ADMIN_REPLY_MESSAGE = "원우회에서 건의사항에 답변을 등록했어요"
+MUTUAL_AID_MESSAGES = {
+    "processing": "상조회 신청이 처리중이에요",
+    "completed": "상조회 신청이 처리 완료되었어요",
+    "rejected": "상조회 신청이 반려되었어요",
+}
+
+
+def notice_message(title: str) -> str:
+    return f"{title} 공지가 등록되었어요"
+
+
+def comment_message(content: str) -> str:
+    return f"내 게시글에 새 댓글이 달렸어요: {quoted_preview(content)}"
+
+
+def like_message(post_title: str) -> str:
+    return f"{quoted_preview(post_title)}에 추천이 달렸어요"
+
+
+def report_message(nickname: str, target_type: str) -> str:
+    return f"{nickname}님이 {'게시글' if target_type == 'post' else '댓글'}을 신고했어요"
+
+
+def event_message(title: str, days_before: int) -> str:
+    return f"{title} 일정이 {_dday_suffix(days_before)}"
+
+
+def deadline_message(title: str, days_before: int) -> str:
+    return f"{title} 마감이 {_dday_suffix(days_before)}"
 
 
 def _settings_allows(db: Session, user_id: int, field: str) -> bool:
@@ -29,7 +75,7 @@ def create_notification(
 ) -> Notification | None:
     if user_id is None:
         return None
-    if actor_id is not None and user_id == actor_id:
+    if actor_id is not None and user_id == actor_id and not settings.notify_self:
         return None
     if dedupe_key and db.scalar(select(Notification.id).where(Notification.dedupe_key == dedupe_key)) is not None:
         return None

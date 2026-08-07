@@ -26,9 +26,9 @@ const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: s
   event: { icon: "calendar-outline", color: "#3B6D11", bg: "#EAF3DE" },
   comment: { icon: "chatbubble-ellipses-outline", color: "#3C3489", bg: "#EEEDFE" },
   like: { icon: "heart-outline", color: "#993556", bg: "#FBEAF0" },
-  admin_reply: { icon: "person-circle-outline", color: "#0C447C", bg: "#E6F1FB" },
+  admin_reply: { icon: "chatbox-ellipses-outline", color: "#0C447C", bg: "#E6F1FB" },
   report: { icon: "flag-outline", color: "#993556", bg: "#FBEAF0" },
-  council: { icon: "people-outline", color: "#3B6D11", bg: "#EAF3DE" },
+  council: { icon: "flower-outline", color: "#A9600F", bg: "#FCEFDE" },
 };
 
 function dayNumber(value: string) {
