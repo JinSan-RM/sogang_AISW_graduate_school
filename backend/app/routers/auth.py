@@ -45,7 +45,7 @@ from app.security import (
     verify_password,
     verify_verification_code,
 )
-from app.user_validation import ensure_nickname_available
+from app.user_validation import normalize_nickname
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -283,7 +283,9 @@ def verify_register_email(payload: EmailVerificationConfirm, request: Request, d
 def register(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     enforce_rate_limit(request, action="auth.register", limit=10, window_seconds=3600)
     ensure_password_policy(payload.password)
-    nickname = ensure_nickname_available(db, payload.nickname)
+    nickname = normalize_nickname(payload.nickname)
+    if not nickname:
+        raise AppException(status_code=422, message="Nickname is required.", code="VALIDATION_ERROR")
     if not payload.privacy_consent:
         raise AppException(status_code=400, message="Privacy consent is required.", code="PRIVACY_CONSENT_REQUIRED")
     active_policy = db.scalar(

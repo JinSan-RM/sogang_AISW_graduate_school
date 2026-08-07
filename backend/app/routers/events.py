@@ -1,4 +1,4 @@
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
@@ -16,6 +16,15 @@ from app.response import success_response
 from app.schemas.event import EventCreate, EventUpdate
 
 router = APIRouter()
+KOREA_TIME_ZONE = ZoneInfo("Asia/Seoul")
+
+
+def _korea_date_boundary(value: date) -> datetime:
+    return (
+        datetime.combine(value, time.min, tzinfo=KOREA_TIME_ZONE)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
 
 
 def _dispatch_for_date(db: Session, target_date: date) -> dict:
@@ -89,8 +98,8 @@ def _event_payload(event: Event) -> dict:
 
 @router.get("")
 def get_events(
-    from_date: datetime | None = Query(None),
-    to_date: datetime | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
     category: str | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
@@ -100,7 +109,7 @@ def get_events(
         # 종료일(없으면 시작일)이 조회 시작 이후면 포함 → 여러 날에 걸친 일정도 모든 날에 조회된다.
         filters.append(func.coalesce(Event.end_at, Event.start_at) >= from_date)
     if to_date is not None:
-        exclusive_end = to_date + timedelta(days=1) if to_date.time() == time.min else to_date
+        exclusive_end = _korea_date_boundary(to_date + timedelta(days=1))
         filters.append(Event.start_at < exclusive_end)
     if category:
         filters.append(Event.category == category)

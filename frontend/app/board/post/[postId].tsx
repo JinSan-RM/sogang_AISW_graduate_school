@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
@@ -26,7 +26,10 @@ import {
 import { reportApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
+import { postDetailBackAction, postDetailBackRoute } from "../../../utils/appRoutes";
+import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
+import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
 import { formatCohortName } from "../../../utils/userLabel";
 
@@ -64,6 +67,15 @@ type ReportTarget = {
   type: "post" | "comment";
   id: number;
   label: string;
+};
+
+type WebTextInputKeyPressEvent = TextInputKeyPressEvent & {
+  key?: string;
+  shiftKey?: boolean;
+  nativeEvent: TextInputKeyPressEvent["nativeEvent"] & {
+    isComposing?: boolean;
+    keyCode?: number;
+  };
 };
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -129,7 +141,7 @@ function IconButton({ icon, onPress, label, size = 24, color = COLORS.text }: { 
 }
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{ postId: string }>();
+  const params = useLocalSearchParams<{ postId: string; fromBoardId?: string }>();
   const insets = useSafeAreaInsets();
   const postId = Number(params.postId);
   const userId = useUserStore((state) => state.userId);
@@ -150,6 +162,8 @@ export default function PostDetailScreen() {
   const comments = commentRes?.data ?? [];
 
   const [commentText, setCommentText] = useState("");
+  const [commentInputHeight, setCommentInputHeight] = useState(38);
+  const commentSubmitLockRef = useRef(false);
   const [replyParentId, setReplyParentId] = useState<number | null>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -192,6 +206,27 @@ export default function PostDetailScreen() {
   useEffect(() => {
     setGalleryIndex(0);
   }, [postId]);
+
+  const postBackTarget = post ? postDetailBackRoute(post.board_id, params.fromBoardId) : null;
+  const handlePostBack = useCallback(() => {
+    if (!postBackTarget) return;
+    if (postDetailBackAction(params.fromBoardId, router.canGoBack()) === "back") {
+      router.back();
+      return;
+    }
+    router.replace(postBackTarget as never);
+  }, [params.fromBoardId, postBackTarget]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android" || !postBackTarget) return undefined;
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        handlePostBack();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [handlePostBack, postBackTarget])
+  );
 
   if (isLoading) {
     return <LoadingState />;
@@ -428,19 +463,42 @@ export default function PostDetailScreen() {
   };
 
   const handleCreateComment = () => {
-    if (!requireLogin() || createCommentMutation.isPending) return;
-    const trimmed = commentText.trim();
+    if (!requireLogin()) return;
+    const trimmed = commentSubmissionValue({
+      text: commentText,
+      isPending: createCommentMutation.isPending,
+      isLocked: commentSubmitLockRef.current,
+    });
     if (!trimmed) return;
+    commentSubmitLockRef.current = true;
     createCommentMutation.mutate(
       { content: trimmed, parent_id: replyParentId },
       {
         onSuccess: () => {
           setCommentText("");
+          setCommentInputHeight(38);
           setReplyParentId(null);
         },
         onError: () => Alert.alert("댓글 등록 실패", "댓글을 저장할 수 없습니다."),
+        onSettled: () => {
+          commentSubmitLockRef.current = false;
+        },
       }
     );
+  };
+
+  const handleCommentKeyPress = (event: TextInputKeyPressEvent) => {
+    if (Platform.OS !== "web") return;
+    const webEvent = event as WebTextInputKeyPressEvent;
+    const action = commentKeyAction({
+      key: webEvent.key ?? webEvent.nativeEvent.key,
+      shiftKey: webEvent.shiftKey,
+      isComposing: webEvent.nativeEvent.isComposing,
+      keyCode: webEvent.nativeEvent.keyCode,
+    });
+    if (action !== "submit") return;
+    event.preventDefault();
+    handleCreateComment();
   };
 
   return (
@@ -449,10 +507,7 @@ export default function PostDetailScreen() {
         <IconButton
           icon="chevron-back"
           label="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace(`/board/${post.board_id}` as never);
-          }}
+          onPress={handlePostBack}
         />
         <Text numberOfLines={1} style={styles.appBarTitle}>
           {appBarTitle}
@@ -511,7 +566,7 @@ export default function PostDetailScreen() {
                 </>
               ) : null}
             </View>
-            {board?.board_type === "album" ? (
+            {board?.board_type === "album" && imageAttachments.length > 1 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbs}>
                 {(imageAttachments.length > 0 ? imageAttachments : [null, null, null, null]).map((attachment, index) => {
                   return (
@@ -859,8 +914,15 @@ export default function PostDetailScreen() {
           ) : null}
           <View style={styles.commentInputRow}>
             <TextInput
+              blurOnSubmit={Platform.OS === "web" ? false : undefined}
+              multiline
               value={commentText}
               onChangeText={setCommentText}
+              onContentSizeChange={(event) => {
+                setCommentInputHeight(Math.min(88, Math.max(38, event.nativeEvent.contentSize.height)));
+              }}
+              onKeyPress={handleCommentKeyPress}
+              onSubmitEditing={Platform.OS === "web" ? undefined : handleCreateComment}
               placeholder="댓글을 남겨보세요"
               placeholderTextColor="#A6ACB7"
               returnKeyType="send"
@@ -880,32 +942,32 @@ export default function PostDetailScreen() {
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.menuSheet}>
             <View style={styles.sheetHandle} />
             {canEditOwn ? (
-              <>
-                <Pressable
-                  onPress={() => {
-                    setShowPostMenu(false);
-                    if (isActivityCertification) {
-                      router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
-                    } else {
-                      router.push(`/board/post/edit/${post.id}`);
-                    }
-                  }}
-                  style={styles.sheetMenuItem}
-                >
-                  <Ionicons name="create-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.sheetMenuText}>수정</Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setShowPostMenu(false);
-                    handleDeletePost();
-                  }}
-                  style={styles.sheetMenuItem}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#D64545" />
-                  <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
-                </Pressable>
-              </>
+              <Pressable
+                onPress={() => {
+                  setShowPostMenu(false);
+                  if (isActivityCertification || isMutualAidRequest) {
+                    router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
+                  } else {
+                    router.push(`/board/post/edit/${post.id}`);
+                  }
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <Ionicons name="create-outline" size={20} color={COLORS.text} />
+                <Text style={styles.sheetMenuText}>수정</Text>
+              </Pressable>
+            ) : null}
+            {canDeleteOwn ? (
+              <Pressable
+                onPress={() => {
+                  setShowPostMenu(false);
+                  handleDeletePost();
+                }}
+                style={styles.sheetMenuItem}
+              >
+                <Ionicons name="trash-outline" size={20} color="#D64545" />
+                <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
+              </Pressable>
             ) : null}
             {showReportItem ? (
               <Pressable
@@ -1941,12 +2003,13 @@ const styles = StyleSheet.create({
   },
   commentInputRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 10,
   },
   commentInput: {
     flex: 1,
-    height: 38,
+    minHeight: 38,
+    maxHeight: 88,
     borderWidth: 0.5,
     borderColor: "#E1E4E9",
     borderRadius: 999,
@@ -1954,6 +2017,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "400",
     paddingHorizontal: 14,
+    paddingVertical: 9,
+    textAlignVertical: "top",
   },
   sendButton: {
     width: 36,

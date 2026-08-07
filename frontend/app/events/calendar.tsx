@@ -9,6 +9,14 @@ import LoadingState from "../../components/LoadingState";
 import { eventApi } from "../../services/api";
 import type { EventItem } from "../../types";
 import { formatTime24 } from "../../utils/dateFormat";
+import {
+  calendarMonthRange,
+  currentKoreaMonth,
+  eventDaysForMonth,
+  eventOccursOnCalendarDate,
+  koreaCalendarDate,
+  shiftCalendarMonth,
+} from "../../utils/eventCalendar";
 
 const COLORS = {
   primary: "#2761FF",
@@ -87,9 +95,9 @@ function EventRow({ item }: { item: EventItem }) {
 
 export default function EventCalendarScreen() {
   const insets = useSafeAreaInsets();
-  const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
-  const range = useMemo(() => monthRange(currentMonth), [currentMonth]);
+  const [currentMonth, setCurrentMonth] = useState(() => currentKoreaMonth());
+  const [selectedDay, setSelectedDay] = useState(() => koreaCalendarDate().day);
+  const range = useMemo(() => calendarMonthRange(currentMonth), [currentMonth]);
   const { data, isError, isLoading, refetch } = useQuery({
     queryKey: ["events", range.start, range.end],
     queryFn: () => eventApi.getEvents({ from_date: range.start, to_date: range.end }),
@@ -103,7 +111,7 @@ export default function EventCalendarScreen() {
   const cells = buildMonthCells(currentMonth);
 
   const changeMonth = (delta: number) => {
-    setCurrentMonth((value) => new Date(value.getFullYear(), value.getMonth() + delta, 1));
+    setCurrentMonth((value) => shiftCalendarMonth(value, delta));
     setSelectedDay(1);
   };
 

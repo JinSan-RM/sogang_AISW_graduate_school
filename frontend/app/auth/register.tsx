@@ -20,6 +20,11 @@ import {
   passwordError,
   phoneError,
 } from "../../utils/authValidation";
+import {
+  hasReachedPrivacyPolicyEnd,
+  PRIVACY_POLICY_SECTIONS,
+  PRIVACY_POLICY_SUPPORT_EMAIL,
+} from "../../utils/privacyPolicy";
 
 const COLORS = {
   primary: "#2761FF", // primary/500
@@ -81,6 +86,13 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [consented, setConsented] = useState(false);
+  const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+  const [privacyReviewed, setPrivacyReviewed] = useState(false);
+  const [privacyReadToEnd, setPrivacyReadToEnd] = useState(false);
+  const [privacyContentHeight, setPrivacyContentHeight] = useState(0);
+  const [privacyViewportHeight, setPrivacyViewportHeight] = useState(0);
+  const [privacyScrollOffset, setPrivacyScrollOffset] = useState(0);
+  const reviewedPrivacyVersionRef = useRef<string | null>(null);
   const [majorModalVisible, setMajorModalVisible] = useState(false);
   const [profileValidationAttempted, setProfileValidationAttempted] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -108,6 +120,32 @@ export default function RegisterScreen() {
     const timer = setInterval(updateTimers, 1000);
     return () => clearInterval(timer);
   }, [step]);
+
+  useEffect(() => {
+    if (
+      privacyModalVisible &&
+      hasReachedPrivacyPolicyEnd({
+        contentHeight: privacyContentHeight,
+        viewportHeight: privacyViewportHeight,
+        offsetY: privacyScrollOffset,
+      })
+    ) {
+      setPrivacyReadToEnd(true);
+    }
+  }, [privacyContentHeight, privacyModalVisible, privacyScrollOffset, privacyViewportHeight]);
+
+  useEffect(() => {
+    const activeVersion = privacyPolicy?.version;
+    if (
+      privacyReviewed &&
+      reviewedPrivacyVersionRef.current &&
+      reviewedPrivacyVersionRef.current !== activeVersion
+    ) {
+      reviewedPrivacyVersionRef.current = null;
+      setPrivacyReviewed(false);
+      setConsented(false);
+    }
+  }, [privacyPolicy?.version, privacyReviewed]);
 
   const goBack = () => {
     if (step === 1 || step === 2) {
@@ -252,6 +290,38 @@ export default function RegisterScreen() {
     return Object.keys(nextErrors).length === 0;
   };
 
+  const openPrivacyPolicy = () => {
+    if (!privacyPolicy) {
+      setErrors((current) => ({
+        ...current,
+        consent: "개인정보 처리방침 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
+      }));
+      return;
+    }
+    setPrivacyReadToEnd(false);
+    setPrivacyContentHeight(0);
+    setPrivacyViewportHeight(0);
+    setPrivacyScrollOffset(0);
+    setPrivacyModalVisible(true);
+  };
+
+  const confirmPrivacyReview = () => {
+    if (!privacyReadToEnd || !privacyPolicy) return;
+    reviewedPrivacyVersionRef.current = privacyPolicy.version;
+    setPrivacyReviewed(true);
+    setPrivacyModalVisible(false);
+    setErrors((current) => ({ ...current, consent: undefined }));
+  };
+
+  const togglePrivacyConsent = () => {
+    if (!privacyReviewed || reviewedPrivacyVersionRef.current !== privacyPolicy?.version) {
+      openPrivacyPolicy();
+      return;
+    }
+    setConsented((value) => !value);
+    setErrors((current) => ({ ...current, consent: undefined }));
+  };
+
   const register = async () => {
     if (!verificationToken) {
       setErrors({ form: "학교 이메일 인증을 다시 진행해주세요." });
@@ -278,6 +348,8 @@ export default function RegisterScreen() {
       const errorCode = apiErrorCode(error);
       if (errorCode === "PRIVACY_POLICY_VERSION_MISMATCH") {
         setConsented(false);
+        setPrivacyReviewed(false);
+        reviewedPrivacyVersionRef.current = null;
         await registrationOptionsQuery.refetch();
         setErrors({ consent: "개인정보 처리방침이 변경되었어요. 내용을 확인하고 다시 동의해주세요." });
         return;
@@ -288,10 +360,7 @@ export default function RegisterScreen() {
         setErrors({ major: "현재 선택할 수 있는 전공을 다시 선택해주세요." });
         return;
       }
-      setErrors({
-        nickname: errorCode === "NICKNAME_CONFLICT" ? "이미 사용 중인 이름이에요." : undefined,
-        form: errorCode === "NICKNAME_CONFLICT" ? undefined : "회원가입을 완료하지 못했어요. 입력 정보와 인증 상태를 확인해주세요.",
-      });
+      setErrors({ form: "회원가입을 완료하지 못했어요. 입력 정보와 인증 상태를 확인해주세요." });
     } finally {
       setIsSubmitting(false);
     }
@@ -406,7 +475,21 @@ export default function RegisterScreen() {
                         {verificationMessage.text}
                       </Text>
                     </View>
-                  ) : null}
+                  ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: isSubmitting || resendCooldown > 0 }}
+                      disabled={isSubmitting || resendCooldown > 0}
+                      hitSlop={8}
+                      onPress={() => void requestCode(true)}
+                    >
+                      <Text style={styles.resendLink}>
+                        {isSubmitting
+                          ? "발송 중"
+                          : `재전송${resendCooldown > 0 ? `  (${formatCountdown(resendCooldown)})` : ""}`}
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
                 {verificationExpired || verificationAttemptsLocked ? null : (
                   <Pressable disabled={isSubmitting || resendCooldown > 0} onPress={() => void requestCode(true)} hitSlop={8}>
@@ -518,6 +601,65 @@ export default function RegisterScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => {
+          if (privacyReadToEnd) confirmPrivacyReview();
+        }}
+        transparent
+        visible={privacyModalVisible}
+      >
+        <View style={styles.privacyModalBackdrop}>
+          <View style={styles.privacyModalCard}>
+            <View style={styles.privacyModalHandle} />
+            <View style={styles.privacyModalHeader}>
+              <View style={styles.privacyModalTitleRow}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
+                <Text style={styles.privacyModalTitle}>개인정보 수집 및 이용 동의</Text>
+              </View>
+              <Text style={styles.privacyModalInstruction}>전문을 끝까지 확인해야 닫을 수 있어요.</Text>
+            </View>
+            <ScrollView
+              contentContainerStyle={styles.privacyModalContent}
+              onContentSizeChange={(_, height) => setPrivacyContentHeight(height)}
+              onLayout={(event) => setPrivacyViewportHeight(event.nativeEvent.layout.height)}
+              onScroll={(event) => setPrivacyScrollOffset(event.nativeEvent.contentOffset.y)}
+              scrollEventThrottle={16}
+              style={styles.privacyModalScroll}
+            >
+              <View style={styles.privacyPolicyMeta}>
+                <Text style={styles.privacyPolicyMetaText}>버전: {privacyPolicy?.version ?? "-"}</Text>
+                <Text style={styles.privacyPolicyMetaText}>시행일: {privacyPolicy?.effective_at?.slice(0, 10) ?? "-"}</Text>
+              </View>
+              {PRIVACY_POLICY_SECTIONS.map((section) => (
+                <View key={section.title} style={styles.privacyPolicySection}>
+                  <Text style={styles.privacyPolicySectionTitle}>{section.title}</Text>
+                  <Text style={styles.privacyPolicyBody}>{section.body}</Text>
+                </View>
+              ))}
+              <View style={styles.privacyPolicySection}>
+                <Text style={styles.privacyPolicySectionTitle}>개인정보 문의</Text>
+                <Text style={styles.privacyPolicyBody}>{PRIVACY_POLICY_SUPPORT_EMAIL}</Text>
+              </View>
+              <Text style={styles.privacyPolicyEnd}>전문을 모두 확인했습니다.</Text>
+            </ScrollView>
+            <View style={styles.privacyModalFooter}>
+              <Text style={[styles.privacyModalFooterHint, privacyReadToEnd ? styles.privacyModalFooterHintDone : null]}>
+                {privacyReadToEnd ? "내용을 모두 확인했어요." : "아래로 끝까지 내려주세요."}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!privacyReadToEnd}
+                onPress={confirmPrivacyReview}
+                style={[styles.primaryButton, !privacyReadToEnd ? styles.validationDisabledButton : null]}
+              >
+                <Text style={styles.primaryButtonText}>{privacyReadToEnd ? "내용을 확인했어요" : "끝까지 읽어주세요"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -579,4 +721,22 @@ const styles = StyleSheet.create({
   modalRetry: { alignItems: "flex-start", gap: 8, paddingVertical: 10 },
   modalRetryButton: { borderRadius: 7, backgroundColor: COLORS.primary50, paddingHorizontal: 12, paddingVertical: 8 },
   modalRetryText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
+  privacyModalBackdrop: { flex: 1, alignItems: "center", justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.42)" },
+  privacyModalCard: { width: "100%", maxWidth: 405, height: "88%", overflow: "hidden", borderTopLeftRadius: 18, borderTopRightRadius: 18, backgroundColor: COLORS.bg, paddingTop: 12 },
+  privacyModalHandle: { width: 36, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: "#C7CCD4", marginBottom: 14 },
+  privacyModalHeader: { gap: 6, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: "#EAECEF" },
+  privacyModalTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  privacyModalTitle: { flex: 1, color: COLORS.text, fontSize: 18, fontWeight: "600" },
+  privacyModalInstruction: { color: COLORS.tertiary, fontSize: 12, fontWeight: "400", lineHeight: 18 },
+  privacyModalScroll: { flex: 1 },
+  privacyModalContent: { gap: 18, paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28 },
+  privacyPolicyMeta: { gap: 3, borderRadius: 8, backgroundColor: "#F7F8FA", padding: 12 },
+  privacyPolicyMetaText: { color: COLORS.muted, fontSize: 12, fontWeight: "400", lineHeight: 18 },
+  privacyPolicySection: { gap: 5 },
+  privacyPolicySectionTitle: { color: COLORS.text, fontSize: 14, fontWeight: "700", lineHeight: 20 },
+  privacyPolicyBody: { color: COLORS.text, fontSize: 13, fontWeight: "400", lineHeight: 21 },
+  privacyPolicyEnd: { color: "#2E9E5B", fontSize: 12, fontWeight: "600", textAlign: "center", paddingVertical: 8 },
+  privacyModalFooter: { gap: 8, borderTopWidth: 1, borderTopColor: "#EAECEF", backgroundColor: COLORS.bg, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
+  privacyModalFooterHint: { color: COLORS.tertiary, fontSize: 12, fontWeight: "400", textAlign: "center" },
+  privacyModalFooterHintDone: { color: "#2E9E5B", fontWeight: "600" },
 });

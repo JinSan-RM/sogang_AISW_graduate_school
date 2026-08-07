@@ -8,7 +8,7 @@ from app.models.auth import EmailVerificationToken, PasswordResetToken, RefreshT
 from app.models.banner import Banner
 from app.models.media import MediaAsset, PostAttachment
 from app.models.event import Event
-from app.models.faq import FAQ
+from app.models.faq import FAQ, FAQAttachment
 from app.models.post_extension import PostLectureReview, PostMutualAid, PostSuggestion
 from app.models.notification import Notification, NotificationSetting, PushDelivery, PushToken
 from app.models.audit import AccountDeletionReceipt, LegacyImportRecord, OperationalAuditLog

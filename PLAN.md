@@ -46,7 +46,7 @@ Phase 2 converted the Notion planning into concrete API, DB, auth, route, and im
 | Project initial setup | Implemented; policy/QA pending | 2026-05-01 to 2026-05-04 | CI, env examples, lint/test/typecheck/export commands, and backend/frontend separation exist. Branch policy remains repository administration. |
 | DB build and initial data setup | Implemented; `0021` smoke and restore passed | 2026-05-01 to 2026-05-08 | Clean and legacy migration paths, reversible `0021`↔`0019` rehearsal, environment-scoped seed data, reset guards, 104 PostgreSQL tests, dump/restore fingerprints, and media checksum restore passed in isolation. Production startup creates no user and preserves operator-edited reference content; the first administrator is promoted through the one-time production bootstrap command. |
 | Auth/login feature development | Implemented; deployment/device QA pending | 2026-05-04 to 2026-05-11 | Login, email verification, password reset UI/API, refresh/logout, Argon2id migration, and persistent rate limits exist. Production SMTP and physical-device session QA remain. |
-| User profile feature development | Implemented; device QA pending | 2026-05-04 to 2026-05-11 | Profile/account UI, protected profile image upload, and nickname conflict handling exist. Verify picker/session behavior on physical devices. |
+| User profile feature development | Implemented; device QA pending | 2026-05-04 to 2026-05-11 | Profile/account UI and protected profile image upload exist. Signup names are real-name display fields and allow duplicates; email remains the unique account identity. Verify picker/session behavior on physical devices. |
 | Core feature A: boards/community | Implemented; integration QA pending | 2026-05-18 to 2026-05-31 | Boards/posts/comments/reactions/search/protected media, pagination, and reports exist. Draft autosave is deferred; mobile route polish remains QA. |
 
 ## Phase 4 Notion Plan
@@ -141,7 +141,7 @@ Phase 5 QA can start when:
 - All P0 mobile routes are reachable.
 - Guest/user/admin permissions, mutual-aid owner scope, and media access are verified by API tests.
 - Backend compile checks and frontend typecheck pass.
-- Alembic has one head at `0022_legacy_import_records`; clean, recognized legacy, downgrade/upgrade rehearsal, and fail-closed unknown-schema behavior are verified.
+- Alembic has one head at `0024_faq_attachments`; the local migration/model regression and isolated PostgreSQL `0023`→`0024`→`0023`→`0024` rehearsal pass.
 - Known issues are tagged as `Phase 5 QA`, `v1.1`, or `blocked`.
 
 Checked on 2026-07-27: these local entry conditions pass. This is not a store-release approval. Signed mobile artifacts, physical-device checks, live-host checks, the 18 external release inputs, and the frontend dependency-risk decision remain open and are tracked in `CODEX.md`.
@@ -149,3 +149,10 @@ Checked on 2026-07-27: these local entry conditions pass. This is not a store-re
 Checked on 2026-08-02: the backend suite passes 185 tests, and isolated PostgreSQL clean upgrade plus
 `0021`→`0022`→`0021`→`0022` migration rehearsal passes. Legacy source workbooks and CSV exports
 remain local-only migration inputs because they contain personal data and the repository is public.
+
+Checked on 2026-08-04: the local backend suite passes 203 tests, Alembic reports the single
+`0024_faq_attachments` head, and the frontend typecheck/lint plus focused legacy-media display tests
+pass. An isolated PostgreSQL database passed the clean upgrade and `0023`→`0024`→`0023`→`0024`
+rehearsal. The full 605-file legacy source was imported into an isolated PostgreSQL review database;
+594 supported files passed DB/filesystem verification and the live web review loaded the 14-image
+deduplicated photo post plus the 1-image and 2-image FAQ entries successfully.

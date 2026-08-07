@@ -29,7 +29,7 @@ from app.media_service import _matches_declared_content, media_access_reference,
 from app.models.audit import LegacyImportRecord
 from app.models.board import Board
 from app.models.comment import Comment
-from app.models.faq import FAQ
+from app.models.faq import FAQ, FAQAttachment
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
 from app.models.post_extension import PostSuggestion
@@ -136,6 +136,19 @@ MIME_EXTENSIONS = {
     "application/haansofthwp": ".hwp",
     "application/vnd.hancom.hwp": ".hwp",
 }
+
+# The cleaned workbook contains one article ID in two sheets.  Its board name
+# and attachments both identify the photo album row as the canonical record.
+# Keeping this decision explicit prevents workbook sheet order from silently
+# routing the post and its attachments to the wrong board.
+CANONICAL_DUPLICATE_ARTICLE_SHEETS = {
+    "6764961": "사진첩",
+}
+
+# These legacy download formats are deliberately not added to the application
+# upload allowlist. They remain in the source archive and are reported instead
+# of being exposed through the member media endpoint.
+ARCHIVED_LEGACY_ATTACHMENT_EXTENSIONS = {".ipynb", ".mp4", ".txt", ".zip"}
 
 
 @dataclass(frozen=True)
@@ -292,6 +305,7 @@ def load_article_workbook(path: Path) -> tuple[list[SourceRow], list[SourceRow],
     attachments: list[SourceRow] = []
     duplicates: list[SourceRow] = []
     seen_ids: set[str] = set()
+    article_indexes: dict[str, int] = {}
     for sheet in workbook.worksheets:
         rows = list(_nonempty_rows(sheet))
         if not rows:
@@ -314,9 +328,17 @@ def load_article_workbook(path: Path) -> tuple[list[SourceRow], list[SourceRow],
             if not row.source_id:
                 continue
             if row.source_id in seen_ids:
-                duplicates.append(row)
+                canonical_sheet = CANONICAL_DUPLICATE_ARTICLE_SHEETS.get(row.source_id)
+                existing_index = article_indexes[row.source_id]
+                existing_row = articles[existing_index]
+                if canonical_sheet and row.sheet == canonical_sheet and existing_row.sheet != canonical_sheet:
+                    duplicates.append(existing_row)
+                    articles[existing_index] = row
+                else:
+                    duplicates.append(row)
                 continue
             seen_ids.add(row.source_id)
+            article_indexes[row.source_id] = len(articles)
             articles.append(row)
     return articles, attachments, duplicates
 
@@ -1332,20 +1354,116 @@ def _download_attachment(
         raise
 
 
+def index_local_attachment_files(source_dir: Path) -> dict[str, Path]:
+    """Index migration input files by the legacy ``fileStorageId`` basename."""
+
+    source_dir = source_dir.expanduser().resolve()
+    if not source_dir.is_dir():
+        raise ValueError(f"attachment_source_directory_not_found:{source_dir}")
+    result: dict[str, Path] = {}
+    duplicate_ids: set[str] = set()
+    for path in sorted(source_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.is_symlink():
+            raise ValueError(f"symlinked_attachment_source_not_allowed:{path.name}")
+        storage_id = path.stem.strip()
+        if not storage_id:
+            continue
+        if storage_id in result:
+            duplicate_ids.add(storage_id)
+            continue
+        result[storage_id] = path
+    if duplicate_ids:
+        rendered = ",".join(sorted(duplicate_ids)[:20])
+        raise ValueError(f"duplicate_local_attachment_storage_ids:{rendered}")
+    return result
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _copy_local_attachment(
+    source: Path,
+    destination: Path,
+    *,
+    declared_name: str,
+    maximum_bytes: int,
+) -> tuple[str, int, str, Path]:
+    """Validate and atomically copy a local migration file into managed media storage."""
+
+    if not source.is_file() or source.is_symlink():
+        raise ValueError("invalid_local_attachment_source")
+    temporary = destination.with_name(f".{destination.name}.part")
+    temporary.parent.mkdir(parents=True, exist_ok=True)
+    temporary.unlink(missing_ok=True)
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        with source.open("rb") as input_file, temporary.open("xb") as output_file:
+            while chunk := input_file.read(1024 * 1024):
+                total += len(chunk)
+                if total > maximum_bytes:
+                    raise ValueError("file_too_large")
+                digest.update(chunk)
+                output_file.write(chunk)
+        if total == 0:
+            raise ValueError("empty_file")
+        inferred_content_type = normalize_content_type(
+            mimetypes.guess_type(declared_name)[0] or mimetypes.guess_type(source.name)[0]
+        )
+        actual_content_type = _detected_content_type(temporary, inferred_content_type)
+        if not actual_content_type:
+            raise ValueError(
+                f"unsupported_or_invalid_content:{inferred_content_type or 'unknown'}"
+            )
+        corrected_destination = destination.with_suffix(MIME_EXTENSIONS[actual_content_type])
+        corrected_destination.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(temporary, corrected_destination)
+        return actual_content_type, total, digest.hexdigest(), corrected_destination
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def import_attachments(
     db: Session,
     rows: list[SourceRow],
     reference_urls: dict[str, str],
     posts_by_source_id: dict[str, Post],
     *,
-    media_root: Path,
+    media_root: Path | None = None,
+    public_media_dir: Path | None = None,
+    private_media_dir: Path | None = None,
+    attachment_source_dir: Path | None = None,
     apply: bool,
     skip_downloads: bool,
     maximum_bytes: int = 20 * 1024 * 1024,
 ) -> Counter:
     stats: Counter = Counter()
-    public_root = media_root / "public"
-    private_root = media_root / "private"
+    if (public_media_dir is None) != (private_media_dir is None):
+        raise ValueError("public_and_private_media_directories_must_be_set_together")
+    if public_media_dir is not None and private_media_dir is not None:
+        public_root = public_media_dir.expanduser().resolve()
+        private_root = private_media_dir.expanduser().resolve()
+    elif media_root is not None:
+        resolved_media_root = media_root.expanduser().resolve()
+        public_root = resolved_media_root / "public"
+        private_root = resolved_media_root / "private"
+    else:
+        raise ValueError("media_storage_directories_are_required")
+    if public_root == private_root:
+        raise ValueError("public_and_private_media_directories_must_be_distinct")
+    local_files = (
+        index_local_attachment_files(attachment_source_dir)
+        if attachment_source_dir is not None
+        else {}
+    )
     existing_media = {media.stored_filename: media for media in db.scalars(select(MediaAsset)).all()}
     existing_media_by_storage_id = {
         match.group(1): media
@@ -1359,11 +1477,12 @@ def import_attachments(
         (record.entity_type, record.source_id): record
         for record in db.scalars(
             select(LegacyImportRecord).where(
-                LegacyImportRecord.entity_type.in_(["cohort_leader", "past_council", "mutual_aid_archive"])
+                LegacyImportRecord.entity_type.in_(["cohort_leader", "past_council", "mutual_aid_archive", "faq"])
             )
         ).all()
     }
     board_by_id = {board.id: board for board in db.scalars(select(Board)).all()}
+    media_hashes_by_post: dict[int, dict[str, int]] = defaultdict(dict)
 
     for index, row in enumerate(rows, start=1):
         if apply and not skip_downloads and (index == 1 or index % 25 == 0 or index == len(rows)):
@@ -1374,11 +1493,21 @@ def import_attachments(
             stats["invalid_attachment_rows"] += 1
             continue
         url = value_as_text(row.data.get("link_url")) or reference_urls.get(storage_id, "")
+        local_source = local_files.get(storage_id)
         source_id = storage_id
         attachment_row = SourceRow(row.source_file, row.sheet, row.row_number, {**row.data, "writeId": source_id})
         post = posts_by_source_id.get(article_id)
         special_record = next(
-            (ledger_by_article[key] for key in (("cohort_leader", article_id), ("past_council", article_id), ("mutual_aid_archive", article_id)) if key in ledger_by_article),
+            (
+                ledger_by_article[key]
+                for key in (
+                    ("cohort_leader", article_id),
+                    ("past_council", article_id),
+                    ("mutual_aid_archive", article_id),
+                    ("faq", article_id),
+                )
+                if key in ledger_by_article
+            ),
             None,
         )
         is_private = bool(
@@ -1399,7 +1528,21 @@ def import_attachments(
                     details={"article_id": article_id},
                 )
             continue
-        if not url.startswith(("http://", "https://")):
+        if attachment_source_dir is not None and local_source is None:
+            stats["missing_local_attachment_files"] += 1
+            if apply:
+                upsert_ledger(
+                    db,
+                    attachment_row,
+                    entity_type="attachment",
+                    action="failed",
+                    status="failed",
+                    source_parent_id=article_id,
+                    reason="missing_local_attachment_file",
+                    details={"article_id": article_id, "filename": value_as_text(row.data.get("subject"))},
+                )
+            continue
+        if local_source is None and not url.startswith(("http://", "https://")):
             stats["missing_attachment_urls"] += 1
             if apply:
                 upsert_ledger(
@@ -1414,7 +1557,30 @@ def import_attachments(
                 )
             continue
         filename = _safe_filename(value_as_text(row.data.get("subject")), f"legacy-{storage_id}")
-        guessed_extension = Path(filename).suffix.lower() or Path(urllib.parse.urlparse(url).path).suffix.lower()
+        guessed_extension = (
+            Path(filename).suffix.lower()
+            or (local_source.suffix.lower() if local_source is not None else "")
+            or Path(urllib.parse.urlparse(url).path).suffix.lower()
+        )
+        if local_source is not None and local_source.suffix.lower() in ARCHIVED_LEGACY_ATTACHMENT_EXTENSIONS:
+            stats["archived_unsupported_attachments"] += 1
+            if apply:
+                upsert_ledger(
+                    db,
+                    attachment_row,
+                    entity_type="attachment",
+                    action="archived",
+                    status="archived",
+                    source_parent_id=article_id,
+                    reason="legacy_attachment_type_not_supported",
+                    details={
+                        "article_id": article_id,
+                        "filename": filename,
+                        "extension": local_source.suffix.lower(),
+                        "source_origin": "local",
+                    },
+                )
+            continue
         stored_filename = f"legacy-{storage_id}{guessed_extension}"
         destination = (private_root if is_private else public_root) / stored_filename
         media = existing_media.get(stored_filename) or existing_media_by_storage_id.get(storage_id)
@@ -1422,15 +1588,17 @@ def import_attachments(
             stored_filename = media.stored_filename
             destination = (private_root if media.is_private else public_root) / stored_filename
         if skip_downloads or not apply:
-            stats["download_candidates"] += 1
+            stats["local_copy_candidates" if local_source is not None else "download_candidates"] += 1
             continue
         action = "unchanged"
         sha256 = ""
-        downloaded_now = False
+        stored_now = False
         post_attachment_id: int | None = None
+        faq_attachment_id: int | None = None
+        duplicate_of_media_asset_id: int | None = None
         try:
             if destination.exists() and destination.stat().st_size > 0:
-                sha256 = hashlib.sha256(destination.read_bytes()).hexdigest()
+                sha256 = _sha256_file(destination)
                 content_type = _detected_content_type(
                     destination,
                     media.content_type if media else "",
@@ -1439,6 +1607,15 @@ def import_attachments(
                 if not content_type:
                     raise ValueError("unsupported_or_invalid_existing_file")
                 file_size = destination.stat().st_size
+            elif local_source is not None:
+                content_type, file_size, sha256, destination = _copy_local_attachment(
+                    local_source,
+                    destination,
+                    declared_name=filename,
+                    maximum_bytes=maximum_bytes,
+                )
+                stored_now = True
+                stored_filename = destination.name
             else:
                 content_type, file_size, sha256, destination = _download_attachment(
                     url,
@@ -1446,7 +1623,7 @@ def import_attachments(
                     declared_name=filename,
                     maximum_bytes=maximum_bytes,
                 )
-                downloaded_now = True
+                stored_now = True
                 stored_filename = destination.name
             if media is None:
                 media = MediaAsset(
@@ -1481,21 +1658,32 @@ def import_attachments(
                 )
                 action = "updated" if changed else "unchanged"
             if post is not None:
+                duplicate_of_media_asset_id = media_hashes_by_post[post.id].get(sha256)
                 link = db.scalar(
                     select(PostAttachment).where(
                         PostAttachment.post_id == post.id,
                         PostAttachment.media_id == media.id,
                     )
                 )
-                if link is None:
-                    link = PostAttachment(
-                        post_id=post.id,
-                        media_id=media.id,
-                        sort_order=value_as_int(row.data.get("sequence")),
-                    )
-                    db.add(link)
-                    db.flush()
-                post_attachment_id = link.id
+                if duplicate_of_media_asset_id is not None and duplicate_of_media_asset_id != media.id:
+                    if link is not None:
+                        db.delete(link)
+                        db.flush()
+                    stats["deduplicated_post_attachment_links"] += 1
+                else:
+                    media_hashes_by_post[post.id][sha256] = media.id
+                    sequence = value_as_int(row.data.get("sequence"))
+                    if link is None:
+                        link = PostAttachment(
+                            post_id=post.id,
+                            media_id=media.id,
+                            sort_order=sequence,
+                        )
+                        db.add(link)
+                        db.flush()
+                    elif link.sort_order != sequence:
+                        link.sort_order = sequence
+                    post_attachment_id = link.id
             elif special_record and special_record.entity_type in {"cohort_leader", "past_council"}:
                 board = board_by_id.get(special_record.target_id or 0)
                 if board:
@@ -1506,6 +1694,27 @@ def import_attachments(
                         article_id=article_id,
                         media_url=media_access_reference(media.id),
                     )
+            elif special_record and special_record.entity_type == "faq":
+                faq = db.get(FAQ, special_record.target_id or 0)
+                if faq is not None:
+                    faq_link = db.scalar(
+                        select(FAQAttachment).where(
+                            FAQAttachment.faq_id == faq.id,
+                            FAQAttachment.media_id == media.id,
+                        )
+                    )
+                    sequence = value_as_int(row.data.get("sequence"))
+                    if faq_link is None:
+                        faq_link = FAQAttachment(
+                            faq_id=faq.id,
+                            media_id=media.id,
+                            sort_order=sequence,
+                        )
+                        db.add(faq_link)
+                        db.flush()
+                    elif faq_link.sort_order != sequence:
+                        faq_link.sort_order = sequence
+                    faq_attachment_id = faq_link.id
             upsert_ledger(
                 db,
                 attachment_row,
@@ -1523,14 +1732,17 @@ def import_attachments(
                     "sha256": sha256,
                     "is_private": is_private,
                     "storage_path": f"{'private' if is_private else 'public'}/{stored_filename}",
-                    "source_url": url,
+                    "source_origin": "local" if local_source is not None else "download",
+                    "source_url": None if local_source is not None else url,
                     "media_asset_id": media.id,
                     "post_attachment_id": post_attachment_id,
+                    "faq_attachment_id": faq_attachment_id,
+                    "duplicate_of_media_asset_id": duplicate_of_media_asset_id,
                 },
             )
             stats[f"{action}_attachments"] += 1
         except Exception as exc:
-            if downloaded_now:
+            if stored_now:
                 destination.unlink(missing_ok=True)
             stats["failed_attachments"] += 1
             upsert_ledger(
@@ -1541,7 +1753,12 @@ def import_attachments(
                 status="failed",
                 source_parent_id=article_id,
                 reason=str(exc)[:500],
-                details={"article_id": article_id, "filename": filename, "source_url": url},
+                details={
+                    "article_id": article_id,
+                    "filename": filename,
+                    "source_origin": "local" if local_source is not None else "download",
+                    "source_url": None if local_source is not None else url,
+                },
             )
     return stats
 

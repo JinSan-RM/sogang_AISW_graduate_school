@@ -1,7 +1,5 @@
 import { AxiosHeaders, isAxiosError } from "axios";
 
-export const MAJOR_OPTIONS = ["인공지능", "소프트웨어", "블록체인", "데이터사이언스·인공지능"] as const;
-
 export function composeSchoolEmail(emailId: string) {
   return `${emailId.trim().toLowerCase()}@sogang.ac.kr`;
 }

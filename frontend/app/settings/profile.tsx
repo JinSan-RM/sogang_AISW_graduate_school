@@ -174,7 +174,7 @@ export default function ProfileSettingsScreen() {
               <MediaImage media={{ id: profileImageMediaId, url: profileImageUrl }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{fields.nickname.slice(0, 1) || "?"}</Text>
+                <Ionicons name="person" size={24} color={COLORS.primary} />
               </View>
             )}
             <View style={styles.cameraBadge}>

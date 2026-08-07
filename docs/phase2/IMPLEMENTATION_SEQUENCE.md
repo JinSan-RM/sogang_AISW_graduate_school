@@ -144,7 +144,7 @@ Checklist:
 
 2026-07-27 implementation addendum:
 
-- Current Alembic head is `0022_legacy_import_records`.
+- Current Alembic head is `0024_faq_attachments`.
 - Account deletion uses server-verified current-password hard deletion and a non-enumerating public email flow; it is not account deactivation.
 - SQLite and isolated PostgreSQL each pass 104/104 backend tests.
 - Local production Compose, web deep-link, migration, and backup/restore rehearsals pass.
@@ -154,6 +154,11 @@ Checklist:
 clean upgrade plus `0021`→`0022`→`0021`→`0022` round trip passed. Legacy XLSX/CSV inputs are
 local-only personal-data-bearing migration sources; only the importer, redacted provenance ledger,
 tests, and operator documentation belong in Git.
+
+2026-08-04 migration addendum: the local suite passes 203 tests and the single head is
+`0024_faq_attachments`. Local attachment sources are copied into protected persistent storage and
+verified with a DB/filesystem manifest. An isolated PostgreSQL database passed clean upgrade plus
+`0023`→`0024`→`0023`→`0024` rehearsal, and a full local-data review passed API and web rendering.
 
 ## Recommended First Pull Requests
 

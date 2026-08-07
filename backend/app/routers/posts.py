@@ -852,10 +852,10 @@ def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User 
             raise AppException(status_code=403, message="Answered suggestions cannot be deleted.", code="FORBIDDEN")
     if board is not None and board.board_type == "mutual_aid" and current_user.role != "admin":
         mutual_aid = db.scalar(select(PostMutualAid).where(PostMutualAid.post_id == post.id))
-        if mutual_aid is not None and mutual_aid.status != "processing":
+        if mutual_aid is not None and mutual_aid.status == "completed":
             raise AppException(
                 status_code=403,
-                message="Completed or rejected mutual-aid requests cannot be deleted.",
+                message="Completed mutual-aid requests cannot be deleted.",
                 code="FORBIDDEN",
             )
 

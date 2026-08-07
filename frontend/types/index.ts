@@ -259,7 +259,7 @@ export type EventItem = {
   category: string;
   color?: string;
   start_at: string;
-  end_at?: string;
+  end_at?: string | null;
   created_by?: number;
   created_at: string;
   updated_at: string;
@@ -305,6 +305,7 @@ export type FAQItem = {
   category?: string;
   sort_order: number;
   is_active: boolean;
+  attachments: MediaAsset[];
   created_at: string;
   updated_at: string;
 };
