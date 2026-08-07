@@ -33,6 +33,20 @@ function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+// 시작일~종료일(당일 포함) 범위에 targetDay가 들어가면 true. 여러 날에 걸친 일정은 모든 날에 표시된다.
+function eventCoversDay(event: EventItem, targetDay: Date) {
+  const start = new Date(event.start_at);
+  if (Number.isNaN(start.getTime())) return false;
+  const parsedEnd = event.end_at ? new Date(event.end_at) : start;
+  const end = Number.isNaN(parsedEnd.getTime()) ? start : parsedEnd;
+  const target = startOfDay(targetDay);
+  return target >= startOfDay(start) && target <= startOfDay(end);
+}
+
 function monthRange(date: Date) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1);
   const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59);
@@ -82,10 +96,10 @@ export default function EventCalendarScreen() {
   });
 
   const events = data?.data ?? [];
-  const selectedEvents = events.filter((event) => {
-    const date = new Date(event.start_at);
-    return !Number.isNaN(date.getTime()) && date.getDate() === selectedDay;
-  });
+  const selectedDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), selectedDay);
+  const selectedEvents = events
+    .filter((event) => eventCoversDay(event, selectedDate))
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
   const cells = buildMonthCells(currentMonth);
 
   const changeMonth = (delta: number) => {
@@ -138,7 +152,9 @@ export default function EventCalendarScreen() {
               </Text>
             ))}
             {cells.map((cell) => {
-              const hasEvent = cell.day ? events.some((event) => new Date(event.start_at).getDate() === cell.day) : false;
+              const hasEvent = cell.day
+                ? events.some((event) => eventCoversDay(event, new Date(currentMonth.getFullYear(), currentMonth.getMonth(), cell.day!)))
+                : false;
               const selected = selectedDay === cell.day;
               return (
                 <Pressable

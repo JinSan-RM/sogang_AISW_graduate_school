@@ -166,10 +166,20 @@ function thumbnailUrl(post: PostListItem) {
 
 function eventDays(events: EventItem[], month: Date) {
   const days = new Set<number>();
+  const lastDate = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   for (const event of events) {
-    const date = new Date(event.start_at);
-    if (!Number.isNaN(date.getTime()) && date.getFullYear() === month.getFullYear() && date.getMonth() === month.getMonth()) {
-      days.add(date.getDate());
+    const start = new Date(event.start_at);
+    if (Number.isNaN(start.getTime())) continue;
+    const parsedEnd = event.end_at ? new Date(event.end_at) : start;
+    const end = Number.isNaN(parsedEnd.getTime()) ? start : parsedEnd;
+    // 시작~종료 날짜를 하루씩 순회하며 해당 월에 걸치는 모든 날짜를 표시(여러 날 일정 대응).
+    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    while (cursor.getTime() <= endDay.getTime()) {
+      if (cursor.getFullYear() === month.getFullYear() && cursor.getMonth() === month.getMonth()) {
+        days.add(cursor.getDate());
+      }
+      cursor.setDate(cursor.getDate() + 1);
     }
   }
   return days;
@@ -504,7 +514,8 @@ function CalendarCard({ events, month }: { events: EventItem[]; month: Date }) {
         ))}
       </View>
       <Pressable
-        onPress={() => (nextEvent ? router.push(`/events/${nextEvent.id}` as never) : router.push("/events" as never))}
+        disabled={!nextEvent}
+        onPress={() => { if (nextEvent) router.push(`/events/${nextEvent.id}` as never); }}
         style={styles.nextEvent}
       >
         <View style={styles.eventDot} />
@@ -1115,7 +1126,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 10,
+    // 제목이 1줄이어도 카드 하단에 붙어서 두 카드의 댓글/추천 줄 높이가 맞는다.
+    marginTop: "auto",
+    paddingTop: 10,
   },
   statText: {
     color: COLORS.muted,
