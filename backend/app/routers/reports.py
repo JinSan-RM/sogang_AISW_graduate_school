@@ -11,7 +11,7 @@ from app.models.comment import Comment
 from app.models.post import Post
 from app.models.report import Report
 from app.models.user import User
-from app.notifications import notify_admins
+from app.notifications import notify_admins, report_message
 from app.post_access import require_comment_read, require_post_read
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
@@ -48,7 +48,7 @@ def _create_report(target_type: str, target_id: int, payload: ReportCreate, db: 
         db,
         actor_id=user.id,
         notification_type="report",
-        message=f"{user.nickname} reported a {target_type}.",
+        message=report_message(user.nickname, target_type),
         post_id=target_id if target_type == "post" else None,
     )
     db.commit()
@@ -195,7 +195,10 @@ def report_post(
     post = db.get(Post, post_id)
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
-    require_post_read(db, post, user)
+    board = require_post_read(db, post, user)
+    if board is not None and board.write_permission == "admin":
+        # 관리자만 작성하는 게시판(공지사항, 동아리 홍보 등)은 신고 대상이 아니다.
+        raise AppException(status_code=400, message="This board cannot be reported.", code="BAD_REQUEST")
     if post.author_id == user.id:
         raise AppException(status_code=400, message="You cannot report your own post.", code="BAD_REQUEST")
     return _create_report("post", post_id, payload, db, user)

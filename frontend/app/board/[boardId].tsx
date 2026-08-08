@@ -783,7 +783,9 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
   );
 }
 
-export default function BoardPostsScreen({ initialBoardId, isTabRoot = false }: BoardPostsScreenProps = {}) {
+// ponytail: embedded (initialBoardId) == rendered inside a tab screen, so it must stay a tab root
+// and switch boards via state instead of router.replace, which would leave the (tabs) group and hide the tab bar.
+export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBoardId !== undefined }: BoardPostsScreenProps = {}) {
   const params = useLocalSearchParams<{ boardId: string }>();
   const insets = useSafeAreaInsets();
   const routeBoardId = Number(params.boardId);

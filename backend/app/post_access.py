@@ -35,8 +35,6 @@ def require_post_read(db: Session, post: Post, user: User) -> Board:
         author_unpublished = post.status in {"draft", "hidden"} and post.author_id == user.id
         if post.status != "published" and not author_unpublished:
             raise _post_not_found()
-    if board.board_type == "mutual_aid" and post.author_id != user.id and user.role != "admin":
-        raise _post_not_found()
     return board
 
 
@@ -81,6 +79,5 @@ def post_read_filter(user: User) -> ColumnElement[bool]:
         Board.is_active.is_(True),
         Board.read_permission.in_(("guest", "user")),
         post_status_read_filter(user),
-        or_(Board.board_type != "mutual_aid", Post.author_id == user.id),
     ]
     return and_(*conditions)
