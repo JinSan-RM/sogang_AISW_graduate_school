@@ -23,7 +23,7 @@ import {
   useUpdateMutualAid,
   useUpdateSuggestion,
 } from "../../../hooks/usePosts";
-import { reportApi } from "../../../services/api";
+import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
 import { postDetailBackAction, postDetailBackRoute } from "../../../utils/appRoutes";
@@ -172,6 +172,7 @@ export default function PostDetailScreen() {
   const [reportReason, setReportReason] = useState(REPORT_REASONS[0].value);
   const [reportDetail, setReportDetail] = useState("");
   const [isReporting, setIsReporting] = useState(false);
+  const [isBlockingAuthor, setIsBlockingAuthor] = useState(false);
   const [reportedTargets, setReportedTargets] = useState<Record<string, boolean>>({});
   const [suggestionStatus, setSuggestionStatus] = useState("received");
   const [suggestionReply, setSuggestionReply] = useState("");
@@ -271,11 +272,21 @@ export default function PostDetailScreen() {
   const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
   const contentUrl = firstUrlFromText(post.content);
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
-  const canEditOwn = isMine && !hasLockedSuggestion && !isNotice;
+  const canEditOwn =
+    isMine &&
+    !hasLockedSuggestion &&
+    !isNotice &&
+    (!isMutualAidRequest || canEditMutualAidRequest(post.mutual_aid?.status));
+  const canDeleteOwn =
+    isMine &&
+    !hasLockedSuggestion &&
+    !isNotice &&
+    (!isMutualAidRequest || canDeleteMutualAidRequest(post.mutual_aid?.status));
   // 관리자만 작성하는 게시판(공지사항, 동아리 홍보, 네트워킹, 원우회 활동내역 등)은 신고 대상이 아니다.
   const isAdminOnlyBoard = board?.write_permission === "admin";
   const showReportItem = !isMine && !isAdminOnlyBoard;
-  const hasPostMenu = canEditOwn || showReportItem;
+  const showBlockItem = post.author_id !== null && !isMine && !canManagePost && !isSuggestionRequest && !isAdminOnlyBoard;
+  const hasPostMenu = canEditOwn || canDeleteOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
     post.suggestion?.status ??
@@ -393,6 +404,30 @@ export default function PostDetailScreen() {
     } finally {
       setIsReporting(false);
     }
+  };
+
+  const handleBlockAuthor = () => {
+    const authorId = post.author_id;
+    if (!requireLogin() || authorId === null || isMine || isBlockingAuthor) return;
+    Alert.alert("작성자 차단", "이 작성자의 게시글과 댓글을 내 화면에서 숨길까요?", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "차단",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setIsBlockingAuthor(true);
+            await userApi.blockUser({ blocked_user_id: authorId, reason: "post_detail" });
+            Alert.alert("차단 완료", "차단한 작성자의 콘텐츠를 숨겼습니다.");
+            router.replace(`/board/${post.board_id}`);
+          } catch {
+            Alert.alert("차단 실패", "잠시 후 다시 시도하세요.");
+          } finally {
+            setIsBlockingAuthor(false);
+          }
+        },
+      },
+    ]);
   };
 
   const handleLike = async () => {
@@ -926,9 +961,9 @@ export default function PostDetailScreen() {
               placeholder="댓글을 남겨보세요"
               placeholderTextColor="#A6ACB7"
               returnKeyType="send"
-              blurOnSubmit={false}
-              onSubmitEditing={handleCreateComment}
-              style={[styles.commentInput, { outlineStyle: "none" } as never]}
+              scrollEnabled={commentInputHeight >= 88}
+              style={[styles.commentInput, { height: commentInputHeight }, { outlineStyle: "none" } as never]}
+              submitBehavior={Platform.OS === "web" ? "newline" : "submit"}
             />
             <Pressable disabled={createCommentMutation.isPending} onPress={handleCreateComment} style={styles.sendButton}>
               <Ionicons name="send" size={17} color="#FFFFFF" />
@@ -976,10 +1011,23 @@ export default function PostDetailScreen() {
                   setShowPostMenu(false);
                   startReport({ type: "post", id: post.id, label: "게시글" });
                 }}
-                style={[styles.sheetMenuItem, styles.sheetMenuItemLast]}
+                style={styles.sheetMenuItem}
               >
                 <Ionicons name="flag-outline" size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
+              </Pressable>
+            ) : null}
+            {showBlockItem ? (
+              <Pressable
+                disabled={isBlockingAuthor}
+                onPress={() => {
+                  setShowPostMenu(false);
+                  handleBlockAuthor();
+                }}
+                style={[styles.sheetMenuItem, styles.sheetMenuItemLast]}
+              >
+                <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
+                <Text style={styles.sheetMenuText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
               </Pressable>
             ) : null}
           </Pressable>

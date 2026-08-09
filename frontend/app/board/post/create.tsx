@@ -1236,8 +1236,20 @@ export default function PostCreateScreen() {
                   <View style={styles.compactAttachmentList}>
                     {attachments.map((attachment) => (
                       <View key={attachment.id} style={styles.compactAttachmentItem}>
-                        <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
-                        <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                        <Pressable
+                          accessibilityLabel={`${attachment.original_filename} 열기`}
+                          accessibilityRole="link"
+                          onPress={() => void openAttachment(attachment)}
+                          style={styles.compactAttachmentOpen}
+                        >
+                          <Ionicons name="document-outline" size={16} color={COLORS.primary} />
+                          <Text numberOfLines={1} style={styles.compactAttachmentName}>{attachment.original_filename}</Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityLabel={`${attachment.original_filename} 삭제`}
+                          hitSlop={8}
+                          onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                        >
                           <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
                         </Pressable>
                       </View>

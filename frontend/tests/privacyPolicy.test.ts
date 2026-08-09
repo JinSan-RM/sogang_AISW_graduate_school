@@ -4,16 +4,19 @@ import test from "node:test";
 import { hasReachedPrivacyPolicyEnd, PRIVACY_POLICY_SECTIONS } from "../utils/privacyPolicy";
 
 
-test("개인정보 전문은 법정 고지 항목을 공통 콘텐츠로 제공한다", () => {
-  assert.deepEqual(
-    PRIVACY_POLICY_SECTIONS.map((section) => section.title),
-    [
-      "제 1조 (수집 항목)",
-      "제 2조 (수집 목적)",
-      "제 3조 (보유 및 이용기간)",
-      "제 4조 (동의 거부 권리)",
-    ],
-  );
+test("전문은 서비스 이용약관과 개인정보 처리방침의 필수 항목을 제공한다", () => {
+  const titles = PRIVACY_POLICY_SECTIONS.map((section) => section.title);
+
+  for (const requiredTitle of [
+    "서비스 이용약관",
+    "개인정보 처리방침",
+    "제1조 (개인정보의 처리 목적)",
+    "제2조 (개인정보의 처리 및 보유 기간)",
+    "제6조 (처리하는 개인정보의 항목)",
+    "제13조 (개인정보 처리방침의 변경)",
+  ]) {
+    assert.ok(titles.includes(requiredTitle), `필수 항목 누락: ${requiredTitle}`);
+  }
 });
 
 

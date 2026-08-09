@@ -166,27 +166,6 @@ function thumbnailUrl(post: PostListItem) {
   return null;
 }
 
-function eventDays(events: EventItem[], month: Date) {
-  const days = new Set<number>();
-  const lastDate = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  for (const event of events) {
-    const start = new Date(event.start_at);
-    if (Number.isNaN(start.getTime())) continue;
-    const parsedEnd = event.end_at ? new Date(event.end_at) : start;
-    const end = Number.isNaN(parsedEnd.getTime()) ? start : parsedEnd;
-    // 시작~종료 날짜를 하루씩 순회하며 해당 월에 걸치는 모든 날짜를 표시(여러 날 일정 대응).
-    const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-    while (cursor.getTime() <= endDay.getTime()) {
-      if (cursor.getFullYear() === month.getFullYear() && cursor.getMonth() === month.getMonth()) {
-        days.add(cursor.getDate());
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-  return days;
-}
-
 function buildMonthCells(month: Date, activeDay: number, markedDays: Set<number>) {
   const firstDay = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const lastDate = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -511,16 +490,22 @@ function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; m
           </Pressable>
         ))}
       </View>
-      <Pressable
-        disabled={!nextEvent}
-        onPress={() => { if (nextEvent) router.push(`/events/${nextEvent.id}` as never); }}
-        style={styles.nextEvent}
-      >
-        <View style={styles.eventDot} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.nextEventTitle} numberOfLines={1}>
-            {nextEvent ? `${formatHomeScheduleDate(nextEvent.start_at)} · ${nextEvent.title}` : "예정된 일정이 없습니다"}
-          </Text>
+      {nextEvent ? (
+        <Pressable onPress={() => router.push(`/events/${nextEvent.id}` as never)} style={styles.nextEvent}>
+          <View style={styles.eventDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nextEventTitle} numberOfLines={1}>
+              {`${formatHomeScheduleDate(nextEvent.start_at)} · ${nextEvent.title}`}
+            </Text>
+          </View>
+          <Text style={styles.nextEventDday}>{dDayLabel(nextEvent.end_at ?? nextEvent.start_at)}</Text>
+        </Pressable>
+      ) : (
+        <View accessibilityLabel="예정된 일정이 없습니다" style={styles.nextEvent}>
+          <View style={styles.eventDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.nextEventTitle} numberOfLines={1}>예정된 일정이 없습니다</Text>
+          </View>
         </View>
       )}
     </View>
