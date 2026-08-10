@@ -24,12 +24,15 @@ test("회원가입 이름은 동명이인을 오류로 처리하지 않는다", 
 });
 
 
-test("개인정보 동의는 마이페이지와 같은 전문을 끝까지 확인한 뒤 닫는다", () => {
+test("개인정보 동의 체크와 전문 열기는 독립적으로 동작한다", () => {
   assert.match(registerSource, /PRIVACY_POLICY_SECTIONS\.map/);
   assert.match(registerSource, /visible=\{privacyModalVisible\}/);
-  assert.match(registerSource, /onContentSizeChange=/);
-  assert.match(registerSource, /hasReachedPrivacyPolicyEnd/);
-  assert.match(registerSource, /disabled=\{!privacyReadToEnd\}/);
-  assert.match(registerSource, /전문을 끝까지 확인한 후 동의할 수 있어요/);
+  assert.match(registerSource, /onPress=\{togglePrivacyConsent\}/);
+  assert.match(registerSource, /accessibilityLabel="이용약관 및 개인정보 처리방침 전문 보기"/);
+  assert.match(registerSource, /onPress=\{openPrivacyPolicy\}/);
+  assert.match(registerSource, /이용약관 및 개인정보 처리방침 동의 \(필수\)/);
+  assert.match(registerSource, /onRequestClose=\{\(\) => setPrivacyModalVisible\(false\)\}/);
+  assert.doesNotMatch(registerSource, /privacyReviewed|privacyReadToEnd|hasReachedPrivacyPolicyEnd/);
+  assert.doesNotMatch(registerSource, />전문보기<\/Text>/);
   assert.match(privacyScreenSource, /sections=\{PRIVACY_POLICY_SECTIONS\}/);
 });

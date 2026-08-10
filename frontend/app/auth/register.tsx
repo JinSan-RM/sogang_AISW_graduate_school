@@ -19,11 +19,7 @@ import {
   passwordError,
   phoneError,
 } from "../../utils/authValidation";
-import {
-  hasReachedPrivacyPolicyEnd,
-  PRIVACY_POLICY_SECTIONS,
-  PRIVACY_POLICY_SUPPORT_EMAIL,
-} from "../../utils/privacyPolicy";
+import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_SUPPORT_EMAIL } from "../../utils/privacyPolicy";
 import {
   resendAvailableAt,
   resendCountdownLabel,
@@ -92,12 +88,6 @@ export default function RegisterScreen() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [consented, setConsented] = useState(false);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
-  const [privacyReviewed, setPrivacyReviewed] = useState(false);
-  const [privacyReadToEnd, setPrivacyReadToEnd] = useState(false);
-  const [privacyContentHeight, setPrivacyContentHeight] = useState(0);
-  const [privacyViewportHeight, setPrivacyViewportHeight] = useState(0);
-  const [privacyScrollOffset, setPrivacyScrollOffset] = useState(0);
-  const reviewedPrivacyVersionRef = useRef<string | null>(null);
   const [majorModalVisible, setMajorModalVisible] = useState(false);
   const [profileValidationAttempted, setProfileValidationAttempted] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -125,32 +115,6 @@ export default function RegisterScreen() {
     const timer = setInterval(updateTimers, 1000);
     return () => clearInterval(timer);
   }, [step]);
-
-  useEffect(() => {
-    if (
-      privacyModalVisible &&
-      hasReachedPrivacyPolicyEnd({
-        contentHeight: privacyContentHeight,
-        viewportHeight: privacyViewportHeight,
-        offsetY: privacyScrollOffset,
-      })
-    ) {
-      setPrivacyReadToEnd(true);
-    }
-  }, [privacyContentHeight, privacyModalVisible, privacyScrollOffset, privacyViewportHeight]);
-
-  useEffect(() => {
-    const activeVersion = privacyPolicy?.version;
-    if (
-      privacyReviewed &&
-      reviewedPrivacyVersionRef.current &&
-      reviewedPrivacyVersionRef.current !== activeVersion
-    ) {
-      reviewedPrivacyVersionRef.current = null;
-      setPrivacyReviewed(false);
-      setConsented(false);
-    }
-  }, [privacyPolicy?.version, privacyReviewed]);
 
   const goBack = () => {
     if (step === 1 || step === 2) {
@@ -303,26 +267,10 @@ export default function RegisterScreen() {
       }));
       return;
     }
-    setPrivacyReadToEnd(false);
-    setPrivacyContentHeight(0);
-    setPrivacyViewportHeight(0);
-    setPrivacyScrollOffset(0);
     setPrivacyModalVisible(true);
   };
 
-  const confirmPrivacyReview = () => {
-    if (!privacyReadToEnd || !privacyPolicy) return;
-    reviewedPrivacyVersionRef.current = privacyPolicy.version;
-    setPrivacyReviewed(true);
-    setPrivacyModalVisible(false);
-    setErrors((current) => ({ ...current, consent: undefined }));
-  };
-
   const togglePrivacyConsent = () => {
-    if (!privacyReviewed || reviewedPrivacyVersionRef.current !== privacyPolicy?.version) {
-      openPrivacyPolicy();
-      return;
-    }
     setConsented((value) => !value);
     setErrors((current) => ({ ...current, consent: undefined }));
   };
@@ -353,8 +301,6 @@ export default function RegisterScreen() {
       const errorCode = apiErrorCode(error);
       if (errorCode === "PRIVACY_POLICY_VERSION_MISMATCH") {
         setConsented(false);
-        setPrivacyReviewed(false);
-        reviewedPrivacyVersionRef.current = null;
         await registrationOptionsQuery.refetch();
         setErrors({ consent: "개인정보 처리방침이 변경되었어요. 내용을 확인하고 다시 동의해주세요." });
         return;
@@ -557,7 +503,7 @@ export default function RegisterScreen() {
               </View>
               <View style={styles.consentRow}>
                 <Pressable
-                  accessibilityHint={privacyReviewed ? "개인정보 수집 및 이용 동의를 변경합니다." : "개인정보 수집 및 이용 전문을 엽니다."}
+                  accessibilityHint="이용약관 및 개인정보 처리방침 동의를 변경합니다."
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: consented, disabled: !privacyPolicy }}
                   disabled={!privacyPolicy}
@@ -565,20 +511,19 @@ export default function RegisterScreen() {
                   style={styles.consentToggle}
                 >
                   <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><Ionicons name="checkmark" size={13} color="#FFFFFF" /></View>
-                  <Text style={styles.consentText}>개인정보 수집 및 이용 동의 (필수)</Text>
+                  <Text style={styles.consentText}>이용약관 및 개인정보 처리방침 동의 (필수)</Text>
                 </Pressable>
                 <Pressable
+                  accessibilityLabel="이용약관 및 개인정보 처리방침 전문 보기"
                   accessibilityRole="link"
                   disabled={!privacyPolicy}
                   hitSlop={6}
                   onPress={openPrivacyPolicy}
                   style={styles.privacyDetailsLink}
                 >
-                  <Text style={styles.privacyDetailsText}>전문보기</Text>
-                  <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
                 </Pressable>
               </View>
-              {!privacyReviewed ? <Text style={styles.privacyReviewHint}>전문을 끝까지 확인한 후 동의할 수 있어요.</Text> : null}
               <FieldError message={errors.consent} />
               <FieldError message={errors.form} />
               <Pressable disabled={isSubmitting} onPress={register} style={[styles.primaryButton, registerBlocked ? styles.validationDisabledButton : null]}>
@@ -615,9 +560,7 @@ export default function RegisterScreen() {
 
       <Modal
         animationType="slide"
-        onRequestClose={() => {
-          if (privacyReadToEnd) confirmPrivacyReview();
-        }}
+        onRequestClose={() => setPrivacyModalVisible(false)}
         transparent
         visible={privacyModalVisible}
       >
@@ -627,18 +570,11 @@ export default function RegisterScreen() {
             <View style={styles.privacyModalHeader}>
               <View style={styles.privacyModalTitleRow}>
                 <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
-                <Text style={styles.privacyModalTitle}>개인정보 수집 및 이용 동의</Text>
+                <Text style={styles.privacyModalTitle}>이용약관 및 개인정보 처리방침</Text>
               </View>
-              <Text style={styles.privacyModalInstruction}>전문을 끝까지 확인해야 닫을 수 있어요.</Text>
+              <Text style={styles.privacyModalInstruction}>내용을 확인하고 언제든 닫을 수 있어요.</Text>
             </View>
-            <ScrollView
-              contentContainerStyle={styles.privacyModalContent}
-              onContentSizeChange={(_, height) => setPrivacyContentHeight(height)}
-              onLayout={(event) => setPrivacyViewportHeight(event.nativeEvent.layout.height)}
-              onScroll={(event) => setPrivacyScrollOffset(event.nativeEvent.contentOffset.y)}
-              scrollEventThrottle={16}
-              style={styles.privacyModalScroll}
-            >
+            <ScrollView contentContainerStyle={styles.privacyModalContent} style={styles.privacyModalScroll}>
               <View style={styles.privacyPolicyMeta}>
                 <Text style={styles.privacyPolicyMetaText}>버전: {privacyPolicy?.version ?? "-"}</Text>
                 <Text style={styles.privacyPolicyMetaText}>시행일: {privacyPolicy?.effective_at?.slice(0, 10) ?? "-"}</Text>
@@ -653,19 +589,14 @@ export default function RegisterScreen() {
                 <Text style={styles.privacyPolicySectionTitle}>개인정보 문의</Text>
                 <Text style={styles.privacyPolicyBody}>{PRIVACY_POLICY_SUPPORT_EMAIL}</Text>
               </View>
-              <Text style={styles.privacyPolicyEnd}>전문을 모두 확인했습니다.</Text>
             </ScrollView>
             <View style={styles.privacyModalFooter}>
-              <Text style={[styles.privacyModalFooterHint, privacyReadToEnd ? styles.privacyModalFooterHintDone : null]}>
-                {privacyReadToEnd ? "내용을 모두 확인했어요." : "아래로 끝까지 내려주세요."}
-              </Text>
               <Pressable
                 accessibilityRole="button"
-                disabled={!privacyReadToEnd}
-                onPress={confirmPrivacyReview}
-                style={[styles.primaryButton, !privacyReadToEnd ? styles.validationDisabledButton : null]}
+                onPress={() => setPrivacyModalVisible(false)}
+                style={styles.primaryButton}
               >
-                <Text style={styles.primaryButtonText}>{privacyReadToEnd ? "내용을 확인했어요" : "끝까지 읽어주세요"}</Text>
+                <Text style={styles.primaryButtonText}>닫기</Text>
               </Pressable>
             </View>
           </View>
@@ -720,9 +651,7 @@ const styles = StyleSheet.create({
   checkBox: { width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 5, backgroundColor: "#C7CCD4" }, // Figma: 20, radius 5, gray/300 unchecked
   checkBoxActive: { backgroundColor: COLORS.primary }, // Figma: primary/500 checked
   consentText: { color: COLORS.text, fontSize: 14, fontWeight: "400" }, // Figma: Regular 14
-  privacyDetailsLink: { flexDirection: "row", alignItems: "center", gap: 1, paddingVertical: 4 },
-  privacyDetailsText: { color: COLORS.primary, fontSize: 12, fontWeight: "700", textDecorationLine: "underline" },
-  privacyReviewHint: { color: COLORS.tertiary, fontSize: 12, fontWeight: "400", lineHeight: 18, marginTop: -12, paddingLeft: 28 },
+  privacyDetailsLink: { alignItems: "center", justifyContent: "center", paddingLeft: 8, paddingVertical: 4 },
   completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
   completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
   completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280
@@ -751,8 +680,5 @@ const styles = StyleSheet.create({
   privacyPolicySection: { gap: 5 },
   privacyPolicySectionTitle: { color: COLORS.text, fontSize: 14, fontWeight: "700", lineHeight: 20 },
   privacyPolicyBody: { color: COLORS.text, fontSize: 13, fontWeight: "400", lineHeight: 21 },
-  privacyPolicyEnd: { color: "#2E9E5B", fontSize: 12, fontWeight: "600", textAlign: "center", paddingVertical: 8 },
   privacyModalFooter: { gap: 8, borderTopWidth: 1, borderTopColor: "#EAECEF", backgroundColor: COLORS.bg, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
-  privacyModalFooterHint: { color: COLORS.tertiary, fontSize: 12, fontWeight: "400", textAlign: "center" },
-  privacyModalFooterHintDone: { color: "#2E9E5B", fontWeight: "600" },
 });

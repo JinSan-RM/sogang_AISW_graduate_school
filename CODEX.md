@@ -149,7 +149,7 @@ P1 strongly recommended:
 - Completed: immediate notice notifications and idempotent event D-day/D-1 dispatch.
 - Completed: admin statistics dashboard and operational audit log.
 - Completed: signup display names allow duplicate real names while school email remains the unique account identity.
-- Completed: signup privacy consent reuses the My Page policy content, requires scrolling to the end before the sheet can close, and keeps the final checkbox choice explicit.
+- Completed: signup privacy consent reuses the My Page policy content, lets the checkbox toggle consent directly, and opens the freely closable full document only from the right chevron.
 - Completed: pagination and empty/error/loading states for notifications, search, and activity lists.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
 - Completed P1 bug #47: mutual-aid event dates are disabled and revalidated before KST D+2 in the mobile form, and the API rejects direct create/date-change bypasses while allowing unchanged historical dates during other edits.

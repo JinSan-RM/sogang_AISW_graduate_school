@@ -180,7 +180,7 @@ Register:
 - Step 2: six-digit email verification code.
 - Step 3: name/nickname, cohort, active major, phone, password/confirmation, and current privacy-policy consent.
 - Major options and privacy-policy version come from the public registration-options API and are managed by admins.
-- Privacy consent opens the same full document used by the My Page legal screen. The sheet cannot close until the user reaches the end; returning to signup does not auto-check consent, so the user still makes an explicit checkbox choice.
+- The privacy checkbox toggles consent directly. Only the right chevron opens the same full document used by the My Page legal screen, and the sheet can close at any scroll position. Signup still requires explicit consent to the active privacy-policy version.
 
 Password reset:
 
