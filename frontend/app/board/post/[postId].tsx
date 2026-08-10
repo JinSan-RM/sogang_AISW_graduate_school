@@ -748,9 +748,15 @@ export default function PostDetailScreen() {
                       Alert.alert("파일 열기 실패", "첨부 파일에 접근할 수 없습니다.");
                     }
                   }}
-                  style={isImage ? styles.imageAttachment : styles.fileAttachment}
+                  style={isImage ? [styles.imageAttachment, isNotice ? styles.noticeImageAttachment : null] : styles.fileAttachment}
                 >
-                  {isImage ? <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} /> : null}
+                  {isImage ? (
+                    isNotice ? (
+                      <MediaImage media={attachment} resizeMode="contain" style={styles.noticeAttachmentImage} />
+                    ) : (
+                      <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
+                    )
+                  ) : null}
                   {!isImage ? (
                     <>
                       <Ionicons name="document-outline" size={18} color={COLORS.subtle} />
@@ -1775,6 +1781,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden",
     backgroundColor: "#F3F4F6",
+  },
+  noticeImageAttachment: {
+    height: 230,
+  },
+  noticeAttachmentImage: {
+    width: "100%",
+    height: "100%",
   },
   attachmentImage: {
     width: "100%",

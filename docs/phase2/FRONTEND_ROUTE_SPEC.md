@@ -114,6 +114,7 @@ Presentation rules from the approved Figma capture set:
 - Schedule day headers use `YY.MM.DD(weekday)`, rows use `HH:mm`, and schedule detail metadata uses `YY.MM.DD(weekday) · HH:mm`.
 - Home schedule summaries use `MM.DD(weekday)`.
 - Home banners are image-only assets registered by an administrator. The app renders the selected responsive image without synthesized title, badge, description, deadline, theme overlay, or gradient; only the carousel page indicator and optional navigation link remain app UI.
+- Notice-detail image attachments use a full-width, 230px-high frame with `contain` sizing so the entire image remains visible; other post-detail image attachments keep their approved natural-aspect presentation.
 - Notification rows are an explicit exception: today's items use `오전/오후 h:mm`, and older rows use `YY.MM.DD` without a weekday.
 - Council activity-history rows contain date and title only; their detail contains title, divider, and body without reactions or comments.
 - Mutual-aid member list status labels are `처리중`, `완료`, and `반려`.

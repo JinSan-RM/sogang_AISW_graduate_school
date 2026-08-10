@@ -58,9 +58,12 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 상세 이미지가 고정 높이 대신 원본 비율 컴포넌트를 사용한다", () => {
+test("#41·45 공지 상세 이미지는 고정 프레임 안에 전체 사진을 표시한다", () => {
   assert.match(postDetailSource, /<NaturalAspectMediaImage media=\{heroAttachment\}/);
+  assert.match(postDetailSource, /isNotice \? \([\s\S]*<MediaImage media=\{attachment\} resizeMode="contain" style=\{styles\.noticeAttachmentImage\}/);
   assert.match(postDetailSource, /<NaturalAspectMediaImage media=\{attachment\}/);
+  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 230/);
+  assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
 });
 
 test("#29·31 상조회 입력 안내는 일반 굵기이고 상세 비고는 증빙서류 바로 앞에 표시된다", () => {
