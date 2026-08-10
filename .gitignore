@@ -85,6 +85,7 @@ frontend/.git.backup-*/
 
 # Local Codex verification artifacts
 .codex-tmp/
+.worktrees/
 outputs/
 ~$*.xlsx
 
