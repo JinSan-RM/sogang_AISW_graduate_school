@@ -809,28 +809,57 @@ def update_post(
         _validate_admin_participation_post(board, payload.metadata, current_user)
     if post.author_id != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
-    if board is not None:
-        _validate_post_content(board, payload.content)
+    target_board = board
+    if payload.board_id is not None and payload.board_id != post.board_id:
+        if board.category != "resources" or board.board_type != "resource":
+            raise AppException(
+                status_code=400,
+                message="Posts can only be moved between resource boards.",
+                code="BAD_REQUEST",
+            )
+        target_board = db.get(Board, payload.board_id)
+        if target_board is None or not target_board.is_active:
+            raise AppException(status_code=404, message="Board not found.", code="NOT_FOUND")
+        if target_board.category != "resources" or target_board.board_type != "resource":
+            raise AppException(
+                status_code=400,
+                message="Posts can only be moved between resource boards.",
+                code="BAD_REQUEST",
+            )
+        if not can_read_board(current_user, target_board.read_permission) or not can_write_board(
+            current_user,
+            target_board.write_permission,
+        ):
+            raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
+
+    if target_board is not None:
+        _validate_post_content(target_board, payload.content)
     if board is not None and board.board_type == "suggestion" and current_user.role != "admin":
         if _suggestion_has_admin_reply(db, post.id):
             raise AppException(status_code=403, message="Answered suggestions cannot be edited.", code="FORBIDDEN")
-    if payload.is_anonymous and (board is None or (not board.allow_anonymous and board.board_type != "suggestion")):
+    if payload.is_anonymous and (
+        target_board is None or (not target_board.allow_anonymous and target_board.board_type != "suggestion")
+    ):
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
 
-    is_anonymous = True if board is not None and board.board_type == "suggestion" else payload.is_anonymous
+    is_anonymous = (
+        True if target_board is not None and target_board.board_type == "suggestion" else payload.is_anonymous
+    )
+    if target_board is not None:
+        post.board_id = target_board.id
     post.title = payload.title
-    post.content = "" if board is not None and board.board_type == "album" else payload.content
+    post.content = "" if target_board is not None and target_board.board_type == "album" else payload.content
     post.is_anonymous = is_anonymous
-    post.category = None if board is not None and board.board_type == "album" else payload.category
-    post.metadata_json = _metadata_for_update(post, board, payload.metadata)
-    post.deadline_at = payload.deadline_at if board is not None and board.board_type == "notice" else None
-    if board is not None:
-        _upsert_suggestion_extension(db, post, board, payload.category)
-        _upsert_mutual_aid_extension(db, post, board, payload.category, payload.metadata)
+    post.category = None if target_board is not None and target_board.board_type == "album" else payload.category
+    post.metadata_json = _metadata_for_update(post, target_board, payload.metadata)
+    post.deadline_at = payload.deadline_at if target_board is not None and target_board.board_type == "notice" else None
+    if target_board is not None:
+        _upsert_suggestion_extension(db, post, target_board, payload.category)
+        _upsert_mutual_aid_extension(db, post, target_board, payload.category, payload.metadata)
     if payload.attachment_ids is not None:
         _replace_attachments(db, post.id, payload.attachment_ids, current_user, _evidence_link(payload.metadata))
-    if board is not None:
-        _ensure_admin_participation_image(db, post, board)
+    if target_board is not None:
+        _ensure_admin_participation_image(db, post, target_board)
     db.commit()
     db.refresh(post)
 

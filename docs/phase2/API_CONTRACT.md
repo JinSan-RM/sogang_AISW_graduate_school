@@ -863,7 +863,27 @@ Rules:
 
 Auth: author or admin
 
-Request: same as create.
+Request: same as create, with an optional target board for resource-sharing edits.
+
+```json
+{
+  "board_id": 12,
+  "title": "Updated resource title",
+  "content": "Updated resource content",
+  "is_anonymous": false,
+  "attachment_ids": [1, 2]
+}
+```
+
+Response:
+
+```json
+{
+  "id": 10
+}
+```
+
+`board_id` may differ from the current board only when both the source and target are active boards with `category = resources` and `board_type = resource`. The API verifies the caller's target-board read/write permission and preserves the post ID, attachments, comments, likes, and bookmarks. Other cross-board moves return `400 BAD_REQUEST`.
 
 For mutual-aid requests, changing `metadata.event_date` applies the same KST D+2 rule as creation. An unchanged historical date may be retained while other editable fields are updated, so an existing processing request does not become uneditable merely because time passed.
 Members may update their own mutual-aid request only while its workflow status is `processing`. A `completed` or `rejected` request is immutable; administrators change workflow status only through the dedicated mutual-aid endpoint.

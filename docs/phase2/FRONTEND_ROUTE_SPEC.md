@@ -73,7 +73,7 @@ The Home schedule card changes its displayed month and `GET /events` range in pl
 
 ## 4. Board List Screen Requirements
 
-Community tab opens the `event-album` board when available and exposes `행사 사진첩 / 자료공유` as section tabs. Resource sharing offers `강의후기`, `시험족보`, `종합시험`, and `졸업논문`; `graduation-thesis` is a member-writable resource board. Participation activity certification uses a source-post selection sheet instead of free-text activity names.
+Community tab opens the `event-album` board when available and exposes `행사 사진첩 / 자료공유` as section tabs. Resource sharing offers `강의후기`, `시험족보`, `종합시험`, and `졸업논문`; `graduation-thesis` is a member-writable resource board. The resource post edit screen exposes a board picker limited to these active resource boards, and moving a post preserves its existing detail URL and related content. Participation activity certification uses a source-post selection sheet instead of free-text activity names.
 
 The participation club and networking guide lists are backed by `club-promo` and `networking-programs`. Only admins see their create entry points. Create/edit requires a representative image and an HTTP(S) participation URL; detail binds the `가입 신청` or `참가 신청` button to that URL.
 

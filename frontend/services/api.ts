@@ -390,6 +390,7 @@ export const postApi = {
   updatePost: async (
     postId: number,
     payload: {
+      board_id?: number;
       title: string;
       content: string;
       is_anonymous?: boolean;

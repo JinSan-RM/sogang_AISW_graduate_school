@@ -12,6 +12,7 @@ import { usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
 import LoadingState from "../../../../components/LoadingState";
 import type { MediaAsset } from "../../../../types";
 import { pickAndUploadImages } from "../../../../utils/mediaPicker";
+import { resourcePostEditBoards } from "../../../../utils/resourceBoards";
 
 const COLORS = {
   primary: "#2761FF",
@@ -41,7 +42,13 @@ export default function PostEditScreen() {
   const { data, isError, isLoading, refetch } = usePostDetail(postId);
   const post = data?.data;
   const { data: boardsRes } = useBoardsQuery();
-  const board = boardsRes?.data.flatMap((group) => group.boards).find((item) => item.id === post?.board_id);
+  const boards = boardsRes?.data.flatMap((group) => group.boards) ?? [];
+  const board = boards.find((item) => item.id === post?.board_id);
+  const resourceBoardOptions = resourcePostEditBoards(boards, board);
+  const [selectedBoardId, setSelectedBoardId] = useState(0);
+  const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false);
+  const selectedBoard = resourceBoardOptions.find((item) => item.id === selectedBoardId) ?? board;
+  const isResourceEdit = resourceBoardOptions.length > 0;
   const isStudyRecruit = board?.slug === "study-recruit";
   const isAdminParticipationPost = board?.slug === "club-promo" || board?.slug === "networking-programs";
   const isAlbum = board?.board_type === "album";
@@ -58,6 +65,7 @@ export default function PostEditScreen() {
 
   useEffect(() => {
     if (!post) return;
+    setSelectedBoardId((current) => current || post.board_id);
     reset({
       title: post.title,
       category: post.category ?? "",
@@ -128,6 +136,7 @@ export default function PostEditScreen() {
 
     updateMutation.mutate(
       {
+        board_id: isResourceEdit ? selectedBoardId || post.board_id : undefined,
         title: values.title.trim(),
         content: isAlbum ? values.title.trim() : content,
         category: values.category?.trim() || undefined,
@@ -147,7 +156,13 @@ export default function PostEditScreen() {
         is_anonymous: post.is_anonymous,
       },
       {
-        onSuccess: goBack,
+        onSuccess: () => {
+          if (isResourceEdit && selectedBoardId !== post.board_id) {
+            router.replace(`/board/post/${postId}`);
+            return;
+          }
+          goBack();
+        },
         onError: () => Alert.alert("저장 실패", "작성자 또는 관리자만 이 게시글을 수정할 수 있습니다."),
       }
     );
@@ -180,9 +195,47 @@ export default function PostEditScreen() {
       </View>
 
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroller} contentContainerStyle={styles.content}>
-        <View style={styles.readOnlyField}>
-          <Text numberOfLines={1} style={styles.readOnlyText}>{boardLabel}</Text>
-        </View>
+        {isResourceEdit ? (
+          <View>
+            <Text style={styles.fieldLabel}>게시판</Text>
+            <Pressable
+              accessibilityLabel="게시판 선택"
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isBoardMenuOpen }}
+              onPress={() => setIsBoardMenuOpen((current) => !current)}
+              style={styles.boardSelect}
+            >
+              <Text numberOfLines={1} style={styles.readOnlyText}>{selectedBoard?.name ?? "게시판 선택"}</Text>
+              <Ionicons name={isBoardMenuOpen ? "chevron-up" : "chevron-down"} size={18} color={COLORS.muted} />
+            </Pressable>
+            {isBoardMenuOpen ? (
+              <View style={styles.boardMenu}>
+                {resourceBoardOptions.map((option) => {
+                  const selected = option.id === selectedBoardId;
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={option.id}
+                      onPress={() => {
+                        setSelectedBoardId(option.id);
+                        setIsBoardMenuOpen(false);
+                      }}
+                      style={[styles.boardOption, selected ? styles.boardOptionSelected : null]}
+                    >
+                      <Text style={[styles.boardOptionText, selected ? styles.boardOptionTextSelected : null]}>{option.name}</Text>
+                      {selected ? <Ionicons name="checkmark" size={18} color={COLORS.primary} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.readOnlyField}>
+            <Text numberOfLines={1} style={styles.readOnlyText}>{boardLabel}</Text>
+          </View>
+        )}
 
         {isStudyRecruit ? (
           <Controller
@@ -404,6 +457,44 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+  },
+  boardSelect: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  boardMenu: {
+    marginTop: 6,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+  },
+  boardOption: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+  },
+  boardOptionSelected: {
+    backgroundColor: "#EDF2FE",
+  },
+  boardOptionText: {
+    color: COLORS.text,
+    fontSize: 14,
+  },
+  boardOptionTextSelected: {
+    color: COLORS.primary,
+    fontWeight: "700",
   },
   statusRow: {
     flexDirection: "row",

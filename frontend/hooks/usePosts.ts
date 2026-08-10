@@ -59,6 +59,7 @@ export function usePostComments(postId: number, enabled = true) {
 }
 
 type PostMutationPayload = {
+  board_id?: number;
   title: string;
   content: string;
   is_anonymous?: boolean;
@@ -81,9 +82,16 @@ export function useUpdatePost(postId: number, boardId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: PostMutationPayload) => postApi.updatePost(postId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["post", postId] });
-      queryClient.invalidateQueries({ queryKey: ["posts", boardId] });
+    onSuccess: async (_response, payload) => {
+      const invalidations = [
+        queryClient.invalidateQueries({ queryKey: ["post", postId] }),
+        queryClient.invalidateQueries({ queryKey: ["posts", boardId] }),
+        queryClient.invalidateQueries({ queryKey: ["multi-board-posts"] }),
+      ];
+      if (payload.board_id && payload.board_id !== boardId) {
+        invalidations.push(queryClient.invalidateQueries({ queryKey: ["posts", payload.board_id] }));
+      }
+      await Promise.all(invalidations);
     },
   });
 }
