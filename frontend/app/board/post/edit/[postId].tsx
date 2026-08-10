@@ -211,7 +211,7 @@ export default function PostEditScreen() {
           name="title"
           render={({ field, fieldState }) => (
             <View>
-              {isStudyRecruit ? <Text style={styles.fieldLabel}>제목</Text> : null}
+              <Text style={styles.fieldLabel}>제목</Text>
               <TextInput
                 accessibilityLabel="제목"
                 multiline
@@ -234,7 +234,7 @@ export default function PostEditScreen() {
             name="content"
             render={({ field, fieldState }) => (
               <View>
-                {isStudyRecruit ? <Text style={styles.fieldLabel}>내용</Text> : null}
+                <Text style={styles.fieldLabel}>내용</Text>
                 <TextInput
                   accessibilityLabel="내용"
                   multiline

@@ -110,8 +110,12 @@ test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시
   assert.match(postDetailSource, /name="remove-circle-outline"/);
 });
 
-test("#71 스터디 수정 화면은 입력 항목 라벨을 항상 노출한다", () => {
-  for (const label of ["모집 상태", "제목", "내용", "스터디장 연락수단"]) {
+test("#71 게시글 수정 화면은 제목과 내용 라벨을 게시판 종류와 관계없이 노출한다", () => {
+  assert.match(postEditSource, /<Text style=\{styles\.fieldLabel\}>제목<\/Text>\s*<TextInput/);
+  assert.match(postEditSource, /<Text style=\{styles\.fieldLabel\}>내용<\/Text>\s*<TextInput/);
+  assert.doesNotMatch(postEditSource, /isStudyRecruit \? <Text style=\{styles\.fieldLabel\}>(?:제목|내용)<\/Text>/);
+
+  for (const label of ["모집 상태", "스터디장 연락수단"]) {
     assert.match(postEditSource, new RegExp(`>${label}<`));
   }
 });
