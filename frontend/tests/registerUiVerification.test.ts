@@ -9,10 +9,12 @@ const privacyScreenSource = readFileSync("app/legal/privacy.tsx", "utf8");
 
 test("회원가입 인증 단계는 최초 발송과 재전송 상태를 구분한다", () => {
   assert.match(registerSource, /setVerificationMessage\(resend \?/);
-  assert.match(registerSource, /`재전송\$\{resendCooldown > 0/);
-  assert.match(registerSource, /formatCountdown\(resendCooldown\)/);
+  assert.match(registerSource, /signupProgressDotIndex\(step\)/);
+  assert.match(registerSource, /resendAvailableAt\(responseReceivedAt, resendIn\)/);
+  assert.match(registerSource, /resendCountdownLabel\(resendCooldown\)/);
+  assert.match(registerSource, /disabled=\{isSubmitting \|\| resendCooldown > 0\}/);
   assert.match(registerSource, /verificationExpired \? \(/);
-  assert.match(registerSource, />\{isSubmitting \? "발송 중" : "인증코드 재전송"\}<\/Text>/);
+  assert.match(registerSource, /resendCooldown > 0 \? resendCountdownLabel\(resendCooldown\) : "인증코드 재전송"/);
 });
 
 

@@ -14,7 +14,6 @@ import {
   apiRetryAfterSeconds,
   composeSchoolEmail,
   emailIdError,
-  formatCountdown,
   isApiResponseUncertain,
   isEmailDeliveryConfirmed,
   passwordError,
@@ -25,6 +24,11 @@ import {
   PRIVACY_POLICY_SECTIONS,
   PRIVACY_POLICY_SUPPORT_EMAIL,
 } from "../../utils/privacyPolicy";
+import {
+  resendAvailableAt,
+  resendCountdownLabel,
+  signupProgressDotIndex,
+} from "../../utils/signupVerificationUi";
 
 const COLORS = {
   primary: "#2761FF", // primary/500
@@ -50,9 +54,10 @@ const UNCERTAIN_VERIFICATION_SECONDS = 5 * 60;
 const UNCERTAIN_RESEND_SECONDS = 5 * 60;
 
 function StepDots({ step }: { step: number }) {
+  const activeStep = signupProgressDotIndex(step);
   return (
     <View style={styles.stepDots}>
-      {[0, 1, 2].map((item) => <View key={item} style={[styles.stepDot, step === item ? styles.stepDotActive : null]} />)}
+      {[0, 1, 2].map((item) => <View key={item} style={[styles.stepDot, activeStep === item ? styles.stepDotActive : null]} />)}
     </View>
   );
 }
@@ -182,8 +187,8 @@ export default function RegisterScreen() {
       setVerificationToken("");
       verificationExpiresAtRef.current = requestStartedAt + response.data.expires_in * 1000;
       const resendIn = response.data.resend_in ?? response.data.expires_in;
-      resendAvailableAtRef.current = requestStartedAt + resendIn * 1000;
       const responseReceivedAt = Date.now();
+      resendAvailableAtRef.current = resendAvailableAt(responseReceivedAt, resendIn);
       setCountdown(
         Math.max(0, Math.ceil((verificationExpiresAtRef.current - responseReceivedAt) / 1000)),
       );
@@ -475,37 +480,32 @@ export default function RegisterScreen() {
                         {verificationMessage.text}
                       </Text>
                     </View>
-                  ) : (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityState={{ disabled: isSubmitting || resendCooldown > 0 }}
-                      disabled={isSubmitting || resendCooldown > 0}
-                      hitSlop={8}
-                      onPress={() => void requestCode(true)}
-                    >
-                      <Text style={styles.resendLink}>
-                        {isSubmitting
-                          ? "발송 중"
-                          : `재전송${resendCooldown > 0 ? `  (${formatCountdown(resendCooldown)})` : ""}`}
-                      </Text>
-                    </Pressable>
-                  )}
+                  ) : null}
                 </View>
-                {verificationExpired || verificationAttemptsLocked || !verificationMessage ? null : resendCooldown > 0 ? (
-                  <Text style={styles.timerText}>{formatCountdown(resendCooldown)}</Text>
-                ) : (
-                  <Pressable disabled={isSubmitting} onPress={() => void requestCode(true)} hitSlop={8}>
-                    <Text style={styles.resendLink}>{isSubmitting ? "발송 중" : "재전송"}</Text>
+                {verificationExpired || verificationAttemptsLocked ? null : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: isSubmitting || resendCooldown > 0 }}
+                    disabled={isSubmitting || resendCooldown > 0}
+                    hitSlop={8}
+                    onPress={() => void requestCode(true)}
+                    style={!codeError && !verificationMessage ? styles.resendControlLeading : styles.resendControlTrailing}
+                  >
+                    <Text style={styles.resendLink}>
+                      {isSubmitting ? "발송 중" : resendCountdownLabel(resendCooldown)}
+                    </Text>
                   </Pressable>
                 )}
               </View>
               {verificationExpired ? (
                 <Pressable
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || resendCooldown > 0}
                   onPress={() => void requestCode(true)}
-                  style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null]}
+                  style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null, resendCooldown > 0 ? styles.validationDisabledButton : null]}
                 >
-                  <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 재전송"}</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {isSubmitting ? "발송 중" : resendCooldown > 0 ? resendCountdownLabel(resendCooldown) : "인증코드 재전송"}
+                  </Text>
                 </Pressable>
               ) : (
                 <Pressable
@@ -695,9 +695,10 @@ const styles = StyleSheet.create({
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
   errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statusRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, marginTop: -12 },
+  statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8, marginTop: -12 },
   statusLeft: { flexShrink: 1, minWidth: 0 },
-  timerText: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  resendControlLeading: { alignSelf: "flex-start" },
+  resendControlTrailing: { marginLeft: "auto" },
   resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular 12
   successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
