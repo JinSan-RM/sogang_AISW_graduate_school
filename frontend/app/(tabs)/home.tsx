@@ -20,6 +20,7 @@ import {
 } from "react-native";
 
 import { MediaImageBackground } from "../../components/MediaImage";
+import HomeSectionGate from "../../components/HomeSectionGate";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
@@ -75,6 +76,7 @@ const HORIZONTAL_PADDING = 20;
 const ALBUM_CARD_WIDTH = 120;
 const ALBUM_CARD_GAP = 10;
 const HOME_ALBUM_LIMIT = 10;
+const SHOW_HOME_POPULAR_POSTS = false;
 const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#2761FF", "#8EC9FF"],
   ["#5B49C8", "#B7A4F8"],
@@ -512,33 +514,59 @@ function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; m
   );
 }
 
-function PopularPosts({ posts, compact }: { posts: PostListItem[]; compact: boolean }) {
-  const rows = posts.slice(0, 2);
-  if (!rows.length) {
-    return <HomeEmptyState type="popular" />;
-  }
+// 이 부분이 홈 인기게시글 코드입니다.
+function HomePopularPostsSection({
+  boardId,
+  boardsError,
+  compact,
+  refetchBoards,
+}: {
+  boardId?: number;
+  boardsError: boolean;
+  compact: boolean;
+  refetchBoards: () => Promise<unknown>;
+}) {
+  const popularQuery = useQuery({
+    queryKey: ["home", "popular", boardId],
+    queryFn: () => postApi.getPosts(boardId ?? 0, 1, 2, { sort: "popular" }),
+    enabled: Boolean(boardId),
+  });
+  const rows = (popularQuery.data?.data ?? []).slice(0, 2);
 
   return (
-    <View style={[styles.popularGrid, compact ? styles.popularGridCompact : null]}>
-      {rows.map((post) => (
-        <Pressable key={post.id} onPress={() => router.push(`/board/post/${post.id}` as never)} style={styles.popularCard}>
-          <View style={styles.categoryPill}>
-            <Text style={styles.categoryPillText} numberOfLines={1}>
-              {post.category || "커뮤니티"}
-            </Text>
-          </View>
-          <Text style={styles.popularTitle} numberOfLines={2}>
-            {post.title}
-          </Text>
-          <View style={styles.postStats}>
-            <Ionicons name="chatbubble-outline" size={11} color={COLORS.muted} />
-            <Text style={styles.statText}>{post.comment_count}</Text>
-            <Ionicons name="heart-outline" size={11} color={COLORS.muted} />
-            <Text style={styles.statText}>{post.like_count}</Text>
-          </View>
-        </Pressable>
-      ))}
-    </View>
+    <>
+      <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((boardId ? `/board/${boardId}` : COMMUNITY_TAB_ROUTE) as never)} />
+      {popularQuery.isLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      ) : boardsError || popularQuery.isError ? (
+        <HomeErrorState label="인기 게시글" onRetry={() => void Promise.all([refetchBoards(), popularQuery.refetch()])} />
+      ) : rows.length === 0 ? (
+        <HomeEmptyState type="popular" />
+      ) : (
+        <View style={[styles.popularGrid, compact ? styles.popularGridCompact : null]}>
+          {rows.map((post) => (
+            <Pressable key={post.id} onPress={() => router.push(`/board/post/${post.id}` as never)} style={styles.popularCard}>
+              <View style={styles.categoryPill}>
+                <Text style={styles.categoryPillText} numberOfLines={1}>
+                  {post.category || "커뮤니티"}
+                </Text>
+              </View>
+              <Text style={styles.popularTitle} numberOfLines={2}>
+                {post.title}
+              </Text>
+              <View style={styles.postStats}>
+                <Ionicons name="chatbubble-outline" size={11} color={COLORS.muted} />
+                <Text style={styles.statText}>{post.comment_count}</Text>
+                <Ionicons name="heart-outline" size={11} color={COLORS.muted} />
+                <Text style={styles.statText}>{post.like_count}</Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </>
   );
 }
 
@@ -623,11 +651,6 @@ export default function HomeScreen() {
     queryKey: ["home", "events", monthRange.start, monthRange.end],
     queryFn: () => eventApi.getEvents({ from_date: monthRange.start, to_date: monthRange.end }),
   });
-  const popularQuery = useQuery({
-    queryKey: ["home", "popular", popularBoardId],
-    queryFn: () => postApi.getPosts(popularBoardId ?? 0, 1, 2, { sort: "popular" }),
-    enabled: Boolean(popularBoardId),
-  });
   const albumQuery = useQuery({
     queryKey: ["home", "album", albumBoardId],
     queryFn: () => postApi.getPosts(albumBoardId ?? 0, 1, HOME_ALBUM_LIMIT, { sort: "latest" }),
@@ -643,7 +666,6 @@ export default function HomeScreen() {
   const banners = bannersQuery.data?.data ?? [];
   const notices = noticesQuery.data?.data ?? [];
   const events = eventsQuery.data?.data ?? [];
-  const popularPosts = popularQuery.data?.data ?? [];
   const albumPosts = albumQuery.data?.data ?? [];
   const hasUnreadNotifications = (notificationQuery.data?.data ?? []).some((notification) => !notification.is_read);
   const displayName = user?.nickname || "서강인";
@@ -699,16 +721,14 @@ export default function HomeScreen() {
         />
       )}
 
-      <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((popularBoardId ? `/board/${popularBoardId}` : COMMUNITY_TAB_ROUTE) as never)} />
-      {popularQuery.isLoading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
-        </View>
-      ) : boardsError || popularQuery.isError ? (
-        <HomeErrorState label="인기 게시글" onRetry={() => void Promise.all([refetchBoards(), popularQuery.refetch()])} />
-      ) : (
-        <PopularPosts posts={popularPosts} compact={compact} />
-      )}
+      <HomeSectionGate visible={SHOW_HOME_POPULAR_POSTS}>
+        <HomePopularPostsSection
+          boardId={popularBoardId}
+          boardsError={boardsError}
+          compact={compact}
+          refetchBoards={refetchBoards}
+        />
+      </HomeSectionGate>
 
       <SectionHeader title="📸 행사 사진첩" onPress={() => router.push(COMMUNITY_TAB_ROUTE as never)} />
       {albumQuery.isLoading ? (
