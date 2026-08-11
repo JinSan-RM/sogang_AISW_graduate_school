@@ -18,6 +18,7 @@ import { MediaImageBackground } from "../../../components/MediaImage";
 import { postApi, userApi } from "../../../services/api";
 import type { MediaAsset, PostListItem, UserSearchItem } from "../../../types";
 import {
+  ACTIVITY_PARTICIPANT_GUIDANCE,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
@@ -953,7 +954,7 @@ export default function PostCreateScreen() {
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
-                <Text style={styles.activityWarningText}>원우회비 미납자, 졸업자는 검색되지 않아요</Text>
+                <Text style={styles.activityWarningText}>{ACTIVITY_PARTICIPANT_GUIDANCE}</Text>
               </View>
             </View>
           </>

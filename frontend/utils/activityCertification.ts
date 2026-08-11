@@ -1,5 +1,8 @@
 import type { UserSearchItem } from "../types";
 
+export const ACTIVITY_PARTICIPANT_GUIDANCE =
+  "원우회비 미납자, 졸업자는 검색되지 않아요. 지원금은 참가자 목록 기준 지급되니 본인도 검색해서 추가해주세요.";
+
 export function formatActivityParticipant(user: UserSearchItem): string {
   return [user.cohort ? `${user.cohort}기` : null, user.nickname].filter(Boolean).join(" ");
 }

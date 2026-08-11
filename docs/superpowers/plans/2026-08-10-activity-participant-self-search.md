@@ -26,11 +26,11 @@
 - Consumes: authenticated `GET /api/users/search?q={name}`.
 - Produces: regression coverage proving an eligible authenticated user can find themselves.
 
-- [ ] **Step 1: Add the API regression test**
+- [x] **Step 1: Add the API regression test**
 
 Create an eligible owner fixture through the shared `api` context, search for `Owner`, and assert the returned IDs contain user ID `1`.
 
-- [ ] **Step 2: Run the focused API test**
+- [x] **Step 2: Run the focused API test**
 
 Run: `.\.venv\Scripts\python.exe -m pytest tests/test_user_search.py -q`
 
@@ -48,26 +48,26 @@ Expected: PASS because the API already includes the signed-in user when eligibil
 **Interfaces:**
 - Produces: `ACTIVITY_PARTICIPANT_GUIDANCE`, consumed by the activity-certification form.
 
-- [ ] **Step 1: Add a failing guidance contract test**
+- [x] **Step 1: Add a failing guidance contract test**
 
 Import `ACTIVITY_PARTICIPANT_GUIDANCE` and assert that it tells the author to search for and add themselves.
 
-- [ ] **Step 2: Run the focused frontend test and verify RED**
+- [x] **Step 2: Run the focused frontend test and verify RED**
 
 Run: `npx tsx --test tests/activityCertification.test.ts`
 
 Expected: FAIL because `ACTIVITY_PARTICIPANT_GUIDANCE` is not exported yet.
 
-- [ ] **Step 3: Implement the minimal screen change**
+- [x] **Step 3: Implement the minimal screen change**
 
 Export the approved guidance from `utils/activityCertification.ts`, import it in the create screen, and replace the shorter warning text with the shared copy.
 
-- [ ] **Step 4: Run focused tests and verify GREEN**
+- [x] **Step 4: Run focused tests and verify GREEN**
 
 Run the backend focused test and `npx tsx --test tests/activityCertification.test.ts`.
 
 Expected: both pass.
 
-- [ ] **Step 5: Run regression verification**
+- [x] **Step 5: Run regression verification**
 
 Run `npm test`, `npm run typecheck`, and the relevant backend user tests. Verify the participant picker visually on the study activity-certification form.

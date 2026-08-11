@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTIVITY_PARTICIPANT_GUIDANCE,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
 } from "../utils/activityCertification";
+
+test("참가자 안내는 작성자 본인도 검색해서 추가하도록 설명한다", () => {
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도 검색해서 추가해주세요/);
+});
 
 test("활동인증 수정 시 저장된 참가자 이름과 사용자 ID를 칩으로 복원한다", () => {
   const participants = activityParticipantsFromMetadata({
