@@ -51,8 +51,8 @@ function itemLabel(item: UserActivityItem) {
 function activityCategoryLabel(item: UserActivityItem) {
   const raw = item.category?.trim() || item.board_name?.trim() || itemLabel(item);
   return {
-    "강의 후기": "강의후기",
-    "시험 자료실": "시험족보",
+    "강의후기": "강의후기",
+    "시험족보": "시험족보",
   }[raw] ?? raw;
 }
 
