@@ -28,7 +28,9 @@ import { formatBoardDate } from "../../../utils/dateFormat";
 import {
   calendarMonthFromDotDate,
   formatDotDate,
+  isCalendarDateWithinBounds,
   isMutualAidEventDateAllowed,
+  maximumActivityCertificationDate,
   minimumMutualAidEventDate,
 } from "../../../utils/dateSelection";
 import { createFormNotice, requiredFieldNotice, type FormNotice } from "../../../utils/formNotice";
@@ -203,10 +205,12 @@ const CAL_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 function InlineCalendar({
   value,
   minimumDate,
+  maximumDate,
   onSelect,
 }: {
   value?: string;
   minimumDate?: string;
+  maximumDate?: string;
   onSelect: (dateStr: string) => void;
 }) {
   const [view, setView] = useState(() => {
@@ -245,7 +249,7 @@ function InlineCalendar({
           if (day === null) return <View key={`e-${index}`} style={styles.calCell} />;
           const dateStr = formatDotDate(new Date(view.y, view.m, day));
           const isSelected = dateStr === selected;
-          const isDisabled = Boolean(minimumDate && dateStr < minimumDate);
+          const isDisabled = !isCalendarDateWithinBounds(dateStr, { minimumDate, maximumDate });
           return (
             <Pressable
               accessibilityState={{ disabled: isDisabled, selected: isSelected }}
@@ -857,6 +861,7 @@ export default function PostCreateScreen() {
                   </Pressable>
                   {datePickerOpen ? (
                     <InlineCalendar
+                      maximumDate={maximumActivityCertificationDate()}
                       value={field.value}
                       onSelect={(dateStr) => {
                         field.onChange(dateStr);

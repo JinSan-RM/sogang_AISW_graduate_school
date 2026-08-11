@@ -73,6 +73,23 @@ export function minimumMutualAidEventDate(now = new Date()): string {
   return formatCalendarDateParts(addCalendarDays(koreaCalendarDateParts(now), MUTUAL_AID_MIN_LEAD_DAYS));
 }
 
+export function maximumActivityCertificationDate(now = new Date()): string {
+  return formatCalendarDateParts(koreaCalendarDateParts(now));
+}
+
+export function isCalendarDateWithinBounds(
+  value: string,
+  bounds: { minimumDate?: string; maximumDate?: string },
+): boolean {
+  const parsed = calendarDateParts(value);
+  if (!parsed) return false;
+
+  const normalized = formatCalendarDateParts(parsed);
+  if (bounds.minimumDate && normalized < bounds.minimumDate) return false;
+  if (bounds.maximumDate && normalized > bounds.maximumDate) return false;
+  return true;
+}
+
 export function isMutualAidEventDateAllowed(value?: string, now = new Date()): boolean {
   const parsed = calendarDateParts(value);
   if (!parsed) return false;
