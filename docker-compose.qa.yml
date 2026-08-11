@@ -21,8 +21,8 @@ services:
       AUTH_SECRET_KEY: isolated-qa-secret-not-for-deployment
       RATE_LIMIT_ENABLED: "false"
       EXPO_PUSH_ENABLED: "false"
-      EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "0"
-      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "0"
+      EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "300"
+      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "300"
       MEDIA_UPLOAD_DIR: /data/media
       MEDIA_PRIVATE_UPLOAD_DIR: /data/private-media
     ports:

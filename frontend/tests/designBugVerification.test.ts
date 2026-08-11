@@ -33,6 +33,11 @@ test("QA frontend restart clears Metro before serving updated web styles", () =>
   assert.match(qaComposeSource, /npm run web -- --host lan --clear/);
 });
 
+test("QA 인증코드 재전송 제한은 운영과 같은 5분을 유지한다", () => {
+  assert.match(qaComposeSource, /EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "300"/);
+  assert.match(qaComposeSource, /PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "300"/);
+});
+
 test("#2 메인 배너는 설정된 목적지로 직접 이동한다", () => {
   assert.match(homeSource, /const linkHref = banner\.cta_href\?\.trim\(\)/);
   assert.match(homeSource, /router\.push\(linkHref as never\)/);
