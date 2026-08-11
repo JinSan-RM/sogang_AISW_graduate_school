@@ -29,6 +29,7 @@ import type { MutualAidStatus } from "../../../types";
 import { navigateFromPostDetail } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
+import { openMediaUrl } from "../../../utils/mediaOpener";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
 import { formatCohortName } from "../../../utils/userLabel";
@@ -742,7 +743,13 @@ export default function PostDetailScreen() {
                   onPress={async () => {
                     try {
                       const accessUrl = await resolveMediaAccessUrl(attachment);
-                      if (accessUrl) await Linking.openURL(accessUrl);
+                      if (accessUrl) {
+                        await openMediaUrl(accessUrl, {
+                          platform: Platform.OS,
+                          assignWebLocation: (url) => window.location.assign(url),
+                          openExternalUrl: (url) => Linking.openURL(url),
+                        });
+                      }
                     } catch {
                       Alert.alert("파일 열기 실패", "첨부 파일에 접근할 수 없습니다.");
                     }

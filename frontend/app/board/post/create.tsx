@@ -5,7 +5,7 @@ import { isAxiosError } from "axios";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
@@ -31,6 +31,7 @@ import {
   minimumMutualAidEventDate,
 } from "../../../utils/dateSelection";
 import { createFormNotice, requiredFieldNotice, type FormNotice } from "../../../utils/formNotice";
+import { openMediaUrl } from "../../../utils/mediaOpener";
 import { pickAndUploadDocuments, pickAndUploadImages } from "../../../utils/mediaPicker";
 import {
   canEditMutualAidRequest,
@@ -691,7 +692,11 @@ export default function PostCreateScreen() {
     try {
       const accessUrl = await resolveMediaAccessUrl(attachment);
       if (!accessUrl) throw new Error("MISSING_MEDIA_URL");
-      await Linking.openURL(accessUrl);
+      await openMediaUrl(accessUrl, {
+        platform: Platform.OS,
+        assignWebLocation: (url) => window.location.assign(url),
+        openExternalUrl: (url) => Linking.openURL(url),
+      });
     } catch {
       setFormNotice(createFormNotice("파일 열기 실패", "첨부 파일에 접근할 수 없습니다. 잠시 후 다시 시도해주세요."));
     }
