@@ -26,7 +26,7 @@ import {
 import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
-import { postDetailBackAction, postDetailBackRoute } from "../../../utils/appRoutes";
+import { navigateFromPostDetail } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
@@ -208,25 +208,24 @@ export default function PostDetailScreen() {
     setGalleryIndex(0);
   }, [postId]);
 
-  const postBackTarget = post ? postDetailBackRoute(post.board_id, params.fromBoardId) : null;
   const handlePostBack = useCallback(() => {
-    if (!postBackTarget) return;
-    if (postDetailBackAction(params.fromBoardId, router.canGoBack()) === "back") {
-      router.back();
-      return;
-    }
-    router.replace(postBackTarget as never);
-  }, [params.fromBoardId, postBackTarget]);
+    if (!post) return;
+    navigateFromPostDetail(board, {
+      canGoBack: () => router.canGoBack(),
+      back: () => router.back(),
+      replace: (route) => router.replace(route as never),
+    });
+  }, [board, post]);
 
   useFocusEffect(
     useCallback(() => {
-      if (Platform.OS !== "android" || !postBackTarget) return undefined;
+      if (Platform.OS !== "android" || !post) return undefined;
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
         handlePostBack();
         return true;
       });
       return () => subscription.remove();
-    }, [handlePostBack, postBackTarget])
+    }, [handlePostBack, post])
   );
 
   if (isLoading) {

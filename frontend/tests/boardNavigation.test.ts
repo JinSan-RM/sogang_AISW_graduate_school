@@ -4,9 +4,11 @@ import test from "node:test";
 import {
   COMMUNITY_TAB_ROUTE,
   HOME_TAB_ROUTE,
+  NOTICES_TAB_ROUTE,
+  PARTICIPATION_TAB_ROUTE,
   boardParentRoute,
-  postDetailBackAction,
-  postDetailBackRoute,
+  navigateFromPostDetail,
+  postDetailBackDecision,
   postDetailRoute,
   routeBoardId,
 } from "../utils/appRoutes";
@@ -28,18 +30,48 @@ test("알 수 없는 게시판도 전체 보드 대신 홈으로 안전하게 �
 
 test("게시판 목록에서 연 상세 글에는 원래 게시판 ID를 기록한다", () => {
   assert.equal(postDetailRoute(91, 16), "/board/post/91?fromBoardId=16");
-  assert.equal(postDetailBackRoute(20, "16"), "/board/16");
 });
 
-test("직접 링크 상세 글은 해당 글의 게시판 목록을 대체 경로로 사용한다", () => {
-  assert.equal(postDetailBackRoute(20), "/board/20");
-  assert.equal(postDetailBackRoute(20, "invalid"), "/board/20");
-  assert.equal(postDetailBackAction(undefined, true), "replace");
+test("커뮤니티 글 상세는 탐색 기록이 있어도 커뮤니티 탭으로 바로 복귀한다", () => {
+  assert.deepEqual(
+    postDetailBackDecision({ slug: "exam-archive", category: "resources", board_type: "resource" }, true),
+    { action: "replace", route: COMMUNITY_TAB_ROUTE }
+  );
 });
 
-test("목록 진입은 기존 스택을 보존하고 스택이 없으면 목록 경로로 대체한다", () => {
-  assert.equal(postDetailBackAction("16", true), "back");
-  assert.equal(postDetailBackAction("16", false), "replace");
+test("참여활동 글 상세는 탐색 기록이 있어도 참여활동 탭으로 바로 복귀한다", () => {
+  assert.deepEqual(
+    postDetailBackDecision({ slug: "networking-programs", category: "participation", board_type: "post" }, true),
+    { action: "replace", route: PARTICIPATION_TAB_ROUTE }
+  );
+});
+
+test("일반 상세 글은 탐색 기록이 있으면 기존 화면으로 복귀한다", () => {
+  assert.deepEqual(
+    postDetailBackDecision({ slug: "academic-notices", category: "notice", board_type: "notice" }, true),
+    { action: "back" }
+  );
+});
+
+test("직접 링크로 연 일반 상세 글은 제품 상위 경로로 복귀한다", () => {
+  assert.deepEqual(
+    postDetailBackDecision({ slug: "academic-notices", category: "notice", board_type: "notice" }, false),
+    { action: "replace", route: NOTICES_TAB_ROUTE }
+  );
+});
+
+test("커뮤니티 상세의 공통 뒤로가기 실행기는 기존 목록 대신 탭 경로를 교체한다", () => {
+  const calls: string[] = [];
+  navigateFromPostDetail(
+    { slug: "exam-archive", category: "resources", board_type: "resource" },
+    {
+      canGoBack: () => true,
+      back: () => calls.push("back"),
+      replace: (route) => calls.push(`replace:${route}`),
+    }
+  );
+
+  assert.deepEqual(calls, [`replace:${COMMUNITY_TAB_ROUTE}`]);
 });
 
 test("게시판 경로 파라미터는 양의 정수만 허용한다", () => {

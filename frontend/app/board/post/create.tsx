@@ -39,6 +39,7 @@ import {
   mutualAidRelationLabel,
   normalizeMutualAidEventDate,
 } from "../../../utils/mutualAid";
+import { examArchiveAttachmentActions } from "../../../utils/postAttachments";
 
 const COLORS = {
   primary: "#2761FF",
@@ -317,6 +318,7 @@ export default function PostCreateScreen() {
   const isMutualAid = boardType === "mutual_aid";
   const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
+  const isExamArchive = board?.slug === "exam-archive";
   const isStudyRecruit = board?.slug === "study-recruit";
   // 처음 올릴 때부터 마감 상태인 모집글을 막는다. 마감 전환은 등록 후 수정에서만.
   const canCloseRecruitment = Boolean(postId);
@@ -658,13 +660,11 @@ export default function PostCreateScreen() {
     });
   };
 
-  const selectFile = async () => {
+  const uploadAttachments = async (pickAttachments: () => Promise<MediaAsset[]>) => {
     try {
       setIsUploading(true);
       setUploadProgress(0);
-      const uploaded = (isAlbum || isActivity || isAdminParticipationPost)
-        ? await pickAndUploadImages(setUploadProgress)
-        : await pickAndUploadDocuments(setUploadProgress, isMutualAid);
+      const uploaded = await pickAttachments();
       if (uploaded.length > 0) {
         setAttachments((current) => [...current, ...uploaded]);
       }
@@ -675,6 +675,17 @@ export default function PostCreateScreen() {
       setUploadProgress(0);
     }
   };
+
+  const selectFile = () => uploadAttachments(
+    (isAlbum || isActivity || isAdminParticipationPost)
+      ? () => pickAndUploadImages(setUploadProgress)
+      : () => pickAndUploadDocuments(setUploadProgress, isMutualAid)
+  );
+
+  const examAttachmentActions = examArchiveAttachmentActions(board?.slug, {
+    images: () => void uploadAttachments(() => pickAndUploadImages(setUploadProgress)),
+    documents: () => void uploadAttachments(() => pickAndUploadDocuments(setUploadProgress)),
+  });
 
   const openAttachment = async (attachment: MediaAsset) => {
     try {
@@ -1367,10 +1378,36 @@ export default function PostCreateScreen() {
               </View>
             </View>
           ) : null}
-          <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
-            <Ionicons name="image-outline" size={16} color={COLORS.muted} />
-            <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : isAdminParticipationPost ? "대표 사진 첨부" : "이미지 첨부"}</Text>
-          </Pressable>
+          {isExamArchive ? (
+            <View style={styles.examArchiveAttachActions}>
+              {examAttachmentActions.map((action) => (
+                <Pressable
+                  disabled={isUploading}
+                  key={action.picker}
+                  onPress={action.onPress}
+                  style={[
+                    styles.compactAttachButton,
+                    styles.examArchiveAttachButton,
+                    isUploading ? styles.attachButtonDisabled : null,
+                  ]}
+                >
+                  <Ionicons
+                    name={action.picker === "images" ? "image-outline" : "document-text-outline"}
+                    size={16}
+                    color={COLORS.muted}
+                  />
+                  <Text style={styles.compactAttachText}>
+                    {isUploading ? `업로드 ${uploadProgress || 0}%` : action.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
+              <Ionicons name="image-outline" size={16} color={COLORS.muted} />
+              <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : isAdminParticipationPost ? "대표 사진 첨부" : "이미지 첨부"}</Text>
+            </Pressable>
+          )}
           {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
           {imageAttachments.length > 0 ? (
             <View style={styles.writeImageGrid}>
@@ -2426,6 +2463,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  examArchiveAttachActions: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 8,
+  },
+  examArchiveAttachButton: {
+    flex: 1,
+    justifyContent: "center",
   },
   compactAttachText: {
     color: COLORS.muted,
