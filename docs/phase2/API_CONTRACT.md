@@ -578,8 +578,32 @@ Response item:
 
 Rule:
 
-- Intended for in-app member selection such as activity certification participants.
+- Retained as a generic legacy member lookup; activity certification participant selection does not call this endpoint.
 - Does not return email, phone, company, or account status.
+
+### GET `/dues-payers/search`
+
+Auth: user
+
+Query: required `q` (name or student-number substring), optional `size` (default `8`, max `20`). Returns only the independent current dues-payer roster as `{id, name, major, student_number}`. User enrollment, activation, and legacy `dues_status` fields do not affect results.
+
+### GET `/dues-payers/admin/payers`
+
+Auth: admin
+
+Query: optional `q`, `page`, and `size` (max `100`). Returns the same items with the shared pagination envelope.
+
+### POST `/dues-payers/admin/import`
+
+Auth: admin. Multipart field: `file`, restricted to `.xlsx`.
+
+The first sheet is read without a header as `name`, `major`, `student_number`. A valid workbook is upserted atomically by normalized student number and returns `{created, updated, unchanged, total_rows}`. Any partial blank row, non-`A` plus five-digit student number, populated fourth column, duplicate normalized student number, empty workbook, malformed workbook, or oversized upload rejects the entire import. Validation codes are `DUES_IMPORT_EMPTY_VALUE`, `DUES_IMPORT_INVALID_STUDENT_NUMBER`, `DUES_IMPORT_DUPLICATE_STUDENT_NUMBER`, `INVALID_DUES_WORKBOOK`, and `PAYLOAD_TOO_LARGE`.
+
+### POST `/dues-payers/admin/delete-all`
+
+Auth: admin
+
+Request: `{ "confirmation": "진짜 삭제" }`. The phrase must match exactly or the API returns `400 DUES_DELETE_CONFIRMATION_REQUIRED`. Success permanently clears the current roster and returns `{deleted}`; restoration requires a new import. Audit details contain counts only, never roster PII.
 
 ### GET `/users/me/blocks`
 
@@ -680,6 +704,7 @@ Request:
 Rules:
 
 - Admins cannot remove their own admin role or deactivate themselves through this endpoint.
+- `dues_status` is not an accepted field; extra fields are rejected. The legacy database column is not a roster-management API.
 
 ## 4. Boards and IA
 
@@ -849,6 +874,7 @@ Rules:
 - `study-recruit` remains user-writable, so every authenticated member may create and manage their own study recruitment post.
 - Club, study, and networking activity certification boards keep `write_permission = user`, so every authenticated member may submit an activity certification.
 - Activity certifications require at least one ready image and reject non-image attachments.
+- New activity certifications require a non-empty ordered list of unique positive `metadata.participant_dues_payer_ids`. Every ID must exist in the current roster; otherwise the API returns `422 INVALID_DUES_PAYER`. The server ignores client-supplied participant names, stores roster names in `metadata.participants`, and removes legacy `participant_user_ids`.
 - `metadata.bank_account` is returned only to admins; list/detail responses for ordinary users remove it while preserving the stored value.
 - Council/GSA boards are admin-managed except `suggestion` and `mutual_aid` board types; the post API applies this rule even if board permission data is stale.
 - Suggestion list items expose `suggestion.status` as `received` or `answered`. Only admins can write the official reply; `answered` is rejected unless a non-empty official reply is supplied. A new or changed reply notifies the anonymous author without exposing their identity in the UI.
@@ -888,7 +914,7 @@ Response:
 For mutual-aid requests, changing `metadata.event_date` applies the same KST D+2 rule as creation. An unchanged historical date may be retained while other editable fields are updated, so an existing processing request does not become uneditable merely because time passed.
 Members may update their own mutual-aid request only while its workflow status is `processing`. A `completed` or `rejected` request is immutable; administrators change workflow status only through the dedicated mutual-aid endpoint.
 
-For activity certifications, authors can update `metadata.activity_date`, `metadata.participants`, `metadata.participant_user_ids`, and `metadata.activity_source_post_id`. If the member-facing edit payload omits the hidden `metadata.bank_account`, the stored value is preserved; explicitly providing the key updates it.
+For activity certifications, authors can update `metadata.activity_date`, `metadata.participant_dues_payer_ids`, and `metadata.activity_source_post_id`; the server regenerates `metadata.participants` from the roster. An unchanged historical record without dues-payer IDs may retain its old participant snapshot while other fields are edited, but changing that legacy participant list requires complete reselection from the current roster. If the member-facing edit payload omits the hidden `metadata.bank_account`, the stored value is preserved; explicitly providing the key updates it.
 
 ### PUT `/posts/{post_id}/mutual-aid`
 

@@ -55,7 +55,8 @@ class UserBlockItem(BaseModel):
 
 
 class AdminUserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     role: Literal["user", "admin"] | None = None
     is_active: bool | None = None
     enrollment_status: Literal["active", "leave", "graduated"] | None = None
-    dues_status: Literal["paid", "unpaid", "exempt"] | None = None

@@ -80,6 +80,7 @@ Phase 2 changes:
 - Add `last_login_at DATETIME NULL`.
 - Add `privacy_policy_version VARCHAR(50) NULL` and `privacy_consented_at DATETIME NULL`; new registrations must populate both.
 - Consider removing `username` later if email is the only login ID. Keep for now to avoid migration churn.
+- `users.dues_status` is legacy-only. It is not exposed in the admin member response, cannot be changed by the general admin user API, and has no relationship to activity participant eligibility.
 
 Indexes:
 
@@ -87,6 +88,19 @@ Indexes:
 - Unique `username`
 - Index `role`
 - Index `is_active`
+
+### `dues_payers`
+
+The current dues-payer roster is intentionally independent from `users`; there is no user foreign key and no year/semester dimension.
+
+- `id INTEGER PRIMARY KEY`
+- `student_number VARCHAR(20) NOT NULL`, unique, normalized to `^A\d{5}$`
+- `name VARCHAR(50) NOT NULL`, indexed for search
+- `major VARCHAR(100) NOT NULL`
+- `created_at DATETIME NOT NULL`
+- `updated_at DATETIME NOT NULL`
+
+The roster is populated only through the admin XLSX upsert. Raw workbooks and row-level PII never belong in migrations, seed data, or operational audit details. Activity-certification metadata stores ordered `participant_dues_payer_ids` plus a server-generated `participants` name snapshot, so clearing the current roster does not erase historical participant names.
 
 ### `boards`
 

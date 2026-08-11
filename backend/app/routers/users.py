@@ -147,7 +147,6 @@ def get_admin_users(
                 "role": item.role,
                 "is_active": item.is_active,
                 "enrollment_status": item.enrollment_status,
-                "dues_status": item.dues_status,
                 "last_login_at": item.last_login_at,
                 "created_at": item.created_at,
                 "privacy_policy_version": item.privacy_policy_version,

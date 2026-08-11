@@ -55,7 +55,7 @@ Phase 2 converted the Notion planning into concrete API, DB, auth, route, and im
 | --- | --- | --- | --- |
 | Core feature B: notifications/notices | Implemented; device delivery QA pending | 2026-06-01 to 2026-06-14 | Notice workflows, notification triggers/settings, Expo push token/provider adapter, ticket/receipt tracking, and local fallback exist. Production FCM/APNs credentials and physical-device delivery remain. |
 | Core feature C: schedule/events | Implemented; device QA pending | 2026-06-14 to 2026-06-21 | Event API, calendar/detail screens, admin CRUD, and idempotent D-day/D-1 hooks exist. Recurring events are deferred to v1.1. |
-| Admin page development | Implemented; QA pending | 2026-06-14 to 2026-06-25 | Admin surface covers launch-critical users, notices, posts/comments, reports, FAQs, events, registration settings, and statistics. Keep both the protected route and backend admin dependencies. |
+| Admin page development | Implemented; QA pending | 2026-06-14 to 2026-06-25 | Admin surface covers launch-critical users, the independent dues-payer roster, notices, posts/comments, reports, FAQs, events, registration settings, and statistics. Keep both the protected route and backend admin dependencies. |
 | Frontend-backend full integration | Local P0 hardening passed; store/device QA pending | 2026-06-21 to 2026-06-28 | Current-head PostgreSQL/API/production-Compose/web checks and an unsigned Android release-bundle rehearsal pass. Physical Android/iOS, production credentials, signed native release builds, live hosting, and store submission inputs remain. |
 
 ## Product Scope To Preserve
@@ -86,6 +86,7 @@ P0 features:
 - Search keyword highlighting.
 - IA redesign.
 - Quick menu.
+- Independent current dues-payer roster for subsidy activity-certification participants, with admin XLSX upsert and permanent-delete safeguards.
 
 P1 features:
 

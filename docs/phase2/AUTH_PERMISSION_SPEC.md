@@ -70,6 +70,8 @@ Implementation:
 | Read post detail | No | Yes | Yes |
 | Create regular post | No | Yes | Yes |
 | Create activity certification | No | Yes | Yes |
+| Search current dues-payer roster | No | Yes | Yes |
+| Import/list/delete dues-payer roster | No | No | Yes |
 | Create study recruitment | No | Yes | Yes |
 | Create club/networking guide post | No | No | Yes |
 | Create notice | No | No | Yes |
@@ -110,6 +112,7 @@ Rules:
 - Frontend may hide buttons based on permission, but hidden UI is not security.
 - The `club-promo` and `networking-programs` boards are seeded and migrated with `write_permission = admin`; the post API also applies an explicit admin guard for defense in depth.
 - `study-recruit` and all activity certification boards remain user-writable. Activity bank-account metadata is sensitive and may be read only by admins.
+- Activity-certification participants are resolved only from the independent current dues-payer roster. Member-account enrollment, activation, and legacy dues fields grant no participant eligibility. Only admins may list the full roster, import XLSX rows, or permanently clear it; authenticated members receive bounded name/student-number search results for the picker.
 - Every `council`/`gsa` board is admin-writable unless its board type is `suggestion` or `mutual_aid`.
 - Cohort-leader registration is stored through the admin-only board management API; members can read the configured cohort introductions but cannot create or edit them.
 - Past-council records use a separate admin-only board metadata area. FAQ remains a separate dedicated table/API; neither mutation path is available to members.

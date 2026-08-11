@@ -177,3 +177,16 @@ def test_exact_confirmation_permanently_deletes_roster_and_audits_counts_without
             ("dues_payer.delete_all", {"deleted": 2}),
         ]
         assert "홍길동" not in str([(log.action, log.details) for log in logs])
+
+
+def test_admin_user_api_does_not_expose_or_change_legacy_dues_status(api) -> None:
+    update = api.client.put(
+        "/api/users/admin/users/1",
+        json={"dues_status": "unpaid"},
+        headers=api.headers["admin"],
+    )
+    listing = api.client.get("/api/users/admin/users", headers=api.headers["admin"])
+
+    assert update.status_code == 422
+    assert listing.status_code == 200
+    assert all("dues_status" not in item for item in listing.json()["data"])

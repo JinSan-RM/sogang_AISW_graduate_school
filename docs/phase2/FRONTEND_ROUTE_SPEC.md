@@ -47,7 +47,7 @@ My Page/Settings opens from the profile action rather than a sixth bottom tab. D
 | `S_015` | `/settings/account` | Account settings | user |
 | `S_016` | `/settings/activity` | My activity | user |
 | Search | `/search` | Global search | user |
-| Admin | `/admin` | Launch-critical content and account administration | admin |
+| Admin | `/admin` | Launch-critical content, account, and independent dues-payer-roster administration | admin |
 
 The root layout must guard all member routes and must guard `/admin` by role. The UI guard is navigation hygiene only; every admin mutation also uses a backend admin dependency.
 
@@ -83,7 +83,9 @@ Study recruitment is backed by `study-recruit` and remains writable by every aut
 The common post edit screen always shows persistent `제목` and `내용` labels above their inputs so existing values never obscure each field's purpose; these labels do not depend on board lookup or slug detection.
 The recruitment list follows the approved Figma text-row layout: status pill, title, up to two preview lines, and `cohort + author · YY.MM.DD(weekday)`. It does not use the image-heavy club/networking guide card and does not show reaction counts in the list.
 
-Club, study, and networking activity certification remains available to every authenticated member. The create flow supports multiple image previews, activity date, account, and participant inputs, followed by a dedicated completion state. The participant picker lets an eligible signed-in member search for and add themselves explicitly; it does not auto-select the author or bypass the active-enrollment and paid/exempt-dues rules. The edit flow reuses the same calendar and eligible-member participant picker, hydrates the stored date, participant chips, source post, and attachments, and preserves the hidden account value when the author saves. Detail supports image paging; account data is rendered only for admins.
+Club, study, and networking activity certification remains available to every authenticated member. The create flow supports multiple image previews, activity date, account, and participant inputs, followed by a dedicated completion state. Their single shared subsidy-participant picker searches the independent current dues-payer roster by name or student number and displays `name major student_number` with spaces; it never queries member accounts or auto-selects the author. The edit flow reuses the same calendar and roster picker, hydrates current participant IDs or historical name-only chips, source post, and attachments, and preserves the hidden account value when the author saves. A changed legacy participant list requires complete roster reselection. Detail supports image paging; account data is rendered only for admins.
+
+The admin console includes a separate `원우회비` tab. It uploads a headerless three-column XLSX using student-number upsert, searches the current roster, paginates the result, shows atomic validation failures without partial changes, and requires `start -> irreversible warning -> exact 진짜 삭제 phrase` before permanent deletion. Member-account cards no longer display or mutate a dues status.
 
 Council content is managed by admins except suggestion and mutual-aid submissions. Admins manage executive name/cohort/role/profile images from the executive section. Notice create/edit can opt into council activity-history linkage; linked notices reuse their title, body, date, and image attachments in the council list and detail screens.
 
