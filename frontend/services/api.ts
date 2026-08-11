@@ -24,6 +24,8 @@ import type {
   EventItem,
   EventPayload,
   FAQItem,
+  DuesPayerImportResult,
+  DuesPayerItem,
   NotificationItem,
   NotificationSettings,
   MediaAsset,
@@ -747,13 +749,44 @@ export const adminApi = {
       role?: "user" | "admin";
       is_active?: boolean;
       enrollment_status?: "active" | "leave" | "graduated";
-      dues_status?: "paid" | "unpaid" | "exempt";
     }
   ) => {
     const response = await api.put<ApiSuccess<{ id: number; role: "user" | "admin"; is_active: boolean }>>(
       `/users/admin/users/${userId}`,
       payload
     );
+    return response.data;
+  },
+};
+
+export const duesPayerApi = {
+  search: async (q: string, size = 8) => {
+    const response = await api.get<ApiSuccess<DuesPayerItem[]>>("/dues-payers/search", {
+      params: { q, size },
+    });
+    return response.data;
+  },
+  getAdminPayers: async (params?: { q?: string; page?: number; size?: number }) => {
+    const response = await api.get<ApiSuccess<DuesPayerItem[]>>("/dues-payers/admin/payers", { params });
+    return response.data;
+  },
+  importWorkbook: async (file: File | { uri: string; name: string; type: string }) => {
+    const formData = new FormData();
+    formData.append("file", file as any);
+    const response = await api.post<ApiSuccess<DuesPayerImportResult>>(
+      "/dues-payers/admin/import",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: MEDIA_UPLOAD_TIMEOUT_MS,
+      },
+    );
+    return response.data;
+  },
+  deleteAll: async (confirmation: string) => {
+    const response = await api.post<ApiSuccess<{ deleted: number }>>("/dues-payers/admin/delete-all", {
+      confirmation,
+    });
     return response.data;
   },
 };

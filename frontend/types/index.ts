@@ -352,11 +352,24 @@ export type AdminUserItem = {
   role: "user" | "admin";
   is_active: boolean;
   enrollment_status: "active" | "leave" | "graduated";
-  dues_status: "paid" | "unpaid" | "exempt";
   last_login_at?: string | null;
   created_at: string;
   privacy_policy_version?: string | null;
   privacy_consented_at?: string | null;
+};
+
+export type DuesPayerItem = {
+  id: number;
+  name: string;
+  major: string;
+  student_number: string;
+};
+
+export type DuesPayerImportResult = {
+  created: number;
+  updated: number;
+  unchanged: number;
+  total_rows: number;
 };
 
 export type AdminReportItem = {

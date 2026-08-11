@@ -9,6 +9,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextIn
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
+import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
@@ -76,7 +77,7 @@ const eventSchema = z.object({
 });
 
 type EventForm = z.infer<typeof eventSchema>;
-type AdminSection = "dashboard" | "banners" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "reports" | "faqs" | "events" | "registration";
+type AdminSection = "dashboard" | "banners" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
 type BoardScope = "all" | "notices" | "council" | "participation" | "community";
 type AdminPostMode = "all" | "notice" | "pinned";
 type SuggestionAdminFilter = "received" | "answered" | "all";
@@ -264,6 +265,7 @@ const SECTIONS: { key: AdminSection; label: string; icon: IconName }[] = [
   { key: "suggestions", label: "건의사항", icon: "chatbox-ellipses-outline" },
   { key: "mutualAid", label: "상조회", icon: "flower-outline" },
   { key: "accounts", label: "계정", icon: "people-outline" },
+  { key: "duesPayers", label: "원우회비", icon: "receipt-outline" },
   { key: "reports", label: "신고", icon: "flag-outline" },
   { key: "faqs", label: "FAQ", icon: "help-circle-outline" },
   { key: "events", label: "일정", icon: "calendar-outline" },
@@ -1270,7 +1272,7 @@ function UserCard({
   onActiveToggle: (item: AdminUserItem) => void;
   onEligibilityChange: (
     item: AdminUserItem,
-    payload: Partial<Pick<AdminUserItem, "enrollment_status" | "dues_status">>
+    payload: Partial<Pick<AdminUserItem, "enrollment_status">>
   ) => void;
 }) {
   return (
@@ -1303,23 +1305,6 @@ function UserCard({
               active={item.enrollment_status === value}
               label={label}
               onPress={() => onEligibilityChange(item, { enrollment_status: value })}
-            />
-          ))}
-        </View>
-      </View>
-      <View style={{ gap: 6 }}>
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>회비 상태</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {([
-            ["paid", "납부"],
-            ["unpaid", "미납"],
-            ["exempt", "면제"],
-          ] as const).map(([value, label]) => (
-            <Chip
-              key={value}
-              active={item.dues_status === value}
-              label={label}
-              onPress={() => onEligibilityChange(item, { dues_status: value })}
             />
           ))}
         </View>
@@ -2366,13 +2351,13 @@ export default function AdminScreen() {
 
   const handleUserEligibilityChange = async (
     item: AdminUserItem,
-    payload: Partial<Pick<AdminUserItem, "enrollment_status" | "dues_status">>
+    payload: Partial<Pick<AdminUserItem, "enrollment_status">>
   ) => {
     try {
       await adminApi.updateUser(item.id, payload);
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch {
-      Alert.alert("변경 실패", "회원의 재학·회비 상태를 변경할 수 없습니다.");
+      Alert.alert("변경 실패", "회원의 재학 상태를 변경할 수 없습니다.");
     }
   };
 
@@ -3486,6 +3471,8 @@ export default function AdminScreen() {
             ))}
           </View>
         ) : null}
+
+        {section === "duesPayers" ? <DuesPayerSection /> : null}
 
         {section === "reports" ? (
           <View style={{ gap: 12 }}>
