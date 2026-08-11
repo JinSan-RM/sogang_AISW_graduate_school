@@ -13,6 +13,7 @@ from app.deps import can_read_board, can_write_board, get_current_user, get_db, 
 from app.errors import AppException
 from app.models.board import Board
 from app.models.bookmark import Bookmark
+from app.models.dues_payer import DuesPayer
 from app.models.like import Like
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
@@ -49,6 +50,64 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
         metadata.pop("bank_account", None)
     if board.board_type == "mutual_aid" and not include_sensitive:
         metadata.pop("proof_url", None)
+    return metadata
+
+
+def _invalid_dues_payer() -> AppException:
+    return AppException(
+        status_code=422,
+        message="Select every participant from the dues payer roster.",
+        code="INVALID_DUES_PAYER",
+    )
+
+
+def _canonical_activity_metadata(
+    db: Session,
+    board: Board | None,
+    incoming_metadata: dict | None,
+    *,
+    existing_metadata: dict | None = None,
+) -> dict | None:
+    if board is None or board.board_type != "activity_certification":
+        return incoming_metadata
+
+    metadata = dict(incoming_metadata or {})
+    existing = dict(existing_metadata or {})
+    if "participant_dues_payer_ids" not in metadata:
+        if not existing:
+            raise _invalid_dues_payer()
+
+        existing_participants = existing.get("participants")
+        incoming_participants = metadata.get("participants", existing_participants)
+        if not isinstance(existing_participants, str) or incoming_participants != existing_participants:
+            raise _invalid_dues_payer()
+
+        metadata["participants"] = existing_participants
+        if "participant_dues_payer_ids" in existing:
+            metadata["participant_dues_payer_ids"] = existing["participant_dues_payer_ids"]
+        elif "participant_user_ids" in existing:
+            metadata["participant_user_ids"] = existing["participant_user_ids"]
+        return metadata
+
+    payer_ids = metadata.get("participant_dues_payer_ids")
+    if (
+        not isinstance(payer_ids, list)
+        or not payer_ids
+        or any(not isinstance(payer_id, int) or isinstance(payer_id, bool) or payer_id <= 0 for payer_id in payer_ids)
+        or len(set(payer_ids)) != len(payer_ids)
+    ):
+        raise _invalid_dues_payer()
+
+    payers_by_id = {
+        payer.id: payer
+        for payer in db.scalars(select(DuesPayer).where(DuesPayer.id.in_(payer_ids))).all()
+    }
+    if len(payers_by_id) != len(payer_ids):
+        raise _invalid_dues_payer()
+
+    metadata["participants"] = ", ".join(payers_by_id[payer_id].name for payer_id in payer_ids)
+    metadata["participant_dues_payer_ids"] = payer_ids
+    metadata.pop("participant_user_ids", None)
     return metadata
 
 
@@ -841,6 +900,7 @@ def create_post(
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
 
     is_anonymous = True if board.board_type == "suggestion" else payload.is_anonymous
+    post_metadata = _canonical_activity_metadata(db, board, payload.metadata)
     post = Post(
         board_id=board_id,
         author_id=current_user.id,
@@ -851,7 +911,7 @@ def create_post(
         is_anonymous=is_anonymous,
         is_notice=board.board_type == "notice",
         category=None if board.board_type == "album" else payload.category,
-        metadata_json=payload.metadata,
+        metadata_json=post_metadata,
         deadline_at=payload.deadline_at if board.board_type == "notice" else None,
     )
     db.add(post)
@@ -938,11 +998,18 @@ def update_post(
     post.content = "" if target_board is not None and target_board.board_type == "album" else payload.content
     post.is_anonymous = is_anonymous
     post.category = None if target_board is not None and target_board.board_type == "album" else payload.category
-    post.metadata_json = _metadata_for_update(
+    existing_metadata = dict(post.metadata_json or {})
+    merged_metadata = _metadata_for_update(
         post,
         target_board,
         payload.metadata,
         has_new_attachments=bool(payload.attachment_ids),
+    )
+    post.metadata_json = _canonical_activity_metadata(
+        db,
+        target_board,
+        merged_metadata,
+        existing_metadata=existing_metadata,
     )
     post.deadline_at = payload.deadline_at if target_board is not None and target_board.board_type == "notice" else None
     if target_board is not None:

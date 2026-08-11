@@ -1,10 +1,17 @@
 from app.models.board import Board
+from app.models.dues_payer import DuesPayer
 from app.models.media import PostAttachment
 from app.models.post import Post
 
 
 def _create_activity_certification(api) -> tuple[int, int]:
     with api.session() as db:
+        db.add_all(
+            [
+                DuesPayer(name="Owner payer", major="AI", student_number="A74001"),
+                DuesPayer(name="Other payer", major="Security", student_number="A74002"),
+            ]
+        )
         board = Board(
             name="Club Activity Certification",
             slug="club-activity-edit-test",
@@ -43,8 +50,8 @@ def _update_payload() -> dict:
         "category": "Updated club",
         "metadata": {
             "activity_date": "2026.08.15",
-            "participants": "Owner, Other",
-            "participant_user_ids": "1,2",
+            "participants": "client supplied names",
+            "participant_dues_payer_ids": [1, 2],
             "activity_source_post_id": "3",
         },
         "attachment_ids": [1],
@@ -84,8 +91,8 @@ def test_activity_certification_owner_updates_date_and_participants_without_losi
         post = db.get(Post, post_id)
         assert post.metadata_json == {
             "activity_date": "2026.08.15",
-            "participants": "Owner, Other",
-            "participant_user_ids": "1,2",
+            "participants": "Owner payer, Other payer",
+            "participant_dues_payer_ids": [1, 2],
             "activity_source_post_id": "3",
             "bank_account": "Sogang Bank 123-456",
         }
