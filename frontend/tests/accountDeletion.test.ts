@@ -3,11 +3,25 @@ import test from "node:test";
 
 import {
   ACCOUNT_DELETION_CONFIRMATION,
+  ACCOUNT_DELETION_ITEMS,
+  ACCOUNT_RETENTION_NOTICE,
   accountDeletionErrorMessage,
   isAccountDeletionCodeValid,
   isDeletionConfirmationValid,
   publicAccountDeletionErrorMessage,
 } from "../utils/accountDeletion";
+
+test("탈퇴 안내는 모든 작성 콘텐츠와 상조회 자료 보존을 명확히 알린다", () => {
+  const notice = [...ACCOUNT_DELETION_ITEMS, ACCOUNT_RETENTION_NOTICE].join(" ");
+
+  assert.match(notice, /공개 여부와 상태에 관계없이/);
+  assert.match(notice, /작성 당시의 이름과 기수/);
+  assert.match(notice, /상조회 신청/);
+  assert.match(notice, /연결된 증빙자료/);
+  assert.match(notice, /관리자만 열람/);
+  assert.doesNotMatch(notice, /비공개 게시글.*삭제/);
+  assert.doesNotMatch(notice, /작성자 연결을 제거/);
+});
 
 test("계정 삭제 확인 문구는 공백을 제외하고 정확히 일치해야 한다", () => {
   assert.equal(isDeletionConfirmationValid(ACCOUNT_DELETION_CONFIRMATION), true);

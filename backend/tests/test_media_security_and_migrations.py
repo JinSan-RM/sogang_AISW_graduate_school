@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 from app import migrate
@@ -13,6 +14,7 @@ from app.media_service import media_file_signature
 from app.models.banner import Banner
 from app.models.board import Board
 from app.models.media import MediaAsset, PostAttachment
+from app.models.post import Post
 from app.models.user import User
 from app.routers import media as media_router
 
@@ -250,7 +252,7 @@ def test_post_media_reuses_post_read_policy_and_any_readable_link_allows(api, me
     assert _signed_file_response(api, access).status_code == 200
 
 
-def test_private_mutual_aid_media_is_hidden_from_non_owner(api, media_storage) -> None:
+def test_private_mutual_aid_media_is_admin_only_after_attachment(api, media_storage) -> None:
     _, private_directory = media_storage
     uploaded = _upload(api, filename="evidence.pdf", body=PDF_BYTES, content_type="application/pdf", private=True)
     assert uploaded.status_code == 200
@@ -266,10 +268,61 @@ def test_private_mutual_aid_media_is_hidden_from_non_owner(api, media_storage) -
     assert other_access.status_code == 404
     assert other_access.json()["code"] == "NOT_FOUND"
 
-    for actor in ("owner", "admin"):
-        allowed = api.client.get(f"/api/media/{media_id}/access-url", headers=api.headers[actor])
-        assert allowed.status_code == 200
-        assert _signed_file_response(api, allowed).content == PDF_BYTES
+    owner_access = api.client.get(f"/api/media/{media_id}/access-url", headers=api.headers["owner"])
+    assert owner_access.status_code == 404
+    assert owner_access.json()["code"] == "NOT_FOUND"
+
+    admin_access = api.client.get(f"/api/media/{media_id}/access-url", headers=api.headers["admin"])
+    assert admin_access.status_code == 200
+    assert _signed_file_response(api, admin_access).content == PDF_BYTES
+
+
+def test_mutual_aid_owner_can_edit_without_receiving_or_replacing_existing_evidence(api, media_storage) -> None:
+    uploaded = _upload(
+        api,
+        filename="evidence.pdf",
+        body=PDF_BYTES,
+        content_type="application/pdf",
+        private=True,
+    )
+    media_id = uploaded.json()["data"]["id"]
+    with api.session() as db:
+        post = db.get(Post, 1)
+        post.metadata_json = {
+            "event_date": "2026-08-01",
+            "relation": "self",
+            "proof_url": "https://example.com/private-proof",
+        }
+        db.add(PostAttachment(post_id=post.id, media_id=media_id, sort_order=0))
+        db.commit()
+
+    detail = api.client.get("/api/posts/1", headers=api.headers["owner"])
+    assert detail.status_code == 200
+    assert detail.json()["data"]["attachments"] == []
+    assert "proof_url" not in detail.json()["data"]["metadata"]
+    assert detail.json()["data"]["mutual_aid"]["has_evidence"] is True
+
+    updated = api.client.put(
+        "/api/posts/1",
+        headers=api.headers["owner"],
+        json={
+            "title": "Private Need Alpha",
+            "content": "Updated remarks",
+            "category": "wedding",
+            "metadata": {"event_date": "2026-08-01", "relation": "self"},
+            "attachment_ids": [],
+            "is_anonymous": False,
+        },
+    )
+    assert updated.status_code == 200
+
+    with api.session() as db:
+        post = db.get(Post, 1)
+        attachments = db.scalars(
+            select(PostAttachment).where(PostAttachment.post_id == post.id)
+        ).all()
+        assert [attachment.media_id for attachment in attachments] == [media_id]
+        assert post.metadata_json["proof_url"] == "https://example.com/private-proof"
 
 
 def test_profile_and_banner_references_are_member_readable_via_stable_and_legacy_paths(api, media_storage) -> None:

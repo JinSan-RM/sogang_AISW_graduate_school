@@ -11,10 +11,10 @@ QA override accepted on 2026-08-02 for bug #47: a new or changed mutual-aid even
 Security/integration decision checked on 2026-07-27:
 
 - The approved mobile IA keeps five bottom tabs: Home, Notices, Community, Participation, and Student Council.
-- Mutual-aid applications are private workflow records. A member can discover and read only their own application; administrators can read and process all applications. Unauthorized object-level reads return `404 NOT_FOUND` to avoid confirming that another member's application exists.
+- Mutual-aid application content is readable by authenticated members, while evidence files and evidence links are administrator-only. Non-admin evidence lookup, including a guessed media ID, returns `404 NOT_FOUND`.
 - Uploaded media is member-only. The public `/uploads` mount is not part of the launch architecture; browser-rendered images and file downloads use short-lived signed URLs issued only after authorization.
 - Email is the login identifier. A separate "find ID" flow is intentionally omitted; the login and recovery copy tells users to use their school email and provides password reset.
-- Account deletion is irreversible. An authenticated member uses `DELETE /api/users/me` with `current_password`; a signed-out member can use the non-enumerating email request/verify flow. Public published content is retained only after removing the author link, while private, draft, hidden, mutual-aid content and private media are deleted. Migration `0021_account_deletion_receipts` stores only a non-identifying completion receipt.
+- Account deletion is irreversible. An authenticated member uses `DELETE /api/users/me` with `current_password`; a signed-out member can use the non-enumerating email request/verify flow. Every authored post/comment, including draft, hidden, deleted-status, and mutual-aid content, remains with its writing-time name/cohort snapshot. Connected media remains after only the account ownership link is removed; unattached uploads and account-only activity are deleted. Migration `0021_account_deletion_receipts` stores only a non-identifying completion receipt, and `0025_author_content_snapshots` supplies the historical author display fields.
 
 ## Current Project State
 

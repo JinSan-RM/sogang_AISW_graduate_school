@@ -37,11 +37,12 @@ test("상조회 수정은 전용 신청 양식으로 이동하고 상태별 메�
   assert.match(detailSource, /canDeleteMutualAidRequest\(post\.mutual_aid\?\.status\)/);
 });
 
-test("상조회 수정 양식은 확장정보와 기존 첨부를 복원하고 첨부 변경을 저장한다", () => {
+test("상조회 수정 양식은 증빙을 노출하지 않고 기존 관리자 전용 증빙을 보존한다", () => {
   assert.match(editFormSource, /existingPost\.mutual_aid\?\.event_type/);
   assert.match(editFormSource, /existingPost\.mutual_aid\?\.event_date/);
   assert.match(editFormSource, /existingPost\.mutual_aid\?\.relation/);
-  assert.match(editFormSource, /setAttachments\(existingPost\.attachments\)/);
-  assert.match(editFormSource, /resolveMediaAccessUrl\(attachment\)/);
+  assert.match(editFormSource, /existingPost\?\.mutual_aid\?\.has_evidence/);
+  assert.match(editFormSource, /isMutualAid && hasStoredMutualAidEvidence/);
+  assert.match(editFormSource, /증빙자료는 원우회 관리자만 확인/);
   assert.match(editFormSource, /attachment_ids: attachmentIds/);
 });

@@ -24,6 +24,7 @@ from app.models.like import Like
 from app.models.media import MediaAsset, PostAttachment
 from app.models.notification import Notification, NotificationSetting, PushDelivery, PushToken
 from app.models.post import Post
+from app.models.post_extension import PostMutualAid
 from app.models.rate_limit import RateLimitBucket
 from app.models.report import Report
 from app.models.search import SearchHistory
@@ -53,7 +54,7 @@ def _count(db, model) -> int:
     return int(db.scalar(select(func.count()).select_from(model)) or 0)
 
 
-def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_content(
+def test_authenticated_account_deletion_removes_pii_and_preserves_all_authored_content(
     api,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -61,13 +62,20 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
     public_directory, private_directory = _set_media_directories(monkeypatch, tmp_path)
     public_file = public_directory / "thumbnail.png"
     private_file = private_directory / "mutual-aid-proof.pdf"
+    orphan_file = private_directory / "unattached-upload.pdf"
+    shared_file = public_directory / "shared-on-other-post.png"
     public_file.write_bytes(b"public image")
     private_file.write_bytes(b"private evidence")
+    orphan_file.write_bytes(b"unattached evidence")
+    shared_file.write_bytes(b"shared image")
 
     now = utc_now()
     with api.session() as db:
         public_post = db.get(Post, 3)
+        mutual_aid_post = db.get(Post, 1)
         assert public_post is not None
+        assert mutual_aid_post is not None
+        mutual_aid_post.metadata_json = {"proof_url": "https://example.com/private-proof"}
         public_comment = Comment(post_id=public_post.id, author_id=1, content="A public answer")
         private_evidence = MediaAsset(
             owner_id=1,
@@ -78,6 +86,41 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
             url=None,
             is_private=True,
             status="ready",
+        )
+        unattached_upload = MediaAsset(
+            owner_id=1,
+            original_filename="unattached-upload.pdf",
+            stored_filename=orphan_file.name,
+            content_type="application/pdf",
+            file_size=orphan_file.stat().st_size,
+            url=None,
+            is_private=True,
+            status="ready",
+        )
+        shared_attachment = MediaAsset(
+            owner_id=1,
+            original_filename="shared-on-other-post.png",
+            stored_filename=shared_file.name,
+            content_type="image/png",
+            file_size=shared_file.stat().st_size,
+            url=None,
+            is_private=False,
+            status="ready",
+        )
+        draft_post = Post(
+            board_id=2,
+            author_id=1,
+            title="Owner draft retained",
+            content="Draft body",
+            status="draft",
+        )
+        deleted_post = Post(
+            board_id=2,
+            author_id=1,
+            title="Owner soft-deleted retained",
+            content="Deleted body",
+            status="deleted",
+            deleted_at=now,
         )
         owner_notification = Notification(
             user_id=1,
@@ -99,6 +142,10 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
             [
                 public_comment,
                 private_evidence,
+                unattached_upload,
+                shared_attachment,
+                draft_post,
+                deleted_post,
                 Like(user_id=1, post_id=public_post.id),
                 Bookmark(user_id=1, post_id=public_post.id),
                 Report(
@@ -147,6 +194,7 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
         )
         db.flush()
         db.add(PostAttachment(post_id=1, media_id=private_evidence.id, sort_order=0))
+        db.add(PostAttachment(post_id=2, media_id=shared_attachment.id, sort_order=0))
         db.flush()
         db.add(
             PushDelivery(
@@ -158,6 +206,10 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
         db.commit()
         public_comment_id = public_comment.id
         private_media_id = private_evidence.id
+        unattached_media_id = unattached_upload.id
+        shared_media_id = shared_attachment.id
+        draft_post_id = draft_post.id
+        deleted_post_id = deleted_post.id
 
     wrong_password = api.client.request(
         "DELETE",
@@ -188,7 +240,9 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
     datetime.fromisoformat(response_data["completed_at"])
 
     assert public_file.read_bytes() == b"public image"
-    assert not private_file.exists()
+    assert private_file.read_bytes() == b"private evidence"
+    assert shared_file.read_bytes() == b"shared image"
+    assert not orphan_file.exists()
     assert not list(private_directory.glob(".*.account-delete"))
     with api.session() as db:
         receipt = db.get(AccountDeletionReceipt, receipt_id)
@@ -202,26 +256,64 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
             "completed_at",
         }
         assert db.get(User, 1) is None
-        assert db.get(Post, 1) is None
-        assert db.get(Post, 4) is None
-        assert db.get(MediaAsset, private_media_id) is None
-        assert db.get(PostAttachment, 2) is None
+        mutual_aid_post = db.get(Post, 1)
+        hidden_post = db.get(Post, 4)
+        draft_post = db.get(Post, draft_post_id)
+        deleted_post = db.get(Post, deleted_post_id)
+        for retained_post in (mutual_aid_post, hidden_post, draft_post, deleted_post):
+            assert retained_post is not None
+            assert retained_post.author_id is None
+            assert retained_post.author_nickname_snapshot == "Owner"
+        assert mutual_aid_post.status == "published"
+        assert db.scalar(
+            select(PostMutualAid).where(PostMutualAid.post_id == mutual_aid_post.id)
+        ) is not None
+        assert hidden_post.status == "hidden"
+        assert draft_post.status == "draft"
+        assert deleted_post.status == "deleted"
+        assert deleted_post.deleted_at == now
+
+        retained_private_media = db.get(MediaAsset, private_media_id)
+        assert retained_private_media is not None
+        assert retained_private_media.owner_id is None
+        assert retained_private_media.original_filename == "identity-proof.pdf"
+        assert db.get(PostAttachment, 2) is not None
+        assert db.get(MediaAsset, unattached_media_id) is None
+
+        retained_shared_media = db.get(MediaAsset, shared_media_id)
+        assert retained_shared_media is not None
+        assert retained_shared_media.owner_id is None
+        assert retained_shared_media.original_filename == "shared-on-other-post.png"
+        assert db.scalar(
+            select(PostAttachment).where(
+                PostAttachment.post_id == 2,
+                PostAttachment.media_id == shared_media_id,
+            )
+        ) is not None
 
         surviving_post = db.get(Post, 3)
         assert surviving_post is not None
         assert surviving_post.author_id is None
+        assert surviving_post.author_nickname_snapshot == "Owner"
         assert surviving_post.like_count == 0
         assert surviving_post.comment_count == 1
 
         surviving_comment = db.get(Comment, public_comment_id)
         assert surviving_comment is not None
         assert surviving_comment.author_id is None
+        assert surviving_comment.author_nickname_snapshot == "Owner"
         assert surviving_comment.content == "A public answer"
+
+        mutual_aid_comment = db.scalar(select(Comment).where(Comment.post_id == 1))
+        assert mutual_aid_comment is not None
+        assert mutual_aid_comment.author_id is None
+        assert mutual_aid_comment.author_nickname_snapshot == "Owner"
+        assert mutual_aid_comment.content == "Owner comment"
 
         public_media = db.get(MediaAsset, 1)
         assert public_media is not None
         assert public_media.owner_id is None
-        assert public_media.original_filename == "deleted-user-file.png"
+        assert public_media.original_filename == "thumbnail.png"
 
         for model in (
             Like,
@@ -251,12 +343,30 @@ def test_authenticated_account_deletion_removes_pii_and_anonymizes_public_conten
     post_detail = api.client.get("/api/posts/3", headers=api.headers["other"])
     assert post_detail.status_code == 200
     assert post_detail.json()["data"]["author_id"] is None
-    assert post_detail.json()["data"]["author_nickname"] == DELETED_USER_NICKNAME
+    assert post_detail.json()["data"]["author_nickname"] == "Owner"
 
     comments = api.client.get("/api/posts/3/comments", headers=api.headers["other"])
     assert comments.status_code == 200
     assert comments.json()["data"][0]["author_id"] is None
-    assert comments.json()["data"][0]["author_nickname"] == DELETED_USER_NICKNAME
+    assert comments.json()["data"][0]["author_nickname"] == "Owner"
+
+    member_mutual_aid = api.client.get("/api/posts/1", headers=api.headers["other"])
+    assert member_mutual_aid.status_code == 200
+    assert member_mutual_aid.json()["data"]["attachments"] == []
+    assert "proof_url" not in (member_mutual_aid.json()["data"]["metadata"] or {})
+    assert api.client.get(
+        f"/api/media/{private_media_id}/access-url",
+        headers=api.headers["other"],
+    ).status_code == 404
+
+    admin_mutual_aid = api.client.get("/api/posts/1", headers=api.headers["admin"])
+    assert admin_mutual_aid.status_code == 200
+    assert admin_mutual_aid.json()["data"]["attachments"][0]["id"] == private_media_id
+    assert admin_mutual_aid.json()["data"]["metadata"]["proof_url"] == "https://example.com/private-proof"
+    assert api.client.get(
+        f"/api/media/{private_media_id}/access-url",
+        headers=api.headers["admin"],
+    ).status_code == 200
 
 
 def test_admin_must_be_demoted_before_self_deletion(api) -> None:

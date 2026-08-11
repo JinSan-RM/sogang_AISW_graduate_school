@@ -92,8 +92,8 @@ Implementation:
 | Guide/admin content CRUD | No | No | Yes |
 | Profile edit | No | Own only | Own/all if later needed |
 | Notification settings | No | Own only | Own only |
-| Read mutual-aid requests | No | Own only | All |
-| Read mutual-aid comments/evidence | No | Own only | All |
+| Read mutual-aid requests/comments | No | Yes | Yes |
+| Read/open/download mutual-aid evidence | No | No | Yes |
 | Issue media access URL | No | Authorized media only | All |
 
 ## 6. Board Write Policy
@@ -114,10 +114,10 @@ Rules:
 - Cohort-leader registration is stored through the admin-only board management API; members can read the configured cohort introductions but cannot create or edit them.
 - Past-council records use a separate admin-only board metadata area. FAQ remains a separate dedicated table/API; neither mutation path is available to members.
 - Suggestions remain anonymous in member and admin presentation. Only the admin reply endpoint can set an official answer and `answered` requires reply text.
-- Mutual-aid submissions are readable only by the requester and admins; board lists and global search are owner-scoped for non-admin users, and the same centralized post-read policy protects detail, reaction, comment, report, activity-history, and attachment paths. A non-owner receives `404 NOT_FOUND` so the API does not confirm the existence of another member's application.
+- Mutual-aid submission content and status are readable by authenticated members. Evidence files, evidence filenames, and `metadata.proof_url` are never returned to non-admin clients; direct evidence media lookup returns `404 NOT_FOUND`.
 - A requester may edit a mutual-aid submission only while it is `processing`. They may delete a `processing` or `rejected` submission, but never a `completed` submission; the API enforces the state rule even when called directly.
 - Draft and hidden posts are author/admin only across the same paths, while `deleted` status is admin-only; changing a previously readable post to an unpublished state removes it from other members' activity history and media authorization.
-- The backend does not mount the upload directory. It issues short-lived signed media URLs only after an authenticated metadata/access request passes object-level policy. A post attachment inherits the post's read policy; mutual-aid evidence remains requester/admin only.
+- The backend does not mount the upload directory. It issues short-lived signed media URLs only after an authenticated metadata/access request passes object-level policy. Ordinary post attachments inherit post read policy; mutual-aid evidence is administrator-only even for the requester after attachment.
 
 ## 7. Anonymous Writing
 
@@ -183,7 +183,8 @@ Rules:
 - Signed-out deletion uses `POST /api/auth/account-deletion/request` followed by `/verify`; verification requires the school-email code and current password.
 - The request endpoint returns the same accepted response for existing and missing accounts. Invalid account, code, or password at verification returns one generic error.
 - Both paths are rate-limited. Verification codes are hashed, have attempt and expiry limits, and are never returned by the API or logged.
-- The operation hard-deletes account PII, sessions/tokens, private activity, private/draft/hidden/mutual-aid content, and private/non-retained media in one database transaction with staged-file rollback protection.
-- Public published posts/comments and their required public attachments may remain only after user/owner links and identifying filenames are removed.
+- The operation hard-deletes account PII, sessions/tokens, user-specific activity, and unattached owned uploads in one database transaction with staged-file rollback protection.
+- Every authored post/comment remains regardless of status or board type. Before the user row is removed, missing writing-time name/cohort snapshots are filled and `author_id` is cleared. Every connected owned media asset remains with its `owner_id` cleared; filenames and bytes are unchanged.
+- Anonymous and forced-anonymous content remains anonymous to non-admin readers. Administrators may resolve its live author or historical snapshot. Mutual-aid evidence remains administrator-only after account deletion.
 - Administrators must transfer operational responsibility and be demoted by another administrator before self-deletion.
 - The completion receipt is deliberately non-identifying. There is no fixed application-level legal retention claim; any receipt or backup interval requires explicit privacy-owner approval.

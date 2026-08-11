@@ -511,14 +511,40 @@ until the recovery owner approves deletion.
   `POST /api/auth/account-deletion/verify`; it requires email verification and
   the current password without revealing whether an account exists.
 - A completed operation hard-deletes account PII, authentication/session
-  records, private content, and private media. Retained public content has its
-  author link removed.
+  records, user-specific activity, and unattached owned uploads. All authored
+  posts/comments and connected media remain; author/owner account links are
+  cleared after writing-time name/cohort snapshots are ensured.
+- Mutual-aid application rows and connected evidence remain. Evidence files
+  and links are administrator-only and continue to follow the separate annual
+  destruction policy.
 - `account_deletion_receipts` must never gain user ID, email, IP address,
   free-form reason, or deletion counts.
 - Administrator self-deletion is rejected until responsibilities are
   transferred and the account is demoted.
 - Keep the approved retention decision in deployment records and
   `ACCOUNT_DELETION_RECEIPT_RETENTION_DAYS`.
+
+Before rollout and after restoring any legacy backup, audit orphan rows that
+cannot show a verified writing-time author:
+
+```sql
+SELECT 'posts' AS entity, count(*) AS missing_snapshot
+FROM posts
+WHERE author_id IS NULL AND author_nickname_snapshot IS NULL
+UNION ALL
+SELECT 'comments' AS entity, count(*) AS missing_snapshot
+FROM comments
+WHERE author_id IS NULL AND author_nickname_snapshot IS NULL;
+```
+
+If either count is non-zero, export only the affected content IDs to an
+encrypted operator artifact. A post may be backfilled from its verified
+`metadata->>'legacy_author'` and `legacy_author_cohort`; otherwise use a
+pre-deletion backup matched by content ID. Never guess a name or cohort.
+Physically deleted posts/comments/media cannot be recreated by migration
+`0025`; restore them only from an approved backup after matching row identity,
+attachment relations, original-file checksums, and the applicable retention
+policy.
 
 # Verification Evidence
 

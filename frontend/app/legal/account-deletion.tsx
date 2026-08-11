@@ -192,8 +192,8 @@ export default function PublicAccountDeletionScreen() {
             계정 삭제가 완료되었습니다
           </Text>
           <Text style={styles.successBody}>
-            계정 개인정보와 비공개 데이터가 삭제되었습니다. 공개 게시글과 댓글은 작성자 연결이
-            제거된 상태로 유지됩니다.
+            계정 개인정보가 삭제되었습니다. 작성한 게시글·댓글·상조회 신청과 연결 첨부는 작성 당시의
+            이름과 기수로 유지되며, 상조회 증빙자료는 관리자만 열람할 수 있습니다.
           </Text>
           <Pressable
             accessibilityRole="link"

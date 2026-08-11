@@ -544,13 +544,29 @@ def test_article_import_is_idempotent(api) -> None:
             },
         )
 
-        _, first_stats, _ = import_articles_and_specials(db, [row], [], apply=True, limit=1)
+        imported_posts, first_stats, _ = import_articles_and_specials(db, [row], [], apply=True, limit=1)
+        db.commit()
+        imported_post = imported_posts["4313612"]
+        expected_snapshot = (
+            imported_post.metadata_json["legacy_author"],
+            imported_post.metadata_json["legacy_author_cohort"],
+        )
+        imported_post.author_nickname_snapshot = None
+        imported_post.author_cohort_snapshot = None
         db.commit()
         _, second_stats, _ = import_articles_and_specials(db, [row], [], apply=True, limit=1)
         db.commit()
+        _, third_stats, _ = import_articles_and_specials(db, [row], [], apply=True, limit=1)
+        db.commit()
 
         assert first_stats["created_posts"] == 1
-        assert second_stats["unchanged_posts"] == 1
+        assert second_stats["updated_posts"] == 1
+        assert third_stats["unchanged_posts"] == 1
+        db.refresh(imported_post)
+        assert (
+            imported_post.author_nickname_snapshot,
+            imported_post.author_cohort_snapshot,
+        ) == expected_snapshot
         assert db.scalar(select(func.count(Post.id)).where(Post.title == "이관 테스트")) == 1
         assert db.scalar(select(func.count(LegacyImportRecord.id))) == 1
 
@@ -647,9 +663,24 @@ def test_comment_parent_mapping_archives_depth_over_two(api) -> None:
         stats = import_comments(db, rows, {"article-1": post}, apply=True, reconcile_untracked=False)
         db.commit()
 
+        imported_comments = db.scalars(
+            select(Comment).where(Comment.post_id == post.id).order_by(Comment.id)
+        ).all()
+        for comment in imported_comments:
+            comment.author_nickname_snapshot = None
+            comment.author_cohort_snapshot = None
+        db.commit()
+        rerun_stats = import_comments(db, rows, {"article-1": post}, apply=True, reconcile_untracked=False)
+        db.commit()
+
         assert stats["created_comments"] == 2
+        assert rerun_stats["created_comments"] == 0
         assert stats["over_depth_reply_comments"] == 1
         assert db.scalar(select(func.count(Comment.id)).where(Comment.post_id == post.id)) == 2
+        for comment in imported_comments:
+            db.refresh(comment)
+            assert comment.author_nickname_snapshot is not None
+            assert comment.author_cohort_snapshot is not None
         archived = db.scalar(
             select(LegacyImportRecord).where(
                 LegacyImportRecord.entity_type == "comment",

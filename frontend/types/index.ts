@@ -219,6 +219,7 @@ export type MutualAidDetail = {
   rejection_reason?: string | null;
   reviewed_by?: number | null;
   reviewed_at?: string | null;
+  has_evidence?: boolean;
 };
 
 export type MediaAsset = {

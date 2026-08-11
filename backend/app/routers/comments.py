@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.account_deletion import DELETED_USER_NICKNAME
+from app.author_snapshots import resolve_author_display
 from app.board_policies import comments_are_disabled
 from app.deps import get_current_user, get_db
 from app.errors import AppException
@@ -77,12 +77,19 @@ def get_comments(
     roots: list[dict] = []
 
     for comment in comments:
+        live_author = author_by_id.get(comment.author_id, {})
+        author = resolve_author_display(
+            live_nickname=live_author.get("nickname"),
+            live_cohort=live_author.get("cohort"),
+            snapshot_nickname=comment.author_nickname_snapshot,
+            snapshot_cohort=comment.author_cohort_snapshot,
+        )
         nodes[comment.id] = {
             "id": comment.id,
             "post_id": comment.post_id,
             "author_id": comment.author_id,
-            "author_nickname": author_by_id.get(comment.author_id, {}).get("nickname", DELETED_USER_NICKNAME),
-            "author_cohort": author_by_id.get(comment.author_id, {}).get("cohort"),
+            "author_nickname": author.nickname,
+            "author_cohort": author.cohort,
             "parent_id": comment.parent_id,
             "content": comment.content,
             "created_at": comment.created_at,
@@ -130,6 +137,8 @@ def create_comment(
     comment = Comment(
         post_id=post_id,
         author_id=current_user.id,
+        author_nickname_snapshot=current_user.nickname,
+        author_cohort_snapshot=current_user.cohort,
         parent_id=payload.parent_id,
         content=payload.content,
     )

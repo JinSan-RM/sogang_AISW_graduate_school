@@ -20,6 +20,8 @@ class Post(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     board_id: Mapped[int] = mapped_column(ForeignKey("boards.id"), nullable=False)
     author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    author_nickname_snapshot: Mapped[str | None] = mapped_column(String(50))
+    author_cohort_snapshot: Mapped[str | None] = mapped_column(String(20))
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

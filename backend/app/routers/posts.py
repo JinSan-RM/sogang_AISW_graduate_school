@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
-from app.account_deletion import DELETED_USER_NICKNAME
+from app.author_snapshots import resolve_author_display
 from app.board_policies import hides_author_identity
 from app.deps import can_read_board, can_write_board, get_current_user, get_db, require_admin
 from app.errors import AppException
@@ -47,17 +47,35 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
     metadata = dict(post.metadata_json)
     if board.board_type == "activity_certification" and not include_sensitive:
         metadata.pop("bank_account", None)
+    if board.board_type == "mutual_aid" and not include_sensitive:
+        metadata.pop("proof_url", None)
     return metadata
 
 
-def _metadata_for_update(post: Post, board: Board | None, incoming_metadata: dict | None) -> dict | None:
-    if board is None or board.board_type != "activity_certification":
-        return incoming_metadata
-
+def _metadata_for_update(
+    post: Post,
+    board: Board | None,
+    incoming_metadata: dict | None,
+    *,
+    has_new_attachments: bool = False,
+) -> dict | None:
     metadata = dict(incoming_metadata or {})
     existing_metadata = dict(post.metadata_json or {})
-    if "bank_account" in existing_metadata and "bank_account" not in metadata:
+    if (
+        board is not None
+        and board.board_type == "activity_certification"
+        and "bank_account" in existing_metadata
+        and "bank_account" not in metadata
+    ):
         metadata["bank_account"] = existing_metadata["bank_account"]
+    if (
+        board is not None
+        and board.board_type == "mutual_aid"
+        and not has_new_attachments
+        and "proof_url" in existing_metadata
+        and "proof_url" not in metadata
+    ):
+        metadata["proof_url"] = existing_metadata["proof_url"]
     return metadata or None
 
 
@@ -79,22 +97,31 @@ def _post_author_nickname(
     current_user: User,
     nickname: str | None,
 ) -> str:
-    if post.author_id is None:
-        return DELETED_USER_NICKNAME
     if _hide_post_author(post, board, current_user):
         return "Anonymous"
-    return nickname or DELETED_USER_NICKNAME
+    return resolve_author_display(
+        live_nickname=nickname,
+        live_cohort=None,
+        snapshot_nickname=post.author_nickname_snapshot,
+        snapshot_cohort=None,
+    ).nickname
 
 
 def _post_author_cohort(
     post: Post,
     board: Board,
     current_user: User,
+    nickname: str | None,
     cohort: str | None,
 ) -> str | None:
-    if post.author_id is None or _hide_post_author(post, board, current_user):
+    if _hide_post_author(post, board, current_user):
         return None
-    return cohort
+    return resolve_author_display(
+        live_nickname=nickname,
+        live_cohort=cohort,
+        snapshot_nickname=post.author_nickname_snapshot,
+        snapshot_cohort=post.author_cohort_snapshot,
+    ).cohort
 
 
 def _enforce_council_management_policy(board: Board, current_user: User) -> None:
@@ -135,7 +162,10 @@ def get_posts(
         if hides_author_identity(board) and current_user.role != "admin":
             filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword))
         else:
-            author_match = User.nickname.ilike(keyword)
+            author_match = or_(
+                User.nickname.ilike(keyword),
+                Post.author_nickname_snapshot.ilike(keyword),
+            )
             if current_user.role != "admin":
                 author_match = and_(Post.is_anonymous.is_(False), author_match)
             filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | author_match)
@@ -230,7 +260,7 @@ def get_posts(
             "content_preview": post.content[:100],
             "author_id": _visible_post_author_id(post, board, current_user),
             "author_nickname": _post_author_nickname(post, board, current_user, nickname),
-            "author_cohort": _post_author_cohort(post, board, current_user, cohort),
+            "author_cohort": _post_author_cohort(post, board, current_user, nickname, cohort),
             "is_anonymous": post.is_anonymous,
             "is_pinned": post.is_pinned,
             "is_notice": post.is_notice,
@@ -239,9 +269,15 @@ def get_posts(
             "metadata": _safe_metadata(post, board),
             "suggestion": _suggestion_payload(db, post.id) if board.board_type == "suggestion" else None,
             "mutual_aid": _mutual_aid_payload(db, post.id) if board.board_type == "mutual_aid" else None,
-            "attachment_count": attachment_count,
-            "thumbnail_media_id": thumbnail_media_id,
-            "thumbnail_url": thumbnail_url,
+            "attachment_count": 0
+            if board.board_type == "mutual_aid" and current_user.role != "admin"
+            else attachment_count,
+            "thumbnail_media_id": None
+            if board.board_type == "mutual_aid" and current_user.role != "admin"
+            else thumbnail_media_id,
+            "thumbnail_url": None
+            if board.board_type == "mutual_aid" and current_user.role != "admin"
+            else thumbnail_url,
             "view_count": post.view_count,
             "like_count": post.like_count,
             "comment_count": post.comment_count,
@@ -280,7 +316,14 @@ def _highlight(text: str, keyword: str | None) -> str:
     return f"{text[:start]}<mark>{text[start:end]}</mark>{text[end:]}"
 
 
-def _post_attachments(db: Session, post_id: int, current_user: User) -> list[dict]:
+def _post_attachments(
+    db: Session,
+    post_id: int,
+    board: Board,
+    current_user: User,
+) -> list[dict]:
+    if board.board_type == "mutual_aid" and current_user.role != "admin":
+        return []
     rows = db.execute(
         select(PostAttachment, MediaAsset)
         .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
@@ -307,6 +350,8 @@ def _replace_attachments(
     attachment_ids: list[int],
     current_user: User,
     evidence_link: str | None = None,
+    *,
+    preserve_existing_when_empty: bool = False,
 ) -> None:
     post = db.get(Post, post_id)
     board = db.get(Board, post.board_id) if post is not None else None
@@ -314,6 +359,22 @@ def _replace_attachments(
     requires_album_images = board is not None and board.board_type == "album"
     requires_activity_images = board is not None and board.board_type == "activity_certification"
     requires_admin_participation_image = board is not None and board.slug in ADMIN_PARTICIPATION_BOARD_SLUGS
+    existing_attachment_count = int(
+        db.scalar(
+            select(func.count(PostAttachment.id)).where(PostAttachment.post_id == post_id)
+        )
+        or 0
+    )
+    if (
+        requires_private
+        and preserve_existing_when_empty
+        and not attachment_ids
+        and existing_attachment_count > 0
+    ):
+        # Members are not allowed to receive evidence metadata. An empty list
+        # during an ordinary edit therefore means "keep the protected evidence",
+        # not "delete evidence the client could not see".
+        return
     if requires_private and not attachment_ids and not (evidence_link or "").strip():
         raise AppException(
             status_code=400,
@@ -405,6 +466,13 @@ def _mutual_aid_payload(db: Session, post_id: int) -> dict | None:
     mutual_aid = db.scalar(select(PostMutualAid).where(PostMutualAid.post_id == post_id))
     if mutual_aid is None:
         return None
+    post = db.get(Post, post_id)
+    attachment_count = int(
+        db.scalar(
+            select(func.count(PostAttachment.id)).where(PostAttachment.post_id == post_id)
+        )
+        or 0
+    )
     return {
         "event_type": mutual_aid.event_type,
         "event_date": mutual_aid.event_date.isoformat(),
@@ -413,6 +481,7 @@ def _mutual_aid_payload(db: Session, post_id: int) -> dict | None:
         "rejection_reason": mutual_aid.rejection_reason,
         "reviewed_by": mutual_aid.reviewed_by,
         "reviewed_at": mutual_aid.reviewed_at,
+        "has_evidence": attachment_count > 0 or bool(_evidence_link(post.metadata_json if post else None)),
     }
 
 
@@ -553,7 +622,13 @@ def get_admin_posts(
         filters.append(Post.is_notice.is_(is_notice))
     if q:
         keyword = f"%{q}%"
-        filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | User.nickname.ilike(keyword) | Board.name.ilike(keyword))
+        filters.append(
+            Post.title.ilike(keyword)
+            | Post.content.ilike(keyword)
+            | User.nickname.ilike(keyword)
+            | Post.author_nickname_snapshot.ilike(keyword)
+            | Board.name.ilike(keyword)
+        )
 
     total = (
         db.scalar(
@@ -630,8 +705,18 @@ def get_admin_posts(
             "title": post.title,
             "content_preview": post.content[:100],
             "author_id": post.author_id,
-            "author_nickname": nickname or DELETED_USER_NICKNAME,
-            "author_cohort": cohort if post.author_id is not None else None,
+            "author_nickname": resolve_author_display(
+                live_nickname=nickname,
+                live_cohort=cohort,
+                snapshot_nickname=post.author_nickname_snapshot,
+                snapshot_cohort=post.author_cohort_snapshot,
+            ).nickname,
+            "author_cohort": resolve_author_display(
+                live_nickname=nickname,
+                live_cohort=cohort,
+                snapshot_nickname=post.author_nickname_snapshot,
+                snapshot_cohort=post.author_cohort_snapshot,
+            ).cohort,
             "is_anonymous": post.is_anonymous,
             "is_pinned": post.is_pinned,
             "is_notice": post.is_notice,
@@ -712,7 +797,7 @@ def get_post_detail(
             "content": post.content,
             "author_id": _visible_post_author_id(post, board, current_user),
             "author_nickname": _post_author_nickname(post, board, current_user, nickname),
-            "author_cohort": _post_author_cohort(post, board, current_user, cohort),
+            "author_cohort": _post_author_cohort(post, board, current_user, nickname, cohort),
             "is_anonymous": post.is_anonymous,
             "is_pinned": post.is_pinned,
             "is_notice": post.is_notice,
@@ -721,7 +806,7 @@ def get_post_detail(
             "metadata": _safe_metadata(post, board, include_sensitive=current_user.role == "admin"),
             "suggestion": _suggestion_payload(db, post.id),
             "mutual_aid": _mutual_aid_payload(db, post.id),
-            "attachments": _post_attachments(db, post.id, current_user),
+            "attachments": _post_attachments(db, post.id, board, current_user),
             "view_count": post.view_count,
             "like_count": post.like_count,
             "comment_count": post.comment_count,
@@ -759,6 +844,8 @@ def create_post(
     post = Post(
         board_id=board_id,
         author_id=current_user.id,
+        author_nickname_snapshot=current_user.nickname,
+        author_cohort_snapshot=current_user.cohort,
         title=payload.title,
         content="" if board.board_type == "album" else payload.content,
         is_anonymous=is_anonymous,
@@ -851,13 +938,32 @@ def update_post(
     post.content = "" if target_board is not None and target_board.board_type == "album" else payload.content
     post.is_anonymous = is_anonymous
     post.category = None if target_board is not None and target_board.board_type == "album" else payload.category
-    post.metadata_json = _metadata_for_update(post, target_board, payload.metadata)
+    post.metadata_json = _metadata_for_update(
+        post,
+        target_board,
+        payload.metadata,
+        has_new_attachments=bool(payload.attachment_ids),
+    )
     post.deadline_at = payload.deadline_at if target_board is not None and target_board.board_type == "notice" else None
     if target_board is not None:
         _upsert_suggestion_extension(db, post, target_board, payload.category)
         _upsert_mutual_aid_extension(db, post, target_board, payload.category, payload.metadata)
     if payload.attachment_ids is not None:
-        _replace_attachments(db, post.id, payload.attachment_ids, current_user, _evidence_link(payload.metadata))
+        incoming_evidence_link = _evidence_link(payload.metadata)
+        _replace_attachments(
+            db,
+            post.id,
+            payload.attachment_ids,
+            current_user,
+            _evidence_link(post.metadata_json),
+            preserve_existing_when_empty=(
+                target_board is not None
+                and target_board.board_type == "mutual_aid"
+                and current_user.role != "admin"
+                and not payload.attachment_ids
+                and incoming_evidence_link is None
+            ),
+        )
     if target_board is not None:
         _ensure_admin_participation_image(db, post, target_board)
     db.commit()

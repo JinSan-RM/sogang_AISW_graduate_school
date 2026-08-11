@@ -10,13 +10,13 @@ from uuid import uuid4
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.author_snapshots import DELETED_USER_NICKNAME
 from app.errors import AppException
 from app.media_service import media_storage_path, private_upload_directory, public_upload_directory
 from app.models.audit import AccountDeletionReceipt, OperationalAuditLog
 from app.config import settings
 from app.models.auth import EmailVerificationToken, PasswordResetToken, RefreshToken
 from app.models.banner import Banner
-from app.models.board import Board
 from app.models.bookmark import Bookmark
 from app.models.comment import Comment
 from app.models.event import Event
@@ -37,10 +37,8 @@ from app.security import generate_token_urlsafe, utc_now, verify_password
 
 logger = logging.getLogger(__name__)
 
-DELETED_USER_NICKNAME = "Deleted user"
 ACCOUNT_DELETE_PURPOSE = "account_delete"
 _STAGING_SUFFIX = ".account-delete"
-_PUBLIC_READ_PERMISSIONS = frozenset({"guest", "user"})
 
 
 @dataclass(frozen=True)
@@ -54,21 +52,10 @@ class AccountDeletionResult:
     receipt_id: str
     completed_at: str
     deleted_user_id: int
-    anonymized_posts: int
-    anonymized_comments: int
-    deleted_private_posts: int
-    deleted_media: int
-
-
-def _is_public_post(post: Post, board: Board | None) -> bool:
-    return bool(
-        board is not None
-        and board.is_active
-        and board.read_permission in _PUBLIC_READ_PERMISSIONS
-        and board.board_type != "mutual_aid"
-        and post.status == "published"
-        and post.deleted_at is None
-    )
+    retained_posts: int
+    retained_comments: int
+    retained_attached_media: int
+    deleted_unattached_media: int
 
 
 def _media_paths_for_deletion(media: MediaAsset) -> tuple[Path, ...]:
@@ -152,11 +139,6 @@ def purge_expired_account_deletion_receipts(db: Session) -> int:
     return int(result.rowcount or 0)
 
 
-def _anonymized_filename(original_filename: str) -> str:
-    extension = Path(original_filename).suffix.lower()
-    return f"deleted-user-file{extension}"
-
-
 def _delete_push_history(db: Session, user_id: int) -> None:
     push_token_ids = list(db.scalars(select(PushToken.id).where(PushToken.user_id == user_id)).all())
     notification_ids = list(db.scalars(select(Notification.id).where(Notification.user_id == user_id)).all())
@@ -220,7 +202,7 @@ def delete_user_account(
     current_password: str,
     channel: str = "authenticated",
 ) -> AccountDeletionResult:
-    """Hard-delete account PII while irreversibly anonymizing public content.
+    """Hard-delete account PII while retaining every authored post and comment.
 
     Administrators must first transfer operational ownership and be demoted by
     another administrator. This prevents a self-service deletion from
@@ -255,33 +237,12 @@ def delete_user_account(
     user_posts = db.scalars(
         select(Post).where(Post.author_id == user.id).with_for_update()
     ).all()
-    boards_by_id = {
-        board.id: board
-        for board in db.scalars(
-            select(Board).where(Board.id.in_({post.board_id for post in user_posts}))
-        ).all()
-    } if user_posts else {}
-    public_posts = [post for post in user_posts if _is_public_post(post, boards_by_id.get(post.board_id))]
-    public_post_ids = {post.id for post in public_posts}
-    private_post_ids = {post.id for post in user_posts if post.id not in public_post_ids}
-
-    authored_comment_rows = db.execute(
-        select(Comment.id, Comment.post_id, Post, Board)
-        .join(Post, Post.id == Comment.post_id)
-        .join(Board, Board.id == Post.board_id)
-        .where(Comment.author_id == user.id)
+    authored_comments = db.scalars(
+        select(Comment).where(Comment.author_id == user.id).with_for_update()
     ).all()
-    public_comment_ids = {
-        comment_id
-        for comment_id, _, post, board in authored_comment_rows
-        if post.id not in private_post_ids and _is_public_post(post, board)
-    }
-    private_comment_ids = {
-        comment_id
-        for comment_id, _, post, board in authored_comment_rows
-        if post.id not in private_post_ids and not _is_public_post(post, board)
-    }
-    affected_comment_post_ids = {post_id for _, post_id, _, _ in authored_comment_rows}
+    authored_post_ids = {post.id for post in user_posts}
+    authored_comment_ids = {comment.id for comment in authored_comments}
+    affected_comment_post_ids = {comment.post_id for comment in authored_comments}
     affected_like_post_ids = set(
         db.scalars(select(Like.post_id).where(Like.user_id == user.id)).all()
     )
@@ -289,35 +250,17 @@ def delete_user_account(
     owned_media = list(
         db.scalars(select(MediaAsset).where(MediaAsset.owner_id == user.id).with_for_update()).all()
     )
-    private_evidence_media = list(
+    retained_media_ids = set(
         db.scalars(
-            select(MediaAsset)
-            .join(PostAttachment, PostAttachment.media_id == MediaAsset.id)
-            .where(
-                PostAttachment.post_id.in_(private_post_ids),
-                MediaAsset.is_private.is_(True),
-            )
+            select(PostAttachment.media_id)
+            .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
+            .where(MediaAsset.owner_id == user.id)
         ).all()
-    ) if private_post_ids else []
-    media_by_id = {media.id: media for media in [*owned_media, *private_evidence_media]}
-
-    retained_media_ids: set[int] = set()
-    if public_post_ids:
-        retained_media_ids = set(
-            db.scalars(
-                select(PostAttachment.media_id)
-                .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
-                .where(
-                    PostAttachment.post_id.in_(public_post_ids),
-                    MediaAsset.owner_id == user.id,
-                    MediaAsset.is_private.is_(False),
-                )
-            ).all()
-        )
+    )
     deleted_media = [
         media
-        for media_id, media in media_by_id.items()
-        if media_id not in retained_media_ids
+        for media in owned_media
+        if media.id not in retained_media_ids
     ]
     deleted_media_ids = {media.id for media in deleted_media}
     staged_files = _stage_files(deleted_media)
@@ -334,19 +277,18 @@ def delete_user_account(
         for media in owned_media:
             if media.id in retained_media_ids:
                 media.owner_id = None
-                media.original_filename = _anonymized_filename(media.original_filename)
 
-        if private_post_ids:
-            db.execute(delete(Post).where(Post.id.in_(private_post_ids)))
-        if private_comment_ids:
-            db.execute(delete(Comment).where(Comment.id.in_(private_comment_ids)))
-        if public_comment_ids:
-            db.execute(
-                Comment.__table__.update()
-                .where(Comment.id.in_(public_comment_ids))
-                .values(author_id=None)
-            )
-        for post in public_posts:
+        for comment in authored_comments:
+            if not comment.author_nickname_snapshot:
+                comment.author_nickname_snapshot = user.nickname
+            if comment.author_cohort_snapshot is None:
+                comment.author_cohort_snapshot = user.cohort
+            comment.author_id = None
+        for post in user_posts:
+            if not post.author_nickname_snapshot:
+                post.author_nickname_snapshot = user.nickname
+            if post.author_cohort_snapshot is None:
+                post.author_cohort_snapshot = user.cohort
             post.author_id = None
 
         db.execute(delete(Like).where(Like.user_id == user.id))
@@ -422,8 +364,8 @@ def delete_user_account(
         receipt_id=receipt_id,
         completed_at=completed_at.isoformat(),
         deleted_user_id=user_id,
-        anonymized_posts=len(public_post_ids),
-        anonymized_comments=len(public_comment_ids),
-        deleted_private_posts=len(private_post_ids),
-        deleted_media=len(deleted_media_ids),
+        retained_posts=len(authored_post_ids),
+        retained_comments=len(authored_comment_ids),
+        retained_attached_media=len(retained_media_ids),
+        deleted_unattached_media=len(deleted_media_ids),
     )

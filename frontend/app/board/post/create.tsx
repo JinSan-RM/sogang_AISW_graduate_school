@@ -430,6 +430,7 @@ export default function PostCreateScreen() {
   }, [isAdminParticipationPost, params.category, setValue]);
 
   const attachmentIds = attachments.map((attachment) => attachment.id);
+  const hasStoredMutualAidEvidence = Boolean(postId && existingPost?.mutual_aid?.has_evidence);
   const syncParticipants = (items: UserSearchItem[]) => {
     setSelectedParticipants(items);
     setValue("participants", items.map(formatActivityParticipant).join(", "), { shouldValidate: true });
@@ -630,7 +631,11 @@ export default function PostCreateScreen() {
         setFormNotice(createFormNotice("증빙서류 첨부", "http:// 또는 https://로 시작하는 올바른 주소를 입력하세요."));
         return;
       }
-    } else if (requiresAttachment && (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0)) {
+    } else if (
+      requiresAttachment &&
+      (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0) &&
+      !(isMutualAid && hasStoredMutualAidEvidence)
+    ) {
       setFormNotice(createFormNotice(labels.attachment, `${labels.attachmentHelp}을 첨부하세요.`));
       return;
     }

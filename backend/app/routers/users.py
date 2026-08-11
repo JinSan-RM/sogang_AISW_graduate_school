@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.account_deletion import DELETED_USER_NICKNAME, delete_user_account
+from app.account_deletion import delete_user_account
+from app.author_snapshots import resolve_author_display
 from app.board_policies import hides_author_identity
 from app.deps import get_current_user, get_db, require_admin
 from app.errors import AppException
@@ -303,17 +304,24 @@ def get_my_activity(
                 "category": post.category,
                 "comment_count": post.comment_count,
                 "like_count": post.like_count,
-                "author_nickname": DELETED_USER_NICKNAME
-                if post.author_id is None
-                else (
+                "author_nickname": (
                     "Anonymous"
                     if user.role != "admin" and (post.is_anonymous or hides_author_identity(board))
-                    else author_nickname
+                    else resolve_author_display(
+                        live_nickname=author_nickname,
+                        live_cohort=author_cohort,
+                        snapshot_nickname=post.author_nickname_snapshot,
+                        snapshot_cohort=post.author_cohort_snapshot,
+                    ).nickname
                 ),
                 "author_cohort": None
-                if post.author_id is None
-                or (user.role != "admin" and (post.is_anonymous or hides_author_identity(board)))
-                else author_cohort,
+                if user.role != "admin" and (post.is_anonymous or hides_author_identity(board))
+                else resolve_author_display(
+                    live_nickname=author_nickname,
+                    live_cohort=author_cohort,
+                    snapshot_nickname=post.author_nickname_snapshot,
+                    snapshot_cohort=post.author_cohort_snapshot,
+                ).cohort,
                 "created_at": post.created_at,
             }
             for bookmark, post, board, author_nickname, author_cohort in bookmarks

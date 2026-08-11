@@ -23,13 +23,14 @@ Reason:
 
 Decision:
 
-- Do not add `posts.author_name` in Phase 2.
-- Resolve display name through `users.nickname`.
+- Store `author_nickname_snapshot VARCHAR(50) NULL` and `author_cohort_snapshot VARCHAR(20) NULL` on both `posts` and `comments`.
+- Populate snapshots from the authenticated user at write time and from the legacy author during import.
+- Prefer the live user profile while the account exists; after unlink/deletion, use the snapshot for historical display.
 
 Reason:
 
-- Current code already joins users.
-- Snapshot names can be added later if audit/history requirements appear.
+- Account deletion must not erase the name and cohort shown on historical posts/comments.
+- This is an intentional, narrowly scoped denormalization. Email, phone, major, company, account number, and other profile fields are not copied.
 
 ### Board Model
 
@@ -130,6 +131,8 @@ Current:
 - `id`
 - `board_id`
 - `author_id`
+- `author_nickname_snapshot`
+- `author_cohort_snapshot`
 - `title`
 - `content`
 - `is_pinned`
@@ -163,6 +166,7 @@ Phase 2 rule:
 
 - Enforce max depth 2 in application code.
 - Keep DB flexible enough for future deeper nesting.
+- Store `author_nickname_snapshot` and `author_cohort_snapshot` at creation/import time for historical display after account unlinking.
 
 ### `likes` and `bookmarks`
 
@@ -544,13 +548,13 @@ The same migration normalizes `council`/`gsa` write permissions: only `suggestio
 Structured cohort-leader introductions use `boards.metadata.cohort_leaders` with cohort, captain/vice-captain names, greeting, introduction, banner image URL, and two profile image URLs. The board admin API is the only write path.
 Past councils use the separate `gsa-past-councils` organization-intro board and `boards.metadata.past_councils`; FAQ continues to use the dedicated `faqs` table. Past-council entries store council number, president/vice-president profile data, introduction, images, and activity lines.
 
-`0020_account_hard_delete` changes the account-deletion foreign-key contract:
+`0020_account_hard_delete` changes the account-deletion foreign-key contract, and the current deletion policy uses that nullable contract without deleting authored content:
 
-- `posts.author_id`, `comments.author_id`, and `media_assets.owner_id` become nullable with `ON DELETE SET NULL` so approved public content can survive without an account link.
+- `posts.author_id`, `comments.author_id`, and `media_assets.owner_id` are nullable with `ON DELETE SET NULL` so all authored content and connected media can survive without an account link.
 - `likes.user_id` and `bookmarks.user_id` use `ON DELETE CASCADE`.
 - operational ownership columns on banners, events, suggestion replies, and mutual-aid reviews use `ON DELETE SET NULL`.
 - email-verification purpose accepts `account_delete`.
-- the service deletes private/draft/hidden/mutual-aid content and private media before deleting the user; it anonymizes only active published content on readable public/member boards.
+- the service fills missing author snapshots, clears every authored post/comment `author_id`, clears `owner_id` on every connected owned media asset, and preserves post/comment/extension/attachment rows and original filenames. Only unattached owned uploads are physically removed as part of account deletion.
 
 The `0020` downgrade refuses to make author/owner columns non-null after irreversible anonymization has occurred. Operators must restore a pre-deletion backup rather than fabricate ownership.
 
@@ -561,6 +565,8 @@ The `0020` downgrade refuses to make author/owner columns non-null after irrever
 | `receipt_id` | `VARCHAR(36)` | primary key, random UUID |
 | `channel` | `VARCHAR(20)` | `authenticated` or `public_email` |
 | `result` | `VARCHAR(20)` | only `completed` |
+
+`0025_author_content_snapshots` adds the four nullable snapshot columns to `posts` and `comments` and backfills rows that still have a live `author_id`. A missing snapshot on an already orphaned historical row is never guessed; operations must use verified backup or legacy metadata evidence.
 | `completed_at` | `DATETIME` | indexed |
 
 The receipt deliberately has no user ID, email, IP address, free-form reason, or deletion counts. Production may expire receipts only after the privacy owner explicitly sets `ACCOUNT_DELETION_RECEIPT_RETENTION_DAYS`; the schema and application do not assert a fixed legal retention period.

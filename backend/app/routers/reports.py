@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.account_deletion import DELETED_USER_NICKNAME
+from app.author_snapshots import resolve_author_display
 from app.deps import get_current_user, get_db, require_admin
 from app.errors import AppException
 from app.models.comment import Comment
@@ -66,6 +66,12 @@ def _post_target_payload(db: Session, post_id: int) -> dict:
         return {"target_exists": False, "target_deleted": True}
 
     post, author_nickname = row
+    author = resolve_author_display(
+        live_nickname=author_nickname,
+        live_cohort=None,
+        snapshot_nickname=post.author_nickname_snapshot,
+        snapshot_cohort=post.author_cohort_snapshot,
+    )
     return {
         "target_exists": True,
         "target_deleted": post.deleted_at is not None,
@@ -74,9 +80,7 @@ def _post_target_payload(db: Session, post_id: int) -> dict:
         "title": post.title,
         "content_preview": post.content[:160],
         "author_id": post.author_id,
-        "author_nickname": DELETED_USER_NICKNAME
-        if post.author_id is None
-        else ("Anonymous" if post.is_anonymous else author_nickname),
+        "author_nickname": author.nickname,
     }
 
 
@@ -91,6 +95,12 @@ def _comment_target_payload(db: Session, comment_id: int) -> dict:
         return {"target_exists": False, "target_deleted": True}
 
     comment, post, author_nickname = row
+    author = resolve_author_display(
+        live_nickname=author_nickname,
+        live_cohort=None,
+        snapshot_nickname=comment.author_nickname_snapshot,
+        snapshot_cohort=comment.author_cohort_snapshot,
+    )
     return {
         "target_exists": True,
         "target_deleted": post.deleted_at is not None,
@@ -99,7 +109,7 @@ def _comment_target_payload(db: Session, comment_id: int) -> dict:
         "title": post.title,
         "content_preview": comment.content[:160],
         "author_id": comment.author_id,
-        "author_nickname": author_nickname or DELETED_USER_NICKNAME,
+        "author_nickname": author.nickname,
     }
 
 

@@ -538,6 +538,8 @@ def _post_payload(row: SourceRow, board: Board, author: User) -> dict[str, Any]:
     return {
         "board_id": board.id,
         "author_id": author.id,
+        "author_nickname_snapshot": author.nickname,
+        "author_cohort_snapshot": author.cohort,
         "title": title,
         "content": redacted_body,
         "is_anonymous": board.slug == "lecture-reviews",
@@ -1168,16 +1170,19 @@ def import_comments(
                 candidates = existing_by_key.get((post.id, created_at, original_content), [])
             comment = candidates.pop(0) if candidates else None
             action = "unchanged"
+            author = ensure_legacy_user(
+                db,
+                row.data.get("write_user"),
+                row.data.get("cohort"),
+                user_cache,
+                preferred=db.get(User, comment.author_id) if comment and comment.author_id else None,
+            )
             if comment is None:
-                author = ensure_legacy_user(
-                    db,
-                    row.data.get("write_user"),
-                    row.data.get("cohort"),
-                    user_cache,
-                )
                 comment = Comment(
                     post_id=post.id,
                     author_id=author.id,
+                    author_nickname_snapshot=author.nickname,
+                    author_cohort_snapshot=author.cohort,
                     parent_id=parent.id if parent else None,
                     content=content,
                     created_at=created_at,
@@ -1193,6 +1198,12 @@ def import_comments(
                     action = "updated"
                 if comment.parent_id != desired_parent_id:
                     comment.parent_id = desired_parent_id
+                    action = "updated"
+                if comment.author_nickname_snapshot is None:
+                    comment.author_nickname_snapshot = author.nickname
+                    action = "updated"
+                if comment.author_cohort_snapshot is None:
+                    comment.author_cohort_snapshot = author.cohort
                     action = "updated"
             comment_by_source_id[row.source_id] = comment
             upsert_ledger(

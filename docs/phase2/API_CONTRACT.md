@@ -465,10 +465,10 @@ Rules:
 
 - The server verifies the current password; UI-only verification is never trusted.
 - The operation is irreversible and rate-limited.
-- In these deletion rules, `public` means non-private active published content retained for authenticated community members; it does not reopen guest content access.
-- Public, active, published posts/comments may remain only after `author_id` is set to null. Their API display name is `Deleted user`.
-- Public attachments required by retained public posts may remain only after `owner_id` is set to null and the original filename is anonymized.
-- Private, draft, hidden, deleted, and mutual-aid posts; private/non-public comments; private evidence; and non-retained owned media are deleted.
+- Every authored post and comment remains regardless of board type, visibility, or `draft`/`published`/`hidden`/`deleted` status. The service fills missing writing-time name/cohort snapshots and then sets `author_id` to null.
+- API author fields prefer a live user while present, then the stored snapshot, and use `Deleted user` only for legacy orphan rows that have neither. Anonymous/forced-anonymous responses remain `Anonymous` with no cohort for non-admin readers.
+- Every owned media asset connected through `post_attachments` remains with `owner_id` set to null. The original filename and stored bytes are preserved; only unattached owned uploads are removed.
+- Mutual-aid posts, `post_mutual_aid` data, evidence relations/files, and `proof_url` remain. Evidence metadata and access URLs are administrator-only.
 - Sessions, reset/verification tokens, likes, bookmarks, reports, search history, blocks, notifications/settings, push tokens/deliveries, and account-linked rate-limit subjects are removed.
 - Administrator self-deletion returns `409 ADMIN_ACCOUNT_DELETION_FORBIDDEN` until responsibilities are transferred and another administrator demotes the account.
 - The receipt is non-identifying and contains no user ID, email, IP address, free-form reason, or deletion counts.
@@ -852,7 +852,7 @@ Rules:
 - `metadata.bank_account` is returned only to admins; list/detail responses for ordinary users remove it while preserving the stored value.
 - Council/GSA boards are admin-managed except `suggestion` and `mutual_aid` board types; the post API applies this rule even if board permission data is stale.
 - Suggestion list items expose `suggestion.status` as `received` or `answered`. Only admins can write the official reply; `answered` is rejected unless a non-empty official reply is supplied. A new or changed reply notifies the anonymous author without exposing their identity in the UI.
-- Mutual-aid requests are private records: non-admin users only receive their own requests in board lists and global search and may only open their own request details, comments, and attachments. Admins can list and review every request. At least one private evidence attachment is required by the API, while `content` stores optional remarks and accepts an empty string. A guessed ID belonging to another member returns `404 NOT_FOUND`.
+- Mutual-aid request content/status is member-readable. At least one private evidence attachment or evidence link is required, while `content` stores optional remarks and accepts an empty string. Only administrators receive attachments or `metadata.proof_url`; non-admin direct evidence media lookup returns `404 NOT_FOUND`. A non-admin edit receives only `mutual_aid.has_evidence` and an empty attachment list, so an unchanged edit preserves the protected evidence without exposing it.
 - A new mutual-aid `metadata.event_date` must be at least two calendar days after the current `Asia/Seoul` date. Past dates, today, and tomorrow return `422 MUTUAL_AID_DATE_TOO_SOON`; exactly D+2 is accepted. Both `YYYY-MM-DD` and the mobile form's `YYYY.MM.DD` storage value are parsed.
 - Admin notice posts may set `metadata.show_in_council_activity = true`. Linked notices require an image in the admin UI and are reused as photo/text entries in the council activity history.
 - The `gsa-executives` board stores administrator-managed executive records under `boards.metadata.executives` with `name`, `cohort`, `role`, and optional `image_url`.
@@ -1161,7 +1161,7 @@ Rules:
 
 - Unattached ordinary media is available to its owner and administrators; member-facing profile/banner media may be issued to authenticated members.
 - A post attachment requires read permission for at least one attached post.
-- Mutual-aid evidence requires request ownership or administrator role.
+- Mutual-aid evidence requires administrator role after it is attached to a request. The upload owner may access a still-unattached private upload, but attachment immediately switches it to the administrator-only evidence policy.
 - An unauthorized object-level request returns `404 NOT_FOUND`.
 
 ### GET `/media/access-url?path=...`

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.account_deletion import DELETED_USER_NICKNAME
+from app.author_snapshots import resolve_author_display
 from app.board_policies import ANONYMOUS_NO_COMMENT_BOARD_SLUGS
 from app.deps import get_current_user, get_db
 from app.models.board import Board
@@ -77,7 +77,12 @@ def search(
         )
 
     if current_user.role == "admin":
-        filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | User.nickname.ilike(keyword))
+        filters.append(
+            Post.title.ilike(keyword)
+            | Post.content.ilike(keyword)
+            | User.nickname.ilike(keyword)
+            | Post.author_nickname_snapshot.ilike(keyword)
+        )
     else:
         filters.append(
             or_(
@@ -86,7 +91,10 @@ def search(
                 and_(
                     Post.is_anonymous.is_(False),
                     Board.slug.not_in(ANONYMOUS_NO_COMMENT_BOARD_SLUGS),
-                    User.nickname.ilike(keyword),
+                    or_(
+                        User.nickname.ilike(keyword),
+                        Post.author_nickname_snapshot.ilike(keyword),
+                    ),
                 ),
             )
         )
@@ -126,19 +134,26 @@ def search(
             "category": post.category,
             "title": post.title,
             "content_preview": post.content[:100],
-            "author_nickname": DELETED_USER_NICKNAME
-            if post.author_id is None
-            else (
+            "author_nickname": (
                 "Anonymous"
-                if post.is_anonymous
+                if (post.is_anonymous and current_user.role != "admin")
                 or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
-                else nickname
+                else resolve_author_display(
+                    live_nickname=nickname,
+                    live_cohort=cohort,
+                    snapshot_nickname=post.author_nickname_snapshot,
+                    snapshot_cohort=post.author_cohort_snapshot,
+                ).nickname
             ),
             "author_cohort": None
-            if post.author_id is None
-            or post.is_anonymous
+            if (post.is_anonymous and current_user.role != "admin")
             or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
-            else cohort,
+            else resolve_author_display(
+                live_nickname=nickname,
+                live_cohort=cohort,
+                snapshot_nickname=post.author_nickname_snapshot,
+                snapshot_cohort=post.author_cohort_snapshot,
+            ).cohort,
             "created_at": post.created_at,
             "highlights": {
                 "title": _highlight(post.title, q),
