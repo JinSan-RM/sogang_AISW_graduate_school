@@ -230,7 +230,7 @@ export default function ParticipationScreen() {
               </View>
               <View style={styles.noticeStrip}>
                 <Ionicons name="information-circle-outline" size={17} color={COLORS.cyan500} />
-                <Text style={styles.noticeStripText}>원우회비 미납자와 졸업자는 참가자 검색에서 제외됩니다.</Text>
+                <Text style={styles.noticeStripText}>원우회비 납부자 명부에 등록된 사람만 참가자로 검색할 수 있습니다.</Text>
               </View>
               <View style={styles.actionRow}>
                 <Pressable

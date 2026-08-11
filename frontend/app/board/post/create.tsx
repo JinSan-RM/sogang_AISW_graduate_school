@@ -15,14 +15,16 @@ import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/useP
 import CompletionState from "../../../components/CompletionState";
 import LoadingState from "../../../components/LoadingState";
 import { MediaImageBackground } from "../../../components/MediaImage";
-import { postApi, userApi } from "../../../services/api";
-import type { MediaAsset, PostListItem, UserSearchItem } from "../../../types";
+import { duesPayerApi, postApi } from "../../../services/api";
+import type { MediaAsset, PostListItem } from "../../../types";
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
+  activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
+  type ActivityParticipant,
 } from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import {
@@ -296,7 +298,7 @@ export default function PostCreateScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [participantQuery, setParticipantQuery] = useState("");
-  const [selectedParticipants, setSelectedParticipants] = useState<UserSearchItem[]>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<ActivityParticipant[]>([]);
   const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | "board" | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   // 증빙서류는 파일 업로드와 링크 입력 중 하나만 사용한다.
@@ -341,8 +343,8 @@ export default function PostCreateScreen() {
   }, [boardsRes?.data, boardId]);
   const trimmedParticipantQuery = participantQuery.trim();
   const participantSearch = useQuery({
-    queryKey: ["user-search", trimmedParticipantQuery],
-    queryFn: () => userApi.searchUsers({ q: trimmedParticipantQuery, size: 8 }),
+    queryKey: ["dues-payer-search", trimmedParticipantQuery],
+    queryFn: () => duesPayerApi.search(trimmedParticipantQuery, 8),
     enabled: isActivity && trimmedParticipantQuery.length > 0,
     retry: false,
   });
@@ -431,11 +433,11 @@ export default function PostCreateScreen() {
 
   const attachmentIds = attachments.map((attachment) => attachment.id);
   const hasStoredMutualAidEvidence = Boolean(postId && existingPost?.mutual_aid?.has_evidence);
-  const syncParticipants = (items: UserSearchItem[]) => {
+  const syncParticipants = (items: ActivityParticipant[]) => {
     setSelectedParticipants(items);
     setValue("participants", items.map(formatActivityParticipant).join(", "), { shouldValidate: true });
   };
-  const addParticipant = (participant: UserSearchItem) => {
+  const addParticipant = (participant: ActivityParticipant) => {
     if (selectedParticipants.some((item) => item.id === participant.id)) {
       setParticipantQuery("");
       return;
@@ -583,6 +585,11 @@ export default function PostCreateScreen() {
         requireValue(values.participants, "참가자") ||
         (canEditActivityBankAccount && requireValue(values.bankAccount, "입금 계좌"))
       ) {
+        return;
+      }
+      const participantError = activityParticipantSelectionError(selectedParticipants, existingPost?.metadata);
+      if (participantError) {
+        setFormNotice(createFormNotice("참가자 재선택", participantError));
         return;
       }
     }
@@ -914,7 +921,7 @@ export default function PostCreateScreen() {
                         <Ionicons name="search-outline" size={15} color={COLORS.subtle} />
                         <TextInput
                           onChangeText={setParticipantQuery}
-                          placeholder="이름으로 검색"
+                          placeholder="이름 또는 학번으로 검색"
                           placeholderTextColor="#A6ACB7"
                           style={styles.activityInlineInput}
                           value={participantQuery}
@@ -936,11 +943,10 @@ export default function PostCreateScreen() {
                                 style={[styles.participantResultRow, selected ? styles.participantResultRowDisabled : null]}
                               >
                                 <View style={styles.participantAvatar}>
-                                  <Text style={styles.participantAvatarText}>{participant.nickname.slice(0, 1)}</Text>
+                                  <Text style={styles.participantAvatarText}>{participant.name.slice(0, 1)}</Text>
                                 </View>
                                 <View style={styles.participantTextBlock}>
                                   <Text style={styles.participantName}>{formatActivityParticipant(participant)}</Text>
-                                  {participant.major ? <Text style={styles.participantMeta}>{participant.major}</Text> : null}
                                 </View>
                                 <Ionicons name={selected ? "checkmark-circle" : "add-circle-outline"} size={18} color={selected ? COLORS.primary : COLORS.subtle} />
                               </Pressable>

@@ -292,13 +292,6 @@ export type UserActivityItem = {
   created_at: string;
 };
 
-export type UserSearchItem = {
-  id: number;
-  nickname: string;
-  cohort?: string | null;
-  major?: string | null;
-};
-
 export type FAQItem = {
   id: number;
   question: string;

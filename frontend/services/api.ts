@@ -37,7 +37,6 @@ import type {
   SearchResult,
   UserActivityItem,
   UserMe,
-  UserSearchItem,
   ReportStatus,
   PrivacyPolicyVersion,
   RegistrationOptions,
@@ -524,10 +523,6 @@ export const userApi = {
   },
   getActivity: async (params?: { type?: "posts" | "comments" | "bookmarks"; page?: number; size?: number }) => {
     const response = await api.get<ApiSuccess<UserActivityItem[]>>("/users/me/activity", { params });
-    return response.data;
-  },
-  searchUsers: async (params: { q: string; size?: number }) => {
-    const response = await api.get<ApiSuccess<UserSearchItem[]>>("/users/search", { params });
     return response.data;
   },
   getBlockedUsers: async () => {

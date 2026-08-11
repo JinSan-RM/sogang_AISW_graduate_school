@@ -3,85 +3,107 @@ import test from "node:test";
 
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
+  activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
 } from "../utils/activityCertification";
 
-test("참가자 안내는 작성자 본인도 검색해서 추가하도록 설명한다", () => {
-  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도 검색해서 추가해주세요/);
+test("참가자 안내는 원우회비 명부에서 이름이나 학번으로 본인까지 추가하도록 설명한다", () => {
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /원우회비 납부자 명부/);
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /이름이나 학번/);
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도/);
 });
 
-test("활동인증 수정 시 저장된 참가자 이름과 사용자 ID를 칩으로 복원한다", () => {
-  const participants = activityParticipantsFromMetadata({
+test("원우회비 납부자는 이름 전공 학번을 띄어쓰기로 표시한다", () => {
+  assert.equal(
+    formatActivityParticipant({ id: 4, name: "김서강", major: "AI", student_number: "A74001" }),
+    "김서강 AI A74001",
+  );
+});
+
+test("현재 활동인증 metadata의 납부자 ID와 이름을 수정 칩으로 복원한다", () => {
+  assert.deepEqual(activityParticipantsFromMetadata({
+    participants: "김서강, 이서강",
+    participant_dues_payer_ids: [4, 7],
+  }), [
+    { id: 4, name: "김서강", persisted: true },
+    { id: 7, name: "이서강", persisted: true },
+  ]);
+});
+
+test("기존 회원 기반 참가자는 납부자 ID로 오인하지 않고 레거시 칩으로 복원한다", () => {
+  assert.deepEqual(activityParticipantsFromMetadata({
     participants: "72기 김서강, 73기 이서강",
-    participant_user_ids: "4, 7",
-  });
-
-  assert.deepEqual(participants, [
-    { id: 4, nickname: "72기 김서강" },
-    { id: 7, nickname: "73기 이서강" },
-  ]);
-  assert.deepEqual(participants.map(formatActivityParticipant), ["72기 김서강", "73기 이서강"]);
-});
-
-test("사용자 ID가 없는 기존 참가자도 수정 화면에서 제거 가능한 임시 칩으로 복원한다", () => {
-  assert.deepEqual(activityParticipantsFromMetadata({ participants: "김서강, 이서강" }), [
-    { id: -1, nickname: "김서강" },
-    { id: -2, nickname: "이서강" },
+    participant_user_ids: "4,7",
+  }), [
+    { id: -1, name: "72기 김서강", legacy: true, persisted: true },
+    { id: -2, name: "73기 이서강", legacy: true, persisted: true },
   ]);
 });
 
-test("활동인증 수정 metadata는 날짜·참가자·소스 글을 갱신하고 유효한 참가자 ID만 저장한다", () => {
+test("현재 명부에서 선택한 참가자만 납부자 ID 배열로 저장한다", () => {
   const metadata = buildActivityCertificationMetadata({
     existingMetadata: {
-      activity_date: "2026.07.01",
       participants: "기존 참가자",
-      participant_user_ids: "2,3",
-      activity_source_post_id: "9",
+      participant_user_ids: "2",
       bank_account: "서강은행 123",
       custom_key: "keep",
     },
     activityDate: "2026.08.15",
-    participants: "72기 김서강, 기존 참가자",
+    participants: "김서강 AI A74001, 이서강 보안 A74002",
     bankAccount: "",
     selectedParticipants: [
-      { id: 4, nickname: "김서강", cohort: "72" },
-      { id: -1, nickname: "기존 참가자" },
+      { id: 4, name: "김서강", major: "AI", student_number: "A74001" },
+      { id: 7, name: "이서강", major: "보안", student_number: "A74002" },
     ],
     activitySourcePostId: 10,
   });
 
   assert.deepEqual(metadata, {
     activity_date: "2026.08.15",
-    participants: "72기 김서강, 기존 참가자",
-    participant_user_ids: "4,",
+    participants: "김서강 AI A74001, 이서강 보안 A74002",
+    participant_dues_payer_ids: [4, 7],
     activity_source_post_id: "10",
     bank_account: "서강은행 123",
     custom_key: "keep",
   });
-  assert.equal(activitySourcePostIdFromMetadata(metadata), 10);
 });
 
-test("ID 없는 기존 참가자 뒤에 새 참가자를 추가해도 이름과 ID 위치가 뒤바뀌지 않는다", () => {
-  const metadata = buildActivityCertificationMetadata({
-    existingMetadata: { participants: "기존 참가자" },
-    activityDate: "2026.08.15",
-    participants: "기존 참가자, 72기 김서강",
-    bankAccount: "",
-    selectedParticipants: [
-      { id: -1, nickname: "기존 참가자" },
-      { id: 7, nickname: "김서강", cohort: "72" },
-    ],
-    activitySourcePostId: 10,
-  });
+test("선택을 바꾸지 않은 기존 참가자는 레거시 스냅샷을 그대로 보존한다", () => {
+  const existingMetadata = {
+    participants: "72기 김서강, 73기 이서강",
+    participant_user_ids: "4,7",
+  };
+  const selectedParticipants = activityParticipantsFromMetadata(existingMetadata);
 
-  assert.equal(metadata.participant_user_ids, ",7");
-  assert.deepEqual(activityParticipantsFromMetadata(metadata), [
-    { id: -1, nickname: "기존 참가자" },
-    { id: 7, nickname: "72기 김서강" },
-  ]);
+  assert.equal(activityParticipantSelectionError(selectedParticipants, existingMetadata), null);
+  assert.deepEqual(buildActivityCertificationMetadata({
+    existingMetadata,
+    activityDate: "2026.08.15",
+    participants: "72기 김서강, 73기 이서강",
+    bankAccount: "",
+    selectedParticipants,
+    activitySourcePostId: null,
+  }), {
+    activity_date: "2026.08.15",
+    participants: "72기 김서강, 73기 이서강",
+    participant_user_ids: "4,7",
+  });
+});
+
+test("기존 회원 기반 참가자 구성을 바꾸면 명부에서 전원 재선택하도록 막는다", () => {
+  const existingMetadata = { participants: "기존 참가자", participant_user_ids: "2" };
+  const mixed = [
+    ...activityParticipantsFromMetadata(existingMetadata),
+    { id: 7, name: "김서강", major: "AI", student_number: "A74001" },
+  ];
+
+  assert.match(activityParticipantSelectionError(mixed, existingMetadata) ?? "", /전원을 다시 선택/);
+  assert.equal(activityParticipantSelectionError([
+    { id: 7, name: "김서강", major: "AI", student_number: "A74001" },
+  ], existingMetadata), null);
 });
 
 test("잘못된 활동 소스 ID는 수정 초기값으로 사용하지 않는다", () => {
