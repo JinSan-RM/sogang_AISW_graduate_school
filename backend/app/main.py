@@ -21,7 +21,7 @@ from app.errors import (
     unhandled_exception_handler,
 )
 from app import models  # noqa: F401
-from app.routers import admin, auth, banners, users, boards, posts, comments, events, faqs, media, notifications, registration, reports, search
+from app.routers import admin, auth, banners, users, boards, posts, comments, dues_payers, events, faqs, media, notifications, registration, reports, search
 from app.response import success_response
 from app.seed import seed_initial_data, seed_reference_data
 
@@ -48,6 +48,7 @@ OPENAPI_TAGS = [
     {"name": "faqs", "description": "FAQ list and admin FAQ management."},
     {"name": "admin", "description": "Operational statistics and audit logs."},
     {"name": "registration", "description": "Public signup options and protected administrator configuration."},
+    {"name": "dues-payers", "description": "Dues payer roster search and administrator management."},
 ]
 
 
@@ -107,6 +108,7 @@ app.add_middleware(
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(registration.router, prefix="/api/registration", tags=["registration"])
+app.include_router(dues_payers.router, prefix="/api/dues-payers", tags=["dues-payers"])
 app.include_router(boards.router, prefix="/api/boards", tags=["boards"])
 app.include_router(banners.router, prefix="/api/banners", tags=["banners"])
 app.include_router(posts.router, prefix="/api", tags=["posts"])
