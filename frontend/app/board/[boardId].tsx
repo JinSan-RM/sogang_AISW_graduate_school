@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, BackHandler, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -21,8 +21,9 @@ import {
   RESOURCE_ALL_SLUGS,
   RESOURCE_FILTERS,
   RESOURCE_FILTER_SLUGS,
-  RESOURCE_SLUG_FILTERS,
+  resourceFilterAfterNavigation,
 } from "../../utils/resourceBoards";
+import type { ResourceFilter } from "../../utils/resourceBoards";
 import { formatCohortName } from "../../utils/userLabel";
 
 const COLORS = {
@@ -83,6 +84,12 @@ const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#B94A2F", "#F39A7D"],
 ];
 type IconName = keyof typeof Ionicons.glyphMap;
+type SectionTab = {
+  label: string;
+  active: boolean;
+  target?: Board;
+  initialFilter?: ResourceFilter;
+};
 type ExecutiveMember = {
   name: string;
   cohort?: string;
@@ -137,9 +144,9 @@ function filterOptions(board?: Board | null) {
   return ["전체"];
 }
 
-function defaultFilterForBoard(board?: Board | null) {
+function defaultFilterForBoard(board?: Board | null, requestedFilter?: ResourceFilter) {
   if (!board) return "전체";
-  if (board.board_type === "resource") return RESOURCE_SLUG_FILTERS[board.slug] ?? "전체";
+  if (board.board_type === "resource") return resourceFilterAfterNavigation(board, requestedFilter);
   if (board.board_type === "activity_certification") return "활동 인증";
   if (participationGroupKey(board) === "study") return "모집";
   if (participationGroupKey(board)) return "안내";
@@ -168,7 +175,7 @@ function participationGroupKey(board?: Board | null) {
   return null;
 }
 
-function sectionTabs(board: Board | undefined, boards: Board[]) {
+function sectionTabs(board: Board | undefined, boards: Board[]): SectionTab[] {
   if (!board) return [];
   const isCommunityResource = board.slug === "event-album" || board.board_type === "resource" || board.category === "resources";
   if (isCommunityResource) {
@@ -178,6 +185,7 @@ function sectionTabs(board: Board | undefined, boards: Board[]) {
         label: "자료공유",
         active: board.board_type === "resource" || board.category === "resources",
         target: findBoardBySlug(boards, "lecture-reviews") ?? boards.find((item) => item.board_type === "resource"),
+        initialFilter: "전체",
       },
     ];
   }
@@ -795,6 +803,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("전체");
+  const requestedBoardFilterRef = useRef<ResourceFilter | undefined>(undefined);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const user = useUserStore((state) => state.user);
 
@@ -856,18 +865,27 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
 
   useEffect(() => {
     if (!board) return;
-    setSelectedFilter(defaultFilterForBoard(board));
+    const requestedFilter = requestedBoardFilterRef.current;
+    requestedBoardFilterRef.current = undefined;
+    setSelectedFilter(defaultFilterForBoard(board, requestedFilter));
   }, [board]);
 
-  const navigateToBoard = (target?: Board) => {
-    if (target && target.id !== boardId) {
-      if (isTabRoot) {
-        setEmbeddedBoardId(target.id);
-        return;
-      }
-
-      router.replace(`/board/${target.id}` as never);
+  const navigateToBoard = (target?: Board, requestedFilter?: ResourceFilter) => {
+    if (!target) return;
+    if (target.id === boardId) {
+      requestedBoardFilterRef.current = undefined;
+      if (requestedFilter) setSelectedFilter(requestedFilter);
+      return;
     }
+
+    requestedBoardFilterRef.current = requestedFilter;
+    if (requestedFilter) setSelectedFilter(requestedFilter);
+    if (isTabRoot) {
+      setEmbeddedBoardId(target.id);
+      return;
+    }
+
+    router.replace(`/board/${target.id}` as never);
   };
 
   const exitBoardDepth = useCallback(() => {
@@ -999,7 +1017,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
       {!showSearch && tabs.length > 0 ? (
         <View style={styles.sectionTabs}>
           {tabs.map((item) => (
-            <Pressable key={item.label} onPress={() => navigateToBoard(item.target)} style={[styles.sectionTab, item.active ? styles.sectionTabActive : null]}>
+            <Pressable key={item.label} onPress={() => navigateToBoard(item.target, item.initialFilter)} style={[styles.sectionTab, item.active ? styles.sectionTabActive : null]}>
               <Text style={[styles.sectionTabText, item.active ? styles.sectionTabTextActive : null]}>{item.label}</Text>
             </Pressable>
           ))}

@@ -4,6 +4,7 @@ import test from "node:test";
 import { COMMUNITY_TAB_ROUTE } from "../utils/appRoutes";
 import type { Board } from "../types";
 import {
+  resourceFilterAfterNavigation,
   resourcePostEditBoards,
   RESOURCE_ALL_SLUGS,
   RESOURCE_FILTERS,
@@ -32,6 +33,14 @@ test("자료공유 게시판 선택 목록에 졸업논문을 연결한다", () 
 
 test("행사 사진첩 더보기는 하단 탭이 유지되는 커뮤니티 루트로 이동한다", () => {
   assert.equal(COMMUNITY_TAB_ROUTE, "/(tabs)/community");
+});
+
+test("자료공유 탭 진입은 대표 강의후기 게시판보다 전체 필터를 우선한다", () => {
+  assert.equal(resourceFilterAfterNavigation(board({}), "전체"), "전체");
+});
+
+test("자료공유 하위 필터 이동은 요청 필터가 없으면 게시판 필터를 사용한다", () => {
+  assert.equal(resourceFilterAfterNavigation(board({ slug: "exam-archive" })), "시험족보");
 });
 
 test("자료공유 글 수정은 활성 자료공유 게시판만 이동 대상으로 제공한다", () => {
