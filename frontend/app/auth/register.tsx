@@ -16,6 +16,7 @@ import {
   emailIdError,
   isApiResponseUncertain,
   isEmailDeliveryConfirmed,
+  passwordConfirmationError,
   passwordError,
   phoneError,
 } from "../../utils/authValidation";
@@ -252,7 +253,8 @@ export default function RegisterScreen() {
     if (nextPhoneError) nextErrors.phone = nextPhoneError;
     const nextPasswordError = passwordError(password);
     if (nextPasswordError) nextErrors.password = nextPasswordError;
-    if (password !== passwordConfirm) nextErrors.passwordConfirm = "비밀번호가 일치하지 않아요.";
+    const nextPasswordConfirmationError = passwordConfirmationError(password, passwordConfirm);
+    if (nextPasswordConfirmationError) nextErrors.passwordConfirm = nextPasswordConfirmationError;
     if (!consented) nextErrors.consent = "개인정보 수집 및 이용 동의가 필요해요.";
     if (!privacyPolicy) nextErrors.consent = "개인정보 처리방침 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.";
     setErrors(nextErrors);

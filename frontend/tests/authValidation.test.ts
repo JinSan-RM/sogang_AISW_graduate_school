@@ -7,6 +7,7 @@ import {
   formatCountdown,
   isApiResponseUncertain,
   isEmailDeliveryConfirmed,
+  passwordConfirmationError,
 } from "../utils/authValidation";
 
 test("school email input is normalized before requesting verification", () => {
@@ -25,6 +26,18 @@ test("verification countdown keeps the AISW two-digit minute and second format",
   assert.equal(formatCountdown(300), "05:00");
   assert.equal(formatCountdown(299), "04:59");
   assert.equal(formatCountdown(0), "00:00");
+});
+
+test("비밀번호 확인을 입력하지 않으면 불일치 오류를 반환한다", () => {
+  assert.equal(passwordConfirmationError("Password1!", ""), "비밀번호가 일치하지 않아요.");
+});
+
+test("비밀번호 확인이 원본 비밀번호와 다르면 불일치 오류를 반환한다", () => {
+  assert.equal(passwordConfirmationError("Password1!", "Password2!"), "비밀번호가 일치하지 않아요.");
+});
+
+test("비밀번호 확인이 원본 비밀번호와 같으면 오류가 없다", () => {
+  assert.equal(passwordConfirmationError("Password1!", "Password1!"), null);
 });
 
 test("remote SMTP request timeouts are distinguishable from delivery rejection", () => {

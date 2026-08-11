@@ -22,6 +22,13 @@ export function passwordError(password: string) {
   return null;
 }
 
+export function passwordConfirmationError(password: string, passwordConfirmation: string) {
+  if (!passwordConfirmation || password !== passwordConfirmation) {
+    return "비밀번호가 일치하지 않아요.";
+  }
+  return null;
+}
+
 export function phoneError(phone: string) {
   if (!/^01[016789]\d{7,8}$/.test(phone)) return "올바른 연락처 형식이 아니에요.";
   return null;
