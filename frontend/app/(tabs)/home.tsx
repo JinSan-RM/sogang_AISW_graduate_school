@@ -24,7 +24,7 @@ import HomeSectionGate from "../../components/HomeSectionGate";
 import { BellIcon, EmptyCalendarIcon, ProfileIcon } from "../../components/icons";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
-import { useMultiBoardPosts } from "../../hooks/usePosts";
+import { useAllMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
@@ -640,7 +640,7 @@ export default function HomeScreen() {
     queryKey: ["banners", "home"],
     queryFn: () => bannerApi.getBanners({ placement: "home" }),
   });
-  const noticesQuery = useMultiBoardPosts(noticeBoardIds, { sort: "latest" });
+  const noticesQuery = useAllMultiBoardPosts(noticeBoardIds, { sort: "latest" });
   const eventsQuery = useQuery({
     queryKey: ["home", "events", monthRange.start, monthRange.end],
     queryFn: () => eventApi.getEvents({ from_date: monthRange.start, to_date: monthRange.end }),
