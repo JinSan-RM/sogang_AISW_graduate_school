@@ -56,21 +56,19 @@ services:
         condition: service_healthy
       frontend-web:
         condition: service_healthy
-    command:
-      - /bin/sh
-      - -c
-      - sh /usr/local/bin/watch-certificates.sh & exec nginx -g 'daemon off;'
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./deploy/nginx/ip.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/nginx/40-start-certificate-watch.sh:/docker-entrypoint.d/40-start-certificate-watch.sh:ro
       - ./deploy/nginx/watch-certificates.sh:/usr/local/bin/watch-certificates.sh:ro
       - letsencrypt:/etc/letsencrypt:ro
       - certbot_webroot:/var/www/certbot:ro
     networks:
       ip_ingress:
         ipv4_address: ${IP_INGRESS_PROXY_IP:-172.30.251.14}
+      ip_public:
     tmpfs:
       - /etc/nginx/conf.d
       - /var/cache/nginx
@@ -167,3 +165,5 @@ networks:
     ipam:
       config:
         - subnet: ${IP_INGRESS_SUBNET:-172.30.251.0/28}
+  ip_public:
+    driver: bridge

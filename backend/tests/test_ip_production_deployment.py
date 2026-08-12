@@ -21,13 +21,20 @@ def _compose(relative_path: str) -> dict:
 def test_ip_overlay_exposes_only_nginx_and_uses_exact_proxy_peer() -> None:
     overlay = _compose("docker-compose.ip.yml")
     services = overlay["services"]
+    nginx = services["nginx"]
 
-    assert services["nginx"]["ports"] == ["80:80", "443:443"]
-    assert services["nginx"]["networks"]["ip_ingress"]["ipv4_address"] == (
+    assert nginx["ports"] == ["80:80", "443:443"]
+    assert nginx["networks"]["ip_ingress"]["ipv4_address"] == (
         "${IP_INGRESS_PROXY_IP:-172.30.251.14}"
     )
+    assert "ip_public" in nginx["networks"]
+    assert overlay["networks"]["ip_ingress"]["internal"] is True
+    assert overlay["networks"]["ip_public"]["driver"] == "bridge"
+    assert overlay["networks"]["ip_public"].get("internal") is not True
     assert "ip_ingress" in services["backend"]["networks"]
     assert "ip_ingress" in services["frontend-web"]["networks"]
+    assert "ip_public" not in services["backend"]["networks"]
+    assert "ip_public" not in services["frontend-web"]["networks"]
 
     for compose_file in ("docker-compose.yml", "docker-compose.production.example.yml"):
         compose = _compose(compose_file)
@@ -39,6 +46,27 @@ def test_ip_overlay_exposes_only_nginx_and_uses_exact_proxy_peer() -> None:
     ]
     assert production["services"]["frontend-web"]["ports"] == [
         "127.0.0.1:${FRONTEND_BIND_PORT:-8080}:8080"
+    ]
+
+
+def test_nginx_uses_official_entrypoint_and_starts_certificate_watcher() -> None:
+    overlay = _compose("docker-compose.ip.yml")
+    nginx = overlay["services"]["nginx"]
+    starter = _read("deploy/nginx/40-start-certificate-watch.sh")
+
+    assert "command" not in nginx
+    assert (
+        "./deploy/nginx/40-start-certificate-watch.sh:"
+        "/docker-entrypoint.d/40-start-certificate-watch.sh:ro"
+    ) in nginx["volumes"]
+    assert (
+        "./deploy/nginx/watch-certificates.sh:"
+        "/usr/local/bin/watch-certificates.sh:ro"
+    ) in nginx["volumes"]
+    assert starter.splitlines() == [
+        "#!/bin/sh",
+        "set -eu",
+        "sh /usr/local/bin/watch-certificates.sh &",
     ]
 
 
