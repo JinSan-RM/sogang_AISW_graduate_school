@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import {
 
 import { MediaImageBackground } from "../../components/MediaImage";
 import HomeSectionGate from "../../components/HomeSectionGate";
+import { BellIcon, EmptyCalendarIcon, ProfileIcon } from "../../components/icons";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
@@ -83,7 +84,6 @@ const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#0E7B60", "#4DBB91"],
 ];
 
-type IconName = keyof typeof Ionicons.glyphMap;
 
 function mediaUrl(value?: string | null) {
   return toAbsoluteMediaUrl(value, API_ORIGIN);
@@ -190,11 +190,10 @@ function getHomeContentWidth(windowWidth: number) {
   return Math.max(280, shellWidth - HORIZONTAL_PADDING * 2);
 }
 
-function IconButton({ icon, label, hasBadge = false, onPress }: { icon: IconName; label: string; hasBadge?: boolean; onPress: () => void }) {
+function IconButton({ label, onPress, children }: { label: string; onPress: () => void; children: ReactNode }) {
   return (
     <Pressable accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
-      <Ionicons name={icon} size={24} color={COLORS.muted} />
-      {hasBadge ? <View style={styles.notificationBadge} /> : null}
+      {children}
     </Pressable>
   );
 }
@@ -216,17 +215,17 @@ function SectionHeader({ title, actionLabel = "더보기", onPress }: { title: s
 function HomeEmptyState({ type }: { type: "notices" | "popular" | "album" }) {
   const content = {
     notices: {
-      icon: "calendar-outline" as IconName,
+      icon: <EmptyCalendarIcon size={32} />,
       title: "등록된 공지사항이 없어요",
       description: "새로운 공지가 등록되면 알려드릴게요",
     },
     popular: {
-      icon: "calendar-outline" as IconName,
+      icon: <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />,
       title: "인기 게시글이 아직 없어요",
       description: "곧 다양한 게시글이 채워질 거예요",
     },
     album: {
-      icon: "camera-outline" as IconName,
+      icon: <Ionicons name="camera-outline" size={32} color="#AAB2BF" />,
       title: "행사 사진첩이 아직 없어요",
       description: "새로운 행사 사진이 등록되면 알려드릴게요",
     },
@@ -234,7 +233,7 @@ function HomeEmptyState({ type }: { type: "notices" | "popular" | "album" }) {
 
   return (
     <View style={styles.emptyState}>
-      <Ionicons name={content.icon} size={32} color="#AAB2BF" />
+      {content.icon}
       <Text style={styles.emptyStateTitle}>{content.title}</Text>
       <Text style={styles.emptyStateDescription}>{content.description}</Text>
     </View>
@@ -682,8 +681,12 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <IconButton icon="notifications-outline" label="알림" hasBadge={hasUnreadNotifications} onPress={() => router.push("/notifications" as never)} />
-          <IconButton icon="person-circle-outline" label="마이페이지" onPress={() => (isAuthenticated ? openDrawer() : router.push("/auth/login" as never))} />
+          <IconButton label="알림" onPress={() => router.push("/notifications" as never)}>
+            <BellIcon size={24} hasBadge={hasUnreadNotifications} />
+          </IconButton>
+          <IconButton label="마이페이지" onPress={() => (isAuthenticated ? openDrawer() : router.push("/auth/login" as never))}>
+            <ProfileIcon size={24} />
+          </IconButton>
         </View>
       </View>
 
@@ -789,17 +792,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.bg,
-    backgroundColor: "#E25576",
   },
   bannerCarousel: {
     width: "100%",
