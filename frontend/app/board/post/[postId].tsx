@@ -32,6 +32,7 @@ import { formatBoardDate } from "../../../utils/dateFormat";
 import { openMediaUrl } from "../../../utils/mediaOpener";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
+import { resourceCategoryLabel } from "../../../utils/resourceBoards";
 import { formatCohortName } from "../../../utils/userLabel";
 
 const COLORS = {
@@ -251,18 +252,15 @@ export default function PostDetailScreen() {
   const isCouncilActivityEntry = metadata.show_in_council_activity === true;
   const isAdminParticipationGuide = isAdminParticipationGuideBoard(board);
   const applicationButtonLabel = board?.slug === "networking-programs" ? "참가 신청" : "가입 신청";
+  const resourceLabel = isResource ? resourceCategoryLabel(board, post.category) : null;
   const label = isMutualAidRequest
     ? MUTUAL_AID_STATUSES.find((status) => status.value === post.mutual_aid?.status)?.label ?? "처리중"
     : isSuggestionRequest
       ? SUGGESTION_STATUSES.find((status) => status.value === post.suggestion?.status)?.label ?? "대기중"
       : board?.board_type === "activity_certification"
         ? (post.category?.trim() || board?.name || "활동")
-      : board?.slug === "comprehensive-exam" || post.category?.includes("종합")
-        ? "종합시험"
-      : board?.slug === "exam-archive"
-        ? "시험족보"
-      : board?.slug === "graduation-thesis"
-        ? "졸업논문"
+      : resourceLabel
+        ? resourceLabel
       : board?.slug === "study-recruit"
         ? String(metadata.recruitment_status ?? post.category ?? "").toLowerCase().includes("closed") || post.category?.includes("마감")
           ? "마감"

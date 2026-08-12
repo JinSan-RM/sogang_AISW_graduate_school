@@ -12,7 +12,7 @@ import { usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
 import LoadingState from "../../../../components/LoadingState";
 import type { MediaAsset } from "../../../../types";
 import { pickAndUploadImages } from "../../../../utils/mediaPicker";
-import { resourcePostEditBoards } from "../../../../utils/resourceBoards";
+import { resourceCategoryLabel, resourcePostEditBoards } from "../../../../utils/resourceBoards";
 
 const COLORS = {
   primary: "#2761FF",
@@ -139,7 +139,9 @@ export default function PostEditScreen() {
         board_id: isResourceEdit ? selectedBoardId || post.board_id : undefined,
         title: values.title.trim(),
         content: isAlbum ? values.title.trim() : content,
-        category: values.category?.trim() || undefined,
+        category: isResourceEdit
+          ? resourceCategoryLabel(selectedBoard) ?? undefined
+          : values.category?.trim() || undefined,
         metadata: isStudyRecruit
           ? {
               ...(post.metadata ?? {}),
