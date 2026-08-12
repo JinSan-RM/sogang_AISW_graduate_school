@@ -63,3 +63,22 @@ export function noticePostsForFilter(posts: PostListItem[], boards: Board[], fil
       return new Date(right.post.created_at).getTime() - new Date(left.post.created_at).getTime();
     });
 }
+
+export function homeNoticePosts(posts: PostListItem[], boards: Board[], limit = 2) {
+  const activeNoticeBoardIds = new Set(
+    boards.filter(isNoticeContentBoard).map((board) => board.id)
+  );
+  const seen = new Set<number>();
+
+  return posts
+    .filter((post) => {
+      if (!activeNoticeBoardIds.has(post.board_id) || seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    })
+    .sort((left, right) => {
+      const createdAtDelta = new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+      return createdAtDelta || right.id - left.id;
+    })
+    .slice(0, limit);
+}

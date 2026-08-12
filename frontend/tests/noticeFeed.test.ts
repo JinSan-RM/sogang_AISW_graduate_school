@@ -3,6 +3,19 @@ import test from "node:test";
 
 import type { Board, PostListItem } from "../types";
 import { isNoticeContentBoard, noticePostsForFilter } from "../utils/noticeFeed";
+import * as noticeFeed from "../utils/noticeFeed";
+
+type HomeNoticeSelector = (
+  posts: PostListItem[],
+  boards: Board[],
+  limit?: number
+) => PostListItem[];
+
+function selectHomeNotices(posts: PostListItem[], boards: Board[], limit = 2) {
+  const selector = (noticeFeed as typeof noticeFeed & { homeNoticePosts?: HomeNoticeSelector }).homeNoticePosts;
+  if (!selector) assert.fail("homeNoticePosts must be exported");
+  return selector(posts, boards, limit);
+}
 
 function board(id: number, slug: string, boardType = "notice"): Board {
   return {
@@ -47,6 +60,11 @@ const boards = [
   board(5, "academic-calendar", "calendar"),
 ];
 
+const homeBoards = [
+  ...boards,
+  { ...board(6, "inactive-notices"), is_active: false },
+];
+
 const posts = [
   post(1, 1, "all"),
   post(2, 2),
@@ -69,4 +87,42 @@ test("기타 탭은 전체 공지 게시판의 전체 분류 글도 기타 공�
 
 test("행사 탭은 행사와 특강 공지를 함께 표시한다", () => {
   assert.deepEqual(noticePostsForFilter(posts, boards, "event").map((item) => item.post.id), [4, 3]);
+});
+
+test("홈 공지는 모든 활성 공지 카테고리에서 최신 두 개를 선택한다", () => {
+  const rows = [
+    post(1, 1, "all"),
+    post(2, 2, "academic"),
+    post(3, 3, "event"),
+    post(4, 4, "webinar"),
+    post(5, 5, "academic"),
+    post(6, 6, "other"),
+  ];
+
+  assert.deepEqual(selectHomeNotices(rows, homeBoards).map((item) => item.id), [4, 3]);
+});
+
+test("홈 공지는 중복을 제거하고 오래된 고정글보다 최신 일반 공지를 우선한다", () => {
+  const oldPinned = {
+    ...post(1, 1, "all", true),
+    created_at: "2026-07-01T00:00:00Z",
+  };
+  const newest = post(4, 4, "webinar");
+  const secondNewest = post(3, 3, "event");
+
+  assert.deepEqual(
+    selectHomeNotices([oldPinned, newest, { ...newest }, secondNewest], homeBoards).map((item) => item.id),
+    [4, 3]
+  );
+});
+
+test("홈 공지는 작성 시간이 같으면 큰 게시글 ID를 먼저 선택한다", () => {
+  const sameTime = "2026-08-12T00:00:00Z";
+  const rows = [
+    { ...post(1, 1), created_at: sameTime },
+    { ...post(2, 2), created_at: sameTime },
+    { ...post(3, 3), created_at: "2026-08-11T00:00:00Z" },
+  ];
+
+  assert.deepEqual(selectHomeNotices(rows, homeBoards).map((item) => item.id), [2, 1]);
 });
