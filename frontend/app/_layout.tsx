@@ -97,12 +97,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF", // app.json splash.backgroundColor와 같은 값
+    backgroundColor: "#EEF2FE", // app.json splash.backgroundColor와 같은 값
   },
   splashLogo: {
-    width: "72%",
-    maxWidth: 320,
-    aspectRatio: 16 / 9,
+    width: "100%",
+    height: "100%",
   },
   viewport: {
     flex: 1,

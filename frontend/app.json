@@ -8,7 +8,7 @@
     "splash": {
       "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#EEF2FE"
     },
     "plugins": [
       "expo-router",
