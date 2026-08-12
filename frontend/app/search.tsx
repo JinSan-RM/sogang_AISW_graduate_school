@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { searchApi } from "../services/api";
 import LoadingState from "../components/LoadingState";
+import NoticeRow from "../components/NoticeRow";
 import type { SearchResult } from "../types";
 import { formatBoardDate } from "../utils/dateFormat";
 import { formatCohortName } from "../utils/userLabel";
@@ -200,26 +201,26 @@ export default function SearchScreen() {
         <FlatList
           data={results}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={[styles.listContent, results.length === 0 ? styles.emptyContent : null]}
+          contentContainerStyle={[styles.listContent, isNoticeSearch ? styles.noticeListContent : null, results.length === 0 ? styles.emptyContent : null]}
           onEndReached={() => {
             if (page < totalPages && !isLoadingMore) void runSearch(page + 1, searchedQuery);
           }}
           onEndReachedThreshold={0.4}
           ListEmptyComponent={isNoticeSearch ? <NoticeEmptyState /> : <View style={styles.center}><Text style={styles.emptyText}>검색 결과가 없습니다.</Text></View>}
           ListFooterComponent={isLoadingMore ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             if (isNoticeSearch) {
-              const label = noticeCategoryLabel(item);
-              const eventTone = label === "행사공지";
-              const otherTone = label === "기타공지";
               return (
-                <Pressable onPress={() => router.push(`/board/post/${item.id}` as never)} style={styles.noticeResultRow}>
-                  <View style={[styles.noticeCategoryPill, eventTone ? styles.noticeCategoryPillEvent : null, otherTone ? styles.noticeCategoryPillOther : null]}>
-                    <Text style={[styles.noticeCategoryText, eventTone ? styles.noticeCategoryTextEvent : null, otherTone ? styles.noticeCategoryTextOther : null]}>{label}</Text>
-                  </View>
-                  <Text numberOfLines={2} style={styles.noticeResultTitle}>{item.title}</Text>
-                  <Text style={styles.noticeResultDate}>{formatBoardDate(item.created_at)}</Text>
-                </Pressable>
+                <NoticeRow
+                  isLast={index === results.length - 1}
+                  item={{
+                    key: String(item.id),
+                    postId: item.id,
+                    title: item.title,
+                    category: noticeCategoryLabel(item),
+                    date: formatBoardDate(item.created_at),
+                  }}
+                />
               );
             }
             return (
@@ -254,7 +255,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 22 },
   searchButton: { minWidth: 58, alignItems: "center", justifyContent: "center", borderRadius: 9, backgroundColor: COLORS.primary },
   searchButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
-  noticeFilters: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 },
+  noticeFilters: { flexDirection: "row", gap: 8, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 14 },
   noticeFilter: { alignItems: "center", justifyContent: "center", borderRadius: 999, borderWidth: 0.5, borderColor: "#E1E4E9", paddingHorizontal: 14, paddingVertical: 8 },
   noticeFilterActive: { borderColor: "#15171C", backgroundColor: "#15171C" },
   noticeFilterText: { color: COLORS.muted, fontSize: 13, fontWeight: "400" },
@@ -271,16 +272,8 @@ const styles = StyleSheet.create({
   noticeEmptyTitle: { color: "#2C3038", fontSize: 18, fontWeight: "500", lineHeight: 26, marginTop: 8 },
   noticeEmptyDescription: { color: "#8A919C", fontSize: 13, fontWeight: "400", lineHeight: 18, marginTop: 8 },
   listContent: { paddingBottom: 32 },
+  noticeListContent: { paddingHorizontal: 16, paddingBottom: 20 },
   emptyContent: { flexGrow: 1 },
-  noticeResultRow: { borderBottomWidth: 1, borderBottomColor: COLORS.divider, paddingHorizontal: 24, paddingVertical: 14 },
-  noticeCategoryPill: { alignSelf: "flex-start", borderRadius: 8, backgroundColor: COLORS.primary50, paddingHorizontal: 8, paddingVertical: 2 },
-  noticeCategoryPillEvent: { backgroundColor: COLORS.pink50 },
-  noticeCategoryPillOther: { backgroundColor: "#F0EEF9" },
-  noticeCategoryText: { color: COLORS.primary, fontSize: 11, fontWeight: "400" },
-  noticeCategoryTextEvent: { color: COLORS.pink700 },
-  noticeCategoryTextOther: { color: "#5A4C8B" },
-  noticeResultTitle: { color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 20, marginTop: 6 },
-  noticeResultDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", marginTop: 6 },
   resultRow: { borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingHorizontal: 22, paddingVertical: 15 },
   boardPill: { alignSelf: "flex-start", borderRadius: 6, backgroundColor: COLORS.primary50, paddingHorizontal: 8, paddingVertical: 4 },
   boardPillText: { color: COLORS.primary, fontSize: 11, fontWeight: "900" },

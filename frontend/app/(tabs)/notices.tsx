@@ -1,4 +1,4 @@
-import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBoardsQuery } from "../../hooks/useApi";
 import LoadingState from "../../components/LoadingState";
+import NoticeRow, { type NoticeRowModel } from "../../components/NoticeRow";
 import { useMultiBoardPosts } from "../../hooks/usePosts";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
@@ -38,15 +39,6 @@ const COLORS = {
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-type NoticeRowModel = {
-  key: string;
-  postId?: number;
-  title: string;
-  category: string;
-  date: string;
-  isPinned?: boolean;
-};
-
 function flattenBoards(groups?: { boards: Board[] }[]) {
   return groups?.flatMap((group) => group.boards) ?? [];
 }
@@ -64,45 +56,10 @@ function deadlineLabel(value?: string | null) {
   return `마감 D-${days}`;
 }
 
-function rowTone(category: string) {
-  if (category.includes("행사")) {
-    return { backgroundColor: "#FBEAF0", color: "#993556" };
-  }
-  if (category.includes("특강")) {
-    return { backgroundColor: COLORS.cyan50, color: COLORS.cyan700 };
-  }
-  if (category.includes("기타")) {
-    return { backgroundColor: "#F0EEF9", color: "#5A4C8B" };
-  }
-  return { backgroundColor: "#E6F1FB", color: "#0C447C" };
-}
-
 function IconButton({ icon, onPress, label }: { icon: IconName; onPress: () => void; label: string }) {
   return (
     <Pressable accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
       <Ionicons name={icon} size={24} color={COLORS.text} />
-    </Pressable>
-  );
-}
-
-function NoticeRow({ item }: { item: NoticeRowModel }) {
-  const tone = rowTone(item.category);
-  const handlePress = item.postId ? () => router.push(`/board/post/${item.postId}` as never) : undefined;
-
-  return (
-    <Pressable disabled={!handlePress} onPress={handlePress} style={[styles.noticeRow, item.isPinned ? styles.noticeRowPinned : null]}>
-      <View style={styles.noticeMain}>
-        <View style={styles.metaRow}>
-          {item.isPinned ? <FontAwesome5 name="thumbtack" size={10} color={COLORS.primary} /> : null}
-          <View style={[styles.categoryPill, { backgroundColor: tone.backgroundColor }]}>
-            <Text style={[styles.categoryText, { color: tone.color }]}>{item.category}</Text>
-          </View>
-        </View>
-        <Text numberOfLines={2} style={[styles.noticeTitle, item.isPinned ? styles.noticeTitlePinned : null]}>
-          {item.title}
-        </Text>
-        <Text style={styles.noticeDate}>{item.date}</Text>
-      </View>
     </Pressable>
   );
 }
@@ -214,8 +171,8 @@ export default function NoticesScreen() {
         {isLoading ? <LoadingRows /> : null}
         {!isLoading && visibleRows.length > 0 ? (
           <View style={styles.list}>
-            {visibleRows.map((item) => (
-              <NoticeRow key={item.key} item={item} />
+            {visibleRows.map((item, index) => (
+              <NoticeRow key={item.key} item={item} isLast={index === visibleRows.length - 1} />
             ))}
           </View>
         ) : null}
@@ -309,8 +266,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   listContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
   },
   listScroller: {
     flex: 1,
@@ -320,60 +277,6 @@ const styles = StyleSheet.create({
   },
   list: {
     backgroundColor: COLORS.surface,
-  },
-  noticeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.border,
-    paddingVertical: 14,
-  },
-  noticeRowPinned: {
-    borderBottomWidth: 0,
-    borderRadius: 12,
-    backgroundColor: "#EEF0F3",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  noticeMain: {
-    flex: 1,
-    minWidth: 0,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 24,
-  },
-  categoryPill: {
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  categoryText: {
-    fontSize: 11,
-    fontWeight: "400",
-  },
-  noticeTitle: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "400",
-    lineHeight: 20,
-    marginTop: 6,
-  },
-  noticeTitlePinned: {
-    fontWeight: "500",
-  },
-  noticeDate: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "400",
-    marginTop: 6,
   },
   loadingWrap: {
     minHeight: 160,
