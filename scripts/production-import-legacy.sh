@@ -247,6 +247,7 @@ from sqlalchemy import func, select
 from app.database import SessionLocal
 from app.models.audit import LegacyImportRecord
 from app.models.comment import Comment
+from app.models.media import MediaAsset
 from app.models.post import Post
 from app.models.user import User
 
@@ -255,6 +256,24 @@ with SessionLocal() as session:
         "posts": session.scalar(select(func.count()).select_from(Post)),
         "comments": session.scalar(select(func.count()).select_from(Comment)),
         "users": session.scalar(select(func.count()).select_from(User)),
+        "legacy_users": session.scalar(
+            select(func.count()).select_from(User).where(User.username.like("legacyv2_%"))
+        ),
+        "admin_users": session.scalar(
+            select(func.count()).select_from(User).where(User.role == "admin")
+        ),
+        "active_users": session.scalar(
+            select(func.count()).select_from(User).where(User.is_active.is_(True))
+        ),
+        "ownerless_media": session.scalar(
+            select(func.count()).select_from(MediaAsset).where(MediaAsset.owner_id.is_(None))
+        ),
+        "posts_without_author": session.scalar(
+            select(func.count()).select_from(Post).where(Post.author_id.is_(None))
+        ),
+        "comments_without_author": session.scalar(
+            select(func.count()).select_from(Comment).where(Comment.author_id.is_(None))
+        ),
         "ledger_records": session.scalar(
             select(func.count()).select_from(LegacyImportRecord)
         ),
@@ -269,6 +288,12 @@ verified_bytes="$(json_integer "$output_root/reports/media-verification.json" ve
 post_count="$(json_integer "$output_root/reports/database-counts.json" posts)"
 comment_count="$(json_integer "$output_root/reports/database-counts.json" comments)"
 user_count="$(json_integer "$output_root/reports/database-counts.json" users)"
+legacy_user_count="$(json_integer "$output_root/reports/database-counts.json" legacy_users)"
+admin_user_count="$(json_integer "$output_root/reports/database-counts.json" admin_users)"
+active_user_count="$(json_integer "$output_root/reports/database-counts.json" active_users)"
+ownerless_media_count="$(json_integer "$output_root/reports/database-counts.json" ownerless_media)"
+posts_without_author="$(json_integer "$output_root/reports/database-counts.json" posts_without_author)"
+comments_without_author="$(json_integer "$output_root/reports/database-counts.json" comments_without_author)"
 ledger_count="$(json_integer "$output_root/reports/database-counts.json" ledger_records)"
 [[ "$created_attachments" == 637 ]] || fail "Expected 637 imported attachments; found $created_attachments."
 [[ "$archived_unsupported" == 11 ]] || fail "Expected 11 archived unsupported attachments; found $archived_unsupported."
@@ -276,7 +301,13 @@ ledger_count="$(json_integer "$output_root/reports/database-counts.json" ledger_
 [[ "$verified_bytes" == 706706761 ]] || fail "Verified media byte count changed: $verified_bytes."
 [[ "$post_count" == 685 ]] || fail "Expected 685 imported posts; found $post_count."
 [[ "$comment_count" == 247 ]] || fail "Expected 247 imported comments; found $comment_count."
-[[ "$user_count" == 197 ]] || fail "Expected 197 imported users; found $user_count."
+[[ "$user_count" == 196 ]] || fail "Expected 196 imported users; found $user_count."
+[[ "$legacy_user_count" == 196 ]] || fail "Expected all 196 imported users to be legacy users; found $legacy_user_count."
+[[ "$admin_user_count" == 0 ]] || fail "The review database must not contain an administrator; found $admin_user_count."
+[[ "$active_user_count" == 0 ]] || fail "Imported legacy users must all be inactive; found $active_user_count active users."
+[[ "$ownerless_media_count" == 25 ]] || fail "Expected 25 ownerless special-content media assets; found $ownerless_media_count."
+[[ "$posts_without_author" == 0 ]] || fail "Imported posts must all retain an author; found $posts_without_author without one."
+[[ "$comments_without_author" == 0 ]] || fail "Imported comments must all retain an author; found $comments_without_author without one."
 [[ "$ledger_count" == 1923 ]] || fail "Expected 1923 migration ledger records; found $ledger_count."
 media_manifest="$(awk -F'"' '/"manifest_sha256"/ {print $4; exit}' "$output_root/reports/media-verification.json")"
 [[ "$media_manifest" =~ ^[0-9a-f]{64}$ ]] || fail "Media verifier did not produce a valid manifest SHA-256."

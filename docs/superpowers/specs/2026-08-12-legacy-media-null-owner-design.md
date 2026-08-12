@@ -15,8 +15,8 @@ backup creation, or production restore.
 
 - Production startup and migration must not create a synthetic user or grant an
   imported member administrator privileges.
-- The approved import totals remain 685 posts, 247 comments, 197 imported
-  users, 1,923 ledger records, 637 supported media files, and 11 explicitly
+- The approved import totals remain 685 posts, 247 comments, 196 inactive
+  legacy users, 1,923 ledger records, 637 supported media files, and 11 explicitly
   archived unsupported files.
 - Post attachment ownership must remain associated with the imported post
   author.
@@ -42,7 +42,7 @@ so nullable ownership does not require a schema migration.
 
 Unsupported attachment types continue to create only an archived provenance
 ledger record. They do not create a media asset and therefore do not need an
-owner.
+owner. The verified source produces exactly 25 such ownerless media assets.
 
 ## Authorization Behavior
 

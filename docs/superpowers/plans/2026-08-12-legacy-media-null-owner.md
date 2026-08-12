@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Production startup and migration must not create a synthetic user or grant an imported member administrator privileges.
-- Approved totals remain 685 posts, 247 comments, 197 users, 1,923 ledger records, 637 supported files, 11 archived unsupported files, and 706,706,761 verified media bytes.
+- Approved totals remain 685 posts, 247 comments, 196 inactive legacy users, no administrator, no authorless post/comment, 25 ownerless special-content media assets, 1,923 ledger records, 637 supported files, 11 archived unsupported files, and 706,706,761 verified media bytes.
 - Post media keeps the imported post author's ID; special-content media without a real author uses `owner_id=NULL`.
 - FAQ and board-metadata media remain relationship-authorized; private mutual-aid media remains administrator-only.
 - No schema migration or dependency change is permitted.

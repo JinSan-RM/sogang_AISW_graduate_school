@@ -138,8 +138,9 @@ Expected gates for the approved `attachments_ver2` and
 
 - source manifest: 653 entries with the approved manifest hash;
 - attachment source: 648 non-empty regular files;
-- database: 685 posts, 247 comments, 197 imported users, and 1,923 provenance
-  ledger records;
+- database: 685 posts, 247 comments, 196 inactive legacy users, no seeded
+  administrator, no authorless post/comment, 25 ownerless special-content media
+  assets, and 1,923 provenance ledger records;
 - supported media: 637 files and exactly 706,706,761 verified bytes;
 - unsupported media: 11 entries deliberately archived in the migration ledger
   (4 ZIP, 4 MP4, 2 TXT, and 1 IPYNB), not silently dropped;

@@ -109,7 +109,13 @@ def test_legacy_import_script_enforces_review_database_and_fresh_targets() -> No
     assert 'scripts/production-ip.sh" Config' in script
     assert '[[ "$post_count" == 685 ]]' in script
     assert '[[ "$comment_count" == 247 ]]' in script
-    assert '[[ "$user_count" == 197 ]]' in script
+    assert '[[ "$user_count" == 196 ]]' in script
+    assert '[[ "$legacy_user_count" == 196 ]]' in script
+    assert '[[ "$admin_user_count" == 0 ]]' in script
+    assert '[[ "$active_user_count" == 0 ]]' in script
+    assert '[[ "$ownerless_media_count" == 25 ]]' in script
+    assert '[[ "$posts_without_author" == 0 ]]' in script
+    assert '[[ "$comments_without_author" == 0 ]]' in script
     assert '[[ "$ledger_count" == 1923 ]]' in script
 
     first_empty_volume_check = script.index('ensure_empty_volume "$production_media_volume"')
