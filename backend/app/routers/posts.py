@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.author_snapshots import resolve_author_display
-from app.board_policies import hides_author_identity
+from app.board_policies import canonical_post_category, hides_author_identity
 from app.deps import can_read_board, can_write_board, get_current_user, get_db, require_admin
 from app.errors import AppException
 from app.models.board import Board
@@ -910,7 +910,7 @@ def create_post(
         content="" if board.board_type == "album" else payload.content,
         is_anonymous=is_anonymous,
         is_notice=board.board_type == "notice",
-        category=None if board.board_type == "album" else payload.category,
+        category=canonical_post_category(board, payload.category),
         metadata_json=post_metadata,
         deadline_at=payload.deadline_at if board.board_type == "notice" else None,
     )
@@ -997,7 +997,7 @@ def update_post(
     post.title = payload.title
     post.content = "" if target_board is not None and target_board.board_type == "album" else payload.content
     post.is_anonymous = is_anonymous
-    post.category = None if target_board is not None and target_board.board_type == "album" else payload.category
+    post.category = canonical_post_category(target_board, payload.category)
     existing_metadata = dict(post.metadata_json or {})
     merged_metadata = _metadata_for_update(
         post,
