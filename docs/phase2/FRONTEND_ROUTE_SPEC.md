@@ -56,7 +56,7 @@ The root layout must guard all member routes and must guard `/admin` by role. Th
 Sections:
 
 - Quick menu for P0 flows.
-- Latest pinned notices.
+- Latest two notices across every active notice board, ordered by creation time without pin priority.
 - Upcoming schedule.
 - Recent community posts.
 

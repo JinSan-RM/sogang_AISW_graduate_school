@@ -23,6 +23,7 @@ import { MediaImageBackground } from "../../components/MediaImage";
 import HomeSectionGate from "../../components/HomeSectionGate";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
+import { useMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
@@ -38,6 +39,7 @@ import {
   shiftCalendarMonth,
 } from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
+import { homeNoticePosts, isNoticeContentBoard } from "../../utils/noticeFeed";
 
 const COLORS = {
   primary: "#2761FF",
@@ -62,7 +64,6 @@ const CARD_ELEVATION = {
   elevation: 1,
 };
 
-const NOTICE_BOARD_SLUGS = ["all-notices", "academic-notices", "general-notices", "webinar-notices"];
 const POPULAR_BOARD_SLUGS = [
   "community-major",
   "community-seminar",
@@ -395,13 +396,11 @@ function NoticeList({
   loading,
   isError,
   onRetry,
-  boardId,
 }: {
   posts: PostListItem[];
   loading: boolean;
   isError: boolean;
   onRetry: () => void;
-  boardId?: number;
 }) {
   if (loading) {
     return (
@@ -415,7 +414,7 @@ function NoticeList({
     return <HomeErrorState label="공지사항" onRetry={onRetry} />;
   }
 
-  const rows = posts.slice(0, 2);
+  const rows = posts;
   if (!rows.length) {
     return <HomeEmptyState type="notices" />;
   }
@@ -438,7 +437,6 @@ function NoticeList({
               {post.deadline_at ? ` · 마감 ${dDayLabel(post.deadline_at)}` : ""}
             </Text>
           </View>
-          {boardId ? null : <Ionicons name="remove" size={0} color={COLORS.subtle} />}
         </Pressable>
       ))}
     </View>
@@ -634,7 +632,8 @@ export default function HomeScreen() {
     refetch: refetchBoards,
   } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardGroups?.data), [boardGroups?.data]);
-  const noticeBoardId = useMemo(() => findBoardId(boards, NOTICE_BOARD_SLUGS, "notices"), [boards]);
+  const noticeBoards = useMemo(() => boards.filter(isNoticeContentBoard), [boards]);
+  const noticeBoardIds = useMemo(() => noticeBoards.map((board) => board.id), [noticeBoards]);
   const popularBoardId = useMemo(() => findBoardId(boards, POPULAR_BOARD_SLUGS, "community"), [boards]);
   const albumBoardId = useMemo(() => findBoardId(boards, ALBUM_BOARD_SLUGS, "participation"), [boards]);
 
@@ -642,11 +641,7 @@ export default function HomeScreen() {
     queryKey: ["banners", "home"],
     queryFn: () => bannerApi.getBanners({ placement: "home" }),
   });
-  const noticesQuery = useQuery({
-    queryKey: ["home", "notices", noticeBoardId],
-    queryFn: () => postApi.getPosts(noticeBoardId ?? 0, 1, 3, { sort: "latest" }),
-    enabled: Boolean(noticeBoardId),
-  });
+  const noticesQuery = useMultiBoardPosts(noticeBoardIds, { sort: "latest" });
   const eventsQuery = useQuery({
     queryKey: ["home", "events", monthRange.start, monthRange.end],
     queryFn: () => eventApi.getEvents({ from_date: monthRange.start, to_date: monthRange.end }),
@@ -664,7 +659,10 @@ export default function HomeScreen() {
   });
 
   const banners = bannersQuery.data?.data ?? [];
-  const notices = noticesQuery.data?.data ?? [];
+  const notices = useMemo(
+    () => homeNoticePosts(noticesQuery.data ?? [], noticeBoards),
+    [noticeBoards, noticesQuery.data]
+  );
   const events = eventsQuery.data?.data ?? [];
   const albumPosts = albumQuery.data?.data ?? [];
   const hasUnreadNotifications = (notificationQuery.data?.data ?? []).some((notification) => !notification.is_read);
@@ -703,7 +701,6 @@ export default function HomeScreen() {
         loading={noticesQuery.isLoading || boardsLoading}
         isError={boardsError || noticesQuery.isError}
         onRetry={() => void Promise.all([refetchBoards(), noticesQuery.refetch()])}
-        boardId={noticeBoardId}
       />
 
       <SectionHeader title="서강생활 일정" />
