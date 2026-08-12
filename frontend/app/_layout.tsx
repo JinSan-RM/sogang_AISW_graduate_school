@@ -2,10 +2,9 @@ import { useFonts } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
-import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Image, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import NotificationBootstrap from "../components/NotificationBootstrap";
-import LoadingState from "../components/LoadingState";
 import { useUserStore } from "../stores/userStore";
 import { INTER_FONTS, patchDefaultFontFamily } from "../utils/fonts";
 import { isAdminUser } from "../utils/permissions";
@@ -30,7 +29,11 @@ export default function RootLayout() {
   }, [hydrateSession]);
 
   if (!hasHydrated || !fontsLoaded) {
-    return <LoadingState />;
+    return (
+      <View style={styles.splash}>
+        <Image source={require("../assets/splash-logo.png")} resizeMode="contain" style={styles.splashLogo} />
+      </View>
+    );
   }
 
   return (
@@ -90,6 +93,17 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF", // app.json splash.backgroundColor와 같은 값
+  },
+  splashLogo: {
+    width: "72%",
+    maxWidth: 320,
+    aspectRatio: 16 / 9,
+  },
   viewport: {
     flex: 1,
     backgroundColor: "#F7F8FA",
