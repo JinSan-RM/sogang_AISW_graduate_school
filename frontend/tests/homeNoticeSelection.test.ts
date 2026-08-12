@@ -9,6 +9,10 @@ test("홈 공지는 단일 슬러그 대신 모든 활성 공지 게시판의 �
   assert.match(homeSource, /boards\.filter\(isNoticeContentBoard\)/);
   assert.match(homeSource, /useAllMultiBoardPosts\(noticeBoardIds, \{ sort: "latest" \}\)/);
   assert.match(homeSource, /homeNoticePosts\(noticesQuery\.data \?\? \[\], noticeBoards\)/);
+  assert.match(homeSource, /boards=\{noticeBoards\}/);
+  assert.match(homeSource, /homeNoticeCategory\(post, boardById\.get\(post\.board_id\)\)/);
   assert.doesNotMatch(homeSource, /NOTICE_BOARD_SLUGS/);
   assert.doesNotMatch(homeSource, /postApi\.getPosts\(noticeBoardId/);
+  assert.doesNotMatch(homeSource, /function noticeCategoryLabel/);
+  assert.doesNotMatch(homeSource, /noticeCategoryLabel\(post\.category\)/);
 });
