@@ -15,7 +15,7 @@ An older pinned notice never outranks a newer notice on Home. Pin priority remai
 
 ## Architecture and Data Flow
 
-The Home screen will reuse the existing notice-feed building blocks instead of selecting one preferred notice-board slug. It will derive all active notice boards with `isNoticeContentBoard`, load their posts with the existing multi-board query, and pass the combined results to a small Home selection helper in `frontend/utils/noticeFeed.ts`.
+The Home screen will reuse the existing notice-feed building blocks instead of selecting one preferred notice-board slug. It will derive all active notice boards with `isNoticeContentBoard`, load every page of their posts with a Home-only multi-board query, and pass the combined results to a small Home selection helper in `frontend/utils/noticeFeed.ts`. Loading every page prevents backend pin-priority pagination from hiding newer unpinned notices from Home.
 
 The helper owns de-duplication, latest-first ordering that ignores `is_pinned`, and the two-item limit. The Notices tab keeps its existing category filtering and pinned-first list behavior. The backend post-list API and its default ordering remain unchanged.
 

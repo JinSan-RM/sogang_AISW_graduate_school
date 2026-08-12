@@ -1,4 +1,18 @@
-import type { Board, PostListItem } from "../types";
+import type { ApiSuccess, Board, PostListItem } from "../types";
+
+export type PostListFilters = {
+  q?: string;
+  category?: string;
+  status?: string;
+  sort?: "latest" | "popular" | "views";
+};
+
+export type PostPageLoader = (
+  boardId: number,
+  page: number,
+  size: number,
+  filters?: PostListFilters
+) => Promise<ApiSuccess<PostListItem[]>>;
 
 export type NoticeFilter = "all" | "academic" | "event" | "other";
 
@@ -81,4 +95,23 @@ export function homeNoticePosts(posts: PostListItem[], boards: Board[], limit = 
       return createdAtDelta || right.id - left.id;
     })
     .slice(0, limit);
+}
+
+export async function loadAllBoardPosts(
+  boardId: number,
+  filters: PostListFilters | undefined,
+  loadPage: PostPageLoader,
+  pageSize = 20
+) {
+  const posts: PostListItem[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await loadPage(boardId, page, pageSize, filters);
+    posts.push(...response.data);
+
+    const pagination = response.pagination;
+    if (!pagination || pagination.page >= pagination.total_pages) return posts;
+    page = pagination.page + 1;
+  }
 }

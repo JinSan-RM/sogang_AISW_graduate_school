@@ -4,7 +4,7 @@
 
 **Goal:** Show exactly the two newest notices on Home across every active notice category, ignoring pin status.
 
-**Architecture:** Add a Home-only pure selector to `noticeFeed.ts` that filters active notice boards, removes duplicate IDs, ignores `is_pinned`, and sorts by creation time. Replace Home's single preferred-board query with the existing multi-board query while leaving the Notices tab and backend ordering unchanged.
+**Architecture:** Add a Home-only pure selector to `noticeFeed.ts` that filters active notice boards, removes duplicate IDs, ignores `is_pinned`, and sorts by creation time. Replace Home's single preferred-board query with a Home-only multi-board query that loads every page, while leaving the Notices tab and backend ordering unchanged.
 
 **Tech Stack:** TypeScript, React Native, Expo Router, TanStack Query, Node test runner via `tsx`
 
@@ -23,7 +23,8 @@
 - Modify `frontend/utils/noticeFeed.ts`: add the Home-only selector without changing shared pinned-first filtering.
 - Modify `frontend/tests/noticeFeed.test.ts`: cover all-category eligibility, exclusions, duplicates, newest-first ordering, and ignored pin state.
 - Create `frontend/tests/homeNoticeSelection.test.ts`: verify that Home uses all notice boards and the Home-only selector.
-- Modify `frontend/app/(tabs)/home.tsx`: replace the preferred-board query with the existing multi-board query.
+- Modify `frontend/hooks/usePosts.ts`: add a Home-only multi-board hook that loads every page from each notice board.
+- Modify `frontend/app/(tabs)/home.tsx`: replace the preferred-board query with the Home-only multi-board query.
 - Modify `docs/phase2/FRONTEND_ROUTE_SPEC.md` and `CODEX.md`: record the exact Home-only rule.
 
 ---
