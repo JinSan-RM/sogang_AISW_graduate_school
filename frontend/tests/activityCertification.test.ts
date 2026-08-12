@@ -10,10 +10,9 @@ import {
   formatActivityParticipant,
 } from "../utils/activityCertification";
 
-test("참가자 안내는 원우회비 명부에서 이름이나 학번으로 본인까지 추가하도록 설명한다", () => {
-  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /원우회비 납부자 명부/);
-  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /이름이나 학번/);
-  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도/);
+test("참가자 안내는 미납자·졸업자 제외와 본인 추가를 설명한다", () => {
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /원우회비 미납자, 졸업자는 검색되지 않아요/);
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도 검색해서 추가해주세요/);
 });
 
 test("원우회비 납부자는 이름 전공 학번을 띄어쓰기로 표시한다", () => {

@@ -8,7 +8,7 @@ export type ActivityParticipant = {
 };
 
 export const ACTIVITY_PARTICIPANT_GUIDANCE =
-  "원우회비 납부자 명부에서 이름이나 학번으로 검색해 추가해주세요. 지원금은 참가자 목록 기준으로 지급되니 본인도 추가해야 합니다.";
+  "원우회비 미납자, 졸업자는 검색되지 않아요. 지원금은 참가자 목록 기준 지급되니 본인도 검색해서 추가해주세요.";
 
 export function formatActivityParticipant(participant: ActivityParticipant): string {
   return [participant.name, participant.major, participant.student_number].filter(Boolean).join(" ");
