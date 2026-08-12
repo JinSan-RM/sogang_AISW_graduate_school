@@ -23,6 +23,7 @@ type AllBoardPostLoader = (
   loadPage: PostPageLoader,
   pageSize?: number
 ) => Promise<PostListItem[]>;
+type HomeNoticeCategory = (post: PostListItem, board?: Board) => string;
 
 function selectHomeNotices(posts: PostListItem[], boards: Board[], limit = 2) {
   const selector = (noticeFeed as typeof noticeFeed & { homeNoticePosts?: HomeNoticeSelector }).homeNoticePosts;
@@ -34,6 +35,13 @@ async function loadEveryBoardPost(boardId: number, filters: PostFilters, loadPag
   const loader = (noticeFeed as typeof noticeFeed & { loadAllBoardPosts?: AllBoardPostLoader }).loadAllBoardPosts;
   if (!loader) assert.fail("loadAllBoardPosts must be exported");
   return loader(boardId, filters, loadPage);
+}
+
+function homeCategory(postItem: PostListItem, boardItem?: Board) {
+  const helper = (noticeFeed as typeof noticeFeed & { homeNoticeCategory?: HomeNoticeCategory })
+    .homeNoticeCategory;
+  if (!helper) assert.fail("homeNoticeCategory must be exported");
+  return helper(postItem, boardItem);
 }
 
 function board(id: number, slug: string, boardType = "notice"): Board {
@@ -164,4 +172,22 @@ test("홈 공지 조회는 최신 일반 공지가 고정글 첫 페이지 밖�
 
   assert.deepEqual(requestedPages, [1, 2, 3]);
   assert.deepEqual(rows.map((item) => item.id), [1, 2, 3]);
+});
+
+test("홈 공지의 other와 all 분류는 기타공지로 표시한다", () => {
+  assert.equal(homeCategory(post(1, 1, "other"), board(1, "all-notices")), "기타공지");
+});
+
+test("홈 공지의 웨비나와 특강 분류는 행사공지로 표시한다", () => {
+  assert.equal(homeCategory(post(1, 4, "webinar"), board(4, "webinar-notices")), "행사공지");
+  assert.equal(homeCategory(post(2, 4, "특강공지"), board(4, "webinar-notices")), "행사공지");
+});
+
+test("홈 공지의 글 분류가 없으면 게시판 분류를 사용한다", () => {
+  assert.equal(homeCategory(post(1, 2), board(2, "academic-notices")), "학사공지");
+  assert.equal(homeCategory(post(2, 3), board(3, "event-notices")), "행사공지");
+});
+
+test("홈 공지의 사용자용 한글 분류명은 그대로 표시한다", () => {
+  assert.equal(homeCategory(post(1, 1, "장학공지"), board(1, "all-notices")), "장학공지");
 });
