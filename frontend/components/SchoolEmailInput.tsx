@@ -39,11 +39,11 @@ export default function SchoolEmailInput({ value, onChangeText, placeholder = "ì
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 48,
+    minHeight: 44, // Figma: h-44
     flexDirection: "row",
     alignItems: "stretch",
     overflow: "hidden",
-    borderWidth: 1,
+    borderWidth: 0.5, // Figma: 0.5px border
     borderColor: "#E1E4E9",
     borderRadius: 8,
     backgroundColor: "#FFFFFF",
@@ -61,7 +61,8 @@ const styles = StyleSheet.create({
     color: "#15171C",
     fontSize: 14,
     fontWeight: "400", // Figma: Inter Regular
-    paddingHorizontal: 14,
+    paddingLeft: 14, // Figma: padding 12px 8px 12px 14px
+    paddingRight: 8,
   },
   divider: {
     width: 1,

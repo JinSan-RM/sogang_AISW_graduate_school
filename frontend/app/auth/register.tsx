@@ -346,6 +346,8 @@ export default function RegisterScreen() {
   const codeError = verificationExpired
     ? "인증 시간이 만료되었어요. 재전송을 눌러주세요."
     : errors.code;
+  // 상태 문구가 이미 떠 있으면 재전송 라벨을 생략하고 남은 시간만 강조한다.
+  const showResendTimerOnly = Boolean(codeError || verificationMessage);
 
   return (
     <View style={styles.screen}>
@@ -410,7 +412,7 @@ export default function RegisterScreen() {
                   value={code}
                 />
               </View>
-              <View style={styles.statusRow}>
+              <View style={[styles.statusRow, codeError || verificationMessage ? styles.statusRowTight : null]}>
                 <View style={styles.statusLeft}>
                   {codeError ? (
                     <View style={styles.errorRow}>
@@ -439,8 +441,8 @@ export default function RegisterScreen() {
                     onPress={() => void requestCode(true)}
                     style={!codeError && !verificationMessage ? styles.resendControlLeading : styles.resendControlTrailing}
                   >
-                    <Text style={styles.resendLink}>
-                      {isSubmitting ? "발송 중" : resendCountdownLabel(resendCooldown)}
+                    <Text style={[styles.resendLink, showResendTimerOnly ? styles.resendTimer : null]}>
+                      {isSubmitting ? "발송 중" : resendCountdownLabel(resendCooldown, { timerOnly: showResendTimerOnly })}
                     </Text>
                   </Pressable>
                 )}
@@ -614,27 +616,30 @@ const styles = StyleSheet.create({
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
   appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" }, // Figma: Inter Medium
   scroller: { flex: 1 },
-  content: { gap: 20, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 }, // Figma body: pt28 pb24
-  stepDots: { flexDirection: "row", gap: 8 },
-  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#DDE2EA" },
+  content: { gap: 20, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 }, // Figma 본문: 28/20/24, gap 20
+  stepDots: { flexDirection: "row", gap: 8, paddingBottom: 4 }, // Figma dots: 8x8, gap 8, pb 4
+  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#D1D5DB" },
   stepDotActive: { backgroundColor: COLORS.primary },
-  heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
-  helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, gray/500
+  heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 24 }, // Figma: Medium 20/24
+  helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 16 }, // Figma: Regular 13/16, gray/500
   field: { gap: 6 }, // Figma label→input gap
   label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
   input: { minHeight: 48, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, border 1, px16, Regular 14
-  codeInput: { minHeight: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 14, paddingVertical: 12 }, // Figma SignUp-Step2: 44h, border 0.5
+  codeInput: { height: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 17, paddingHorizontal: 14, paddingVertical: 12 }, // Figma 코드입력: 44h, border 0.5, padding 12/14, Regular 14/17
   inputError: { borderColor: COLORS.danger },
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
-  errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8, marginTop: -12 },
+  errorRow: { flexDirection: "row", alignItems: "center", gap: 6 }, // Figma 에러행: gap 6
+  statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8 }, // 재전송만 있을 때는 본문 gap 20을 그대로 쓴다
+  // 에러/안내 문구는 코드영역 안에 들어가므로 입력창과 8px만 띄운다(본문 gap 20 - 12).
+  statusRowTight: { marginTop: -12 },
   statusLeft: { flexShrink: 1, minWidth: 0 },
   resendControlLeading: { alignSelf: "flex-start" },
   resendControlTrailing: { marginLeft: "auto" },
-  resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
-  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular 12
-  successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: success green Regular 12
+  resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "400", lineHeight: 18 }, // Figma "재전송 (04:59)": Regular 13/18
+  resendTimer: { fontWeight: "500", lineHeight: 16 }, // Figma "05:00": Medium 13/16
+  errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 15 }, // Figma: error/500 Regular 12/15
+  successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 15 }, // Figma: success green Regular 12/15
   pendingText: { flexShrink: 1, color: COLORS.muted, fontSize: 12, fontWeight: "400", lineHeight: 18 },
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
@@ -644,7 +649,7 @@ const styles = StyleSheet.create({
   primaryButton: { height: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary }, // Figma: 48h
   disabledButton: { opacity: 0.55 },
   validationDisabledButton: { backgroundColor: "#D1D5DB" },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "500" }, // Figma: Inter Medium ~14-15
+  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "500", lineHeight: 17 }, // Figma btn: Medium 14/17
   resendButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 8 },
   resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, primary/500
   resendTextDisabled: { color: COLORS.subtle },
