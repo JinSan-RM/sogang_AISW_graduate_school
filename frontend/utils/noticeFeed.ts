@@ -53,6 +53,11 @@ export function categoryFromNoticePost(post: PostListItem, board?: Board) {
   return normalizeNoticeCategory(post.category) ?? normalizeNoticeCategory(board?.slug) ?? "기타공지";
 }
 
+export function homeNoticeCategory(post: PostListItem, board?: Board) {
+  const category = categoryFromNoticePost(post, board);
+  return category === "특강공지" ? "행사공지" : category;
+}
+
 export function matchesNoticeFilter(category: string, filter: NoticeFilter) {
   if (filter === "all") return true;
   if (filter === "academic") return category === "학사공지";
