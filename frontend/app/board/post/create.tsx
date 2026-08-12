@@ -9,6 +9,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
+import { CameraAddIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/usePosts";
@@ -804,7 +805,7 @@ export default function PostCreateScreen() {
                   <Text style={[styles.activitySelectValue, !field.value ? styles.activitySelectPlaceholder : null]}>
                     {field.value || activitySelectPlaceholder(board?.slug)}
                   </Text>
-                  <Ionicons name="chevron-down" size={16} color={COLORS.subtle} />
+                  <Ionicons name="chevron-down" size={16} color="#A6ACB7" />
                 </Pressable>
               )}
             />
@@ -832,7 +833,7 @@ export default function PostCreateScreen() {
                 </View>
               ) : (
                 <>
-                  <Ionicons name="camera-outline" size={18} color={COLORS.subtle} />
+                  <CameraAddIcon size={26} />
                   <Text style={styles.activityPhotoText}>
                     {isUploading ? `업로드 ${uploadProgress || 0}%` : "활동 사진을 추가해주세요"}
                   </Text>
@@ -869,7 +870,7 @@ export default function PostCreateScreen() {
                     style={styles.activityInputWithIcon}
                   >
                     <Text style={styles.activityDateValue}>{field.value ? formatBoardDate(field.value) : "활동일을 선택하세요"}</Text>
-                    <Ionicons name="calendar-outline" size={16} color={COLORS.subtle} />
+                    <Ionicons name="calendar-outline" size={15} color="#6B7280" />
                   </Pressable>
                   {datePickerOpen ? (
                     <InlineCalendar
@@ -894,7 +895,7 @@ export default function PostCreateScreen() {
                   <TextInput
                     editable={canEditActivityBankAccount}
                     onChangeText={field.onChange}
-                    placeholder={canEditActivityBankAccount ? "은행ㆍ계좌번호를 입력하세요." : "기존 계좌 정보가 유지됩니다"}
+                    placeholder={canEditActivityBankAccount ? "은행 / 계좌번호를 입력하세요" : "기존 계좌 정보가 유지됩니다"}
                     placeholderTextColor="#A6ACB7"
                     style={[styles.input, !canEditActivityBankAccount ? styles.inputDisabled : null]}
                     value={field.value ?? ""}
@@ -902,14 +903,14 @@ export default function PostCreateScreen() {
                 )}
               />
               <View style={styles.activityWarning}>
-                <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
+                <Ionicons name="alert-circle-outline" size={14} color="#854F0B" style={styles.activityWarningIcon} />
                 <Text style={styles.activityWarningText}>
                   {canEditActivityBankAccount ? "계좌는 본인 명의로만 등록 가능해요" : "보안을 위해 기존 계좌는 표시하지 않고 그대로 유지해요"}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.activityFieldGroup}>
+            <View style={[styles.activityFieldGroup, styles.activityParticipantGroup]}>
               <Text style={styles.activityFieldTitle}>참가자</Text>
               <Controller
                 control={control}
@@ -918,7 +919,7 @@ export default function PostCreateScreen() {
                   return (
                     <>
                       <View style={styles.activityInputWithIcon}>
-                        <Ionicons name="search-outline" size={15} color={COLORS.subtle} />
+                        <Ionicons name="search-outline" size={16} color="#A6ACB7" />
                         <TextInput
                           onChangeText={setParticipantQuery}
                           placeholder="이름 또는 학번으로 검색"
@@ -927,12 +928,11 @@ export default function PostCreateScreen() {
                           value={participantQuery}
                         />
                       </View>
-                      {trimmedParticipantQuery.length > 0 ? (
+                      {trimmedParticipantQuery.length > 0 && !participantSearch.isLoading && participantResults.length === 0 ? (
+                        <Text style={styles.participantNoResultText}>검색 결과가 없어요</Text>
+                      ) : null}
+                      {trimmedParticipantQuery.length > 0 && participantResults.length > 0 ? (
                         <View style={styles.participantResultBox}>
-                          {participantSearch.isLoading ? <Text style={styles.participantEmptyText}>검색 중입니다.</Text> : null}
-                          {!participantSearch.isLoading && participantResults.length === 0 ? (
-                            <Text style={styles.participantEmptyText}>검색 결과가 없습니다.</Text>
-                          ) : null}
                           {participantResults.map((participant) => {
                             const selected = selectedParticipants.some((item) => item.id === participant.id);
                             return (
@@ -943,12 +943,21 @@ export default function PostCreateScreen() {
                                 style={[styles.participantResultRow, selected ? styles.participantResultRowDisabled : null]}
                               >
                                 <View style={styles.participantAvatar}>
-                                  <Text style={styles.participantAvatarText}>{participant.name.slice(0, 1)}</Text>
+                                  <Ionicons name="person" size={22} color="#FFFFFF" />
                                 </View>
                                 <View style={styles.participantTextBlock}>
-                                  <Text style={styles.participantName}>{formatActivityParticipant(participant)}</Text>
+                                  <Text style={styles.participantName}>{participant.name}</Text>
+                                  {participant.major || participant.student_number ? (
+                                    <Text style={styles.participantMeta}>{[participant.major, participant.student_number].filter(Boolean).join(" ")}</Text>
+                                  ) : null}
                                 </View>
-                                <Ionicons name={selected ? "checkmark-circle" : "add-circle-outline"} size={18} color={selected ? COLORS.primary : COLORS.subtle} />
+                                {selected ? (
+                                  <Ionicons name="checkmark-circle" size={28} color={COLORS.primary} />
+                                ) : (
+                                  <View style={styles.participantAddButton}>
+                                    <Ionicons name="add" size={16} color={COLORS.primary} />
+                                  </View>
+                                )}
                               </Pressable>
                             );
                           })}
@@ -969,7 +978,7 @@ export default function PostCreateScreen() {
                 }}
               />
               <View style={styles.activityWarning}>
-                <Ionicons name="alert-circle-outline" size={14} color="#B7791F" />
+                <Ionicons name="alert-circle-outline" size={14} color="#854F0B" style={styles.activityWarningIcon} />
                 <Text style={styles.activityWarningText}>{ACTIVITY_PARTICIPANT_GUIDANCE}</Text>
               </View>
             </View>
@@ -1674,7 +1683,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   activityContent: {
-    gap: 10,
+    gap: 16,
     paddingTop: 18,
   },
   activitySelect: {
@@ -1700,6 +1709,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17,
   },
   activitySelectPlaceholder: {
     color: "#A6ACB7",
@@ -1822,12 +1832,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   activityPhotoBox: {
-    height: 148,
+    height: 200,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: "#B4B2A9",
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     overflow: "hidden",
@@ -1918,6 +1928,7 @@ const styles = StyleSheet.create({
     color: "#A6ACB7",
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   activityAttachmentList: {
     gap: 6,
@@ -1938,10 +1949,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   activityFeedbackInput: {
-    minHeight: 74,
+    minHeight: 80, // Figma: 후기입력 80h
   },
   activityInputWithIcon: {
-    minHeight: 44,
+    minHeight: 41, // Figma: 41h, padding 12/14
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -1949,11 +1960,11 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   activityInlineInput: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 41,
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
@@ -2017,78 +2028,91 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17,
   },
   participantResultBox: {
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
+    gap: 8,
     backgroundColor: COLORS.bg,
   },
   participantResultRow: {
-    minHeight: 54,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F3F6",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    gap: 12,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    borderRadius: 10,
+    padding: 14,
   },
   participantResultRowDisabled: {
     opacity: 0.5,
   },
   participantAvatar: {
-    width: 30,
-    height: 30,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 15,
-    backgroundColor: COLORS.primary50,
-  },
-  participantAvatarText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: "900",
+    borderRadius: 22,
+    backgroundColor: "#E6F1FB",
   },
   participantTextBlock: {
     flex: 1,
     minWidth: 0,
+    gap: 2,
   },
   participantName: {
     color: COLORS.text,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
+    lineHeight: 17,
+  },
+  participantAddButton: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 999,
+    borderWidth: 1.3,
+    borderColor: COLORS.primary,
   },
   participantMeta: {
-    color: COLORS.subtle,
-    fontSize: 11,
+    color: COLORS.muted,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: "400",
     marginTop: 2,
   },
-  participantEmptyText: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "800",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  participantNoResultText: {
+    color: "#8A919C",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 16,
+    paddingTop: 4,
+    paddingLeft: 2,
   },
   activityFieldGroup: {
-    gap: 8,
+    gap: 6,
+  },
+  activityParticipantGroup: {
+    gap: 10,
   },
   activityFieldTitle: {
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
   },
   activityWarning: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
     borderRadius: 8,
     backgroundColor: "#FAEEDA",
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  activityWarningIcon: {
+    marginTop: 1,
   },
   activityWarningText: {
     color: "#854F0B",
@@ -2099,7 +2123,7 @@ const styles = StyleSheet.create({
   activityChipRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 8,
   },
   activityMemberChip: {
     minHeight: 28,
@@ -2110,13 +2134,15 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: "#E1E4E9",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
+    paddingLeft: 10,
+    paddingRight: 8,
     paddingVertical: 6,
   },
   activityMemberChipText: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   selectLike: {
     height: 48,
@@ -2562,7 +2588,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   activitySubmitButton: {
-    height: 48,
+    height: 45, // Figma: 인증버튼 45h
     borderRadius: 8,
     marginTop: 2,
   },
@@ -2577,5 +2603,6 @@ const styles = StyleSheet.create({
   },
   activitySubmitText: {
     fontSize: 14,
+    lineHeight: 17,
   },
 });

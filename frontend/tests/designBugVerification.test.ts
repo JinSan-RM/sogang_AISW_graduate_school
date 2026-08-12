@@ -45,8 +45,8 @@ test("#2 메인 배너는 설정된 목적지로 직접 이동한다", () => {
 });
 
 test("#66·67·68 홈과 하단 탭은 디자인 기준 아이콘과 정렬을 사용한다", () => {
-  assert.match(tabLayoutSource, /name="calendar-outline"/);
-  assert.match(tabLayoutSource, /name="home-outline"/);
+  assert.match(tabLayoutSource, /<HomeTabIcon color=\{color\} size=\{22\} \/>/);
+  assert.match(tabLayoutSource, /<NoticeTabIcon color=\{color\} size=\{22\} \/>/);
   assert.match(homeSource, /name="chatbubble-outline"/);
   assert.match(homeSource, /name="heart-outline"/);
   assert.match(homeSource, /dayText:[\s\S]*lineHeight: 28/);
@@ -109,7 +109,8 @@ test("#62·63 공지 목록은 공통 로딩과 중앙 빈 상태 레이아웃�
 });
 
 test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시트를 사용한다", () => {
-  assert.match(postDetailSource, /icon=\{isBookmarked \? "bookmark" : "bookmark-outline"\}/);
+  assert.match(postDetailSource, /<BookmarkIcon filled=\{isBookmarked\}/);
+  assert.match(postDetailSource, /<MoreIcon color=\{COLORS\.text\} \/>/);
   assert.match(postDetailSource, /style=\{styles\.menuSheet\}/);
   assert.match(postDetailSource, /name="flag-outline"/);
   assert.match(postDetailSource, /name="remove-circle-outline"/);

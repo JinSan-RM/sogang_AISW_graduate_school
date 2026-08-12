@@ -107,7 +107,7 @@ def get_events(
     filters = []
     if from_date is not None:
         # 종료일(없으면 시작일)이 조회 시작 이후면 포함 → 여러 날에 걸친 일정도 모든 날에 조회된다.
-        filters.append(func.coalesce(Event.end_at, Event.start_at) >= from_date)
+        filters.append(func.coalesce(Event.end_at, Event.start_at) >= _korea_date_boundary(from_date))
     if to_date is not None:
         exclusive_end = _korea_date_boundary(to_date + timedelta(days=1))
         filters.append(Event.start_at < exclusive_end)

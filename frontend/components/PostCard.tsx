@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { BookmarkIcon } from "./icons";
 import type { PostListItem } from "../types";
 import { formatBoardDate } from "../utils/dateFormat";
 import { formatCohortName } from "../utils/userLabel";
@@ -121,7 +122,7 @@ export default function PostCard({ post, onPress, boardType, boardSlug }: Props)
         </View>
         {post.is_pinned || post.is_notice ? (
           <View style={styles.pinPill}>
-            <Ionicons name="bookmark" size={11} color={COLORS.primary} />
+            <BookmarkIcon filled size={11} color={COLORS.primary} />
             <Text style={styles.pinText}>고정</Text>
           </View>
         ) : null}

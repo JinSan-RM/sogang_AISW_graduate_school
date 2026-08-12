@@ -6,6 +6,7 @@ import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, Text, 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../components/LoadingState";
+import { BookmarkIcon } from "../../components/icons";
 import { userApi } from "../../services/api";
 import type { UserActivityItem } from "../../types";
 import { MY_PAGE_ROUTE } from "../../utils/appRoutes";
@@ -139,7 +140,7 @@ export default function ActivityScreen() {
                       : `${formatBoardDate(item.created_at)} · 댓글 ${item.comment_count ?? 0} · 추천 ${item.like_count ?? 0}`}
                   </Text>
                 </View>
-                {item.type === "bookmark" ? <Ionicons name="bookmark" size={18} color={COLORS.primary} style={styles.bookmark} /> : null}
+                {item.type === "bookmark" ? <View style={styles.bookmark}><BookmarkIcon filled size={18} color={COLORS.primary} /></View> : null}
               </Pressable>
             );
           }}

@@ -144,8 +144,9 @@ const styles = StyleSheet.create({
   },
   appBarTitle: {
     color: COLORS.text,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "500",
+    lineHeight: 22,
   },
   center: {
     flex: 1,
@@ -161,14 +162,15 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   dateLabel: {
-    color: COLORS.muted,
-    fontSize: 13,
+    color: COLORS.subtle,
+    fontSize: 14,
     fontWeight: "400",
+    lineHeight: 20,
     paddingTop: 4,
     paddingBottom: 12,
   },
   eventRow: {
-    borderBottomWidth: 1,
+    borderBottomWidth: 1, // Figma 항목: 1px #EAECEF, padding 16/0, gap 6
     borderBottomColor: COLORS.border,
     paddingVertical: 16,
   },
@@ -183,19 +185,21 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   categoryText: {
-    fontSize: 11,
+    fontSize: 11, // Figma: Regular 11/13
     fontWeight: "400",
+    lineHeight: 13,
   },
   eventTime: {
-    color: "#A6ACB7",
+    color: "#A6ACB7", // Figma: Regular 12/15
     fontSize: 12,
     fontWeight: "400",
+    lineHeight: 15,
   },
   eventTitle: {
     color: COLORS.text,
-    fontSize: 15,
+    fontSize: 15, // Figma: Regular 15/18
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: 18,
     marginTop: 6,
   },
   emptyBox: {
