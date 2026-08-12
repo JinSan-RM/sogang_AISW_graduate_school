@@ -57,7 +57,7 @@ test("#66·67·68 홈과 하단 탭은 디자인 기준 아이콘과 정렬을 �
 test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제 메타데이터에서 만든다", () => {
   assert.match(searchSource, /label: "행사공지"/);
   assert.match(searchSource, /label: "기타공지"/);
-  assert.match(postCardSource, /return "종합시험"/);
+  assert.match(postCardSource, /resourceCategoryLabel/);
   assert.match(postDetailSource, /label\.includes\("기타"\).*#F0EEF9.*#5A4C8B/);
   assert.match(postCardSource, /post\.metadata\?\.recruitment_status/);
   assert.match(postDetailSource, /metadata\.recruitment_status/);
