@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BookmarkIcon } from "./icons";
 import type { PostListItem } from "../types";
 import { formatBoardDate } from "../utils/dateFormat";
+import { resourceCategoryLabel } from "../utils/resourceBoards";
 import { formatCohortName } from "../utils/userLabel";
 
 type Props = {
@@ -56,15 +57,18 @@ function normalizeCategory(post: PostListItem, boardType?: string, boardSlug?: s
       rejected: "반려",
     }[post.mutual_aid.status];
   }
+  if (boardType === "resource") {
+    const resourceLabel = resourceCategoryLabel(
+      { slug: boardSlug, board_type: boardType, category: "resources" },
+      post.category,
+    );
+    if (resourceLabel) return resourceLabel;
+  }
   const raw = post.category?.trim();
   if (boardSlug === "study-recruit") {
     const recruitmentStatus = String(post.metadata?.recruitment_status ?? raw ?? "").toLowerCase();
     return recruitmentStatus.includes("closed") || recruitmentStatus.includes("마감") ? "마감" : "진행중";
   }
-  if (raw?.includes("종합")) return "종합시험";
-  if (boardSlug === "comprehensive-exam") return "종합시험";
-  if (boardSlug === "exam-archive") return "시험족보";
-  if (boardSlug === "graduation-thesis") return "졸업논문";
   if (raw) {
     const lower = raw.toLowerCase();
     if (lower.includes("event") || lower.includes("webinar") || raw.includes("행사") || raw.includes("특강")) return "행사공지";

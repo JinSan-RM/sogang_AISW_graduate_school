@@ -16,6 +16,31 @@ export const RESOURCE_SLUG_FILTERS: Record<string, string> = Object.fromEntries(
   Object.entries(RESOURCE_FILTER_SLUGS).map(([label, slug]) => [slug, label]),
 );
 
+type ResourceBoardIdentity = Partial<
+  Pick<Board, "slug" | "name" | "board_type" | "category">
+>;
+
+export function resourceCategoryLabel(
+  board?: ResourceBoardIdentity | null,
+  storedCategory?: string | null,
+): string | null {
+  const slugLabel = board?.slug ? RESOURCE_SLUG_FILTERS[board.slug] : undefined;
+  if (slugLabel) {
+    return slugLabel;
+  }
+
+  const boardName = board?.name?.trim();
+  if (boardName && RESOURCE_FILTER_SLUGS[boardName]) {
+    return boardName;
+  }
+
+  if (board?.category === "resources" && board.board_type === "resource") {
+    return boardName || "자료";
+  }
+
+  return storedCategory?.trim() || null;
+}
+
 export function resourceFilterAfterNavigation(
   board: Pick<Board, "slug">,
   requestedFilter?: ResourceFilter,

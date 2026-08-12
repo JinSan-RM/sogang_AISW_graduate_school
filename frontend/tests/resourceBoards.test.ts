@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { COMMUNITY_TAB_ROUTE } from "../utils/appRoutes";
 import type { Board } from "../types";
+import * as resourceBoards from "../utils/resourceBoards";
 import {
   resourceFilterAfterNavigation,
   resourcePostEditBoards,
@@ -10,6 +11,31 @@ import {
   RESOURCE_FILTERS,
   RESOURCE_FILTER_SLUGS,
 } from "../utils/resourceBoards";
+
+type ResourceBoardIdentity = Partial<
+  Pick<Board, "slug" | "name" | "board_type" | "category">
+>;
+type ResourceCategoryResolver = (
+  board?: ResourceBoardIdentity | null,
+  storedCategory?: string | null,
+) => string | null;
+
+const resourceLabel = (
+  boardItem?: ResourceBoardIdentity | null,
+  storedCategory?: string | null,
+) => {
+  const resolver = (
+    resourceBoards as typeof resourceBoards & {
+      resourceCategoryLabel?: ResourceCategoryResolver;
+    }
+  ).resourceCategoryLabel;
+
+  if (!resolver) {
+    assert.fail("resourceCategoryLabel must be exported");
+  }
+
+  return resolver(boardItem, storedCategory);
+};
 
 const board = (overrides: Partial<Board>): Board => ({
   id: 1,
@@ -62,4 +88,32 @@ test("자료공유가 아닌 글 수정은 게시판 이동 대상을 제공하�
   const source = board({ id: 20, category: "community", board_type: "post" });
 
   assert.deepEqual(resourcePostEditBoards([source, board({ id: 21 })], source), []);
+});
+
+test("자료공유 태그는 네 게시판의 현재 슬러그를 기준으로 정한다", () => {
+  assert.equal(resourceLabel({ slug: "lecture-reviews" }), "강의후기");
+  assert.equal(resourceLabel({ slug: "exam-archive" }), "시험족보");
+  assert.equal(resourceLabel({ slug: "comprehensive-exam" }), "종합시험");
+  assert.equal(resourceLabel({ slug: "graduation-thesis" }), "졸업논문");
+});
+
+test("자료공유 태그는 저장된 이전 분류보다 현재 게시판을 우선한다", () => {
+  assert.equal(resourceLabel({ slug: "exam-archive" }, "종합시험"), "시험족보");
+  assert.equal(resourceLabel({ name: "시험족보" }, "종합시험"), "시험족보");
+});
+
+test("새 자료공유 게시판은 게시판 이름을 사용하고 일반 게시판은 저장 분류를 유지한다", () => {
+  assert.equal(
+    resourceLabel(
+      {
+        slug: "new-resource",
+        name: "새 자료실",
+        category: "resources",
+        board_type: "resource",
+      },
+      "이전 태그",
+    ),
+    "새 자료실",
+  );
+  assert.equal(resourceLabel({ name: "일반 게시판" }, "자유주제"), "자유주제");
 });
