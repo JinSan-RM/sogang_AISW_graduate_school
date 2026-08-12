@@ -9,6 +9,7 @@ import CommentItem from "../../../components/CommentItem";
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
+import { BookmarkIcon, MoreIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import {
@@ -552,15 +553,15 @@ export default function PostDetailScreen() {
         ) : (
           <View style={styles.appBarActions}>
             {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit && !isCouncilActivity && !isMutualAidRequest ? (
-              <IconButton
-                icon={isBookmarked ? "bookmark" : "bookmark-outline"}
-                label="북마크"
-                size={20}
-                color={isBookmarked ? COLORS.primary : COLORS.text}
-                onPress={handleBookmark}
-              />
+              <Pressable accessibilityLabel="북마크" onPress={handleBookmark} style={[styles.iconButton, styles.appBarActionButton]}>
+                <BookmarkIcon filled={isBookmarked} color={isBookmarked ? COLORS.primary : COLORS.text} size={20} />
+              </Pressable>
             ) : null}
-            {hasPostMenu && !isCouncilActivity ? <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} /> : null}
+            {hasPostMenu && !isCouncilActivity ? (
+              <Pressable accessibilityLabel="더보기" onPress={() => setShowPostMenu(true)} style={[styles.iconButton, styles.appBarActionButton]}>
+                <MoreIcon color={COLORS.text} />
+              </Pressable>
+            ) : null}
           </View>
         )}
       </View>
@@ -1187,6 +1188,10 @@ const styles = StyleSheet.create({
   },
   appBarActions: {
     flexDirection: "row",
+    alignItems: "center",
+  },
+  appBarActionButton: {
+    width: 32,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,

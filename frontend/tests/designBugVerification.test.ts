@@ -109,7 +109,8 @@ test("#62·63 공지 목록은 공통 로딩과 중앙 빈 상태 레이아웃�
 });
 
 test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시트를 사용한다", () => {
-  assert.match(postDetailSource, /icon=\{isBookmarked \? "bookmark" : "bookmark-outline"\}/);
+  assert.match(postDetailSource, /<BookmarkIcon filled=\{isBookmarked\}/);
+  assert.match(postDetailSource, /<MoreIcon color=\{COLORS\.text\} \/>/);
   assert.match(postDetailSource, /style=\{styles\.menuSheet\}/);
   assert.match(postDetailSource, /name="flag-outline"/);
   assert.match(postDetailSource, /name="remove-circle-outline"/);
