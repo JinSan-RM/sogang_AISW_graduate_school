@@ -1269,9 +1269,9 @@ export default function PostCreateScreen() {
             </View>
             {evidenceMode === "file" ? (
               <>
-                <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
+                <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, styles.evidenceFileButton, isUploading ? styles.attachButtonDisabled : null]}>
                   <Ionicons name="document-outline" size={16} color={COLORS.muted} />
-                  <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
+                  <Text style={[styles.compactAttachText, styles.evidenceFileButtonText]}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
                 </Pressable>
                 {attachments.length > 0 ? (
                   <View style={styles.compactAttachmentList}>
@@ -1306,7 +1306,7 @@ export default function PostCreateScreen() {
                   keyboardType="url"
                   onChangeText={setEvidenceLink}
                   placeholder="청첩장·부고장 링크를 입력해주세요"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={COLORS.muted}
                   style={styles.evidenceLinkInput}
                   value={evidenceLink}
                 />
@@ -2296,16 +2296,27 @@ const styles = StyleSheet.create({
   evidenceModeTextActive: {
     color: COLORS.primary,
   },
+  evidenceFileButton: {
+    // Figma: 상조회 첨부버튼 36h, padding 10/12, 텍스트 12/15
+    width: "100%",
+    height: 36,
+    paddingVertical: 10,
+  },
+  evidenceFileButtonText: {
+    fontSize: 12,
+    lineHeight: 15,
+  },
   evidenceLinkField: {
+    // Figma: 링크입력필드 40h, padding 12/14, gap 8
     flexDirection: "row",
     alignItems: "center",
-    gap: 6, // Figma 첨부버튼과 동일한 형태
-    height: 36,
+    gap: 8,
+    height: 40,
     borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   evidenceLinkInput: {
     flex: 1,
