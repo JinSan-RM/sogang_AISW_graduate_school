@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,15 +15,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
-import {
-  ACCOUNT_DELETION_ITEMS,
-  ACCOUNT_RETENTION_NOTICE,
-  accountDeletionErrorMessage,
-} from "../../../utils/accountDeletion";
+import { accountDeletionErrorMessage } from "../../../utils/accountDeletion";
 import { apiErrorCode, apiErrorStatus } from "../../../utils/authValidation";
 import { clearStoredPushToken } from "../../../utils/pushTokenStorage";
 
-import { BackIcon } from "../../../components/icons";
+import { AlertCircleIcon, BackIcon, NoticeAlertIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -31,7 +28,7 @@ const COLORS = {
   border: "#E1E4E9",
   bg: "#FFFFFF",
   panel: "#F8FAFC",
-  danger: "#C73939",
+  danger: "#D64545", // Figma: 탈퇴하기 활성 버튼/오류
   dangerBg: "#FFF4F4",
   disabled: "#D1D5DB",
 };
@@ -44,8 +41,10 @@ export default function AccountDeletionScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
-  const canSubmit = Boolean(currentPassword) && acknowledged && !isSubmitting;
+  // 탈퇴 버튼은 안내 확인만으로 활성화되고, 비밀번호는 모달에서 확인한다.
+  const canSubmit = acknowledged && !isSubmitting;
 
   const deleteAccount = async () => {
     setPasswordError(null);
@@ -71,6 +70,7 @@ export default function AccountDeletionScreen() {
 
       await clearStoredPushToken().catch(() => undefined);
       clearSession();
+      setPasswordModalVisible(false);
       router.replace("/legal/account-deletion?completed=1");
     } catch (error) {
       const status = apiErrorStatus(error);
@@ -100,7 +100,7 @@ export default function AccountDeletionScreen() {
           <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text accessibilityRole="header" style={styles.appBarTitle}>
-          계정 및 데이터 삭제
+          회원 탈퇴
         </Text>
         <View style={styles.iconButton} />
       </View>
@@ -110,69 +110,27 @@ export default function AccountDeletionScreen() {
         keyboardShouldPersistTaps="handled"
         style={styles.scroller}
       >
-        <View style={styles.warningCard}>
-          <View style={styles.warningTitleRow}>
-            <Ionicons name="warning-outline" size={20} color={COLORS.danger} />
-            <Text style={styles.warningTitle}>삭제 요청 전 확인해주세요</Text>
+        <View style={styles.header}>
+          <AlertCircleIcon size={32} color={COLORS.muted} />
+          <Text accessibilityRole="header" style={styles.headerTitle}>탈퇴 전 꼭 확인해주세요</Text>
+        </View>
+
+        <View style={[styles.noticeBanner, styles.noticeBannerBlue]}>
+          <View style={styles.noticeBannerIcon}>
+            <NoticeAlertIcon size={14} color="#0C447C" />
           </View>
-          <Text style={styles.warningLead}>
-            이 작업은 계정과 개인정보를 삭제하며 완료 후에는 되돌리거나 다시 로그인할 수 없습니다.
+          <Text style={[styles.noticeBannerText, styles.noticeBannerTextBlue]}>
+            작성한 게시물과 댓글은 삭제되지 않고, 이름·기수를 포함해 계속 표시돼요.
           </Text>
         </View>
 
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            삭제 및 익명화되는 항목
+        <View style={[styles.noticeBanner, styles.noticeBannerAmber]}>
+          <View style={styles.noticeBannerIcon}>
+            <NoticeAlertIcon size={14} color="#854F0B" />
+          </View>
+          <Text style={[styles.noticeBannerText, styles.noticeBannerTextAmber]}>
+            가입정보는 탈퇴 즉시 삭제되며, 재가입 시 신규 계정으로 처리돼요. 이전에 작성한 게시물에 대한 관리 권한은 복구되지 않아요.
           </Text>
-          {ACCOUNT_DELETION_ITEMS.map((item) => (
-            <View key={item} style={styles.bulletRow}>
-              <View style={styles.bullet} />
-              <Text style={styles.bodyText}>{item}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            보존될 수 있는 정보
-          </Text>
-          <Text style={styles.bodyText}>{ACCOUNT_RETENTION_NOTICE}</Text>
-          <Pressable
-            accessibilityHint="개인정보 처리방침 화면을 엽니다."
-            accessibilityRole="link"
-            onPress={() => router.push("/legal/privacy")}
-          >
-            <Text style={styles.linkText}>개인정보 처리방침 자세히 보기</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>현재 비밀번호 재확인</Text>
-          <TextInput
-            accessibilityLabel="현재 비밀번호"
-            autoCapitalize="none"
-            autoComplete="current-password"
-            onChangeText={(value) => {
-              setCurrentPassword(value);
-              setPasswordError(null);
-              setRequestError(null);
-            }}
-            onSubmitEditing={() => {
-              if (canSubmit) void deleteAccount();
-            }}
-            placeholder="현재 비밀번호를 입력하세요"
-            placeholderTextColor={COLORS.subtle}
-            secureTextEntry
-            style={[styles.input, passwordError ? styles.inputError : null]}
-            value={currentPassword}
-          />
-          {passwordError ? (
-            <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.errorText}>
-              {passwordError}
-            </Text>
-          ) : null}
         </View>
 
         <Pressable
@@ -186,12 +144,10 @@ export default function AccountDeletionScreen() {
           }}
           style={styles.confirmRow}
         >
-          <Ionicons
-            name={acknowledged ? "checkbox" : "square-outline"}
-            size={22}
-            color={acknowledged ? COLORS.primary : COLORS.muted}
-          />
-          <Text style={styles.confirmText}>위 삭제 대상과 보존 내용을 확인했습니다.</Text>
+          <View style={[styles.checkbox, acknowledged ? styles.checkboxChecked : null]}>
+            {acknowledged ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}
+          </View>
+          <Text style={styles.confirmText}>안내사항을 모두 확인했어요</Text>
         </Pressable>
 
         {requestError ? (
@@ -214,24 +170,68 @@ export default function AccountDeletionScreen() {
           accessibilityRole="button"
           accessibilityState={{ busy: isSubmitting, disabled: !canSubmit }}
           disabled={!canSubmit}
-          onPress={() => void deleteAccount()}
+          onPress={() => {
+            setCurrentPassword("");
+            setPasswordError(null);
+            setPasswordModalVisible(true);
+          }}
           style={[styles.deleteButton, !canSubmit ? styles.deleteButtonDisabled : null]}
         >
           {isSubmitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.deleteButtonText}>계정 삭제</Text>
+            <Text style={[styles.deleteButtonText, !canSubmit ? styles.deleteButtonTextDisabled : null]}>탈퇴하기</Text>
           )}
         </Pressable>
 
-        <Pressable
-          accessibilityRole="link"
-          onPress={() => router.push("/settings/password")}
-          style={styles.secondaryLink}
-        >
-          <Text style={styles.secondaryLinkText}>삭제하지 않고 비밀번호 변경</Text>
-        </Pressable>
       </ScrollView>
+
+      <Modal transparent animationType="fade" visible={passwordModalVisible} onRequestClose={() => setPasswordModalVisible(false)}>
+        <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalBackdrop}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.modalCard}>
+            <Text style={styles.modalTitle}>현재 비밀번호 확인</Text>
+            <TextInput
+              accessibilityLabel="현재 비밀번호"
+              autoCapitalize="none"
+              autoComplete="current-password"
+              autoFocus
+              onChangeText={(value) => {
+                setCurrentPassword(value);
+                setPasswordError(null);
+              }}
+              onSubmitEditing={() => {
+                if (currentPassword && !isSubmitting) void deleteAccount();
+              }}
+              placeholder="현재 비밀번호를 입력하세요"
+              placeholderTextColor={COLORS.subtle}
+              secureTextEntry
+              style={[styles.input, passwordError ? styles.inputError : null]}
+              value={currentPassword}
+            />
+            {passwordError ? (
+              <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.errorText}>
+                {passwordError}
+              </Text>
+            ) : null}
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalCancelButton}>
+                <Text style={styles.modalCancelText}>취소</Text>
+              </Pressable>
+              <Pressable
+                disabled={!currentPassword || isSubmitting}
+                onPress={() => void deleteAccount()}
+                style={[styles.modalDeleteButton, !currentPassword || isSubmitting ? styles.deleteButtonDisabled : null]}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={[styles.deleteButtonText, !currentPassword ? styles.deleteButtonTextDisabled : null]}>탈퇴하기</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -248,37 +248,34 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  appBarTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600" },
+  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500", lineHeight: 22 }, // Figma: 18/22 Medium
   scroller: { flex: 1 },
-  content: { paddingHorizontal: 18, paddingTop: 8, paddingBottom: 40, gap: 20 },
-  warningCard: {
-    borderWidth: 1,
-    borderColor: "#F4B4B4",
-    borderRadius: 10,
-    backgroundColor: COLORS.dangerBg,
-    padding: 14,
+  content: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 24, gap: 20 }, // Figma: 본문 40/20/24, gap 20
+  header: {
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
+    paddingBottom: 16,
   },
-  warningTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  warningTitle: { flex: 1, color: COLORS.danger, fontSize: 15, fontWeight: "700" },
-  warningLead: { color: "#7F1D1D", fontSize: 13, lineHeight: 20 },
-  section: { gap: 9 },
-  sectionTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700" },
-  bulletRow: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
-  bullet: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.muted,
-    marginTop: 8,
+  headerTitle: { color: COLORS.text, fontSize: 16, fontWeight: "500", lineHeight: 19 },
+  noticeBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  bodyText: { flex: 1, color: COLORS.muted, fontSize: 13, lineHeight: 20 },
-  linkText: { color: COLORS.primary, fontSize: 13, fontWeight: "600", marginTop: 2 },
-  divider: { height: 1, backgroundColor: COLORS.border },
+  noticeBannerIcon: { marginTop: 1 },
+  noticeBannerBlue: { backgroundColor: "#E6F1FB" },
+  noticeBannerAmber: { backgroundColor: "#FAEEDA" },
+  noticeBannerText: { flex: 1, fontSize: 12, fontWeight: "400", lineHeight: 15 },
+  noticeBannerTextBlue: { color: "#0C447C" },
+  noticeBannerTextAmber: { color: "#854F0B" },
   fieldGroup: { gap: 8 },
-  label: { color: COLORS.text, fontSize: 14, fontWeight: "600" },
+  label: { color: COLORS.text, fontSize: 13, fontWeight: "500", lineHeight: 16 },
   input: {
-    minHeight: 48,
+    minHeight: 41,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
@@ -291,13 +288,25 @@ const styles = StyleSheet.create({
   errorText: { color: COLORS.danger, fontSize: 12, lineHeight: 18 },
   confirmRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 9,
-    borderRadius: 8,
-    backgroundColor: COLORS.panel,
-    padding: 12,
+    alignItems: "center",
+    gap: 8,
   },
-  confirmText: { flex: 1, color: COLORS.text, fontSize: 13, lineHeight: 20 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 4,
+    backgroundColor: COLORS.bg,
+  },
+  checkboxChecked: {
+    // Figma: 체크 시 #15171C 채움 + 흰 체크
+    borderColor: COLORS.text,
+    backgroundColor: COLORS.text,
+  },
+  confirmText: { flex: 1, color: COLORS.text, fontSize: 13, fontWeight: "400", lineHeight: 16 },
   errorBox: {
     borderRadius: 8,
     backgroundColor: COLORS.dangerBg,
@@ -307,15 +316,49 @@ const styles = StyleSheet.create({
   errorBoxText: { color: COLORS.danger, fontSize: 13, lineHeight: 19 },
   retryText: { color: COLORS.danger, fontSize: 13, fontWeight: "700" },
   deleteButton: {
-    minHeight: 50,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: COLORS.danger,
     paddingHorizontal: 16,
   },
-  deleteButtonDisabled: { backgroundColor: COLORS.disabled },
-  deleteButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
-  secondaryLink: { alignItems: "center", paddingVertical: 8 },
-  secondaryLinkText: { color: COLORS.primary, fontSize: 13, fontWeight: "600" },
+  deleteButtonDisabled: { backgroundColor: COLORS.border }, // Figma: 비활성 #E1E4E9
+  deleteButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500", lineHeight: 24 },
+  deleteButtonTextDisabled: { color: "#8A919C" },
+  modalBackdrop: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(17, 24, 39, 0.38)",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 320,
+    gap: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.bg,
+    padding: 20,
+  },
+  modalTitle: { color: COLORS.text, fontSize: 16, fontWeight: "500", lineHeight: 19 },
+  modalActions: { flexDirection: "row", gap: 8 },
+  modalCancelButton: {
+    flex: 1,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
+  },
+  modalCancelText: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 17 },
+  modalDeleteButton: {
+    flex: 1,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: COLORS.danger,
+  },
 });
