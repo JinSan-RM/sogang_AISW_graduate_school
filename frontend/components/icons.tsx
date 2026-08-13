@@ -333,3 +333,96 @@ export function EmptyDocumentIcon({ size = 32, color = "#A6ACB7" }: IconProps) {
     </Svg>
   );
 }
+
+// 사진첩 상세 좌우 이동 화살표 — 디자인 원본, 흰색 stroke 2 / opacity 0.9.
+export function GalleryPrevIcon({ size = 28, color = "#FFFFFF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <Path opacity={0.9} d="M17 6L8 14L17 22" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function GalleryNextIcon({ size = 28, color = "#FFFFFF" }: IconProps) {
+  return (
+    <Svg width={(size * 36) / 28} height={size} viewBox="0 0 36 28" fill="none">
+      <Path opacity={0.9} d="M11 6L20 14L11 22" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 글쓰기 이미지 첨부 아이콘 — 디자인 원본 16x16.
+export function AttachImageIcon({ size = 16, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path d="M12.5 3H3.5C2.67157 3 2 3.67157 2 4.5V11.5C2 12.3284 2.67157 13 3.5 13H12.5C13.3284 13 14 12.3284 14 11.5V4.5C14 3.67157 13.3284 3 12.5 3Z" stroke={color} strokeWidth={1.3} />
+      <Path d="M5 7C5.55228 7 6 6.55228 6 6C6 5.44772 5.55228 5 5 5C4.44772 5 4 5.44772 4 6C4 6.55228 4.44772 7 5 7Z" fill={color} />
+      <Path d="M3 11L6.5 7.5L8.5 9.5L11 7L13 9" stroke={color} strokeWidth={1.3} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 글쓰기 파일 첨부 아이콘(클립) — 디자인 원본 16x16.
+export function AttachFileIcon({ size = 16, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M14.0001 6.33336L8.33343 12C7.76763 12.5658 7.00025 12.8837 6.20009 12.8837C5.39994 12.8837 4.63256 12.5658 4.06676 12C3.50097 11.4342 3.18311 10.6668 3.18311 9.86669C3.18311 9.06654 3.50097 8.29915 4.06676 7.73336L9.33343 2.46669C9.71357 2.08655 10.2292 1.87299 10.7668 1.87299C11.3044 1.87299 11.82 2.08655 12.2001 2.46669C12.5802 2.84684 12.7938 3.36242 12.7938 3.90003C12.7938 4.43763 12.5802 4.95322 12.2001 5.33336L6.66676 10.8667"
+        stroke={color}
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+// 활동 인증 사진 슬라이더 좌우 버튼 — 검정 35% 원 + 흰 화살표 (디자인 원본 28x28).
+export function SliderNextIcon({ size = 28 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <Path opacity={0.35} d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="black" />
+      <Path d="M12 8L18 14L12 20" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export function SliderPrevIcon({ size = 28 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 28 28" fill="none">
+      <Path opacity={0.35} d="M14 28C21.732 28 28 21.732 28 14C28 6.26801 21.732 0 14 0C6.26801 0 0 6.26801 0 14C0 21.732 6.26801 28 14 28Z" fill="black" />
+      <Path d="M16 8L10 14L16 20" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 활동 인증 날짜행 달력 아이콘 — 디자인 원본 16x16, stroke 1.3.
+export function CalendarSmallIcon({ size = 16, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path d="M12.5 3H3.5C2.67157 3 2 3.67157 2 4.5V12.5C2 13.3284 2.67157 14 3.5 14H12.5C13.3284 14 14 13.3284 14 12.5V4.5C14 3.67157 13.3284 3 12.5 3Z" stroke={color} strokeWidth={1.3} />
+      <Path d="M2 6.5H14" stroke={color} strokeWidth={1.3} />
+    </Svg>
+  );
+}
+
+// 회원 탈퇴 헤더 경고 아이콘 — 디자인 원본 32x32, stroke 1.7.
+export function AlertCircleIcon({ size = 32, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <Path d="M16 28C22.6274 28 28 22.6274 28 16C28 9.37258 22.6274 4 16 4C9.37258 4 4 9.37258 4 16C4 22.6274 9.37258 28 16 28Z" stroke={color} strokeWidth={1.7} />
+      <Path d="M16 10.6665V17.3332M16 21.3332V21.3465" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 안내 배너용 작은 경고(느낌표) 아이콘 — 디자인 원본 14x14, stroke 1.1375.
+export function NoticeAlertIcon({ size = 14, color = "#854F0B" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Path d="M7 12.6875C10.1411 12.6875 12.6875 10.1411 12.6875 7C12.6875 3.85888 10.1411 1.3125 7 1.3125C3.85888 1.3125 1.3125 3.85888 1.3125 7C1.3125 10.1411 3.85888 12.6875 7 12.6875Z" stroke={color} strokeWidth={1.1375} />
+      <Path d="M7 4.375V7.875" stroke={color} strokeWidth={1.1375} strokeLinecap="round" />
+      <Path d="M7 10.5001C7.3866 10.5001 7.7 10.1867 7.7 9.8001C7.7 9.4135 7.3866 9.1001 7 9.1001C6.6134 9.1001 6.3 9.4135 6.3 9.8001C6.3 10.1867 6.6134 10.5001 7 10.5001Z" fill={color} />
+    </Svg>
+  );
+}
