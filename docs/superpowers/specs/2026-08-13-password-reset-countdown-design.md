@@ -34,4 +34,3 @@ When the countdown reaches zero, the existing password-reset expired state remai
 - Run the focused frontend test first and observe the missing-label failure.
 - Implement the minimal UI change and rerun the focused test.
 - Run the full frontend test suite, TypeScript typecheck, and ESLint.
-
