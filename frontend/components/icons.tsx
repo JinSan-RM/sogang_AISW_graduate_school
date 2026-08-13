@@ -1,4 +1,4 @@
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 // 디자인에서 받은 SVG 원본을 그대로 옮긴 것. 하드코딩된 색만 color prop으로 바꿨다.
 // ponytail: clipPath(전체 영역을 덮는 rect)는 no-op이라 생략했다.
@@ -169,6 +169,167 @@ export function CameraAddIcon({ size = 26, color = "#A6ACB7" }: IconProps) {
       <Path d="M9 8L10.5 5.5H15.5L17 8" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
       <Path d="M13 18.5C14.933 18.5 16.5 16.933 16.5 15C16.5 13.067 14.933 11.5 13 11.5C11.067 11.5 9.5 13.067 9.5 15C9.5 16.933 11.067 18.5 13 18.5Z" stroke={color} strokeWidth={1.6} />
       <Path d="M19 11V14M17.5 12.5H20.5" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 뒤로가기 아이콘 — 디자인 원본 22x22, stroke 1.8.
+export function BackIcon({ size = 22, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      <Path d="M14 4L6 11L14 18" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 닫기(X) 아이콘 — 디자인 원본 20x20, stroke 1.8.
+export function CloseIcon({ size = 20, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path d="M4 4L16 16M16 4L4 16" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 더보기 메뉴 '수정' 아이콘 — 디자인 원본 20x20, stroke 1.4.
+export function PencilIcon({ size = 20, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path d="M13.5 2.5L17.5 6.5L7 17H3V13L13.5 2.5Z" stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 더보기 메뉴 '삭제' 아이콘 — 디자인 원본 20x20, stroke 1.4.
+export function TrashIcon({ size = 20, color = "#D64545" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path d="M4 6H16M8 6V4H12V6M6 6L6.6 16H13.4L14 6" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 더보기 메뉴 '신고' 아이콘 — 디자인 원본 20x20, stroke 1.4.
+export function FlagIcon({ size = 20, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path d="M5 2.5V17.5M5 3.5H14L11.7 6.5L14 9.5H5" stroke={color} strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 완료 화면 체크 아이콘 — 디자인 원본 64x64.
+export function CheckCircleIcon({ size = 64, color = "#2E9E5B" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      <Path d="M32 56C45.2548 56 56 45.2548 56 32C56 18.7452 45.2548 8 32 8C18.7452 8 8 18.7452 8 32C8 45.2548 18.7452 56 32 56Z" stroke={color} strokeWidth={4} />
+      <Path d="M21.3335 33.3335L28.0002 40.0002L42.6668 25.3335" stroke={color} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 알림 목록 타입 아이콘 — 디자인 원본 36x36, 배경 원 포함.
+export function NotificationCommentIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#EEEDFE" />
+      <Path
+        d="M19.0859 11C15.268 11.0002 12.1729 14.1336 12.1729 17.999C12.1729 19.0862 12.4185 20.1152 12.8555 21.0332L10.4443 24.998L16.0527 24.2881C16.9687 24.7418 17.9975 24.998 19.0859 24.998C22.904 24.998 25.9999 21.8645 26 17.999C26 14.1334 22.9041 11 19.0859 11Z"
+        stroke="#3C3489"
+        strokeWidth={1.5}
+      />
+    </Svg>
+  );
+}
+
+export function NotificationEventIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#EAF3DE" />
+      <Path d="M22.5 13H13.5C12.6716 13 12 13.6716 12 14.5V22.5C12 23.3284 12.6716 24 13.5 24H22.5C23.3284 24 24 23.3284 24 22.5V14.5C24 13.6716 23.3284 13 22.5 13Z" stroke="#3B6D11" strokeWidth={1.5} />
+      <Path d="M12 16.5H24" stroke="#3B6D11" strokeWidth={1.5} />
+      <Path d="M15 11.5V14.5M21 11.5V14.5" stroke="#3B6D11" strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function NotificationCouncilIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#FAEEDA" />
+      <Circle cx={18} cy={13.7998} r={2.25} stroke="#854F0B" strokeWidth={1.5} />
+      <Circle cx={22} cy={16.7002} r={2.25} stroke="#854F0B" strokeWidth={1.5} />
+      <Circle cx={20.47} cy={21.3999} r={2.25} stroke="#854F0B" strokeWidth={1.5} />
+      <Circle cx={15.53} cy={21.3999} r={2.25} stroke="#854F0B" strokeWidth={1.5} />
+      <Circle cx={14} cy={16.7002} r={2.25} stroke="#854F0B" strokeWidth={1.5} />
+      <Circle cx={18} cy={18} r={1.5} stroke="#854F0B" />
+    </Svg>
+  );
+}
+
+export function NotificationLikeIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#FBEAF0" />
+      <Path
+        d="M21.1426 12.75C22.6804 12.7502 24 14.1711 24 15.7363C23.9998 17.827 22.5343 19.7012 20.8848 21.126C20.0784 21.8225 19.2683 22.3765 18.6582 22.7568C18.3948 22.921 18.169 23.0504 18 23.1455C17.831 23.0504 17.6052 22.921 17.3418 22.7568C16.7317 22.3765 15.9216 21.8225 15.1152 21.126C13.4657 19.7012 12.0002 17.827 12 15.7363C12 14.2201 13.2383 12.8389 14.7139 12.7539L14.8574 12.75C15.8993 12.7501 16.8499 13.2973 17.3506 14.1641L18 15.2881L18.6494 14.1641C19.1188 13.3514 19.9835 12.8201 20.9482 12.7568L21.1426 12.75Z"
+        stroke="#993556"
+        strokeWidth={1.5}
+      />
+    </Svg>
+  );
+}
+
+// 기장단 소개 아바타 플레이스홀더 — 디자인 원본 48x48, 배경 원 포함.
+export function PersonAvatarIcon({ size = 48 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+      <Circle cx={24} cy={24} r={24} fill="#E6F1FB" />
+      <Path d="M24.0002 23.9998C26.5775 23.9998 28.6668 21.9105 28.6668 19.3332C28.6668 16.7558 26.5775 14.6665 24.0002 14.6665C21.4228 14.6665 19.3335 16.7558 19.3335 19.3332C19.3335 21.9105 21.4228 23.9998 24.0002 23.9998Z" fill="white" />
+      <Path d="M14.6665 33.3333C14.6665 28.2 18.8665 24 23.9998 24C29.1332 24 33.3332 28.2 33.3332 33.3333" fill="white" />
+    </Svg>
+  );
+}
+
+// 캘린더 다음 달 화살표 — BackIcon 좌우 반전.
+export function ForwardIcon({ size = 22, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      <Path d="M8 4L16 11L8 18" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 회계장부 안내 아이콘 — 디자인 원본 40x40, stroke 1.6.
+export function LedgerIcon({ size = 40, color = "#A6ACB7" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <Path d="M31 8H9C7.34315 8 6 9.34315 6 11V29C6 30.6569 7.34315 32 9 32H31C32.6569 32 34 30.6569 34 29V11C34 9.34315 32.6569 8 31 8Z" stroke={color} strokeWidth={1.6} />
+      <Path d="M6 15H34" stroke={color} strokeWidth={1.6} />
+      <Path d="M12 21H18M12 26H22" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function NotificationSuggestionIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#E0F6F0" />
+      <Path d="M18 24.75C21.7279 24.75 24.75 21.7279 24.75 18C24.75 14.2721 21.7279 11.25 18 11.25C14.2721 11.25 11.25 14.2721 11.25 18C11.25 21.7279 14.2721 24.75 18 24.75Z" stroke="#066B5C" strokeWidth={1.7} />
+      <Path d="M15 18.375L16.875 20.25L21 16.125" stroke="#066B5C" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// FAQ 빈 상태 문서 아이콘 — 디자인 원본 32x32.
+export function EmptyDocumentIcon({ size = 32, color = "#A6ACB7" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <Path d="M8 5H20L26 11V26C26 26.5304 25.7893 27.0391 25.4142 27.4142C25.0391 27.7893 24.5304 28 24 28H8C7.46957 28 6.96086 27.7893 6.58579 27.4142C6.21071 27.0391 6 26.5304 6 26V7C6 6.46957 6.21071 5.96086 6.58579 5.58579C6.96086 5.21071 7.46957 5 8 5Z" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+      <Path d="M18 5V11H26" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+      <Rect x={10} y={14} width={12} height={2} rx={0.65} fill={color} />
+      <Rect x={10} y={18} width={12} height={2} rx={0.65} fill={color} />
+      <Rect x={10} y={22} width={8} height={2} rx={0.65} fill={color} />
     </Svg>
   );
 }

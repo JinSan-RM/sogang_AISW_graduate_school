@@ -12,7 +12,7 @@ export default function CompletionState({ title, onConfirm, buttonLabel = "확�
     <View style={styles.screen}>
       <View style={styles.content}>
         <View style={styles.iconCircle}>
-          <Ionicons name="checkmark" size={36} color="#2E9E5B" />
+          <Ionicons name="checkmark" size={26} color="#2E9E5B" />
         </View>
         <Text style={styles.title}>{title}</Text>
         <Pressable accessibilityRole="button" onPress={onConfirm} style={styles.button}>
@@ -36,13 +36,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   iconCircle: {
-    width: 64,
-    height: 64,
+    // Figma: 64px 프레임 안 12.5% 인셋 → 48px 원, 테두리 4px
+    width: 48,
+    height: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: "#2E9E5B",
-    borderRadius: 32,
+    borderRadius: 24,
+    margin: 8,
   },
   title: {
     color: "#15171C",

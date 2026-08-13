@@ -27,6 +27,7 @@ import {
   signupProgressDotIndex,
 } from "../../utils/signupVerificationUi";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF", // primary/500
   primary50: "#EDF2FE",
@@ -354,7 +355,7 @@ export default function RegisterScreen() {
       {step !== 3 ? (
         <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
           <Pressable accessibilityLabel="뒤로" onPress={goBack} style={styles.iconButton}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+            <BackIcon size={24} color={COLORS.text} />
           </Pressable>
           <Text style={styles.appBarTitle}>회원가입</Text>
           <View style={styles.iconButton} />

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackIcon } from "./icons";
 type LegalSection = { title: string; body: string };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -38,7 +39,7 @@ export default function LegalDocumentScreen({
     <View style={styles.screen}>
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/auth/login"))} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={24} color="#15171C" />
+          <BackIcon size={24} color="#15171C" />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
         <View style={styles.iconButton} />

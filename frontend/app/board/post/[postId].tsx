@@ -9,7 +9,7 @@ import CommentItem from "../../../components/CommentItem";
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
-import { BookmarkIcon, MoreIcon } from "../../../components/icons";
+import { BackIcon, BookmarkIcon, FlagIcon, MoreIcon, PencilIcon, TrashIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import {
@@ -589,7 +589,7 @@ export default function PostDetailScreen() {
                   {imageAttachments.length > 1 ? (
                     <>
                       <Pressable accessibilityLabel="이전 사진" onPress={showPreviousImage} style={[styles.galleryArrow, styles.galleryArrowLeft]}>
-                        <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+                        <BackIcon size={26} color="#FFFFFF" />
                       </Pressable>
                       <Pressable accessibilityLabel="다음 사진" onPress={showNextImage} style={[styles.galleryArrow, styles.galleryArrowRight]}>
                         <Ionicons name="chevron-forward" size={26} color="#FFFFFF" />
@@ -787,10 +787,7 @@ export default function PostDetailScreen() {
 
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
-            <View style={styles.officialReplyHeader}>
-              <Ionicons name="chatbubble-ellipses-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.officialReplyTitle}>원우회 답변</Text>
-            </View>
+            <Text style={styles.officialReplyTitle}>💬 원우회 답변</Text>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
             {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{formatBoardDate(post.suggestion.replied_at)}</Text> : null}
           </View>
@@ -1001,7 +998,7 @@ export default function PostDetailScreen() {
                 }}
                 style={styles.sheetMenuItem}
               >
-                <Ionicons name="create-outline" size={20} color={COLORS.text} />
+                <PencilIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>수정</Text>
               </Pressable>
             ) : null}
@@ -1013,7 +1010,7 @@ export default function PostDetailScreen() {
                 }}
                 style={styles.sheetMenuItem}
               >
-                <Ionicons name="trash-outline" size={20} color="#D64545" />
+                <TrashIcon size={20} color="#D64545" />
                 <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
               </Pressable>
             ) : null}
@@ -1026,7 +1023,7 @@ export default function PostDetailScreen() {
                 }}
                 style={styles.sheetMenuItem}
               >
-                <Ionicons name="flag-outline" size={20} color={COLORS.text} />
+                <FlagIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
               </Pressable>
             ) : null}
@@ -1241,36 +1238,38 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 480,
     alignSelf: "center",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     backgroundColor: COLORS.surface,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   sheetHandle: {
     width: 36,
     height: 4,
     alignSelf: "center",
     borderRadius: 2,
-    backgroundColor: "#E1E4E9",
-    marginBottom: 8,
+    backgroundColor: "#C7CCD4",
+    marginBottom: 16,
   },
   sheetMenuItem: {
-    minHeight: 54,
+    minHeight: 50,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: "#EAECEF",
   },
   sheetMenuText: {
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "500",
+    lineHeight: 18,
   },
   sheetMenuDangerText: {
-    color: "#EF4444",
+    color: "#D64545",
   },
   reportSheet: {
     width: "100%",
@@ -1820,11 +1819,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
-  officialReplyHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
   officialReplyBox: {
     borderRadius: 12,
     backgroundColor: "#F7F8FA", // Figma 236:39
@@ -1836,12 +1830,13 @@ const styles = StyleSheet.create({
     color: "#2761FF",
     fontSize: 13,
     fontWeight: "500", // Figma: Medium
+    lineHeight: 16,
   },
   officialReplyBody: {
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400", // Figma: Regular
-    lineHeight: 23,
+    lineHeight: 17,
   },
   officialReplyDate: {
     color: "#A6ACB7",

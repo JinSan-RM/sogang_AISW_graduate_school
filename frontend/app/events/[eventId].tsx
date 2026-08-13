@@ -8,6 +8,7 @@ import LoadingState from "../../components/LoadingState";
 import { eventApi } from "../../services/api";
 import { formatBoardDateTime } from "../../utils/dateFormat";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -77,7 +78,7 @@ export default function EventDetailScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>일정</Text>
         <View style={styles.iconButton} />

@@ -14,6 +14,7 @@ import type { MediaAsset } from "../../../../types";
 import { pickAndUploadImages } from "../../../../utils/mediaPicker";
 import { resourcePostEditBoards } from "../../../../utils/resourceBoards";
 
+import { CloseIcon } from "../../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -186,9 +187,9 @@ export default function PostEditScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 18) }]}>
         <Pressable accessibilityLabel="닫기" onPress={goBack} style={styles.iconButton}>
-          <Ionicons name="close" size={24} color={COLORS.text} />
+          <CloseIcon size={20} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>글 수정</Text>
         <View style={styles.iconButton} />
@@ -197,7 +198,6 @@ export default function PostEditScreen() {
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroller} contentContainerStyle={styles.content}>
         {isResourceEdit ? (
           <View>
-            <Text style={styles.fieldLabel}>게시판</Text>
             <Pressable
               accessibilityLabel="게시판 선택"
               accessibilityRole="button"
@@ -264,7 +264,6 @@ export default function PostEditScreen() {
           name="title"
           render={({ field, fieldState }) => (
             <View>
-              <Text style={styles.fieldLabel}>제목</Text>
               <TextInput
                 accessibilityLabel="제목"
                 multiline
@@ -287,7 +286,6 @@ export default function PostEditScreen() {
             name="content"
             render={({ field, fieldState }) => (
               <View>
-                <Text style={styles.fieldLabel}>내용</Text>
                 <TextInput
                   accessibilityLabel="내용"
                   multiline
@@ -415,14 +413,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   appBar: {
-    minHeight: 62,
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: "#E1E4E9",
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 14,
   },
   iconButton: {
     width: 42,
@@ -459,7 +457,7 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
   boardSelect: {
-    minHeight: 46,
+    minHeight: 41,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -600,7 +598,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   submitButton: {
-    minHeight: 48,
+    minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,

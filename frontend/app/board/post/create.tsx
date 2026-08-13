@@ -471,7 +471,7 @@ export default function PostCreateScreen() {
       : isActivity
         ? "활동 내용과 소감을 적어주세요"
         : isSuggestion
-          ? "원우회에 건의하고 싶은 내용을 자유롭게 작성해주세요"
+          ? "원우회에 건의하고 싶은 내용을 자유롭게 작성해 주세요"
         : isStudyRecruit
           ? "스터디 내용, 진행 요일/시간 등을 입력하세요"
           : "내용을 입력하세요",
@@ -1349,7 +1349,7 @@ export default function PostCreateScreen() {
                 onChangeText={field.onChange}
                 placeholder={labels.contentPlaceholder}
                 placeholderTextColor="#A6ACB7"
-                style={[styles.input, styles.textArea, fieldState.error ? styles.inputError : null]}
+                style={[styles.input, styles.textArea, isSuggestion ? styles.suggestionContentInput : null, fieldState.error ? styles.inputError : null]}
                 textAlignVertical="top"
                 value={field.value ?? ""}
               />
@@ -2230,7 +2230,10 @@ const styles = StyleSheet.create({
   },
   guideBoxSuggestion: {
     alignItems: "flex-start",
+    gap: 8, // Figma: 익명안내 padding 12/14, gap 8
     backgroundColor: "#E6F1FB", // Figma 134:7 banner bg
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   guideBodySuggestion: {
     color: "#0C447C", // Figma 134:7 banner text
@@ -2384,6 +2387,9 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 70, // Figma: 비고필드 70h
+  },
+  suggestionContentInput: {
+    minHeight: 180, // Figma: 건의 내용입력 180h
   },
   contactInput: {
     minHeight: 60,

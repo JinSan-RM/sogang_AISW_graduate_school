@@ -33,6 +33,7 @@ import type {
   MutualAidStatus,
 } from "../../types";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -675,7 +676,7 @@ function EventDateTimePicker({
 
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Pressable hitSlop={8} onPress={() => changeMonth(-1)} style={{ padding: 6 }}>
-          <Ionicons name="chevron-back" size={20} color={COLORS.text} />
+          <BackIcon size={20} color={COLORS.text} />
         </Pressable>
         <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{monthLabelValue(visibleMonth)}</Text>
         <Pressable hitSlop={8} onPress={() => changeMonth(1)} style={{ padding: 6 }}>
