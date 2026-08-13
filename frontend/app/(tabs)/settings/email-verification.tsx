@@ -86,8 +86,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   verifiedRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  verifiedText: { color: COLORS.green, fontSize: 14, fontWeight: "500" },
-  email: { color: COLORS.text, fontSize: 17, fontWeight: "500" },
-  verifiedDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400" },
-  notice: { color: COLORS.label, fontSize: 13, fontWeight: "400", lineHeight: 19 },
+  verifiedText: { color: COLORS.green, fontSize: 14, fontWeight: "500", lineHeight: 17 },
+  email: { color: COLORS.text, fontSize: 17, fontWeight: "500", lineHeight: 21 },
+  verifiedDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 15 },
+  notice: { color: COLORS.label, fontSize: 13, fontWeight: "400", lineHeight: 16 },
 });
