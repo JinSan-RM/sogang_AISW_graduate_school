@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   text: "#15171C",
   subtle: "#A6ACB7",
@@ -26,7 +27,7 @@ export default function AccountSettingsScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text accessibilityRole="header" style={styles.appBarTitle}>
           계정 설정

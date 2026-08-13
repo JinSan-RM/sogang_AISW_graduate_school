@@ -12,16 +12,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { userApi } from "../../services/api";
-import { useUserStore } from "../../stores/userStore";
+import { userApi } from "../../../services/api";
+import { useUserStore } from "../../../stores/userStore";
 import {
   ACCOUNT_DELETION_ITEMS,
   ACCOUNT_RETENTION_NOTICE,
   accountDeletionErrorMessage,
-} from "../../utils/accountDeletion";
-import { apiErrorCode, apiErrorStatus } from "../../utils/authValidation";
-import { clearStoredPushToken } from "../../utils/pushTokenStorage";
+} from "../../../utils/accountDeletion";
+import { apiErrorCode, apiErrorStatus } from "../../../utils/authValidation";
+import { clearStoredPushToken } from "../../../utils/pushTokenStorage";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -96,7 +97,7 @@ export default function AccountDeletionScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text accessibilityRole="header" style={styles.appBarTitle}>
           계정 및 데이터 삭제

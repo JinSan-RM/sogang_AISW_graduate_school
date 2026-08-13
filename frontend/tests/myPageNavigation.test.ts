@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { MY_PAGE_ROUTE } from "../utils/appRoutes";
 
-const activitySource = readFileSync("app/settings/activity.tsx", "utf8");
+const activitySource = readFileSync("app/(tabs)/settings/activity.tsx", "utf8");
 
 test("마이페이지 활동 화면의 상단 뒤로가기는 항상 마이페이지로 복귀한다", () => {
   assert.equal(MY_PAGE_ROUTE, "/(tabs)/settings");
