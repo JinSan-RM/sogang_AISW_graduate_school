@@ -9,7 +9,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { CameraAddIcon } from "../../../components/icons";
+import { BackIcon, CameraAddIcon, CloseIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/usePosts";
@@ -235,7 +235,7 @@ function InlineCalendar({
     <View style={styles.calCard}>
       <View style={styles.calHeader}>
         <Pressable hitSlop={10} onPress={goPrev} style={styles.calNav}>
-          <Ionicons name="chevron-back" size={20} color={COLORS.text} />
+          <BackIcon size={20} color={COLORS.text} />
         </Pressable>
         <Text style={styles.calTitle}>{`${view.y}년 ${view.m + 1}월`}</Text>
         <Pressable hitSlop={10} onPress={goNext} style={styles.calNav}>
@@ -822,7 +822,7 @@ export default function PostCreateScreen() {
                           onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
                           style={styles.activityPhotoRemove}
                         >
-                          <Ionicons name="close" size={12} color="#FFFFFF" />
+                          <CloseIcon size={12} color="#FFFFFF" />
                         </Pressable>
                       </MediaImageBackground>
                     );
@@ -968,7 +968,7 @@ export default function PostCreateScreen() {
                           {selectedParticipants.map((participant) => (
                             <Pressable key={participant.id} onPress={() => removeParticipant(participant.id)} style={styles.activityMemberChip}>
                               <Text style={styles.activityMemberChipText}>{formatActivityParticipant(participant)}</Text>
-                              <Ionicons name="close" size={12} color={COLORS.muted} />
+                              <CloseIcon size={12} color={COLORS.muted} />
                             </Pressable>
                           ))}
                         </View>
@@ -1455,7 +1455,7 @@ export default function PostCreateScreen() {
                       onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
                       style={styles.writeImageRemove}
                     >
-                      <Ionicons name="close" size={12} color="#FFFFFF" />
+                      <CloseIcon size={12} color="#FFFFFF" />
                     </Pressable>
                   </MediaImageBackground>
                 );
