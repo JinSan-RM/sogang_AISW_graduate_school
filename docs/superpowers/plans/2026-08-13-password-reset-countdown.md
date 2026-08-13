@@ -165,7 +165,11 @@ Define `statusRow`, `statusLeft`, `resendControlTrailing`, and `resendLink` with
 
 Run: `cd frontend && npx tsx --test tests/passwordResetUiVerification.test.ts`
 
-Expected: 2 tests pass, 0 failures.
+Expected: 3 tests pass, 0 failures after the screen wiring contract is added.
+
+- [x] **Step 4a: Add and mutation-check the screen wiring contract after review**
+
+Keep the real state-model assertions and add a narrow screen contract proving that `password-reset.tsx` imports the model, passes live countdown state, and renders `resendControl.label` in the status row. Temporarily remove the label rendering, confirm the focused test fails, restore it, and confirm the focused test passes.
 
 - [x] **Step 5: Run the full frontend verification**
 
