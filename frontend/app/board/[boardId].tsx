@@ -1338,12 +1338,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   albumThumb: {
+    // Figma: 썸네일 155x140, 카운트 배지 좌8/하10 위치
     position: "relative",
-    aspectRatio: 1.05,
+    aspectRatio: 155 / 140,
     justifyContent: "flex-end",
     borderRadius: 10,
     overflow: "hidden",
-    padding: 10,
+    paddingLeft: 10,
+    paddingBottom: 8,
   },
   albumImage: {
     borderRadius: 10,
@@ -1363,18 +1365,21 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 11,
     fontWeight: "500",
+    lineHeight: 13,
   },
   albumTitle: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
     marginTop: 8,
   },
   albumDate: {
     color: "#A6ACB7",
     fontSize: 11,
     fontWeight: "400",
-    marginTop: 4,
+    lineHeight: 13,
+    marginTop: 8, // Figma: 앨범카드 요소 간격 8
   },
   cardContent: {
     paddingHorizontal: 16,
