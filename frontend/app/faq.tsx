@@ -9,6 +9,7 @@ import NaturalAspectMediaImage from "../components/NaturalAspectMediaImage";
 import { faqApi } from "../services/api";
 import type { FAQItem } from "../types";
 
+import { BackIcon, EmptyDocumentIcon } from "../components/icons";
 const COLORS = {
   primary: "#2761FF",
   qBadgeBg: "#E6F1FB", // Figma 62:77 Q badge
@@ -24,7 +25,6 @@ export default function FAQScreen() {
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
-  const [expandedFaqId, setExpandedFaqId] = useState<number | null>(null);
 
   const loadFAQs = useCallback(async () => {
     setIsLoading(true);
@@ -49,7 +49,7 @@ export default function FAQScreen() {
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable accessibilityLabel="뒤로" onPress={() => router.replace("/(tabs)/council" as never)} style={styles.iconButton}>
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>자주 묻는 질문</Text>
         <View style={styles.iconButton} />
@@ -68,48 +68,39 @@ export default function FAQScreen() {
         <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
           {visibleFAQs.length === 0 ? (
             <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>등록된 FAQ가 없습니다.</Text>
+              <EmptyDocumentIcon size={32} />
+              <Text style={styles.emptyTitle}>등록된 자주 묻는 질문이 없어요</Text>
+              <Text style={styles.emptyDescription}>궁금한 점은 건의사항에 남겨주세요</Text>
             </View>
           ) : null}
 
-          {visibleFAQs.map((item) => {
-            const expanded = expandedFaqId === item.id;
-            return (
-              <View key={item.id} style={styles.faqItem}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded }}
-                  onPress={() => setExpandedFaqId((current) => (current === item.id ? null : item.id))}
-                  style={styles.questionRow}
-                >
-                  <View style={styles.questionBadge}>
-                    <Text style={styles.questionBadgeText}>Q</Text>
-                  </View>
-                  <Text style={styles.questionText}>{item.question}</Text>
-                  <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color="#A6ACB7" />
-                </Pressable>
-                {expanded ? (
-                  <View style={styles.answerRow}>
-                    <View style={styles.answerBadge}>
-                      <Text style={styles.answerBadgeText}>A</Text>
-                    </View>
-                    <View style={styles.answerContent}>
-                      <Text style={styles.answerText}>{item.answer}</Text>
-                      {item.attachments
-                        .filter((attachment) => attachment.content_type.startsWith("image/"))
-                        .map((attachment) => (
-                          <NaturalAspectMediaImage
-                            key={attachment.id}
-                            media={attachment}
-                            style={styles.answerImage}
-                          />
-                        ))}
-                    </View>
-                  </View>
-                ) : null}
+          {visibleFAQs.map((item, index) => (
+            <View key={item.id} style={[styles.faqItem, index === visibleFAQs.length - 1 ? styles.faqItemLast : null]}>
+              <View style={styles.questionRow}>
+                <View style={styles.questionBadge}>
+                  <Text style={styles.questionBadgeText}>Q</Text>
+                </View>
+                <Text style={styles.questionText}>{item.question}</Text>
               </View>
-            );
-          })}
+              <View style={styles.answerRow}>
+                <View style={styles.answerBadge}>
+                  <Text style={styles.answerBadgeText}>A</Text>
+                </View>
+                <View style={styles.answerContent}>
+                  <Text style={styles.answerText}>{item.answer}</Text>
+                  {item.attachments
+                    .filter((attachment) => attachment.content_type.startsWith("image/"))
+                    .map((attachment) => (
+                      <NaturalAspectMediaImage
+                        key={attachment.id}
+                        media={attachment}
+                        style={styles.answerImage}
+                      />
+                    ))}
+                </View>
+              </View>
+            </View>
+          ))}
         </ScrollView>
       )}
     </View>
@@ -145,9 +136,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 32,
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
   },
   center: {
     flex: 1,
@@ -173,8 +164,11 @@ const styles = StyleSheet.create({
   faqItem: {
     gap: 8,
     paddingVertical: 13,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.border,
+  },
+  faqItemLast: {
+    borderBottomWidth: 0,
   },
   questionRow: {
     flexDirection: "row",
@@ -206,6 +200,7 @@ const styles = StyleSheet.create({
     color: COLORS.qBadgeText,
     fontSize: 11,
     fontWeight: "500",
+    lineHeight: 13,
   },
   answerBadge: {
     width: 20,
@@ -213,7 +208,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 6,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
     backgroundColor: COLORS.bg,
   },
@@ -221,13 +216,14 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 11,
     fontWeight: "500",
+    lineHeight: 13,
   },
   questionText: {
     flex: 1,
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "500", // Figma: Medium
-    lineHeight: 20,
+    lineHeight: 17,
   },
   answerText: {
     color: COLORS.muted,
@@ -236,13 +232,23 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   emptyBox: {
+    flex: 1,
+    minHeight: 300,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 80,
+    gap: 8,
+    padding: 24,
   },
-  emptyText: {
-    color: COLORS.muted,
+  emptyTitle: {
+    color: "#2C3038",
+    fontSize: 18,
+    fontWeight: "500",
+    lineHeight: 26,
+  },
+  emptyDescription: {
+    color: "#8A919C",
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "400",
+    lineHeight: 18,
   },
 });
