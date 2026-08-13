@@ -63,19 +63,36 @@ function patchComponent(component: PatchableComponent): void {
     const element = originalRender.apply(this, args);
     if (!element || !React.isValidElement(element)) return element;
 
-    const style = (element.props as { style?: StyleProp<TextStyle> }).style;
-    const flattened = (StyleSheet.flatten(style) ?? {}) as { fontFamily?: string; fontWeight?: unknown };
+    // fontWeight는 렌더 인자의 원본 스타일에서 읽는다 — 웹에서는 StyleSheet 스타일이
+    // className으로 컴파일돼 호스트 요소의 style prop에서 사라지기 때문이다.
+    const sourceProps = args[0] as { style?: StyleProp<TextStyle> } | undefined;
+    const sourceStyle = (StyleSheet.flatten(sourceProps?.style) ?? {}) as { fontFamily?: string; fontWeight?: unknown };
 
     // Respect an explicit fontFamily if a caller ever sets one.
-    if (flattened.fontFamily) return element;
+    if (sourceStyle.fontFamily) return element;
+    const fontFamily = familyForWeight(sourceStyle.fontWeight);
 
-    const fontFamily = familyForWeight(flattened.fontWeight);
-    return React.cloneElement(element, {
-      // Text/TextInput's patched render can already be returning a host element
-      // on web. React DOM requires its style prop to be an object, so never pass
-      // the React Native style array through to the resulting <span>/<input>.
-      style: { ...flattened, fontFamily },
-    } as Partial<typeof element.props>);
+    // react-native-web은 최상위 <Text>를 TextAncestorContext.Provider, LocaleProvider
+    // 등으로 감싸서 반환한다. 래퍼(style prop 없음)를 따라 내려가 실제 호스트 요소에
+    // fontFamily를 입히고, 다시 원래 래퍼 체인으로 감싼다.
+    const chain: React.ReactElement[] = [element];
+    let host = element;
+    while (
+      (host.props as { style?: unknown }).style === undefined &&
+      React.isValidElement((host.props as { children?: unknown }).children)
+    ) {
+      host = (host.props as { children: React.ReactElement }).children;
+      chain.push(host);
+    }
+
+    const hostStyle = (StyleSheet.flatten((host.props as { style?: StyleProp<TextStyle> }).style) ?? {}) as Record<string, unknown>;
+    // React DOM requires the style prop to be an object, so never pass a React
+    // Native style array through to the resulting <div>/<span>/<input>.
+    let patched = React.cloneElement(host, { style: { ...hostStyle, fontFamily } } as Partial<typeof host.props>);
+    for (let index = chain.length - 2; index >= 0; index -= 1) {
+      patched = React.cloneElement(chain[index], undefined, patched);
+    }
+    return patched;
   };
   component.__interPatched = true;
 }
