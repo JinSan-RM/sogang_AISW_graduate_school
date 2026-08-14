@@ -32,6 +32,7 @@ import { formatBoardDate } from "../../../utils/dateFormat";
 import { openMediaUrl } from "../../../utils/mediaOpener";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
+import { shouldShowPostAuthorBlock } from "../../../utils/postMenu";
 import { resourceCategoryLabel } from "../../../utils/resourceBoards";
 import { formatCohortName } from "../../../utils/userLabel";
 
@@ -283,7 +284,14 @@ export default function PostDetailScreen() {
   // 관리자만 작성하는 게시판(공지사항, 동아리 홍보, 네트워킹, 원우회 활동내역 등)은 신고 대상이 아니다.
   const isAdminOnlyBoard = board?.write_permission === "admin";
   const showReportItem = !isMine && !isAdminOnlyBoard;
-  const showBlockItem = post.author_id !== null && !isMine && !canManagePost && !isSuggestionRequest && !isAdminOnlyBoard;
+  const showBlockItem = shouldShowPostAuthorBlock({
+    authorId: post.author_id,
+    isMine,
+    canManagePost,
+    isSuggestionRequest,
+    isAdminOnlyBoard,
+    boardSlug: board?.slug,
+  });
   const hasPostMenu = canEditOwn || canDeleteOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
