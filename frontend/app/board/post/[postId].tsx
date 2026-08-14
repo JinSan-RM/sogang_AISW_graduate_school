@@ -32,6 +32,7 @@ import { formatBoardDate } from "../../../utils/dateFormat";
 import { openMediaUrl } from "../../../utils/mediaOpener";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
+import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../utils/replyComposer";
 import { resourceCategoryLabel } from "../../../utils/resourceBoards";
 import { formatCohortName } from "../../../utils/userLabel";
 
@@ -166,7 +167,8 @@ export default function PostDetailScreen() {
   const [commentText, setCommentText] = useState("");
   const [commentInputHeight, setCommentInputHeight] = useState(38);
   const commentSubmitLockRef = useRef(false);
-  const [replyParentId, setReplyParentId] = useState<number | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const replyComposer = getReplyComposerState(replyTarget);
   const [isLiked, setIsLiked] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -489,7 +491,7 @@ export default function PostDetailScreen() {
       onSuccess: () => {
         setPendingDeleteCommentId(null);
         setCommentDeleteError(null);
-        setReplyParentId(null);
+        setReplyTarget(null);
       },
       onError: () => setCommentDeleteError("댓글을 삭제할 수 없습니다. 잠시 후 다시 시도해주세요."),
     });
@@ -505,12 +507,12 @@ export default function PostDetailScreen() {
     if (!trimmed) return;
     commentSubmitLockRef.current = true;
     createCommentMutation.mutate(
-      { content: trimmed, parent_id: replyParentId },
+      { content: trimmed, parent_id: replyComposer.parentId },
       {
         onSuccess: () => {
           setCommentText("");
           setCommentInputHeight(38);
-          setReplyParentId(null);
+          setReplyTarget(null);
         },
         onError: () => Alert.alert("댓글 등록 실패", "댓글을 저장할 수 없습니다."),
         onSettled: () => {
@@ -940,7 +942,7 @@ export default function PostDetailScreen() {
                 }
                 onReport={startReport}
                 reportedTargets={reportedTargets}
-                onReply={(commentId) => setReplyParentId(commentId)}
+                onReply={(comment) => setReplyTarget(createReplyTarget(comment))}
               />
             ))}
           </View>
@@ -949,10 +951,13 @@ export default function PostDetailScreen() {
 
       {!isAdminParticipationGuide && !isCouncilActivityEntry && !isPhotoAlbum && !commentsDisabled ? (
         <View style={[styles.commentBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-          {replyParentId ? (
+          {replyComposer.noticeText ? (
             <View style={styles.replyNotice}>
-              <Text style={styles.replyNoticeText}>#{replyParentId} 답글 작성 중</Text>
-              <Pressable onPress={() => setReplyParentId(null)}>
+              <View style={styles.replyNoticeTarget}>
+                <Ionicons name="arrow-undo-outline" size={14} color={COLORS.primary} />
+                <Text style={styles.replyNoticeText}>{replyComposer.noticeText}</Text>
+              </View>
+              <Pressable accessibilityLabel="답글 대상 취소" onPress={() => setReplyTarget(null)}>
                 <Text style={styles.replyCancelText}>취소</Text>
               </Pressable>
             </View>
@@ -968,7 +973,7 @@ export default function PostDetailScreen() {
               }}
               onKeyPress={handleCommentKeyPress}
               onSubmitEditing={Platform.OS === "web" ? undefined : handleCreateComment}
-              placeholder="댓글을 남겨보세요"
+              placeholder={replyComposer.placeholder}
               placeholderTextColor="#A6ACB7"
               returnKeyType="send"
               scrollEnabled={commentInputHeight >= 88}
@@ -2054,17 +2059,27 @@ const styles = StyleSheet.create({
   replyNotice: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary50,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  replyNoticeTarget: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   replyNoticeText: {
     color: COLORS.primary,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   replyCancelText: {
     color: COLORS.muted,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "500",
   },
   commentInputRow: {
     flexDirection: "row",
