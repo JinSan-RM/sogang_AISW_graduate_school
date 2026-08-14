@@ -61,6 +61,80 @@ def _invalid_dues_payer() -> AppException:
     )
 
 
+def _invalid_activity_source() -> AppException:
+    return AppException(
+        status_code=422,
+        message="Select a current club registered by an administrator.",
+        code="INVALID_ACTIVITY_SOURCE",
+    )
+
+
+def _activity_source_post_id(metadata: dict | None) -> int | None:
+    value = (metadata or {}).get("activity_source_post_id")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized.isdecimal():
+        return None
+    parsed = int(normalized)
+    return parsed if parsed > 0 else None
+
+
+def _canonical_club_activity_source(
+    db: Session,
+    board: Board | None,
+    metadata: dict | None,
+    *,
+    existing_metadata: dict | None = None,
+) -> tuple[dict | None, str | None]:
+    if board is None or board.slug != "club-activity":
+        return metadata, None
+
+    canonical = dict(metadata or {})
+    source_id = _activity_source_post_id(canonical)
+    if source_id is None:
+        raise _invalid_activity_source()
+
+    existing_source_id = _activity_source_post_id(existing_metadata)
+    filters = [Post.id == source_id, Board.slug == "club-promo"]
+    if source_id != existing_source_id:
+        filters.extend(
+            [
+                Board.is_active.is_(True),
+                Post.status == "published",
+                Post.deleted_at.is_(None),
+            ]
+        )
+    source = db.scalar(select(Post).join(Board, Board.id == Post.board_id).where(*filters))
+    if source is None:
+        raise _invalid_activity_source()
+
+    canonical["activity_source_post_id"] = str(source_id)
+    return canonical, source.title
+
+
+def _club_activity_source_titles(db: Session, board: Board | None, posts: list[Post]) -> dict[int, str]:
+    if board is None or board.slug != "club-activity":
+        return {}
+    source_ids = {
+        source_id
+        for post in posts
+        if (source_id := _activity_source_post_id(post.metadata_json)) is not None
+    }
+    if not source_ids:
+        return {}
+    rows = db.execute(
+        select(Post.id, Post.title)
+        .join(Board, Board.id == Post.board_id)
+        .where(Post.id.in_(source_ids), Board.slug == "club-promo")
+    ).all()
+    return {source_id: title for source_id, title in rows}
+
+
 def _canonical_activity_metadata(
     db: Session,
     board: Board | None,
@@ -310,6 +384,7 @@ def get_posts(
         .offset((page - 1) * size)
         .limit(size)
     ).all()
+    activity_source_titles = _club_activity_source_titles(db, board, [row[0] for row in rows])
 
     data = [
         {
@@ -325,6 +400,7 @@ def get_posts(
             "is_notice": post.is_notice,
             "status": post.status,
             "category": post.category,
+            "activity_source_title": activity_source_titles.get(_activity_source_post_id(post.metadata_json)),
             "metadata": _safe_metadata(post, board),
             "suggestion": _suggestion_payload(db, post.id) if board.board_type == "suggestion" else None,
             "mutual_aid": _mutual_aid_payload(db, post.id) if board.board_type == "mutual_aid" else None,
@@ -847,6 +923,7 @@ def get_post_detail(
 
     db.commit()
     db.refresh(post)
+    activity_source_titles = _club_activity_source_titles(db, board, [post])
 
     return success_response(
         {
@@ -862,6 +939,7 @@ def get_post_detail(
             "is_notice": post.is_notice,
             "status": post.status,
             "category": post.category,
+            "activity_source_title": activity_source_titles.get(_activity_source_post_id(post.metadata_json)),
             "metadata": _safe_metadata(post, board, include_sensitive=current_user.role == "admin"),
             "suggestion": _suggestion_payload(db, post.id),
             "mutual_aid": _mutual_aid_payload(db, post.id),
@@ -901,6 +979,7 @@ def create_post(
 
     is_anonymous = True if board.board_type == "suggestion" else payload.is_anonymous
     post_metadata = _canonical_activity_metadata(db, board, payload.metadata)
+    post_metadata, activity_source_title = _canonical_club_activity_source(db, board, post_metadata)
     post = Post(
         board_id=board_id,
         author_id=current_user.id,
@@ -910,7 +989,7 @@ def create_post(
         content="" if board.board_type == "album" else payload.content,
         is_anonymous=is_anonymous,
         is_notice=board.board_type == "notice",
-        category=canonical_post_category(board, payload.category),
+        category=activity_source_title or canonical_post_category(board, payload.category),
         metadata_json=post_metadata,
         deadline_at=payload.deadline_at if board.board_type == "notice" else None,
     )
@@ -997,7 +1076,6 @@ def update_post(
     post.title = payload.title
     post.content = "" if target_board is not None and target_board.board_type == "album" else payload.content
     post.is_anonymous = is_anonymous
-    post.category = canonical_post_category(target_board, payload.category)
     existing_metadata = dict(post.metadata_json or {})
     merged_metadata = _metadata_for_update(
         post,
@@ -1005,12 +1083,20 @@ def update_post(
         payload.metadata,
         has_new_attachments=bool(payload.attachment_ids),
     )
-    post.metadata_json = _canonical_activity_metadata(
+    canonical_metadata = _canonical_activity_metadata(
         db,
         target_board,
         merged_metadata,
         existing_metadata=existing_metadata,
     )
+    canonical_metadata, activity_source_title = _canonical_club_activity_source(
+        db,
+        target_board,
+        canonical_metadata,
+        existing_metadata=existing_metadata,
+    )
+    post.category = activity_source_title or canonical_post_category(target_board, payload.category)
+    post.metadata_json = canonical_metadata
     post.deadline_at = payload.deadline_at if target_board is not None and target_board.board_type == "notice" else None
     if target_board is not None:
         _upsert_suggestion_extension(db, post, target_board, payload.category)
