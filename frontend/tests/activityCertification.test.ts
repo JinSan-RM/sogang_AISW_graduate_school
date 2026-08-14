@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
+  activityCertificationBadgeLabel,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
+  activitySourcePostFilters,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
@@ -110,4 +112,43 @@ test("잘못된 활동 소스 ID는 수정 초기값으로 사용하지 않는�
   assert.equal(activitySourcePostIdFromMetadata({ activity_source_post_id: "0" }), null);
   assert.equal(activitySourcePostIdFromMetadata({ activity_source_post_id: "not-a-number" }), null);
   assert.equal(activitySourcePostIdFromMetadata(undefined), null);
+});
+
+test("동아리 활동 인증 태그는 운영진이 수정한 현재 동아리명을 우선한다", () => {
+  assert.equal(
+    activityCertificationBadgeLabel(
+      { activity_source_title: "서강의 봄", category: "예전 동아리명" },
+      "club-activity",
+    ),
+    "서강의 봄",
+  );
+});
+
+test("동아리 활동 인증 태그는 연결이 없으면 구체적인 기존 이름으로 대체한다", () => {
+  assert.equal(
+    activityCertificationBadgeLabel(
+      { category: "동아리 활동 인증", metadata: { legacy_activity_name: "서뽈링" } },
+      "club-activity",
+    ),
+    "서뽈링",
+  );
+  assert.equal(
+    activityCertificationBadgeLabel({ category: "활동 인증" }, "club-activity"),
+    "동아리 활동 인증",
+  );
+});
+
+test("스터디와 네트워킹 활동 인증 태그의 기존 분류는 유지한다", () => {
+  assert.equal(
+    activityCertificationBadgeLabel({ category: "스터디 활동 인증" }, "study-activity"),
+    "스터디 활동 인증",
+  );
+  assert.equal(
+    activityCertificationBadgeLabel({ category: "멘토링" }, "networking-activity"),
+    "멘토링",
+  );
+});
+
+test("활동 인증의 원본 선택 목록은 공개된 운영진 게시글만 요청한다", () => {
+  assert.deepEqual(activitySourcePostFilters(), { sort: "latest", status: "published" });
 });

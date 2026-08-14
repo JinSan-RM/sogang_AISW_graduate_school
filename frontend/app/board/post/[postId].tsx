@@ -26,6 +26,7 @@ import {
 import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
+import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
 import { navigateFromPostDetail } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
@@ -258,7 +259,7 @@ export default function PostDetailScreen() {
     : isSuggestionRequest
       ? SUGGESTION_STATUSES.find((status) => status.value === post.suggestion?.status)?.label ?? "대기중"
       : board?.board_type === "activity_certification"
-        ? (post.category?.trim() || board?.name || "활동")
+        ? activityCertificationBadgeLabel(post, board?.slug)
       : resourceLabel
         ? resourceLabel
       : board?.slug === "study-recruit"

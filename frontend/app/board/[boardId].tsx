@@ -14,6 +14,7 @@ import { API_ORIGIN } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { Board, PostListItem } from "../../types";
 import { boardParentRoute, postDetailRoute } from "../../utils/appRoutes";
+import { activityCertificationBadgeLabel } from "../../utils/activityCertification";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { pastCouncilActivitiesFromMetadata } from "../../utils/pastCouncil";
@@ -756,7 +757,7 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
   );
 }
 
-function ActivityTile({ post, index, onPress }: { post: PostListItem; index: number; onPress: (postId: number) => void }) {
+function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem; boardSlug?: string; index: number; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
   const preview = post.title.trim() || compactPreview(post);
   const thumbnailUrl = imageUrl(post.thumbnail_url);
@@ -776,7 +777,7 @@ function ActivityTile({ post, index, onPress }: { post: PostListItem; index: num
       )}
       <View style={styles.activityBody}>
         <View style={styles.activityPill}>
-          <Text style={styles.activityPillText}>{post.category || "활동 인증"}</Text>
+          <Text style={styles.activityPillText}>{activityCertificationBadgeLabel(post, boardSlug)}</Text>
         </View>
         {preview ? (
           <Text numberOfLines={2} style={styles.activityPreview}>
@@ -1083,7 +1084,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
             ) : isParticipationGuideCards ? (
               <ParticipationGuideTile post={item} board={itemBoard} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             ) : isActivityCards ? (
-              <ActivityTile post={item} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
+              <ActivityTile post={item} boardSlug={itemBoard?.slug ?? board?.slug} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             ) : (
               <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             );

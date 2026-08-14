@@ -21,6 +21,7 @@ import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
+  activitySourcePostFilters,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
@@ -358,7 +359,7 @@ export default function PostCreateScreen() {
   }, [board?.slug, boards, isActivity]);
   const activitySourceQuery = useQuery({
     queryKey: ["activity-source-options", activitySourceBoard?.id],
-    queryFn: () => postApi.getPosts(activitySourceBoard?.id ?? 0, 1, 50, { sort: "latest" }),
+    queryFn: () => postApi.getPosts(activitySourceBoard?.id ?? 0, 1, 50, activitySourcePostFilters()),
     enabled: isActivity && Boolean(activitySourceBoard?.id),
     retry: false,
   });
