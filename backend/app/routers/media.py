@@ -10,6 +10,7 @@ from app.media_service import (
     create_media_access_url,
     delete_stored_upload,
     media_access_reference,
+    media_download_filename,
     media_storage_path,
     migrate_private_asset,
     migrate_private_files as migrate_private_files_for_session,
@@ -144,7 +145,7 @@ def _serve_signed_media(
     response = FileResponse(
         path,
         media_type=media.content_type,
-        filename=media.original_filename,
+        filename=media_download_filename(media),
         content_disposition_type="inline" if media.content_type.startswith("image/") else "attachment",
     )
     response.headers["Cache-Control"] = "private, no-store" if media.is_private else "private, max-age=60"
