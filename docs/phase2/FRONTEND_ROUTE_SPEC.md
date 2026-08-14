@@ -141,6 +141,7 @@ Required sections:
 - Attachments.
 - Like/bookmark actions for logged-in users.
 - Comments and replies.
+- Selecting a top-level comment reply shows a compact composer target using the same visible `cohort + author` label followed by `님에게 답글`. The target strip never exposes the internal parent comment ID or `작성 중`; reply mode uses `답글을 남겨보세요`, and cancel or successful submission restores the ordinary comment composer.
 - Edit/delete actions for owner/admin. Destructive comment confirmation is rendered in-app so the delete request works consistently on native and web.
 - Pin action for admin.
 
