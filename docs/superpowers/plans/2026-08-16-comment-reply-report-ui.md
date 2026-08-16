@@ -18,6 +18,10 @@
 - Post and comment reports share one bottom sheet and the exact approved reason order and Korean copy.
 - Preserve all unrelated tracked changes and all pre-existing untracked user files.
 
+## Execution Note
+
+The planned source-string assertions in `designBugVerification.test.ts` were replaced during execution with behavior tests for the extracted pure presentation/form models plus browser-based 360px visual captures. This keeps the regression suite focused on observable behavior instead of implementation text while still verifying the component wiring in the running app.
+
 ---
 
 ## File Structure
@@ -28,7 +32,6 @@
 - Create `frontend/tests/reportForm.test.ts`: behavior tests for reason order and `기타` validation.
 - Modify `frontend/components/CommentItem.tsx`: consume tested state, align visual geometry, and keep edit mode open on failures.
 - Modify `frontend/app/board/post/[postId].tsx`: consume report model, wire own-report feedback, align sheets/modals, and use async edit mutation.
-- Modify `frontend/tests/designBugVerification.test.ts`: add source-level regression checks for the visual wiring that pure helpers cannot observe.
 - Modify `docs/phase2/FRONTEND_ROUTE_SPEC.md`: record the approved comment/report presentation rule.
 - Modify `CODEX.md`: record the completed P0 UI-alignment work only after verification succeeds.
 

@@ -142,7 +142,10 @@ Required sections:
 - Like/bookmark actions for logged-in users.
 - Comments and replies.
 - Selecting a top-level comment reply shows a compact composer target using the same visible `cohort + author` label followed by `님에게 답글`. The target strip never exposes the internal parent comment ID or `작성 중`; reply mode uses `답글을 남겨보세요`, and cancel or successful submission restores the ordinary comment composer.
+- Root comments use thin dividers and two-depth replies use indented rounded neutral rows. Every comment keeps a right-aligned `신고` entry; owner rows place the applicable `답글`, `수정`, and `삭제` text actions on one compact line. Edit mode replaces the content with a primary-blue bordered field and shows only `저장` and `취소`.
+- Post and comment reports use one bottom sheet with the ordered reasons `스팸/광고입니다`, `욕설 및 비방이 포함되어 있어요`, `허위 정보예요`, and `기타`. Selecting `기타` reveals the multiline detail field and requires nonblank detail before submission. Owner post/comment report attempts are blocked locally with explanatory feedback and never send a report request.
 - Edit/delete actions for owner/admin. Destructive comment confirmation is rendered in-app so the delete request works consistently on native and web.
+- Post and comment delete confirmations use centered rounded cards, neutral `취소`, destructive `삭제`, and explicit irreversible-deletion copy consistent with the approved mobile reference.
 - Pin action for admin.
 
 Resource-board exceptions:

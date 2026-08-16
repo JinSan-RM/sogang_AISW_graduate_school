@@ -53,6 +53,7 @@ API or navigation architecture.
 ### Shared post and comment report sheet
 
 - Use the same bottom-anchored sheet for post and comment reports.
+- Keep the post-menu `신고` row visible for visual consistency, including on an owner post. Selecting it on the member's own post shows `본인 게시글은 신고할 수 없어요.` without opening the sheet or sending a request.
 - Show a centered drag handle, `신고하기` title, and
   `신고 사유를 선택해주세요` subtitle.
 - Present these radio rows in this order:

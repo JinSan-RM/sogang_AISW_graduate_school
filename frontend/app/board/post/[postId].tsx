@@ -1091,7 +1091,13 @@ export default function PostDetailScreen() {
               {REPORT_REASONS.map((reason) => {
                 const selected = reportReason === reason.value;
                 return (
-                  <Pressable key={reason.value} onPress={() => setReportReason(reason.value)} style={styles.reportReasonItem}>
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    key={reason.value}
+                    onPress={() => setReportReason(reason.value)}
+                    style={[styles.reportReasonItem, { outlineStyle: "none" } as never]}
+                  >
                     <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
                       {selected ? <View style={styles.radioInner} /> : null}
                     </View>
