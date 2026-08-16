@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingState from "../../components/LoadingState";
-import { notificationApi } from "../../services/api";
-import { useUserStore } from "../../stores/userStore";
-import type { NotificationSettings } from "../../types";
+import LoadingState from "../../../components/LoadingState";
+import { notificationApi } from "../../../services/api";
+import { useUserStore } from "../../../stores/userStore";
+import type { NotificationSettings } from "../../../types";
 
+import { BackIcon } from "../../../components/icons";
 function Toggle({ value, disabled, onValueChange }: { value: boolean; disabled?: boolean; onValueChange: (next: boolean) => void }) {
   return (
     <Pressable
@@ -102,7 +103,7 @@ export default function NotificationSettingsScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>알림 설정</Text>
         <View style={styles.iconButton} />

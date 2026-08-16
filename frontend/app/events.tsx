@@ -9,6 +9,7 @@ import { eventApi } from "../services/api";
 import type { EventItem } from "../types";
 import { formatBoardDateTime } from "../utils/dateFormat";
 
+import { BackIcon } from "../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -72,7 +73,7 @@ export default function EventsScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>일정</Text>
         <Pressable accessibilityLabel="캘린더" onPress={() => router.push("/events/calendar")} style={styles.iconButton}>

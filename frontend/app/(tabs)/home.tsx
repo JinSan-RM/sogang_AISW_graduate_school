@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import {
 
 import { MediaImageBackground } from "../../components/MediaImage";
 import HomeSectionGate from "../../components/HomeSectionGate";
+import { BackIcon, BellIcon, EmptyCalendarIcon, ForwardIcon, ProfileIcon } from "../../components/icons";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useAllMultiBoardPosts } from "../../hooks/usePosts";
@@ -84,7 +85,6 @@ const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#0E7B60", "#4DBB91"],
 ];
 
-type IconName = keyof typeof Ionicons.glyphMap;
 
 function mediaUrl(value?: string | null) {
   return toAbsoluteMediaUrl(value, API_ORIGIN);
@@ -182,11 +182,10 @@ function getHomeContentWidth(windowWidth: number) {
   return Math.max(280, shellWidth - HORIZONTAL_PADDING * 2);
 }
 
-function IconButton({ icon, label, hasBadge = false, onPress }: { icon: IconName; label: string; hasBadge?: boolean; onPress: () => void }) {
+function IconButton({ label, onPress, children }: { label: string; onPress: () => void; children: ReactNode }) {
   return (
     <Pressable accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
-      <Ionicons name={icon} size={24} color={COLORS.muted} />
-      {hasBadge ? <View style={styles.notificationBadge} /> : null}
+      {children}
     </Pressable>
   );
 }
@@ -208,17 +207,17 @@ function SectionHeader({ title, actionLabel = "더보기", onPress }: { title: s
 function HomeEmptyState({ type }: { type: "notices" | "popular" | "album" }) {
   const content = {
     notices: {
-      icon: "calendar-outline" as IconName,
+      icon: <EmptyCalendarIcon size={32} />,
       title: "등록된 공지사항이 없어요",
       description: "새로운 공지가 등록되면 알려드릴게요",
     },
     popular: {
-      icon: "calendar-outline" as IconName,
+      icon: <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />,
       title: "인기 게시글이 아직 없어요",
       description: "곧 다양한 게시글이 채워질 거예요",
     },
     album: {
-      icon: "camera-outline" as IconName,
+      icon: <Ionicons name="camera-outline" size={32} color="#AAB2BF" />,
       title: "행사 사진첩이 아직 없어요",
       description: "새로운 행사 사진이 등록되면 알려드릴게요",
     },
@@ -226,7 +225,7 @@ function HomeEmptyState({ type }: { type: "notices" | "popular" | "album" }) {
 
   return (
     <View style={styles.emptyState}>
-      <Ionicons name={content.icon} size={32} color="#AAB2BF" />
+      {content.icon}
       <Text style={styles.emptyStateTitle}>{content.title}</Text>
       <Text style={styles.emptyStateDescription}>{content.description}</Text>
     </View>
@@ -454,11 +453,11 @@ function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; m
     <View style={styles.calendarCard}>
       <View style={styles.calendarHeader}>
         <Pressable accessibilityLabel="이전 달" onPress={() => onChangeMonth(-1)} style={styles.calendarArrow}>
-          <Ionicons name="chevron-back" size={15} color={COLORS.subtle} />
+          <BackIcon size={16} color={COLORS.subtle} />
         </Pressable>
         <Text style={styles.calendarMonth}>{monthLabel(month)}</Text>
         <Pressable accessibilityLabel="다음 달" onPress={() => onChangeMonth(1)} style={styles.calendarArrow}>
-          <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
+          <ForwardIcon size={16} color={COLORS.subtle} />
         </Pressable>
       </View>
       <View style={styles.calendarGrid}>
@@ -677,8 +676,12 @@ export default function HomeScreen() {
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <IconButton icon="notifications-outline" label="알림" hasBadge={hasUnreadNotifications} onPress={() => router.push("/notifications" as never)} />
-          <IconButton icon="person-circle-outline" label="마이페이지" onPress={() => (isAuthenticated ? openDrawer() : router.push("/auth/login" as never))} />
+          <IconButton label="알림" onPress={() => router.push("/notifications" as never)}>
+            <BellIcon size={24} hasBadge={hasUnreadNotifications} />
+          </IconButton>
+          <IconButton label="마이페이지" onPress={() => (isAuthenticated ? openDrawer() : router.push("/auth/login" as never))}>
+            <ProfileIcon size={24} />
+          </IconButton>
         </View>
       </View>
 
@@ -784,17 +787,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.bg,
-    backgroundColor: "#E25576",
   },
   bannerCarousel: {
     width: "100%",
@@ -955,17 +947,15 @@ const styles = StyleSheet.create({
   calendarCard: {
     borderRadius: 12,
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
-    paddingHorizontal: 14,
-    paddingTop: 13,
-    paddingBottom: 14,
+    padding: 14,
   },
   calendarHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 15,
+    marginBottom: 10,
   },
   calendarArrow: {
     width: 24,
@@ -977,6 +967,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "500",
+    lineHeight: 17,
   },
   calendarLink: {
     flexDirection: "row",
@@ -995,21 +986,23 @@ const styles = StyleSheet.create({
   calendarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    rowGap: 2,
   },
   weekday: {
     width: "14.285%",
     color: COLORS.subtle,
     fontSize: 11,
     fontWeight: "400",
+    lineHeight: 13,
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   weekdaySunday: {
     color: "#993556",
   },
   dayCell: {
     width: "14.285%",
-    height: 32,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1027,14 +1020,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#E6F1FB",
   },
   dayText: {
-    width: 28,
-    height: 28,
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
-    lineHeight: 28,
+    lineHeight: 16,
     textAlign: "center",
-    textAlignVertical: "center",
     includeFontPadding: false,
   },
   dayTextActive: {
@@ -1047,31 +1037,30 @@ const styles = StyleSheet.create({
   },
   nextEvent: {
     marginTop: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF0F3",
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 0,
-    backgroundColor: "transparent",
-    padding: 0,
+    gap: 10,
   },
   eventDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: COLORS.primary,
   },
   nextEventTitle: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   nextEventDday: {
     color: COLORS.primary,
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
   },
   nextEventMeta: {
     color: COLORS.muted,

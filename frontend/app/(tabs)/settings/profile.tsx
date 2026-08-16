@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingState from "../../components/LoadingState";
-import MediaImage from "../../components/MediaImage";
-import { registrationApi, userApi } from "../../services/api";
-import { pickAndUploadImage } from "../../utils/mediaPicker";
-import { apiErrorCode, phoneError } from "../../utils/authValidation";
-import { buildProfileUpdatePayload } from "../../utils/profileUpdate";
+import LoadingState from "../../../components/LoadingState";
+import MediaImage from "../../../components/MediaImage";
+import { registrationApi, userApi } from "../../../services/api";
+import { pickAndUploadImage } from "../../../utils/mediaPicker";
+import { apiErrorCode, phoneError } from "../../../utils/authValidation";
+import { buildProfileUpdatePayload } from "../../../utils/profileUpdate";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#E6F1FB",
@@ -151,7 +152,7 @@ export default function ProfileSettingsScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>프로필 수정</Text>
         <View style={styles.iconButton} />

@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, BackHandler, FlatList, Linking, Platform, Pre
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
+import { LedgerIcon, PersonAvatarIcon } from "../../components/icons";
 import LoadingState from "../../components/LoadingState";
 import PostCard from "../../components/PostCard";
 import { useBoardsQuery } from "../../hooks/useApi";
@@ -391,7 +392,7 @@ function CohortLeaderScreen({
       ) : selected ? (
         <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
           {imageUrl(selected.bannerImageUrl) ? (
-            <MediaImage media={{ url: selected.bannerImageUrl }} style={styles.cohortBanner} />
+            <MediaImage media={{ url: selected.bannerImageUrl }} resizeMode="contain" style={styles.cohortBanner} />
           ) : (
             <View style={styles.cohortBannerFallback} />
           )}
@@ -400,7 +401,7 @@ function CohortLeaderScreen({
           <View style={styles.executiveCard}>
             {imageUrl(selected.captainImageUrl) ? (
               <MediaImage media={{ url: selected.captainImageUrl }} style={styles.executiveAvatarImage} />
-            ) : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
+            ) : <PersonAvatarIcon size={48} />}
             <View style={styles.executiveText}>
               <Text style={styles.executiveName}>{selected.captain}</Text>
               <Text style={styles.executiveRole}>{selected.cohort} 기장</Text>
@@ -410,7 +411,7 @@ function CohortLeaderScreen({
             <View style={styles.executiveCard}>
               {imageUrl(selected.viceCaptainImageUrl) ? (
                 <MediaImage media={{ url: selected.viceCaptainImageUrl }} style={styles.executiveAvatarImage} />
-              ) : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
+              ) : <PersonAvatarIcon size={48} />}
               <View style={styles.executiveText}>
                 <Text style={styles.executiveName}>{selected.viceCaptain}</Text>
                 <Text style={styles.executiveRole}>{selected.cohort} 부기장</Text>
@@ -670,9 +671,7 @@ function AccountingExternalScreen({ board, topInset, onBack }: { board?: Board |
         <View style={styles.iconButton} />
       </View>
       <View style={styles.accountingContent}>
-        <View style={styles.accountingIcon}>
-          <Ionicons name="card-outline" size={28} color={COLORS.subtle} />
-        </View>
+        <LedgerIcon size={40} />
         <Text style={styles.accountingTitle}>회계장부는 외부 페이지에서 관리하고 있어요</Text>
         <Text style={styles.accountingDescription}>
           {"원우회 회비 입출금 내역을 투명하게 공개하고 있어요.\n아래 버튼을 누르면 외부 회계장부 페이지로 연결돼요."}
@@ -758,7 +757,8 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
 
 function ActivityTile({ post, index, onPress }: { post: PostListItem; index: number; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
-  const preview = post.title.trim() || compactPreview(post);
+  // 활동 인증 제목은 "동아리 활동 인증 26.06.23"처럼 자동 생성되므로 소감(내용)을 우선 표시한다.
+  const preview = compactPreview(post) || post.content_preview.trim() || post.title.trim();
   const thumbnailUrl = imageUrl(post.thumbnail_url);
   const activityDate =
     typeof post.metadata?.activity_date === "string" && post.metadata.activity_date.trim()
@@ -803,6 +803,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const [query, setQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("전체");
+  const [resourceSort, setResourceSort] = useState<"latest" | "popular">("latest");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const requestedBoardFilterRef = useRef<ResourceFilter | undefined>(undefined);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const user = useUserStore((state) => state.user);
@@ -832,14 +834,15 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
     [boards, isCouncilActivityHistory]
   );
 
+  const isResourceBoard = board?.board_type === "resource";
   const boardPostsQuery = useBoardPosts(boardId, {
     q: query || undefined,
     category: categoryForFilter(selectedFilter, board),
-    sort: "latest",
+    sort: isResourceBoard ? resourceSort : "latest",
   });
   const resourceAllQuery = useMultiBoardPosts(resourceBoardIds, {
     q: query || undefined,
-    sort: "latest",
+    sort: isResourceBoard ? resourceSort : "latest",
   });
   const councilNoticeQuery = useMultiBoardPosts(noticeBoardIds, { sort: "latest" });
 
@@ -851,7 +854,11 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const hasNextPage = isResourceAll ? false : boardPostsQuery.hasNextPage;
   const isFetchingNextPage = isResourceAll ? false : boardPostsQuery.isFetchingNextPage;
   const posts = isResourceAll
-    ? [...(resourceAllQuery.data ?? [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    ? [...(resourceAllQuery.data ?? [])].sort((a, b) =>
+        resourceSort === "popular"
+          ? b.like_count - a.like_count || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
     : data?.pages.flatMap((page) => page.data) ?? [];
   const linkedCouncilNotices = (councilNoticeQuery.data ?? []).filter((item) => item.metadata?.show_in_council_activity === true);
   const councilActivityPosts = [...new Map([...linkedCouncilNotices, ...posts].map((item) => [item.id, item])).values()]
@@ -1045,6 +1052,40 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
       </View>
       ) : null}
 
+      {isResourceBoard ? (
+        <>
+          <View style={styles.sortRowWrap}>
+            <View style={styles.sortRow}>
+              <Pressable accessibilityLabel="정렬 변경" onPress={() => setSortMenuOpen((open) => !open)} style={styles.sortButton}>
+                <Text style={styles.sortButtonText}>{resourceSort === "latest" ? "최신순" : "인기순"}</Text>
+                <Ionicons name="chevron-down" size={12} color={COLORS.muted} />
+              </Pressable>
+            </View>
+            {sortMenuOpen ? (
+              <View style={styles.sortMenu}>
+                {([["latest", "최신순"], ["popular", "인기순"]] as const).map(([value, label]) => {
+                  const active = resourceSort === value;
+                  return (
+                    <Pressable
+                      key={value}
+                      onPress={() => {
+                        setResourceSort(value);
+                        setSortMenuOpen(false);
+                      }}
+                      style={styles.sortOption}
+                    >
+                      <Text style={[styles.sortOptionText, active ? styles.sortOptionTextActive : null]}>{label}</Text>
+                      {active ? <Ionicons name="checkmark" size={14} color={COLORS.primary} /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+          <View style={styles.sortDivider} />
+        </>
+      ) : null}
+
       {isLoading ? (
         <LoadingState />
       ) : (
@@ -1085,7 +1126,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
             ) : isActivityCards ? (
               <ActivityTile post={item} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             ) : (
-              <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
+              <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} isLast={index === posts.length - 1} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
             );
           }}
           onEndReached={() => {
@@ -1100,7 +1141,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
 
       {canShowCreateButton ? (
         <Pressable onPress={openCreate} style={styles.fab}>
-          <Ionicons name="add" size={30} color="#FFFFFF" />
+          <Ionicons name="add" size={22} color="#FFFFFF" />
         </Pressable>
       ) : null}
     </View>
@@ -1181,22 +1222,20 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   filterWrap: {
-    height: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    height: 54, // Figma: 서브필터 54h, padding 12/16, 하단 구분선 없음
     backgroundColor: COLORS.surface,
   },
   filterScroller: {
-    height: 56,
+    height: 54,
     flexGrow: 0,
   },
   filterContent: {
-    height: 56,
+    height: 54,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   filterChip: {
     alignItems: "center",
@@ -1216,9 +1255,71 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   filterTextActive: {
     color: "#FFFFFF",
+  },
+  // Figma: 정렬버튼행 padding 0/16/10, 라벨 13/16 #6B7280, 아래 1px 구분선
+  sortRowWrap: {
+    position: "relative",
+    zIndex: 20,
+  },
+  sortMenu: {
+    // Figma: 드롭다운 160w, radius 12, shadow 0 4 16 12%
+    position: "absolute",
+    top: 34,
+    right: 16,
+    width: 160,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 6,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+    zIndex: 30,
+  },
+  sortOption: {
+    height: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  sortOptionText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: "400",
+    lineHeight: 17,
+  },
+  sortOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: "500",
+  },
+  sortRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  sortButton: {
+    minHeight: 30,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  sortButtonText: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 16,
+  },
+  sortDivider: {
+    height: 1,
+    backgroundColor: "#E1E4E9",
   },
   listContent: {
     paddingBottom: 92,
@@ -1237,12 +1338,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   albumThumb: {
+    // Figma: 썸네일 155x140, 카운트 배지 좌8/하10 위치
     position: "relative",
-    aspectRatio: 1.05,
+    aspectRatio: 155 / 140,
     justifyContent: "flex-end",
     borderRadius: 10,
     overflow: "hidden",
-    padding: 10,
+    paddingLeft: 10,
+    paddingBottom: 8,
   },
   albumImage: {
     borderRadius: 10,
@@ -1262,18 +1365,21 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 11,
     fontWeight: "500",
+    lineHeight: 13,
   },
   albumTitle: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
     marginTop: 8,
   },
   albumDate: {
     color: "#A6ACB7",
     fontSize: 11,
     fontWeight: "400",
-    marginTop: 4,
+    lineHeight: 13,
+    marginTop: 8, // Figma: 앨범카드 요소 간격 8
   },
   cardContent: {
     paddingHorizontal: 16,
@@ -1401,21 +1507,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "flex-start",
-    paddingHorizontal: 34,
-    paddingTop: 78,
-    paddingBottom: 40,
-  },
-  accountingIcon: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
+    paddingHorizontal: 20,
+    paddingTop: 40,
+    gap: 16,
   },
   accountingTitle: {
     color: COLORS.text,
     fontSize: 15,
     fontWeight: "500",
+    lineHeight: 18,
     textAlign: "center",
   },
   accountingDescription: {
@@ -1424,22 +1524,20 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     lineHeight: 21,
     textAlign: "center",
-    marginTop: 14,
   },
   accountingButton: {
-    minWidth: 146,
-    height: 44,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
     backgroundColor: COLORS.primary,
+    paddingVertical: 12,
     paddingHorizontal: 18,
-    marginTop: 20,
   },
   accountingButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "500",
+    lineHeight: 17,
   },
   executiveScroller: {
     flex: 1,
@@ -1665,14 +1763,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   fab: {
+    // Figma: FAB 52px, + 아이콘 22px
     position: "absolute",
-    right: 24,
+    right: 16,
     bottom: 24,
-    width: 58,
-    height: 58,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 29,
+    borderRadius: 999,
     backgroundColor: COLORS.primary,
     shadowColor: "#0B1F56",
     shadowOffset: { width: 0, height: 8 },

@@ -2,10 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 
-import BackButton from "../../components/BackButton";
-import LoadingState from "../../components/LoadingState";
-import { userApi } from "../../services/api";
-import type { BlockedUserItem } from "../../types";
+import BackButton from "../../../components/BackButton";
+import LoadingState from "../../../components/LoadingState";
+import { userApi } from "../../../services/api";
+import type { BlockedUserItem } from "../../../types";
 
 const COLORS = {
   navy: "#112d4e",

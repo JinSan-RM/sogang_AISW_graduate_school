@@ -4,6 +4,15 @@ import { router } from "expo-router";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  BackIcon,
+  NotificationCommentIcon,
+  NotificationCouncilIcon,
+  NotificationEventIcon,
+  NotificationLikeIcon,
+  NotificationSuggestionIcon,
+} from "../components/icons";
+
 import LoadingState from "../components/LoadingState";
 import { notificationApi } from "../services/api";
 import type { NotificationItem } from "../types";
@@ -19,6 +28,15 @@ const COLORS = {
   emptyIcon: "#A6ACB7",
   emptyTitle: "#2C3038",
   emptySub: "#8A919C",
+};
+
+// 디자인 원본 SVG가 있는 타입은 전용 아이콘(배경 원 포함)을 쓴다.
+const CUSTOM_TYPE_ICONS: Record<string, (props: { size?: number }) => React.JSX.Element> = {
+  comment: NotificationCommentIcon,
+  event: NotificationEventIcon,
+  council: NotificationCouncilIcon,
+  like: NotificationLikeIcon,
+  admin_reply: NotificationSuggestionIcon,
 };
 
 const TYPE_META: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
@@ -119,7 +137,7 @@ export default function NotificationsScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>알림</Text>
         <View style={styles.iconButton} />
@@ -156,9 +174,16 @@ export default function NotificationsScreen() {
               <View>
                 {row.showSection ? <Text style={styles.sectionLabel}>{row.section}</Text> : null}
                 <Pressable onPress={() => openNotification(row.item)} style={styles.notificationRow}>
-                  <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
-                    <Ionicons name={meta.icon} size={18} color={meta.color} />
-                  </View>
+                  {(() => {
+                    const CustomIcon = CUSTOM_TYPE_ICONS[row.item.notification_type];
+                    return CustomIcon ? (
+                      <CustomIcon size={36} />
+                    ) : (
+                      <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
+                        <Ionicons name={meta.icon} size={18} color={meta.color} />
+                      </View>
+                    );
+                  })()}
                   <View style={styles.notificationText}>
                     <View style={styles.messageRow}>
                       <Text numberOfLines={2} style={styles.message}>

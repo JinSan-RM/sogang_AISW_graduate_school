@@ -5,6 +5,11 @@
     "owner": "kimjinsan11",
     "scheme": "sogang-community",
     "version": "0.1.0",
+    "splash": {
+      "image": "./assets/splash-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EEF2FE"
+    },
     "plugins": [
       "expo-router",
       "expo-asset",

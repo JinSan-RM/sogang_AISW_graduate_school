@@ -4,11 +4,12 @@ import { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { userApi } from "../../services/api";
-import { useUserStore } from "../../stores/userStore";
-import { apiErrorCode, apiErrorStatus, passwordError } from "../../utils/authValidation";
-import { clearStoredPushToken } from "../../utils/pushTokenStorage";
+import { userApi } from "../../../services/api";
+import { useUserStore } from "../../../stores/userStore";
+import { apiErrorCode, apiErrorStatus, passwordError } from "../../../utils/authValidation";
+import { clearStoredPushToken } from "../../../utils/pushTokenStorage";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -95,7 +96,7 @@ export default function PasswordChangeScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>비밀번호 변경</Text>
         <View style={styles.iconButton} />
@@ -172,7 +173,7 @@ const styles = StyleSheet.create({
   scroller: { flex: 1 },
   content: { paddingTop: 12, paddingHorizontal: 16, paddingBottom: 24, gap: 20 },
   fieldGroup: { gap: 8 },
-  label: { color: COLORS.label, fontSize: 13, fontWeight: "400" },
+  label: { color: COLORS.text, fontSize: 13, fontWeight: "400", lineHeight: 16 }, // Figma: 13/16 #15171C
   input: {
     minHeight: 41,
     borderWidth: 1,
@@ -181,12 +182,13 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   inputError: { borderColor: COLORS.danger, backgroundColor: COLORS.dangerBg },
-  errorRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -2 },
-  errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "400" },
+  errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 15 },
   primaryButton: {
     alignItems: "center",
     justifyContent: "center",

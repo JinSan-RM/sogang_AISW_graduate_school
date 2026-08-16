@@ -9,6 +9,7 @@ import CommentItem from "../../../components/CommentItem";
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
+import { BackIcon, BookmarkIcon, CalendarSmallIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import {
@@ -330,7 +331,8 @@ export default function PostDetailScreen() {
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
   const hasVisualHero = board?.board_type === "album" || isActivityCertification || isAdminParticipationGuide || isCouncilActivityEntry;
-  const hasNaturalHero = isActivityCertification || isCouncilActivityEntry;
+  // Figma: 활동 인증 상세는 240px 고정 슬라이더를 쓴다.
+  const hasNaturalHero = isCouncilActivityEntry;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -550,15 +552,15 @@ export default function PostDetailScreen() {
         ) : (
           <View style={styles.appBarActions}>
             {!isAdminParticipationGuide && !isActivityCertification && !isStudyRecruit && !isCouncilActivity && !isMutualAidRequest ? (
-              <IconButton
-                icon={isBookmarked ? "bookmark" : "bookmark-outline"}
-                label="북마크"
-                size={20}
-                color={isBookmarked ? COLORS.primary : COLORS.text}
-                onPress={handleBookmark}
-              />
+              <Pressable accessibilityLabel="북마크" onPress={handleBookmark} style={[styles.iconButton, styles.appBarActionButton]}>
+                <BookmarkIcon filled={isBookmarked} color={isBookmarked ? COLORS.primary : COLORS.text} size={20} />
+              </Pressable>
             ) : null}
-            {hasPostMenu && !isCouncilActivity ? <IconButton icon="ellipsis-vertical" label="더보기" onPress={() => setShowPostMenu(true)} /> : null}
+            {hasPostMenu && !isCouncilActivity ? (
+              <Pressable accessibilityLabel="더보기" onPress={() => setShowPostMenu(true)} style={[styles.iconButton, styles.appBarActionButton]}>
+                <MoreIcon color={COLORS.text} />
+              </Pressable>
+            ) : null}
           </View>
         )}
       </View>
@@ -566,7 +568,7 @@ export default function PostDetailScreen() {
       <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
         {hasVisualHero ? (
           <View style={styles.visualHeroBlock}>
-            <View style={hasNaturalHero ? styles.visualHeroNatural : styles.visualHero}>
+            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null]}>
               {heroAttachment ? (
                 hasNaturalHero ? (
                   <NaturalAspectMediaImage media={heroAttachment} style={styles.visualHeroNaturalImage} />
@@ -586,16 +588,19 @@ export default function PostDetailScreen() {
                   {imageAttachments.length > 1 ? (
                     <>
                       <Pressable accessibilityLabel="이전 사진" onPress={showPreviousImage} style={[styles.galleryArrow, styles.galleryArrowLeft]}>
-                        <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+                        {isPhotoAlbum ? <GalleryPrevIcon size={28} /> : <SliderPrevIcon size={28} />}
                       </Pressable>
                       <Pressable accessibilityLabel="다음 사진" onPress={showNextImage} style={[styles.galleryArrow, styles.galleryArrowRight]}>
-                        <Ionicons name="chevron-forward" size={26} color="#FFFFFF" />
+                        {isPhotoAlbum ? <GalleryNextIcon size={28} /> : <SliderNextIcon size={28} />}
                       </Pressable>
                     </>
                   ) : null}
-                  <View style={styles.galleryCount}>
-                    <Text style={styles.galleryCountText}>{normalizedGalleryIndex + 1}/{galleryTotal}</Text>
-                  </View>
+                  {/* Figma: 사진첩 상세에는 n/N 카운터가 없다 */}
+                  {!isPhotoAlbum ? (
+                    <View style={styles.galleryCount}>
+                      <Text style={styles.galleryCountText}>{normalizedGalleryIndex + 1} / {galleryTotal}</Text>
+                    </View>
+                  ) : null}
                 </>
               ) : null}
             </View>
@@ -658,7 +663,7 @@ export default function PostDetailScreen() {
             ) : null}
           </>
         ) : null}
-        {!isPhotoAlbum && !isMutualAidRequest && post.content.trim() ? <Text style={[styles.body, isAdminParticipationGuide || isActivityCertification ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
+        {!isPhotoAlbum && !isMutualAidRequest && post.content.trim() ? <Text style={[styles.body, isActivityCertification ? styles.bodyTopGapCert : isAdminParticipationGuide ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
 
         {board?.board_type === "notice" && contentUrl ? (
           <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.externalLinkButton}>
@@ -672,7 +677,7 @@ export default function PostDetailScreen() {
           <>
             {typeof metadata.activity_date === "string" && metadata.activity_date.trim() ? (
               <View style={styles.certDateRow}>
-                <Ionicons name="calendar-outline" size={16} color={COLORS.muted} />
+                <CalendarSmallIcon size={16} color={COLORS.muted} />
                 <Text style={styles.certDateText}>{formatBoardDate(metadata.activity_date)}</Text>
               </View>
             ) : null}
@@ -784,10 +789,7 @@ export default function PostDetailScreen() {
 
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
-            <View style={styles.officialReplyHeader}>
-              <Ionicons name="chatbubble-ellipses-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.officialReplyTitle}>원우회 답변</Text>
-            </View>
+            <Text style={styles.officialReplyTitle}>💬 원우회 답변</Text>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
             {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{formatBoardDate(post.suggestion.replied_at)}</Text> : null}
           </View>
@@ -998,7 +1000,7 @@ export default function PostDetailScreen() {
                 }}
                 style={styles.sheetMenuItem}
               >
-                <Ionicons name="create-outline" size={20} color={COLORS.text} />
+                <PencilIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>수정</Text>
               </Pressable>
             ) : null}
@@ -1010,7 +1012,7 @@ export default function PostDetailScreen() {
                 }}
                 style={styles.sheetMenuItem}
               >
-                <Ionicons name="trash-outline" size={20} color="#D64545" />
+                <TrashIcon size={20} color="#D64545" />
                 <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
               </Pressable>
             ) : null}
@@ -1023,7 +1025,7 @@ export default function PostDetailScreen() {
                 }}
                 style={styles.sheetMenuItem}
               >
-                <Ionicons name="flag-outline" size={20} color={COLORS.text} />
+                <FlagIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
               </Pressable>
             ) : null}
@@ -1185,6 +1187,10 @@ const styles = StyleSheet.create({
   },
   appBarActions: {
     flexDirection: "row",
+    alignItems: "center",
+  },
+  appBarActionButton: {
+    width: 32,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -1234,36 +1240,38 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 480,
     alignSelf: "center",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     backgroundColor: COLORS.surface,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 22,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   sheetHandle: {
     width: 36,
     height: 4,
     alignSelf: "center",
     borderRadius: 2,
-    backgroundColor: "#E1E4E9",
-    marginBottom: 8,
+    backgroundColor: "#C7CCD4",
+    marginBottom: 16,
   },
   sheetMenuItem: {
-    minHeight: 54,
+    minHeight: 50,
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: "#EAECEF",
   },
   sheetMenuText: {
     color: COLORS.text,
     fontSize: 15,
-    fontWeight: "700",
+    fontWeight: "500",
+    lineHeight: 18,
   },
   sheetMenuDangerText: {
-    color: "#EF4444",
+    color: "#D64545",
   },
   reportSheet: {
     width: "100%",
@@ -1483,6 +1491,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 11,
     fontWeight: "400",
+    lineHeight: 13,
   },
   visualHeroBlock: {
     marginHorizontal: -20,
@@ -1494,6 +1503,9 @@ const styles = StyleSheet.create({
     height: 230,
     overflow: "hidden",
     backgroundColor: "#EEF2F7",
+  },
+  visualHeroAlbum: {
+    height: 240, // Figma: 사진첩 큰사진·활동 인증 슬라이더 240h
   },
   visualHeroNatural: {
     position: "relative",
@@ -1517,44 +1529,51 @@ const styles = StyleSheet.create({
     aspectRatio: 360 / 230,
   },
   galleryArrow: {
+    // Figma: 배경 원 없이 흰 화살표만, 좌우 8 여백, 세로 중앙
     position: "absolute",
-    top: "42%",
-    width: 42,
-    height: 42,
+    top: 0,
+    bottom: 0,
+    width: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 21,
-    backgroundColor: "rgba(17,24,39,0.16)",
     zIndex: 2,
   },
   galleryArrowLeft: {
-    left: 8,
+    left: 0,
+    paddingLeft: 8,
+    alignItems: "flex-start",
   },
   galleryArrowRight: {
-    right: 8,
+    right: 0,
+    paddingRight: 8,
+    alignItems: "flex-end",
   },
   galleryCount: {
+    // Figma: 페이지 인디케이터 우16/하16, 검정 40%, radius 999, padding 4/10
     position: "absolute",
-    right: 14,
-    bottom: 14,
-    borderRadius: 12,
-    backgroundColor: "rgba(17,24,39,0.48)",
-    paddingHorizontal: 9,
+    right: 16,
+    bottom: 16,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 10,
     paddingVertical: 4,
   },
   galleryCountText: {
     color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 15,
   },
   galleryThumbs: {
-    gap: 10,
-    paddingHorizontal: 24,
+    // Figma: 썸네일 스트립 52px, gap 8, padding 12/16/16
+    gap: 8,
+    paddingHorizontal: 16,
     paddingTop: 12,
+    paddingBottom: 16,
   },
   galleryThumb: {
-    width: 50,
-    height: 50,
+    width: 52,
+    height: 52,
     borderRadius: 6,
     overflow: "hidden",
     backgroundColor: "#E5E7EB",
@@ -1635,12 +1654,15 @@ const styles = StyleSheet.create({
   bodyTopGap: {
     marginTop: 16,
   },
+  bodyTopGapCert: {
+    marginTop: 12, // Figma: 활동 인증 태그→내용 12
+  },
   activityStudyTitle: {
     width: "100%",
     color: COLORS.text,
     fontSize: 17,
     fontWeight: "500",
-    lineHeight: 24,
+    lineHeight: 21, // Figma: 17/21
   },
   certDateRow: {
     flexDirection: "row",
@@ -1655,11 +1677,13 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   certParticipantLabel: {
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
     marginTop: 16,
     marginBottom: 10,
   },
@@ -1679,6 +1703,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   externalLinkButton: {
     minHeight: 48,
@@ -1813,11 +1838,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "900",
   },
-  officialReplyHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
   officialReplyBox: {
     borderRadius: 12,
     backgroundColor: "#F7F8FA", // Figma 236:39
@@ -1829,12 +1849,13 @@ const styles = StyleSheet.create({
     color: "#2761FF",
     fontSize: 13,
     fontWeight: "500", // Figma: Medium
+    lineHeight: 16,
   },
   officialReplyBody: {
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400", // Figma: Regular
-    lineHeight: 23,
+    lineHeight: 17,
   },
   officialReplyDate: {
     color: "#A6ACB7",

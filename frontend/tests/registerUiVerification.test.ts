@@ -11,7 +11,7 @@ test("회원가입 인증 단계는 최초 발송과 재전송 상태를 구분�
   assert.match(registerSource, /setVerificationMessage\(resend \?/);
   assert.match(registerSource, /signupProgressDotIndex\(step\)/);
   assert.match(registerSource, /resendAvailableAt\(responseReceivedAt, resendIn\)/);
-  assert.match(registerSource, /resendCountdownLabel\(resendCooldown\)/);
+  assert.match(registerSource, /resendCountdownLabel\(resendCooldown, \{ timerOnly: showResendTimerOnly \}\)/);
   assert.match(registerSource, /disabled=\{isSubmitting \|\| resendCooldown > 0\}/);
   assert.match(registerSource, /verificationExpired \? \(/);
   assert.match(registerSource, /resendCooldown > 0 \? resendCountdownLabel\(resendCooldown\) : "인증코드 재전송"/);

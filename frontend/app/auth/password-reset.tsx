@@ -14,6 +14,7 @@ import {
 } from "../../utils/authValidation";
 import { passwordResetResendControl } from "../../utils/passwordResetUi";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF", // primary/500
   text: "#15171C", // gray/900 (Figma)
@@ -244,7 +245,7 @@ export default function PasswordResetScreen() {
       {mode !== "complete" ? (
         <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
           <Pressable accessibilityLabel="뒤로" onPress={goBack} style={styles.iconButton}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+            <BackIcon size={24} color={COLORS.text} />
           </Pressable>
           <Text style={styles.appBarTitle}>{title}</Text>
           <View style={styles.iconButton} />
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
   heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
   helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 13, gray/500
   field: { gap: 6 }, // Figma label→input gap
-  label: { color: COLORS.text, fontSize: 14, fontWeight: "500" }, // Figma: Inter Medium
+  label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
   input: {
     minHeight: 48,
     borderWidth: 1,
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
   submittingButton: { opacity: 0.55 },
   disabledButton: { backgroundColor: "#D1D5DB" },
   validationDisabledButton: { backgroundColor: COLORS.disabled },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500" }, // Figma: Inter Medium
+  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "500", lineHeight: 24 }, // Figma: Inter Medium 14/24
   completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
   completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
   completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280

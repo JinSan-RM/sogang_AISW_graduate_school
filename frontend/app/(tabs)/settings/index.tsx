@@ -3,12 +3,13 @@ import { router } from "expo-router";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useMeQuery } from "../../hooks/useApi";
-import MediaImage from "../../components/MediaImage";
-import { authApi, notificationApi } from "../../services/api";
-import { useUserStore } from "../../stores/userStore";
-import { clearStoredPushToken, getStoredPushToken } from "../../utils/pushTokenStorage";
+import { useMeQuery } from "../../../hooks/useApi";
+import MediaImage from "../../../components/MediaImage";
+import { authApi, notificationApi } from "../../../services/api";
+import { useUserStore } from "../../../stores/userStore";
+import { clearStoredPushToken, getStoredPushToken } from "../../../utils/pushTokenStorage";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -62,7 +63,7 @@ export default function SettingsScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>마이페이지</Text>
         <View style={styles.iconButton} />
