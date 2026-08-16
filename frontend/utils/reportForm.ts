@@ -12,6 +12,30 @@ export type ReportSubmission = {
   detail?: string;
 };
 
+export type ReportEntryState = {
+  visible: boolean;
+  label: "신고" | "신고됨";
+  action: "open" | "own-unavailable" | "none";
+};
+
+export function getReportEntryState({
+  isMine,
+  isReported,
+  isAllowedTarget,
+}: {
+  isMine: boolean;
+  isReported: boolean;
+  isAllowedTarget: boolean;
+}): ReportEntryState {
+  if (!isAllowedTarget) return { visible: false, label: "신고", action: "none" };
+  if (isReported) return { visible: true, label: "신고됨", action: "none" };
+  return {
+    visible: true,
+    label: "신고",
+    action: isMine ? "own-unavailable" : "open",
+  };
+}
+
 export function getReportSubmission(reason: ReportReason, detail: string): ReportSubmission | null {
   if (reason !== "other") return { reason };
   const normalizedDetail = detail.trim();

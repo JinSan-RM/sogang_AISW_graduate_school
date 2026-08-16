@@ -9,7 +9,7 @@ import CommentItem from "../../../components/CommentItem";
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
-import { BackIcon, BookmarkIcon, CalendarSmallIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../components/icons";
+import { BookmarkIcon, CalendarSmallIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import {
@@ -31,11 +31,13 @@ import { activityCertificationBadgeLabel } from "../../../utils/activityCertific
 import { activityCertificationDetailHeading } from "../../../utils/activityDetailPresentation";
 import { navigateFromPostDetail } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
+import { COMMENT_DELETE_COPY } from "../../../utils/commentPresentation";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import { openMediaUrl } from "../../../utils/mediaOpener";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
 import { shouldShowPostAuthorBlock } from "../../../utils/postMenu";
+import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../utils/reportForm";
 import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../utils/replyComposer";
 import { resourceCategoryLabel } from "../../../utils/resourceBoards";
 import { formatCohortName } from "../../../utils/userLabel";
@@ -86,13 +88,6 @@ type WebTextInputKeyPressEvent = TextInputKeyPressEvent & {
 };
 
 type IconName = keyof typeof Ionicons.glyphMap;
-
-const REPORT_REASONS = [
-  { value: "spam", label: "스팸/광고입니다" },
-  { value: "harassment", label: "욕설 및 비방이 포함되어 있어요" },
-  { value: "misinformation", label: "허위 정보예요" },
-  { value: "other", label: "기타" },
-];
 
 const SUGGESTION_STATUSES = [
   { value: "received", label: "대기중" },
@@ -177,7 +172,7 @@ export default function PostDetailScreen() {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
-  const [reportReason, setReportReason] = useState(REPORT_REASONS[0].value);
+  const [reportReason, setReportReason] = useState<ReportReason>(REPORT_REASONS[0].value);
   const [reportDetail, setReportDetail] = useState("");
   const [isReporting, setIsReporting] = useState(false);
   const [isBlockingAuthor, setIsBlockingAuthor] = useState(false);
@@ -288,7 +283,12 @@ export default function PostDetailScreen() {
     (!isMutualAidRequest || canDeleteMutualAidRequest(post.mutual_aid?.status));
   // 관리자만 작성하는 게시판(공지사항, 동아리 홍보, 네트워킹, 원우회 활동내역 등)은 신고 대상이 아니다.
   const isAdminOnlyBoard = board?.write_permission === "admin";
-  const showReportItem = !isMine && !isAdminOnlyBoard;
+  const postReportEntry = getReportEntryState({
+    isMine,
+    isReported: Boolean(reportedTargets[`post:${post.id}`]),
+    isAllowedTarget: !isAdminOnlyBoard,
+  });
+  const showReportItem = postReportEntry.visible;
   const showBlockItem = shouldShowPostAuthorBlock({
     authorId: post.author_id,
     isMine,
@@ -396,19 +396,17 @@ export default function PostDetailScreen() {
     setReportDetail("");
   };
 
-  // "기타"는 구체적인 사유를 적어야 제출할 수 있다.
-  const canSubmitReport = reportReason !== "other" || reportDetail.trim().length > 0;
+  const reportSubmission = getReportSubmission(reportReason, reportDetail);
+  const canSubmitReport = reportSubmission !== null;
 
   const submitReport = async () => {
-    if (!reportTarget || !canSubmitReport || !requireLogin()) return;
+    if (!reportTarget || !reportSubmission || !requireLogin()) return;
     try {
       setIsReporting(true);
-      const payload = {
-        reason: reportReason,
-        detail: reportReason === "other" ? reportDetail.trim() : undefined,
-      };
       const response =
-        reportTarget.type === "post" ? await reportApi.reportPost(reportTarget.id, payload) : await reportApi.reportComment(reportTarget.id, payload);
+        reportTarget.type === "post"
+          ? await reportApi.reportPost(reportTarget.id, reportSubmission)
+          : await reportApi.reportComment(reportTarget.id, reportSubmission);
       setReportedTargets((current) => ({ ...current, [`${reportTarget.type}:${reportTarget.id}`]: true }));
       setReportTarget(null);
       setReportDetail("");
@@ -952,12 +950,15 @@ export default function PostDetailScreen() {
                 comment={comment}
                 currentUserId={userId}
                 onDelete={handleDeleteComment}
-                onEdit={(commentId, content) =>
-                  updateCommentMutation.mutate(
-                    { commentId, content },
-                    { onError: () => Alert.alert("댓글 수정 실패", "댓글을 수정할 수 없습니다.") }
-                  )
-                }
+                onEdit={async (commentId, content) => {
+                  try {
+                    await updateCommentMutation.mutateAsync({ commentId, content });
+                  } catch (error) {
+                    Alert.alert("댓글 수정 실패", "댓글을 수정할 수 없습니다.");
+                    throw error;
+                  }
+                }}
+                onOwnReport={() => Alert.alert("신고할 수 없어요", "본인 댓글은 신고할 수 없어요.")}
                 onReport={startReport}
                 reportedTargets={reportedTargets}
                 onReply={(comment) => setReplyTarget(createReplyTarget(comment))}
@@ -1019,7 +1020,10 @@ export default function PostDetailScreen() {
                     router.push(`/board/post/edit/${post.id}`);
                   }
                 }}
-                style={styles.sheetMenuItem}
+                style={[
+                  styles.sheetMenuItem,
+                  !canDeleteOwn && !showReportItem && !showBlockItem ? styles.sheetMenuItemLast : null,
+                ]}
               >
                 <PencilIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>수정</Text>
@@ -1031,7 +1035,10 @@ export default function PostDetailScreen() {
                   setShowPostMenu(false);
                   handleDeletePost();
                 }}
-                style={styles.sheetMenuItem}
+                style={[
+                  styles.sheetMenuItem,
+                  !showReportItem && !showBlockItem ? styles.sheetMenuItemLast : null,
+                ]}
               >
                 <TrashIcon size={20} color="#D64545" />
                 <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
@@ -1039,15 +1046,22 @@ export default function PostDetailScreen() {
             ) : null}
             {showReportItem ? (
               <Pressable
-                disabled={reportedTargets[`post:${post.id}`]}
+                disabled={postReportEntry.action === "none"}
                 onPress={() => {
                   setShowPostMenu(false);
+                  if (postReportEntry.action === "own-unavailable") {
+                    Alert.alert("신고할 수 없어요", "본인 게시글은 신고할 수 없어요.");
+                    return;
+                  }
                   startReport({ type: "post", id: post.id, label: "게시글" });
                 }}
-                style={styles.sheetMenuItem}
+                style={[
+                  styles.sheetMenuItem,
+                  !showBlockItem ? styles.sheetMenuItemLast : null,
+                ]}
               >
                 <FlagIcon size={20} color={COLORS.text} />
-                <Text style={styles.sheetMenuText}>{reportedTargets[`post:${post.id}`] ? "신고됨" : "신고"}</Text>
+                <Text style={styles.sheetMenuText}>{postReportEntry.label}</Text>
               </Pressable>
             ) : null}
             {showBlockItem ? (
@@ -1088,12 +1102,13 @@ export default function PostDetailScreen() {
             </View>
             {reportReason === "other" ? (
               <TextInput
+                maxLength={1000}
                 multiline
                 value={reportDetail}
                 onChangeText={setReportDetail}
                 placeholder="구체적인 사유를 입력해주세요"
                 placeholderTextColor={COLORS.subtle}
-                style={styles.reportDetailInput}
+                style={[styles.reportDetailInput, { outlineStyle: "none" } as never]}
                 textAlignVertical="top"
               />
             ) : null}
@@ -1109,12 +1124,24 @@ export default function PostDetailScreen() {
       ) : null}
 
       {showDeleteConfirm ? (
-        <Pressable accessibilityLabel="게시물 삭제 닫기" onPress={() => setShowDeleteConfirm(false)} style={styles.confirmBackdrop}>
+        <Pressable
+          accessibilityLabel="게시물 삭제 닫기"
+          onPress={() => {
+            if (!deletePostMutation.isPending) setShowDeleteConfirm(false);
+          }}
+          style={styles.confirmBackdrop}
+        >
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>게시물 삭제</Text>
             <Text style={styles.confirmBody}>삭제한 게시물은 복구할 수 없어요.{"\n"}작성한 댓글도 함께 삭제돼요.</Text>
             <View style={styles.confirmActions}>
-              <Pressable disabled={deletePostMutation.isPending} onPress={() => setShowDeleteConfirm(false)} style={styles.confirmCancelButton}>
+              <Pressable
+                disabled={deletePostMutation.isPending}
+                onPress={() => {
+                  if (!deletePostMutation.isPending) setShowDeleteConfirm(false);
+                }}
+                style={styles.confirmCancelButton}
+              >
                 <Text style={styles.confirmCancelText}>취소</Text>
               </Pressable>
               <Pressable disabled={deletePostMutation.isPending} onPress={confirmDeletePost} style={[styles.confirmDeleteButton, deletePostMutation.isPending ? styles.buttonDisabled : null]}>
@@ -1128,8 +1155,8 @@ export default function PostDetailScreen() {
       {pendingDeleteCommentId !== null ? (
         <Pressable accessibilityLabel="댓글 삭제 닫기" onPress={closeCommentDeleteConfirm} style={styles.confirmBackdrop}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>댓글 삭제</Text>
-            <Text style={styles.confirmBody}>이 댓글을 삭제할까요?</Text>
+            <Text style={styles.confirmTitle}>{COMMENT_DELETE_COPY.title}</Text>
+            <Text style={styles.confirmBody}>{COMMENT_DELETE_COPY.body}</Text>
             {commentDeleteError ? (
               <Text accessibilityRole="alert" style={styles.confirmErrorText}>
                 {commentDeleteError}
@@ -1264,9 +1291,9 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   sheetHandle: {
     width: 36,
@@ -1301,7 +1328,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: COLORS.surface,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 20,
   },
@@ -1393,7 +1420,7 @@ const styles = StyleSheet.create({
   },
   confirmCard: {
     width: "100%",
-    maxWidth: 320,
+    maxWidth: 272,
     borderRadius: 16,
     backgroundColor: COLORS.surface,
     padding: 20,
