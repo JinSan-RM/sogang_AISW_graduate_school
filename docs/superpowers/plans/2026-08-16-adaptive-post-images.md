@@ -4,7 +4,7 @@
 
 **Goal:** 공지사항과 참여활동 상세의 가로·세로 이미지가 전체 너비와 원본 비율을 사용해 내부 여백과 잘림 없이 표시되게 한다.
 
-**Architecture:** 기존 `NaturalAspectMediaImage`가 로드 이벤트에서 원본 크기를 읽어 자연 비율 높이를 만드는 흐름을 재사용한다. 게시글 상세에서 공지 이미지와 참여활동 대표 이미지를 이 렌더러로 통일하고, 갤러리 선택 이미지 ID를 컴포넌트 키로 사용해 이미지 전환마다 비율 상태를 초기화한다.
+**Architecture:** 순수 함수 `postDetailImagePresentation`이 게시판과 이미지 위치를 받아 `natural`, `fixed-contain`, `fixed-cover` 중 하나를 결정한다. 게시글 상세는 이 정책에 따라 기존 `NaturalAspectMediaImage`를 재사용하고, 갤러리 선택 이미지 ID를 컴포넌트 키로 사용해 이미지 전환마다 비율 상태를 초기화한다.
 
 **Tech Stack:** React Native 0.81, Expo Router 6, TypeScript 5.9, Node test runner, ESLint
 
@@ -22,40 +22,97 @@
 ### Task 1: 게시글 상세의 자연 비율 이미지 렌더링
 
 **Files:**
+- Create: `frontend/utils/postDetailImagePresentation.ts`
+- Create: `frontend/tests/postDetailImagePresentation.test.ts`
 - Modify: `frontend/tests/designBugVerification.test.ts`
 - Modify: `frontend/app/board/post/[postId].tsx`
 
 **Interfaces:**
 - Consumes: `NaturalAspectMediaImage({ media, fallbackAspectRatio?, style, ...MediaImageProps })`
+- Produces: `postDetailImagePresentation(input: PostDetailImagePresentationInput): "natural" | "fixed-contain" | "fixed-cover"`
 - Produces: 공지 첨부와 참여활동 대표 이미지에 적용되는 자연 비율 렌더링 및 갤러리 이미지별 상태 초기화
 
 - [ ] **Step 1: 실패하는 회귀 테스트 작성**
 
-`frontend/tests/designBugVerification.test.ts`의 기존 공지 이미지 테스트를 다음 요구로 교체한다.
+`frontend/tests/designBugVerification.test.ts`의 이전 고정 프레임 소스 검사를 제거하고, `frontend/tests/postDetailImagePresentation.test.ts`를 생성한다. 이 테스트는 실제 정책 함수를 가져와 사용자에게 보이는 레이아웃 결정을 검증한다.
 
 ```ts
-test("#41·45 공지와 참여활동 상세 이미지는 원본 비율로 전체 너비를 채운다", () => {
-  assert.match(postDetailSource, /const hasNaturalHero = isCouncilActivityEntry \|\| isActivityCertification \|\| isAdminParticipationGuide/);
-  assert.match(postDetailSource, /<NaturalAspectMediaImage key=\{heroAttachment\.id\} media=\{heroAttachment\}/);
-  assert.match(postDetailSource, /<NaturalAspectMediaImage media=\{attachment\} style=\{styles\.attachmentImage\}/);
-  assert.doesNotMatch(postDetailSource, /resizeMode="contain" style=\{styles\.noticeAttachmentImage\}/);
-  assert.doesNotMatch(postDetailSource, /noticeImageAttachment:[\s\S]*height: 230/);
-  assert.doesNotMatch(postDetailSource, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum/);
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { postDetailImagePresentation } from "../utils/postDetailImagePresentation";
+
+test("공지 첨부와 일반 첨부는 원본 비율을 사용한다", () => {
+  assert.equal(postDetailImagePresentation({ placement: "attachment", boardType: "notice" }), "natural");
+  assert.equal(postDetailImagePresentation({ placement: "attachment", boardType: "post" }), "natural");
+});
+
+test("참여활동 대표 이미지는 원본 비율을 사용한다", () => {
+  assert.equal(postDetailImagePresentation({ placement: "hero", boardType: "activity_certification" }), "natural");
+  assert.equal(postDetailImagePresentation({ placement: "hero", boardType: "post", boardSlug: "club-promo" }), "natural");
+  assert.equal(postDetailImagePresentation({ placement: "hero", boardType: "post", boardSlug: "networking-programs" }), "natural");
+});
+
+test("사진첩의 승인된 고정 contain 프레임은 유지한다", () => {
+  assert.equal(postDetailImagePresentation({ placement: "hero", boardType: "album" }), "fixed-contain");
 });
 ```
 
 - [ ] **Step 2: 테스트가 기대한 이유로 실패하는지 확인**
 
-Run: `cd frontend && npm test -- --test-name-pattern "공지와 참여활동 상세 이미지"`
+Run: `cd frontend && npx tsx --test tests/postDetailImagePresentation.test.ts`
 
-Expected: FAIL. 현재 소스에는 공지 `230px` 프레임과 참여활동 `240px` 프레임이 남아 있고 자연 비율 hero 조건과 이미지 키가 없다.
+Expected: FAIL with `Cannot find module '../utils/postDetailImagePresentation'` because the presentation policy does not exist yet.
 
 - [ ] **Step 3: 최소 구현 적용**
 
-`frontend/app/board/post/[postId].tsx`에서 자연 비율 대상과 렌더링을 다음 형태로 변경한다.
+`frontend/utils/postDetailImagePresentation.ts`를 생성한다.
+
+```ts
+export type PostDetailImagePresentation = "natural" | "fixed-contain" | "fixed-cover";
+
+type PostDetailImagePresentationInput = {
+  placement: "hero" | "attachment";
+  boardType?: string | null;
+  boardSlug?: string | null;
+  isCouncilActivityEntry?: boolean;
+};
+
+export function postDetailImagePresentation({
+  placement,
+  boardType,
+  boardSlug,
+  isCouncilActivityEntry = false,
+}: PostDetailImagePresentationInput): PostDetailImagePresentation {
+  if (placement === "attachment") return "natural";
+  if (boardType === "album") return "fixed-contain";
+  if (
+    boardType === "activity_certification"
+    || boardSlug === "club-promo"
+    || boardSlug === "networking-programs"
+    || isCouncilActivityEntry
+  ) {
+    return "natural";
+  }
+  return "fixed-cover";
+}
+```
+
+`frontend/app/board/post/[postId].tsx`에서 이 정책을 호출하고 자연 비율 대상과 렌더링을 다음 형태로 변경한다.
 
 ```tsx
-const hasNaturalHero = isCouncilActivityEntry || isActivityCertification || isAdminParticipationGuide;
+const heroImagePresentation = postDetailImagePresentation({
+  placement: "hero",
+  boardType: board?.board_type,
+  boardSlug: board?.slug,
+  isCouncilActivityEntry,
+});
+const attachmentImagePresentation = postDetailImagePresentation({
+  placement: "attachment",
+  boardType: board?.board_type,
+  boardSlug: board?.slug,
+});
+const hasNaturalHero = heroImagePresentation === "natural";
 
 <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum ? styles.visualHeroAlbum : null]}>
   {heroAttachment ? (
@@ -66,10 +123,19 @@ const hasNaturalHero = isCouncilActivityEntry || isActivityCertification || isAd
         style={styles.visualHeroNaturalImage}
       />
     ) : (
-      <MediaImage media={heroAttachment} resizeMode="contain" style={styles.visualHeroImage} />
+      <MediaImage
+        media={heroAttachment}
+        resizeMode={heroImagePresentation === "fixed-contain" ? "contain" : "cover"}
+        style={styles.visualHeroImage}
+      />
     )
   ) : (
-    // 기존 fallback 유지
+    <LinearGradient
+      colors={board?.board_type === "album" ? ALBUM_FALLBACK_GRADIENTS[normalizedGalleryIndex % ALBUM_FALLBACK_GRADIENTS.length] : ["#2761FF", "#86C8FF"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[styles.visualHeroFallback, hasNaturalHero ? styles.visualHeroFallbackNatural : null]}
+    />
   )}
 </View>
 ```
@@ -79,7 +145,7 @@ const hasNaturalHero = isCouncilActivityEntry || isActivityCertification || isAd
 ```tsx
 style={isImage ? styles.imageAttachment : styles.fileAttachment}
 
-{isImage ? (
+{isImage && attachmentImagePresentation === "natural" ? (
   <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
 ) : null}
 ```
@@ -88,20 +154,20 @@ style={isImage ? styles.imageAttachment : styles.fileAttachment}
 
 - [ ] **Step 4: 회귀 테스트 통과 확인**
 
-Run: `cd frontend && npm test -- --test-name-pattern "공지와 참여활동 상세 이미지"`
+Run: `cd frontend && npx tsx --test tests/postDetailImagePresentation.test.ts`
 
 Expected: PASS, 0 failures.
 
 - [ ] **Step 5: 관련 단위 테스트 통과 확인**
 
-Run: `cd frontend && npx tsx --test tests/imageDimensions.test.ts tests/designBugVerification.test.ts`
+Run: `cd frontend && npx tsx --test tests/imageDimensions.test.ts tests/postDetailImagePresentation.test.ts tests/designBugVerification.test.ts`
 
 Expected: PASS, 0 failures.
 
 - [ ] **Step 6: 구현 커밋**
 
 ```bash
-git add frontend/tests/designBugVerification.test.ts frontend/app/board/post/[postId].tsx
+git add frontend/utils/postDetailImagePresentation.ts frontend/tests/postDetailImagePresentation.test.ts frontend/tests/designBugVerification.test.ts frontend/app/board/post/[postId].tsx
 git commit -m "fix(frontend): adapt post images to natural aspect ratios"
 ```
 
