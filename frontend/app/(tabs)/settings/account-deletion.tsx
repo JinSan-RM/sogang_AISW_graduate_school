@@ -142,7 +142,7 @@ export default function AccountDeletionScreen() {
             setAcknowledged((value) => !value);
             setRequestError(null);
           }}
-          style={styles.confirmRow}
+          style={[styles.confirmRow, { outlineStyle: "none" } as never]}
         >
           <View style={[styles.checkbox, acknowledged ? styles.checkboxChecked : null]}>
             {acknowledged ? <Ionicons name="checkmark" size={14} color="#FFFFFF" /> : null}

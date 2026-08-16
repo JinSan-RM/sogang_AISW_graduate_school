@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import CompletionState from "../../components/CompletionState";
 import SchoolEmailInput from "../../components/SchoolEmailInput";
 import { userApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
@@ -19,6 +20,7 @@ import {
   ACCOUNT_DELETION_CONFIRMATION,
   ACCOUNT_DELETION_ITEMS,
   ACCOUNT_RETENTION_NOTICE,
+  getMemberAccountDeletionSuccessPresentation,
   isAccountDeletionCodeValid,
   isDeletionConfirmationValid,
   publicAccountDeletionErrorMessage,
@@ -73,6 +75,7 @@ export default function PublicAccountDeletionScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
   const [expiresSeconds, setExpiresSeconds] = useState(0);
+  const memberSuccessPresentation = getMemberAccountDeletionSuccessPresentation(params.completed);
 
   useEffect(() => {
     if (step !== "verify") return;
@@ -174,6 +177,16 @@ export default function PublicAccountDeletionScreen() {
     setResendSeconds(0);
     setExpiresSeconds(0);
   };
+
+  if (memberSuccessPresentation) {
+    return (
+      <CompletionState
+        buttonLabel={memberSuccessPresentation.buttonLabel}
+        onConfirm={() => router.replace(memberSuccessPresentation.confirmRoute)}
+        title={memberSuccessPresentation.title}
+      />
+    );
+  }
 
   if (step === "success") {
     return (

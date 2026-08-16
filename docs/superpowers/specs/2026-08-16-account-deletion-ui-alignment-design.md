@@ -6,7 +6,7 @@
 
 ## Problem
 
-The signed-in account-deletion screen already matches the supplied mobile reference for its unchecked and checked states: it has the warning header, blue and amber retention notices, acknowledgement checkbox, disabled gray action, and enabled destructive action. The remaining visible mismatch is the completion state. Authenticated deletion currently redirects to the public account-deletion route, which renders a public-flow header, detailed retention copy, a login-specific button label, and a privacy-policy link.
+The signed-in account-deletion content already matches the supplied mobile reference for its unchecked and checked states: it has the warning header, blue and amber retention notices, acknowledgement checkbox, disabled gray action, and enabled destructive action. Browser comparison found that the surrounding tab layout still exposes the bottom navigation, while the reference is a full-screen account flow. The other visible mismatch is the completion state. Authenticated deletion currently redirects to the public account-deletion route, which renders a public-flow header, detailed retention copy, a login-specific button label, and a privacy-policy link.
 
 The reference instead shows a minimal completion state containing only an outlined green check, `탈퇴가 완료되었어요!`, and a primary `확인` button. The reference does not show current-password verification, but the backend contract requires it for authenticated deletion and it must remain.
 
@@ -15,6 +15,7 @@ The reference instead shows a minimal completion state containing only an outlin
 ### Pre-deletion states
 
 - Preserve the current signed-in screen because its unchecked and checked states already match the reference.
+- Hide the bottom tab bar only on `/settings/account-deletion`; keep it on the account screen, My Page, and all primary tabs.
 - Keep the exact blue and amber retention notices, acknowledgement checkbox, disabled gray button, and enabled destructive-red `탈퇴하기` button.
 - Keep the current-password modal after selecting `탈퇴하기`. It is a required security step, not an optional visual detail.
 - Preserve existing validation, retry feedback, rate-limit handling, administrator restriction, push-token cleanup, and session cleanup.
@@ -35,7 +36,7 @@ The reference instead shows a minimal completion state containing only an outlin
 
 ## Architecture
 
-Add a small pure presentation selector to `frontend/utils/accountDeletion.ts`. It maps only the explicit completion query value to the compact member-completion title, button label, and destination. The public route consumes this selector before its existing public success branch and renders `CompletionState` only when the selector returns a value.
+Add a small pure presentation selector to `frontend/utils/accountDeletion.ts`. It maps only the explicit completion query value to the compact member-completion title, button label, and destination. The public route consumes this selector before its existing public success branch and renders `CompletionState` only when the selector returns a value. Add a focused tab-visibility helper consumed by the tab layout so the account-deletion path becomes full-screen without changing sibling routes.
 
 No backend, API, database, authentication, or deletion-policy change is required.
 
@@ -46,6 +47,7 @@ Deletion errors remain on the signed-in screen or password modal. A successful a
 ## Testing
 
 - A pure behavior test verifies that only `completed=1` selects the compact member presentation.
+- A route behavior test verifies that only `/settings/account-deletion` hides the tab bar.
 - The test verifies the approved title, button label, and login destination using hand-derived literals.
 - Existing account-deletion security and retention tests remain unchanged.
 - Full frontend tests, typecheck, lint, and a 360px browser capture verify the integrated result.

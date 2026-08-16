@@ -24,6 +24,9 @@
 - Modify `frontend/utils/accountDeletion.ts`: expose the compact authenticated-completion presentation selector.
 - Modify `frontend/tests/accountDeletion.test.ts`: cover the explicit member/public completion distinction.
 - Modify `frontend/app/legal/account-deletion.tsx`: render `CompletionState` for authenticated completion only.
+- Create `frontend/utils/tabBarVisibility.ts`: decide whether a tab-group route is full-screen.
+- Create `frontend/tests/tabBarVisibility.test.ts`: protect account-deletion-only tab hiding.
+- Modify `frontend/app/(tabs)/_layout.tsx`: hide the bottom tab bar on the member deletion route.
 - Modify `docs/phase2/FRONTEND_ROUTE_SPEC.md`: record the two completion variants and retained password requirement.
 - Modify `CODEX.md`: record the completed P0 UI alignment after verification.
 
@@ -95,7 +98,41 @@ git add frontend/utils/accountDeletion.ts frontend/tests/accountDeletion.test.ts
 git commit -m "test: define member deletion completion"
 ```
 
-### Task 2: Route integration and contract documentation
+### Task 2: Full-screen member deletion route
+
+**Files:**
+- Create: `frontend/utils/tabBarVisibility.ts`
+- Create: `frontend/tests/tabBarVisibility.test.ts`
+- Modify: `frontend/app/(tabs)/_layout.tsx`
+
+**Interfaces:**
+- Consumes: the current Expo Router pathname.
+- Produces: `shouldHideTabBar(pathname)` and a hidden tab bar only for `/settings/account-deletion`.
+
+- [ ] **Step 1: Write and run the failing route behavior test**
+
+Assert that `/settings/account-deletion` with or without a trailing slash returns `true`, while `/settings/account`, `/settings`, and `/home` return `false`.
+
+Run: `npx tsx --test tests/tabBarVisibility.test.ts`
+
+Expected: FAIL because `frontend/utils/tabBarVisibility.ts` does not exist.
+
+- [ ] **Step 2: Implement the minimal helper and layout integration**
+
+Normalize a trailing slash and compare the pathname with `/settings/account-deletion`. Use `usePathname()` in the tab layout and set the existing `tabBarStyle` to `{ display: "none" }` only when the helper returns `true`.
+
+- [ ] **Step 3: Run the focused test and typecheck**
+
+Run:
+
+```bash
+npx tsx --test tests/tabBarVisibility.test.ts
+npm run typecheck
+```
+
+Expected: PASS.
+
+### Task 3: Route integration and contract documentation
 
 **Files:**
 - Modify: `frontend/app/legal/account-deletion.tsx`

@@ -1,9 +1,21 @@
-import { Tabs } from "expo-router";
+import { Tabs, usePathname } from "expo-router";
 
 import { CommunityTabIcon, CouncilTabIcon, HomeTabIcon, NoticeTabIcon, ParticipationTabIcon } from "../../components/icons";
 import { MyPageDrawerProvider } from "../../components/MyPageDrawer";
+import { shouldHideTabBar } from "../../utils/tabBarVisibility";
+
+const TAB_BAR_STYLE = {
+  height: 74,
+  borderTopColor: "#E1E4E9",
+  paddingTop: 8,
+  paddingBottom: 8,
+  backgroundColor: "#FFFFFF",
+};
 
 export default function TabsLayout() {
+  const pathname = usePathname();
+  const hideTabBar = shouldHideTabBar(pathname);
+
   return (
     <MyPageDrawerProvider>
       <Tabs
@@ -14,13 +26,7 @@ export default function TabsLayout() {
           // Figma: 라벨 11/13 Regular (react-navigation 기본 fontWeight 500 오버라이드)
           tabBarLabelStyle: { fontSize: 11, fontFamily: "Inter_400Regular", fontWeight: "400", lineHeight: 13, marginTop: 3, marginBottom: 0 },
           tabBarItemStyle: { paddingVertical: 0 },
-          tabBarStyle: {
-            height: 74,
-            borderTopColor: "#E1E4E9",
-            paddingTop: 8,
-            paddingBottom: 8,
-            backgroundColor: "#FFFFFF",
-          },
+          tabBarStyle: TAB_BAR_STYLE,
           headerShown: false,
         }}
       >
@@ -71,6 +77,7 @@ export default function TabsLayout() {
           options={{
             title: "설정",
             href: null,
+            tabBarStyle: hideTabBar ? { display: "none" } : TAB_BAR_STYLE,
           }}
         />
       </Tabs>

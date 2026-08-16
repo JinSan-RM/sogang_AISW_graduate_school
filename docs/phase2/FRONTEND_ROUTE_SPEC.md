@@ -223,7 +223,7 @@ Account:
 
 - Password change.
 - Logout.
-- Irreversible account deletion with current-password input, explicit acknowledgement, error recovery, and completed-session cleanup.
+- Irreversible account deletion with current-password input, explicit acknowledgement, error recovery, and completed-session cleanup. After an authenticated deletion, the explicit `completed=1` state uses the compact approved completion UI (`탈퇴가 완료되었어요!`, `확인`) and returns to login without exposing the protected settings stack.
 
 Public account deletion:
 
@@ -231,7 +231,7 @@ Public account deletion:
 - Verification requires email, code, current password, and the exact destructive-action confirmation phrase.
 - The page distinguishes request, verification, and completion states, but intentionally does not distinguish unknown account, wrong code, or wrong password errors.
 - The copy states that private/draft/hidden/mutual-aid content and private data are deleted, while retained public published content is disconnected from the author.
-- The same route can show the completion state after authenticated deletion and links back to login/privacy.
+- The same route distinguishes completion sources: authenticated `completed=1` uses the compact in-app completion state, while public email-code deletion keeps the detailed retention explanation and login/privacy links.
 
 My activity:
 
