@@ -6,6 +6,7 @@ import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleShee
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
+import ExpandableNaturalAspectMediaImage from "../../../components/ExpandableNaturalAspectMediaImage";
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
@@ -358,6 +359,7 @@ export default function PostDetailScreen() {
     boardSlug: board?.slug,
   });
   const hasNaturalHero = heroImagePresentation === "natural";
+  const hasExpandableHero = isActivityCertification || isAdminParticipationGuide;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -596,7 +598,11 @@ export default function PostDetailScreen() {
             <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum ? styles.visualHeroAlbum : null]}>
               {heroAttachment ? (
                 hasNaturalHero ? (
-                  <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                  hasExpandableHero ? (
+                    <ExpandableNaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                  ) : (
+                    <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                  )
                 ) : (
                   <MediaImage
                     media={heroAttachment}
@@ -793,7 +799,11 @@ export default function PostDetailScreen() {
                   style={isImage ? styles.imageAttachment : styles.fileAttachment}
                 >
                   {isImage && attachmentImagePresentation === "natural" ? (
-                    <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
+                    isNotice ? (
+                      <ExpandableNaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
+                    ) : (
+                      <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
+                    )
                   ) : null}
                   {!isImage ? (
                     <>
