@@ -101,3 +101,6 @@ data/*
 Thumbs.db
 .idea/
 .vscode/
+
+# Claude Code 로컬 감사 로그
+**/.claude/audit-log.jsonl
