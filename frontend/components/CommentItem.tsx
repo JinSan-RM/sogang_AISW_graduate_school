@@ -15,7 +15,7 @@ type Props = {
   comment: CommentNode;
   depth?: number;
   currentUserId?: number | null;
-  onReply?: (commentId: number) => void;
+  onReply?: (comment: CommentNode) => void;
   onEdit?: (commentId: number, content: string) => void;
   onDelete?: (commentId: number) => void;
   onReport?: (target: CommentReportTarget) => void;
@@ -83,7 +83,7 @@ export default function CommentItem({
       {hasActionRow ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 8 }}>
           {canReply ? (
-            <Pressable onPress={() => onReply?.(comment.id)}>
+            <Pressable onPress={() => onReply?.(comment)}>
               <Text style={{ color: "#2761FF", fontSize: 12, fontWeight: "500" }}>답글</Text>
             </Pressable>
           ) : null}
