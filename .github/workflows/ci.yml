@@ -225,7 +225,9 @@ jobs:
           pwsh -NoProfile -File scripts/production-compose.ps1 -Action Config -EnvFile .env.production.example -WorkerEnvFile .env.production.worker.example
           printf '%s\n' 'compose-validation-token' > /tmp/cloudflare-tunnel-token
           CLOUDFLARE_ENABLED=true CLOUDFLARE_TUNNEL_TOKEN_FILE=/tmp/cloudflare-tunnel-token \
+            RATE_LIMIT_TRUSTED_PROXY_IPS=172.30.250.14/32 \
             bash scripts/production-compose.sh Config .env.production.example .env.production.worker.example
           CLOUDFLARE_ENABLED=true CLOUDFLARE_TUNNEL_TOKEN_FILE=/tmp/cloudflare-tunnel-token \
+            RATE_LIMIT_TRUSTED_PROXY_IPS=172.30.250.14/32 \
             pwsh -NoProfile -File scripts/production-compose.ps1 -Action Config -EnvFile .env.production.example -WorkerEnvFile .env.production.worker.example
           docker compose --env-file .env.production.example -f docker-compose.yml -f docker-compose.production.example.yml build
