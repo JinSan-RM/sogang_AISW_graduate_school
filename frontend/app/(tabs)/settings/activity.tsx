@@ -5,14 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingState from "../../components/LoadingState";
-import { BookmarkIcon } from "../../components/icons";
-import { userApi } from "../../services/api";
-import type { UserActivityItem } from "../../types";
-import { MY_PAGE_ROUTE } from "../../utils/appRoutes";
-import { formatBoardDate } from "../../utils/dateFormat";
-import { resourceCategoryLabel } from "../../utils/resourceBoards";
-import { formatCohortName } from "../../utils/userLabel";
+import LoadingState from "../../../components/LoadingState";
+import { BackIcon, BookmarkIcon } from "../../../components/icons";
+import { userApi } from "../../../services/api";
+import type { UserActivityItem } from "../../../types";
+import { MY_PAGE_ROUTE } from "../../../utils/appRoutes";
+import { formatBoardDate } from "../../../utils/dateFormat";
+import { resourceCategoryLabel } from "../../../utils/resourceBoards";
+import { formatCohortName } from "../../../utils/userLabel";
 
 const COLORS = {
   primary: "#2761FF",
@@ -100,7 +100,7 @@ export default function ActivityScreen() {
           onPress={goBackToMyPage}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>{title}</Text>
         <View style={styles.iconButton} />

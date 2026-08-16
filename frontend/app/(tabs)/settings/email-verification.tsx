@@ -3,8 +3,9 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useMeQuery } from "../../hooks/useApi";
+import { useMeQuery } from "../../../hooks/useApi";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   text: "#15171C",
   label: "#6B7280",
@@ -41,7 +42,7 @@ export default function EmailVerificationScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>학교 이메일 인증 정보</Text>
         <View style={styles.iconButton} />
@@ -85,8 +86,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   verifiedRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  verifiedText: { color: COLORS.green, fontSize: 14, fontWeight: "500" },
-  email: { color: COLORS.text, fontSize: 17, fontWeight: "500" },
-  verifiedDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400" },
-  notice: { color: COLORS.label, fontSize: 13, fontWeight: "400", lineHeight: 19 },
+  verifiedText: { color: COLORS.green, fontSize: 14, fontWeight: "500", lineHeight: 17 },
+  email: { color: COLORS.text, fontSize: 17, fontWeight: "500", lineHeight: 21 },
+  verifiedDate: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 15 },
+  notice: { color: COLORS.label, fontSize: 13, fontWeight: "400", lineHeight: 16 },
 });

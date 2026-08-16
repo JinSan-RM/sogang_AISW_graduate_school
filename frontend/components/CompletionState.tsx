@@ -1,5 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { CheckCircleIcon } from "./icons";
 
 type Props = {
   title: string;
@@ -11,9 +12,7 @@ export default function CompletionState({ title, onConfirm, buttonLabel = "ÌôïÏù
   return (
     <View style={styles.screen}>
       <View style={styles.content}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="checkmark" size={36} color="#2E9E5B" />
-        </View>
+        <CheckCircleIcon size={64} />
         <Text style={styles.title}>{title}</Text>
         <Pressable accessibilityRole="button" onPress={onConfirm} style={styles.button}>
           <Text style={styles.buttonText}>{buttonLabel}</Text>
@@ -34,15 +33,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
     paddingHorizontal: 24,
-  },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#2E9E5B",
-    borderRadius: 32,
   },
   title: {
     color: "#15171C",

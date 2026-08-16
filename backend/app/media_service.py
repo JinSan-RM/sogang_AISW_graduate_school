@@ -153,6 +153,17 @@ def normalize_content_type(content_type: str | None) -> str:
     return MIME_ALIASES.get(normalized, normalized)
 
 
+def media_download_filename(media: MediaAsset) -> str:
+    filename = media.original_filename
+    if Path(filename).suffix:
+        return filename
+    extensions = MIME_EXTENSION_PAIRS.get(normalize_content_type(media.content_type))
+    if not extensions:
+        return filename
+    extension = min(extensions, key=lambda value: (len(value), value))
+    return f"{filename}{extension}"
+
+
 def normalize_original_filename(filename: str | None) -> str:
     basename = (filename or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
     if (

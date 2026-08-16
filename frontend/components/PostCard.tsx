@@ -12,6 +12,7 @@ type Props = {
   onPress: (postId: number) => void;
   boardType?: string;
   boardSlug?: string;
+  isLast?: boolean;
 };
 
 const COLORS = {
@@ -82,8 +83,8 @@ function normalizeCategory(post: PostListItem, boardType?: string, boardSlug?: s
 
 function categoryTone(label: string) {
   if (label.includes("반려")) return { bg: "#FBEAF0", fg: "#993556" };
-  if (label.includes("완료")) return { bg: "#EAF8EF", fg: "#1F7A46" };
-  if (label.includes("대기")) return { bg: "#FFF6DC", fg: "#9A6B00" };
+  if (label.includes("완료")) return { bg: "#EAF3DE", fg: "#3B6D11" }; // Figma: 답변완료 칩
+  if (label.includes("대기")) return { bg: "#FAEEDA", fg: "#854F0B" }; // Figma: 대기중 칩
   if (label.includes("진행")) return { bg: "#EAF3DE", fg: "#3B6D11" };
   if (label.includes("마감")) return { bg: "#F0F0EE", fg: "#5B5B57" };
   if (label.includes("종합")) return { bg: "#FAEEDA", fg: "#854F0B" };
@@ -105,7 +106,7 @@ function compactPreview(post: PostListItem) {
   return firstMeaningfulLine ?? "";
 }
 
-export default function PostCard({ post, onPress, boardType, boardSlug }: Props) {
+export default function PostCard({ post, onPress, boardType, boardSlug, isLast }: Props) {
   const label = normalizeCategory(post, boardType, boardSlug);
   const tone = categoryTone(label);
   const preview = compactPreview(post);
@@ -119,7 +120,7 @@ export default function PostCard({ post, onPress, boardType, boardSlug }: Props)
   const showLikeCount = !isWorkflowRequest && !isStudyRecruit;
 
   return (
-    <Pressable onPress={() => onPress(post.id)} style={styles.row}>
+    <Pressable onPress={() => onPress(post.id)} style={[styles.row, isWorkflowRequest ? styles.rowWorkflow : null, isLast ? styles.rowLast : null]}>
       <View style={styles.metaRow}>
         <View style={[styles.pill, { backgroundColor: tone.bg }]}>
           <Text style={[styles.pillText, { color: tone.fg }]}>{label}</Text>
@@ -131,7 +132,7 @@ export default function PostCard({ post, onPress, boardType, boardSlug }: Props)
           </View>
         ) : null}
       </View>
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={[styles.title, isWorkflowRequest ? styles.titleWorkflow : null]} numberOfLines={2}>
         {post.title}
       </Text>
       {preview && !isWorkflowRequest ? (
@@ -158,8 +159,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#E1E4E9",
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
+    // Figma: 구분선이 좌우 16px 안쪽에만 그려지도록 padding 대신 margin.
+    marginHorizontal: 16,
     paddingVertical: 14,
+  },
+  rowWorkflow: {
+    paddingVertical: 13, // Figma: 건의/상조회 항목 padding 13/0
+  },
+  rowLast: {
+    borderBottomWidth: 0,
   },
   metaRow: {
     flexDirection: "row",
@@ -175,6 +183,7 @@ const styles = StyleSheet.create({
   pillText: {
     fontSize: 11,
     fontWeight: "400",
+    lineHeight: 13,
   },
   pinPill: {
     height: 24,
@@ -194,20 +203,25 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "500",
-    lineHeight: 20,
+    lineHeight: 17, // Figma: 14/17
     marginTop: 6,
+  },
+  titleWorkflow: {
+    fontWeight: "400", // Figma: 건의/상조회 제목 Regular 14/17
+    lineHeight: 17,
   },
   preview: {
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "400",
-    lineHeight: 19,
+    lineHeight: 20, // Figma: 13/150%
     marginTop: 6,
   },
   footerText: {
     color: "#A6ACB7",
     fontSize: 12,
     fontWeight: "400",
+    lineHeight: 15,
     marginTop: 6,
   },
 });

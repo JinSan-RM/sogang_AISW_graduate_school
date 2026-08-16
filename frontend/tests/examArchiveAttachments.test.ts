@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { examArchiveAttachmentActions } from "../utils/postAttachments";
+import { writeAttachmentActions } from "../utils/postAttachments";
 
-test("시험 족보 글쓰기는 이미지와 문서 첨부 동작을 구분해 제공한다", () => {
+test("게시판 글쓰기는 이미지와 파일 첨부 동작을 구분해 제공한다", () => {
   const calls: string[] = [];
-  const actions = examArchiveAttachmentActions("exam-archive", {
+  const actions = writeAttachmentActions({
     images: () => calls.push("images"),
     documents: () => calls.push("documents"),
   });
@@ -21,13 +21,4 @@ test("시험 족보 글쓰기는 이미지와 문서 첨부 동작을 구분해 
   actions[0]?.onPress();
   actions[1]?.onPress();
   assert.deepEqual(calls, ["images", "documents"]);
-});
-
-test("다른 게시판 글쓰기는 시험 족보 전용 첨부 동작을 노출하지 않는다", () => {
-  const actions = examArchiveAttachmentActions("study-recruit", {
-    images: () => undefined,
-    documents: () => undefined,
-  });
-
-  assert.deepEqual(actions, []);
 });

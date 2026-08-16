@@ -18,6 +18,7 @@ import {
   shiftCalendarMonth,
 } from "../../utils/eventCalendar";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -106,7 +107,7 @@ export default function EventCalendarScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>일정</Text>
         <View style={styles.iconButton} />
@@ -114,7 +115,7 @@ export default function EventCalendarScreen() {
 
       <View style={styles.monthHeader}>
         <Pressable onPress={() => changeMonth(-1)} style={styles.monthButton}>
-          <Ionicons name="chevron-back" size={20} color={COLORS.text} />
+          <BackIcon size={20} color={COLORS.text} />
         </Pressable>
         <Text style={styles.monthTitle}>{monthLabel(currentMonth)}</Text>
         <Pressable onPress={() => changeMonth(1)} style={styles.monthButton}>

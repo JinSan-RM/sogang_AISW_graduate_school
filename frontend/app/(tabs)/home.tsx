@@ -21,7 +21,7 @@ import {
 
 import { MediaImageBackground } from "../../components/MediaImage";
 import HomeSectionGate from "../../components/HomeSectionGate";
-import { BellIcon, EmptyCalendarIcon, ProfileIcon } from "../../components/icons";
+import { BackIcon, BellIcon, EmptyCalendarIcon, ForwardIcon, ProfileIcon } from "../../components/icons";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useAllMultiBoardPosts } from "../../hooks/usePosts";
@@ -453,11 +453,11 @@ function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; m
     <View style={styles.calendarCard}>
       <View style={styles.calendarHeader}>
         <Pressable accessibilityLabel="이전 달" onPress={() => onChangeMonth(-1)} style={styles.calendarArrow}>
-          <Ionicons name="chevron-back" size={15} color={COLORS.subtle} />
+          <BackIcon size={16} color={COLORS.subtle} />
         </Pressable>
         <Text style={styles.calendarMonth}>{monthLabel(month)}</Text>
         <Pressable accessibilityLabel="다음 달" onPress={() => onChangeMonth(1)} style={styles.calendarArrow}>
-          <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
+          <ForwardIcon size={16} color={COLORS.subtle} />
         </Pressable>
       </View>
       <View style={styles.calendarGrid}>
@@ -947,17 +947,15 @@ const styles = StyleSheet.create({
   calendarCard: {
     borderRadius: 12,
     backgroundColor: COLORS.surface,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: COLORS.border,
-    paddingHorizontal: 14,
-    paddingTop: 13,
-    paddingBottom: 14,
+    padding: 14,
   },
   calendarHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 15,
+    marginBottom: 10,
   },
   calendarArrow: {
     width: 24,
@@ -969,6 +967,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "500",
+    lineHeight: 17,
   },
   calendarLink: {
     flexDirection: "row",
@@ -987,21 +986,23 @@ const styles = StyleSheet.create({
   calendarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    rowGap: 2,
   },
   weekday: {
     width: "14.285%",
     color: COLORS.subtle,
     fontSize: 11,
     fontWeight: "400",
+    lineHeight: 13,
     textAlign: "center",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   weekdaySunday: {
     color: "#993556",
   },
   dayCell: {
     width: "14.285%",
-    height: 32,
+    height: 28,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1019,14 +1020,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#E6F1FB",
   },
   dayText: {
-    width: 28,
-    height: 28,
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
-    lineHeight: 28,
+    lineHeight: 16,
     textAlign: "center",
-    textAlignVertical: "center",
     includeFontPadding: false,
   },
   dayTextActive: {
@@ -1039,31 +1037,30 @@ const styles = StyleSheet.create({
   },
   nextEvent: {
     marginTop: 10,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF0F3",
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 0,
-    backgroundColor: "transparent",
-    padding: 0,
+    gap: 10,
   },
   eventDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: COLORS.primary,
   },
   nextEventTitle: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   nextEventDday: {
     color: COLORS.primary,
     fontSize: 13,
     fontWeight: "500",
+    lineHeight: 16,
   },
   nextEventMeta: {
     color: COLORS.muted,
