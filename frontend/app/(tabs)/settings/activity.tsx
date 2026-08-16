@@ -11,6 +11,7 @@ import { userApi } from "../../../services/api";
 import type { UserActivityItem } from "../../../types";
 import { MY_PAGE_ROUTE } from "../../../utils/appRoutes";
 import { formatBoardDate } from "../../../utils/dateFormat";
+import { resourceCategoryLabel } from "../../../utils/resourceBoards";
 import { formatCohortName } from "../../../utils/userLabel";
 
 const COLORS = {
@@ -50,11 +51,11 @@ function itemLabel(item: UserActivityItem) {
 }
 
 function activityCategoryLabel(item: UserActivityItem) {
+  const resourceLabel = resourceCategoryLabel({ name: item.board_name }, item.category);
+  if (resourceLabel) return resourceLabel;
+
   const raw = item.category?.trim() || item.board_name?.trim() || itemLabel(item);
-  return {
-    "강의후기": "강의후기",
-    "시험족보": "시험족보",
-  }[raw] ?? raw;
+  return raw;
 }
 
 export default function ActivityScreen() {

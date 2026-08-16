@@ -911,6 +911,8 @@ Response:
 
 `board_id` may differ from the current board only when both the source and target are active boards with `category = resources` and `board_type = resource`. The API verifies the caller's target-board read/write permission and preserves the post ID, attachments, comments, likes, and bookmarks. Other cross-board moves return `400 BAD_REQUEST`.
 
+For resource boards, the resolved target board is authoritative for `category`: `lecture-reviews`, `exam-archive`, `comprehensive-exam`, and `graduation-thesis` store `강의후기`, `시험족보`, `종합시험`, and `졸업논문` respectively. A stale or missing client category cannot override this mapping.
+
 For mutual-aid requests, changing `metadata.event_date` applies the same KST D+2 rule as creation. An unchanged historical date may be retained while other editable fields are updated, so an existing processing request does not become uneditable merely because time passed.
 Members may update their own mutual-aid request only while its workflow status is `processing`. A `completed` or `rejected` request is immutable; administrators change workflow status only through the dedicated mutual-aid endpoint.
 

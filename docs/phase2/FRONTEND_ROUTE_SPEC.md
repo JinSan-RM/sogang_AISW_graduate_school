@@ -56,7 +56,7 @@ The root layout must guard all member routes and must guard `/admin` by role. Th
 Sections:
 
 - Quick menu for P0 flows.
-- Latest pinned notices.
+- Latest two notices across every active notice board, ordered by creation time without pin priority.
 - Upcoming schedule.
 - Recent community posts.
 
@@ -73,7 +73,7 @@ The Home schedule card changes its displayed month and `GET /events` range in pl
 
 ## 4. Board List Screen Requirements
 
-Community tab opens the `event-album` board when available and exposes `행사 사진첩 / 자료공유` as section tabs. Resource sharing offers `강의후기`, `시험족보`, `종합시험`, and `졸업논문`; `graduation-thesis` is a member-writable resource board. The resource post edit screen exposes a board picker limited to these active resource boards, and moving a post preserves its existing detail URL and related content. Participation activity certification uses a source-post selection sheet instead of free-text activity names.
+Community tab opens the `event-album` board when available and exposes `행사 사진첩 / 자료공유` as section tabs. Resource sharing offers `강의후기`, `시험족보`, `종합시험`, and `졸업논문`; `graduation-thesis` is a member-writable resource board. The resource post edit screen exposes a board picker limited to these active resource boards, and moving a post preserves its existing detail URL and related content. After a move, the target resource board is authoritative for the post tag across the resource list, post detail, and My Activity, so a stale stored category must never override the target board label. Participation activity certification uses a source-post selection sheet instead of free-text activity names.
 
 The participation club and networking guide lists are backed by `club-promo` and `networking-programs`. Only admins see their create entry points. Create/edit requires a representative image and an HTTP(S) participation URL; detail binds the `가입 신청` or `참가 신청` button to that URL.
 
@@ -116,6 +116,7 @@ Presentation rules from the approved Figma capture set:
 - Activity-certification date inputs, feeds, and details use `YY.MM.DD(weekday)`. Certification feeds use the selected activity date, falling back to the post creation date only for legacy data.
 - Schedule day headers use `YY.MM.DD(weekday)`, rows use `HH:mm`, and schedule detail metadata uses `YY.MM.DD(weekday) · HH:mm`.
 - Home schedule summaries use `MM.DD(weekday)`.
+- Home notice metadata uses `학사공지`, `행사공지`, or `기타공지`; webinar and special-lecture aliases are presented as `행사공지`, and raw codes such as `other` are never shown.
 - Home banners are image-only assets registered by an administrator. The app renders the selected responsive image without synthesized title, badge, description, deadline, theme overlay, or gradient; only the carousel page indicator and optional navigation link remain app UI.
 - Notice-detail image attachments use a full-width, 230px-high frame with `contain` sizing so the entire image remains visible; other post-detail image attachments keep their approved natural-aspect presentation.
 - Notification rows are an explicit exception: today's items use `오전/오후 h:mm`, and older rows use `YY.MM.DD` without a weekday.

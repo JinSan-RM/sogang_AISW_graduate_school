@@ -158,6 +158,58 @@ def _signed_file_response(api, access_response):
     return api.client.get(signed_url)
 
 
+@pytest.mark.parametrize(
+    ("original_filename", "stored_filename", "content_type", "body", "expected_filename"),
+    [
+        ("legacy-15811068", "legacy-15811068.pdf", "application/pdf", PDF_BYTES, "legacy-15811068.pdf"),
+        (
+            "legacy-15811070",
+            "legacy-15811070.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            b"PK\x03\x04test-docx",
+            "legacy-15811070.docx",
+        ),
+        ("already-named.pdf", "stored.pdf", "application/pdf", PDF_BYTES, "already-named.pdf"),
+        ("legacy-unknown", "stored.bin", "application/octet-stream", b"unknown", "legacy-unknown"),
+    ],
+)
+def test_signed_download_adds_missing_extension_without_renaming_valid_files(
+    api,
+    media_storage,
+    original_filename: str,
+    stored_filename: str,
+    content_type: str,
+    body: bytes,
+    expected_filename: str,
+) -> None:
+    public_directory, _ = media_storage
+    public_directory.mkdir(parents=True, exist_ok=True)
+    (public_directory / stored_filename).write_bytes(body)
+    with api.session() as db:
+        media = MediaAsset(
+            owner_id=1,
+            original_filename=original_filename,
+            stored_filename=stored_filename,
+            content_type=content_type,
+            file_size=len(body),
+            url=None,
+            is_private=False,
+            status="ready",
+        )
+        db.add(media)
+        db.flush()
+        media.url = f"/api/media/{media.id}/access-url"
+        media_id = media.id
+        db.commit()
+
+    access = api.client.get(f"/api/media/{media_id}/access-url", headers=api.headers["admin"])
+    response = _signed_file_response(api, access)
+
+    assert response.status_code == 200
+    assert response.content == body
+    assert response.headers["content-disposition"] == f'attachment; filename="{expected_filename}"'
+
+
 def test_upload_stream_validation_and_cleanup(api, media_storage, monkeypatch: pytest.MonkeyPatch) -> None:
     public_directory, _ = media_storage
 

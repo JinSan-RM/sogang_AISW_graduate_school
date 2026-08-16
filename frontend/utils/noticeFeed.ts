@@ -1,4 +1,18 @@
-import type { Board, PostListItem } from "../types";
+import type { ApiSuccess, Board, PostListItem } from "../types";
+
+export type PostListFilters = {
+  q?: string;
+  category?: string;
+  status?: string;
+  sort?: "latest" | "popular" | "views";
+};
+
+export type PostPageLoader = (
+  boardId: number,
+  page: number,
+  size: number,
+  filters?: PostListFilters
+) => Promise<ApiSuccess<PostListItem[]>>;
 
 export type NoticeFilter = "all" | "academic" | "event" | "other";
 
@@ -39,6 +53,11 @@ export function categoryFromNoticePost(post: PostListItem, board?: Board) {
   return normalizeNoticeCategory(post.category) ?? normalizeNoticeCategory(board?.slug) ?? "기타공지";
 }
 
+export function homeNoticeCategory(post: PostListItem, board?: Board) {
+  const category = categoryFromNoticePost(post, board);
+  return category === "특강공지" ? "행사공지" : category;
+}
+
 export function matchesNoticeFilter(category: string, filter: NoticeFilter) {
   if (filter === "all") return true;
   if (filter === "academic") return category === "학사공지";
@@ -62,4 +81,42 @@ export function noticePostsForFilter(posts: PostListItem[], boards: Board[], fil
       if (left.post.is_pinned !== right.post.is_pinned) return left.post.is_pinned ? -1 : 1;
       return new Date(right.post.created_at).getTime() - new Date(left.post.created_at).getTime();
     });
+}
+
+export function homeNoticePosts(posts: PostListItem[], boards: Board[], limit = 2) {
+  const activeNoticeBoardIds = new Set(
+    boards.filter(isNoticeContentBoard).map((board) => board.id)
+  );
+  const seen = new Set<number>();
+
+  return posts
+    .filter((post) => {
+      if (!activeNoticeBoardIds.has(post.board_id) || seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    })
+    .sort((left, right) => {
+      const createdAtDelta = new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
+      return createdAtDelta || right.id - left.id;
+    })
+    .slice(0, limit);
+}
+
+export async function loadAllBoardPosts(
+  boardId: number,
+  filters: PostListFilters | undefined,
+  loadPage: PostPageLoader,
+  pageSize = 20
+) {
+  const posts: PostListItem[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await loadPage(boardId, page, pageSize, filters);
+    posts.push(...response.data);
+
+    const pagination = response.pagination;
+    if (!pagination || pagination.page >= pagination.total_pages) return posts;
+    page = pagination.page + 1;
+  }
 }

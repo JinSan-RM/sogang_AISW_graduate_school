@@ -24,6 +24,7 @@ import HomeSectionGate from "../../components/HomeSectionGate";
 import { BackIcon, BellIcon, EmptyCalendarIcon, ForwardIcon, ProfileIcon } from "../../components/icons";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
+import { useAllMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
@@ -39,6 +40,7 @@ import {
   shiftCalendarMonth,
 } from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
+import { homeNoticeCategory, homeNoticePosts, isNoticeContentBoard } from "../../utils/noticeFeed";
 
 const COLORS = {
   primary: "#2761FF",
@@ -63,7 +65,6 @@ const CARD_ELEVATION = {
   elevation: 1,
 };
 
-const NOTICE_BOARD_SLUGS = ["all-notices", "academic-notices", "general-notices", "webinar-notices"];
 const POPULAR_BOARD_SLUGS = [
   "community-major",
   "community-seminar",
@@ -104,15 +105,6 @@ function pickBannerImage(banner: BannerItem | undefined, width: number) {
 
 function monthLabel(date: Date) {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
-}
-
-function noticeCategoryLabel(value?: string | null) {
-  const category = value?.trim().toLowerCase();
-  if (!category || category === "all") return "공지";
-  if (category.includes("academic") || category.includes("학사")) return "학사공지";
-  if (category.includes("event") || category.includes("행사")) return "행사공지";
-  if (category.includes("webinar") || category.includes("특강")) return "특강공지";
-  return value?.trim() || "공지";
 }
 
 function noticeDotColor(value?: string | null) {
@@ -391,16 +383,16 @@ function HomeBannerCarousel({ banners }: { banners: BannerItem[] }) {
 
 function NoticeList({
   posts,
+  boards,
   loading,
   isError,
   onRetry,
-  boardId,
 }: {
   posts: PostListItem[];
+  boards: Board[];
   loading: boolean;
   isError: boolean;
   onRetry: () => void;
-  boardId?: number;
 }) {
   if (loading) {
     return (
@@ -414,32 +406,35 @@ function NoticeList({
     return <HomeErrorState label="공지사항" onRetry={onRetry} />;
   }
 
-  const rows = posts.slice(0, 2);
+  const rows = posts;
+  const boardById = new Map(boards.map((board) => [board.id, board]));
   if (!rows.length) {
     return <HomeEmptyState type="notices" />;
   }
 
   return (
     <View style={styles.noticeList}>
-      {rows.map((post, index) => (
-        <Pressable
-          key={post.id}
-          onPress={() => router.push(`/board/post/${post.id}` as never)}
-          style={[styles.noticeRow, index === rows.length - 1 ? styles.noticeRowLast : null]}
-        >
-          <View style={[styles.noticeDot, { backgroundColor: noticeDotColor(post.category) }]} />
-          <View style={styles.noticeContent}>
-            <Text style={styles.noticeTitle} numberOfLines={1}>
-              {post.title}
-            </Text>
-            <Text style={styles.noticeMeta} numberOfLines={1}>
-              {noticeCategoryLabel(post.category)} · {formatBoardDate(post.created_at)}
-              {post.deadline_at ? ` · 마감 ${dDayLabel(post.deadline_at)}` : ""}
-            </Text>
-          </View>
-          {boardId ? null : <Ionicons name="remove" size={0} color={COLORS.subtle} />}
-        </Pressable>
-      ))}
+      {rows.map((post, index) => {
+        const category = homeNoticeCategory(post, boardById.get(post.board_id));
+        return (
+          <Pressable
+            key={post.id}
+            onPress={() => router.push(`/board/post/${post.id}` as never)}
+            style={[styles.noticeRow, index === rows.length - 1 ? styles.noticeRowLast : null]}
+          >
+            <View style={[styles.noticeDot, { backgroundColor: noticeDotColor(category) }]} />
+            <View style={styles.noticeContent}>
+              <Text style={styles.noticeTitle} numberOfLines={1}>
+                {post.title}
+              </Text>
+              <Text style={styles.noticeMeta} numberOfLines={1}>
+                {category} · {formatBoardDate(post.created_at)}
+                {post.deadline_at ? ` · 마감 ${dDayLabel(post.deadline_at)}` : ""}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -633,7 +628,8 @@ export default function HomeScreen() {
     refetch: refetchBoards,
   } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardGroups?.data), [boardGroups?.data]);
-  const noticeBoardId = useMemo(() => findBoardId(boards, NOTICE_BOARD_SLUGS, "notices"), [boards]);
+  const noticeBoards = useMemo(() => boards.filter(isNoticeContentBoard), [boards]);
+  const noticeBoardIds = useMemo(() => noticeBoards.map((board) => board.id), [noticeBoards]);
   const popularBoardId = useMemo(() => findBoardId(boards, POPULAR_BOARD_SLUGS, "community"), [boards]);
   const albumBoardId = useMemo(() => findBoardId(boards, ALBUM_BOARD_SLUGS, "participation"), [boards]);
 
@@ -641,11 +637,7 @@ export default function HomeScreen() {
     queryKey: ["banners", "home"],
     queryFn: () => bannerApi.getBanners({ placement: "home" }),
   });
-  const noticesQuery = useQuery({
-    queryKey: ["home", "notices", noticeBoardId],
-    queryFn: () => postApi.getPosts(noticeBoardId ?? 0, 1, 3, { sort: "latest" }),
-    enabled: Boolean(noticeBoardId),
-  });
+  const noticesQuery = useAllMultiBoardPosts(noticeBoardIds, { sort: "latest" });
   const eventsQuery = useQuery({
     queryKey: ["home", "events", monthRange.start, monthRange.end],
     queryFn: () => eventApi.getEvents({ from_date: monthRange.start, to_date: monthRange.end }),
@@ -663,7 +655,10 @@ export default function HomeScreen() {
   });
 
   const banners = bannersQuery.data?.data ?? [];
-  const notices = noticesQuery.data?.data ?? [];
+  const notices = useMemo(
+    () => homeNoticePosts(noticesQuery.data ?? [], noticeBoards),
+    [noticeBoards, noticesQuery.data]
+  );
   const events = eventsQuery.data?.data ?? [];
   const albumPosts = albumQuery.data?.data ?? [];
   const hasUnreadNotifications = (notificationQuery.data?.data ?? []).some((notification) => !notification.is_read);
@@ -703,10 +698,10 @@ export default function HomeScreen() {
       <SectionHeader title="공지사항" onPress={() => router.push("/(tabs)/notices" as never)} />
       <NoticeList
         posts={notices}
+        boards={noticeBoards}
         loading={noticesQuery.isLoading || boardsLoading}
         isError={boardsError || noticesQuery.isError}
         onRetry={() => void Promise.all([refetchBoards(), noticesQuery.refetch()])}
-        boardId={noticeBoardId}
       />
 
       <SectionHeader title="서강생활 일정" />

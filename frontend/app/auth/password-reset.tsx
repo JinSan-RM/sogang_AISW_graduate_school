@@ -12,6 +12,7 @@ import {
   emailIdError,
   passwordError,
 } from "../../utils/authValidation";
+import { passwordResetResendControl } from "../../utils/passwordResetUi";
 
 import { BackIcon } from "../../components/icons";
 const COLORS = {
@@ -218,6 +219,12 @@ export default function PasswordResetScreen() {
   const verificationAttemptsLocked = verificationFailureState === "attempts";
   const codeError = errors.code ?? (verificationExpired ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요." : undefined);
   const codeErrorHasBackground = Boolean(codeError) && verificationFailureState !== "expired" && !verificationExpired;
+  const resendControl = passwordResetResendControl({
+    verificationExpired,
+    verificationAttemptsLocked,
+    isSubmitting,
+    resendCooldown,
+  });
   const displayedPasswordError = errors.password ?? (resetValidationAttempted ? passwordError(newPassword) ?? undefined : undefined);
   const displayedPasswordConfirmError =
     errors.passwordConfirm ??
@@ -307,23 +314,41 @@ export default function PasswordResetScreen() {
                   ]}
                   value={code}
                 />
-                <FieldError message={codeError} />
               </View>
 
-              {!codeError && verificationMessage ? (
-                <View style={styles.verificationStatus}>
-                  <View style={styles.messageRow}>
-                    <Ionicons
-                      name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
-                      size={14}
-                      color={verificationMessage.type === "success" ? COLORS.successText : COLORS.danger}
-                    />
-                    <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
-                      {verificationMessage.text}
-                    </Text>
-                  </View>
+              <View style={styles.statusRow}>
+                <View style={styles.statusLeft}>
+                  {codeError ? (
+                    <View style={styles.messageRow}>
+                      <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
+                      <Text style={styles.errorText}>{codeError}</Text>
+                    </View>
+                  ) : verificationMessage ? (
+                    <View style={styles.messageRow}>
+                      <Ionicons
+                        name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
+                        size={14}
+                        color={verificationMessage.type === "success" ? COLORS.successText : COLORS.danger}
+                      />
+                      <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
+                        {verificationMessage.text}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
-              ) : null}
+                {resendControl.visible ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: resendControl.disabled }}
+                    disabled={resendControl.disabled}
+                    hitSlop={8}
+                    onPress={() => void requestCode(true)}
+                    style={styles.resendControlTrailing}
+                  >
+                    <Text style={styles.resendLink}>{resendControl.label}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
 
               {verificationExpired ? (
                 <Pressable
@@ -439,8 +464,10 @@ const styles = StyleSheet.create({
   messageRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: error/500 Regular
   successText: { flexShrink: 1, color: COLORS.successText, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: green Regular
-  verificationStatus: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: -12 },
-  timer: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
+  statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8, marginTop: -12 },
+  statusLeft: { flexShrink: 1, minWidth: 0 },
+  resendControlTrailing: { marginLeft: "auto" },
+  resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "500" }, // Figma: Medium 13, primary/500
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
   primaryButton: {
     height: 48,
