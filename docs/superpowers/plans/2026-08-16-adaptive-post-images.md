@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 공지사항과 참여활동 상세의 가로·세로 이미지가 전체 너비와 원본 비율을 사용해 내부 여백과 잘림 없이 표시되게 한다.
+**Goal:** 공지사항과 참여활동 상세의 가로·세로 이미지를 원본 비율로 표시하되, 계산 높이가 `500px`를 넘는 사진에는 제한된 미리보기와 인앱 전체보기를 제공한다.
 
-**Architecture:** 순수 함수 `postDetailImagePresentation`이 게시판과 이미지 위치를 받아 `natural`, `fixed-contain`, `fixed-cover` 중 하나를 결정한다. 게시글 상세는 이 정책에 따라 기존 `NaturalAspectMediaImage`를 재사용하고, 갤러리 선택 이미지 ID를 컴포넌트 키로 사용해 이미지 전환마다 비율 상태를 초기화한다.
+**Architecture:** 순수 함수 `postDetailImagePresentation`이 게시판과 이미지 위치의 기본 프레임 정책을 결정하고, `naturalImagePreviewLayout`이 컨테이너 너비와 원본 크기로 `500px` 초과 여부를 계산한다. 상세 전용 `ExpandableNaturalAspectMediaImage`가 일반 자연 비율 표시, 접힌 미리보기, 인앱 전체화면을 한 경계로 캡슐화한다.
 
 **Tech Stack:** React Native 0.81, Expo Router 6, TypeScript 5.9, Node test runner, ESLint
 
@@ -12,7 +12,8 @@
 
 - 이미지 너비는 해당 상세 화면에서 사용할 수 있는 너비의 `100%`다.
 - 이미지 원본 `width / height`를 화면 `aspectRatio`로 사용한다.
-- 세로 이미지에 최대 높이를 강제로 적용하지 않는다.
+- 계산된 자연 높이가 `500px` 이하면 전체 이미지를 표시하고, 초과하면 미리보기 높이를 `500px`로 제한한다.
+- 제한된 미리보기에는 `사진 전체보기` 버튼을 표시하고, 인앱 전체화면에서는 현재 이미지를 원본 비율과 세로 스크롤로 모두 표시한다.
 - 이미지 크기를 판독할 수 없을 때만 `16 / 9`를 임시 대체값으로 사용한다.
 - 행사 사진첩, 원우회 활동내역, 상조회 증빙, 일반 커뮤니티 첨부의 이미지 정책은 변경하지 않는다.
 - 이미지 열기, 보호 URL, 갤러리 화살표와 장수 표시는 유지한다.
@@ -268,3 +269,196 @@ Expected: 사용자 소유 미추적 파일 외에 계획되지 않은 변경이
 Run: `git push -u origin codex/adaptive-post-images`
 
 Expected: 원격 추적 브랜치가 설정되고 push가 성공한다.
+
+### Task 4: 500px 긴 이미지 미리보기와 인앱 전체보기
+
+**Files:**
+- Create: `frontend/utils/naturalImagePreview.ts`
+- Create: `frontend/tests/naturalImagePreview.test.ts`
+- Create: `frontend/components/ExpandableNaturalAspectMediaImage.tsx`
+- Modify: `frontend/app/board/post/[postId].tsx`
+
+**Interfaces:**
+- Consumes: `imageDimensionsFromLoadEvent(event): ImageDimensions | undefined`
+- Consumes: `MediaImage({ media, ...ImageProps })`
+- Produces: `POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT = 500`
+- Produces: `naturalImagePreviewLayout(input): { aspectRatio: number; naturalHeight: number; previewHeight: number; isExpandable: boolean } | undefined`
+- Produces: `ExpandableNaturalAspectMediaImage` with `media`, `fallbackAspectRatio`, `maxPreviewHeight`, `style`, and inherited `MediaImage` props
+
+- [ ] **Step 1: 긴 이미지 경계의 실패 테스트 작성**
+
+`frontend/tests/naturalImagePreview.test.ts`를 다음 내용으로 생성한다.
+
+```ts
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT,
+  naturalImagePreviewLayout,
+} from "../utils/naturalImagePreview";
+
+test("계산 높이가 500px 이하인 이미지는 전체 높이를 사용한다", () => {
+  assert.equal(POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT, 500);
+  assert.deepEqual(
+    naturalImagePreviewLayout({ containerWidth: 300, imageWidth: 600, imageHeight: 1000 }),
+    { aspectRatio: 0.6, naturalHeight: 500, previewHeight: 500, isExpandable: false },
+  );
+});
+
+test("계산 높이가 500px를 넘으면 미리보기 높이를 제한한다", () => {
+  assert.deepEqual(
+    naturalImagePreviewLayout({ containerWidth: 390, imageWidth: 1500, imageHeight: 2121 }),
+    { aspectRatio: 1500 / 2121, naturalHeight: 390 * 2121 / 1500, previewHeight: 500, isExpandable: true },
+  );
+});
+
+test("유효하지 않은 크기는 접힌 미리보기를 만들지 않는다", () => {
+  assert.equal(naturalImagePreviewLayout({ containerWidth: 0, imageWidth: 1500, imageHeight: 2121 }), undefined);
+  assert.equal(naturalImagePreviewLayout({ containerWidth: 390, imageWidth: 0, imageHeight: 2121 }), undefined);
+});
+```
+
+- [ ] **Step 2: 테스트가 기대한 이유로 실패하는지 확인**
+
+Run: `cd frontend && npx tsx --test tests/naturalImagePreview.test.ts`
+
+Expected: FAIL with `Cannot find module '../utils/naturalImagePreview'` because the height policy does not exist yet.
+
+- [ ] **Step 3: 순수 높이 정책 구현**
+
+`frontend/utils/naturalImagePreview.ts`를 생성한다.
+
+```ts
+export const POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT = 500;
+
+type NaturalImagePreviewInput = {
+  containerWidth: number;
+  imageWidth: number;
+  imageHeight: number;
+  maxPreviewHeight?: number;
+};
+
+export function naturalImagePreviewLayout({
+  containerWidth,
+  imageWidth,
+  imageHeight,
+  maxPreviewHeight = POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT,
+}: NaturalImagePreviewInput) {
+  if (![containerWidth, imageWidth, imageHeight, maxPreviewHeight].every((value) => Number.isFinite(value) && value > 0)) {
+    return undefined;
+  }
+  const aspectRatio = imageWidth / imageHeight;
+  const naturalHeight = containerWidth / aspectRatio;
+  const isExpandable = naturalHeight > maxPreviewHeight;
+  return {
+    aspectRatio,
+    naturalHeight,
+    previewHeight: isExpandable ? maxPreviewHeight : naturalHeight,
+    isExpandable,
+  };
+}
+```
+
+- [ ] **Step 4: 정책 테스트 통과 확인**
+
+Run: `cd frontend && npx tsx --test tests/naturalImagePreview.test.ts`
+
+Expected: PASS, 3 tests and 0 failures.
+
+- [ ] **Step 5: 확장 이미지 컴포넌트 구현**
+
+`frontend/components/ExpandableNaturalAspectMediaImage.tsx`는 다음 동작을 구현한다.
+
+```tsx
+const layout = dimensions && containerWidth > 0
+  ? naturalImagePreviewLayout({
+      containerWidth,
+      imageWidth: dimensions.width,
+      imageHeight: dimensions.height,
+      maxPreviewHeight,
+    })
+  : undefined;
+const aspectRatio = layout?.aspectRatio ?? fallbackAspectRatio;
+const isExpandable = layout?.isExpandable ?? false;
+```
+
+컴포넌트의 미리보기 루트는 `onLayout`으로 실제 너비를 저장한다. 이미지는 너비 `100%`와 `aspectRatio`를 사용하고, `isExpandable`이면 루트 높이를 `maxPreviewHeight`로 고정하고 `overflow: "hidden"`을 적용한다. 하단 `LinearGradient` 안의 `사진 전체보기` `Pressable`은 이벤트 전파를 중단하고 전체화면 `Modal`을 연다. 모달은 검은 배경, `사진 전체보기` 제목, 닫기 버튼, 세로 `ScrollView`, 현재 `MediaImage`의 원본 비율 이미지를 렌더링한다. `Modal.onRequestClose`도 같은 닫기 함수를 사용한다.
+
+- [ ] **Step 6: 공지와 참여활동 상세에만 연결**
+
+`frontend/app/board/post/[postId].tsx`에서 다음 범위만 `ExpandableNaturalAspectMediaImage`를 사용한다.
+
+```tsx
+const hasExpandableHero = isActivityCertification || isAdminParticipationGuide;
+
+{hasNaturalHero ? (
+  hasExpandableHero ? (
+    <ExpandableNaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} />
+  ) : (
+    <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} />
+  )
+) : (
+  <MediaImage ... />
+)}
+```
+
+첨부 이미지에서는 `isNotice`일 때만 확장 컴포넌트를 사용하고, 일반 커뮤니티 첨부는 기존 `NaturalAspectMediaImage`를 유지한다. `frontend/app/board/[boardId].tsx`와 `frontend/components/PostCard.tsx`는 수정하지 않는다.
+
+- [ ] **Step 7: 관련 테스트와 타입 검사 실행**
+
+Run: `cd frontend && npx tsx --test tests/naturalImagePreview.test.ts tests/postDetailImagePresentation.test.ts tests/imageDimensions.test.ts && npm run typecheck`
+
+Expected: 모든 테스트 PASS, 타입 검사 exit 0.
+
+- [ ] **Step 8: 구현 커밋**
+
+```bash
+git add frontend/utils/naturalImagePreview.ts frontend/tests/naturalImagePreview.test.ts frontend/components/ExpandableNaturalAspectMediaImage.tsx frontend/app/board/post/[postId].tsx
+git commit -m "feat(frontend): add long image full view"
+```
+
+### Task 5: 계약 갱신, 화면 검증과 기존 PR 업데이트
+
+**Files:**
+- Modify: `docs/phase2/FRONTEND_ROUTE_SPEC.md`
+- Modify: `docs/superpowers/plans/2026-08-16-adaptive-post-images.md`
+- Verify: `frontend/`
+- Create outside repository: `C:/Users/yug67/.codex/visualizations/2026/08/16/01a008c3-9814-7f33-960c-27daa212001c/adaptive-post-preview/long-image-*.png`
+
+**Interfaces:**
+- Consumes: Task 4의 `500px` 미리보기와 전체화면 컴포넌트
+- Produces: 현재 UI와 일치하는 프론트엔드 계약, 변경 화면 캡처, 갱신된 `codex/adaptive-post-images` 원격 브랜치와 PR #12
+
+- [ ] **Step 1: 프론트엔드 계약 갱신**
+
+`docs/phase2/FRONTEND_ROUTE_SPEC.md`의 이미지 규칙을 다음 내용으로 교체한다.
+
+```markdown
+- Notice-detail and participation-detail images use the available full width and each image's natural aspect ratio. Images whose calculated height exceeds 500px use a 500px preview with a `사진 전체보기` control that opens the complete current image in an in-app scrollable full-screen viewer; other post-detail and all list-thumbnail image policies remain unchanged.
+```
+
+- [ ] **Step 2: 전체 검증 실행**
+
+Run: `cd frontend && npm test && npm run typecheck && npm run lint && npm run export:web`
+
+Expected: tests and typecheck/export exit 0; lint has 0 errors and only the repository's existing unused-import warnings.
+
+- [ ] **Step 3: 실제 화면 캡처**
+
+세로 이미지가 `500px` 미리보기와 `사진 전체보기` 버튼을 표시하는 상세 화면, 버튼 클릭 후 전체 이미지 화면을 각각 캡처한다. 가로 이미지와 목록 썸네일이 기존 표현을 유지하는 것도 확인한다.
+
+- [ ] **Step 4: 문서와 캡처 검증 후 커밋**
+
+Run: `git diff --check; git status --short --branch`
+
+```bash
+git add docs/phase2/FRONTEND_ROUTE_SPEC.md docs/superpowers/plans/2026-08-16-adaptive-post-images.md
+git commit -m "docs: align long image preview contract"
+```
+
+- [ ] **Step 5: 기존 원격 브랜치와 PR 갱신**
+
+Run: `git push origin codex/adaptive-post-images`
+
+Expected: 원격 `codex/adaptive-post-images` HEAD가 로컬 HEAD와 같고 기존 초안 PR #12에 새 커밋이 추가된다.
