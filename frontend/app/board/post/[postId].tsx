@@ -28,6 +28,7 @@ import { reportApi, userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { MutualAidStatus } from "../../../types";
 import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
+import { activityCertificationDetailHeading } from "../../../utils/activityDetailPresentation";
 import { navigateFromPostDetail } from "../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../utils/dateFormat";
@@ -331,7 +332,9 @@ export default function PostDetailScreen() {
   const normalizedGalleryIndex = Math.min(galleryIndex, Math.max(imageAttachments.length - 1, 0));
   const isActivityCertification = board?.board_type === "activity_certification";
   const isStudyRecruit = board?.slug === "study-recruit";
-  const isStudyActivity = board?.slug === "study-activity";
+  const activityDetailHeading = isActivityCertification
+    ? activityCertificationDetailHeading(board?.slug, post.title, label)
+    : null;
   const isCouncilActivity = board?.board_type === "activity_history";
   const heroAttachment =
     board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry
@@ -642,8 +645,12 @@ export default function PostDetailScreen() {
 
         {board?.board_type !== "album" ? (
           <>
-            {isActivityCertification && isStudyActivity ? (
-              <Text style={styles.activityStudyTitle}>{label}</Text>
+            {activityDetailHeading?.titleText ? (
+              <Text style={styles.activityStudyTitle}>{activityDetailHeading.titleText}</Text>
+            ) : activityDetailHeading?.tagText ? (
+              <View style={[styles.categoryPill, { backgroundColor: tone.bg }]}>
+                <Text style={[styles.categoryText, { color: tone.fg }]}>{activityDetailHeading.tagText}</Text>
+              </View>
             ) : isCouncilActivity ? null : (
               <View style={[styles.categoryPill, isMutualAidRequest ? styles.mutualAidPill : null, { backgroundColor: tone.bg }]}>
                 <Text style={[styles.categoryText, isMutualAidRequest ? styles.mutualAidPillText : null, { color: tone.fg }]}>{label}</Text>
