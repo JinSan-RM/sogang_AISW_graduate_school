@@ -31,6 +31,7 @@ from app.models.board import Board
 from app.models.comment import Comment
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
+from app.models.user import User
 from scripts.verify_legacy_media import verify_legacy_media
 
 
@@ -344,6 +345,10 @@ def test_local_attachment_import_links_one_copy_per_post_and_serves_it(
 
     assert set(index_local_attachment_files(source_dir)) == {"9001", "9002"}
     with api.session() as db:
+        admin = db.scalar(select(User).where(User.role == "admin"))
+        assert admin is not None
+        admin.role = "user"
+        db.flush()
         post = db.get(Post, 3)
         stats = import_attachments(
             db,
@@ -375,6 +380,7 @@ def test_local_attachment_import_links_one_copy_per_post_and_serves_it(
             public_media_dir=public_dir,
             private_media_dir=private_dir,
         )
+        assert all(media.owner_id == post.author_id for media in imported_media)
 
     assert len(imported_media) == 2
     assert len(imported_links) == 1
@@ -439,6 +445,10 @@ def test_local_faq_image_is_returned_and_authorized(
     )
 
     with api.session() as db:
+        admin = db.scalar(select(User).where(User.role == "admin"))
+        assert admin is not None
+        admin.role = "user"
+        db.flush()
         posts, _, _ = import_articles_and_specials(db, [article], [], apply=True)
         stats = import_attachments(
             db,
@@ -452,6 +462,11 @@ def test_local_faq_image_is_returned_and_authorized(
             skip_downloads=False,
         )
         db.commit()
+        imported_media = db.scalar(
+            select(MediaAsset).where(MediaAsset.stored_filename == "legacy-4322320.png")
+        )
+        assert imported_media is not None
+        assert imported_media.owner_id is None
 
     assert stats["created_attachments"] == 1
     response = api.client.get("/api/faqs", headers=api.headers["owner"])
@@ -487,6 +502,10 @@ def test_unsupported_legacy_download_is_archived_without_exposing_media(api, tmp
     )
 
     with api.session() as db:
+        admin = db.scalar(select(User).where(User.role == "admin"))
+        assert admin is not None
+        admin.role = "user"
+        db.flush()
         post = db.get(Post, 3)
         media_count_before = db.scalar(select(func.count(MediaAsset.id)))
         stats = import_attachments(

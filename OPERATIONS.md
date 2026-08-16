@@ -32,9 +32,10 @@ Required production values:
 - `AUTH_SECRET_KEY`: random value of at least 32 characters.
 - `ACCOUNT_DELETION_RECEIPT_RETENTION_DAYS`: an interval explicitly approved
   by the privacy owner. Production intentionally has no invented default.
-- `ALLOWED_HOSTS`: comma-separated public API hostnames only. Do not include a
-  scheme, port, IP literal, or wildcard. The first hostname is also sent as the
-  internal readiness check's `Host` header.
+- `ALLOWED_HOSTS`: comma-separated approved public API hostnames. The dedicated
+  raw-IP rehearsal overlay also accepts one explicit globally routable IPv4.
+  Do not include a scheme, port, private/reserved IP, or wildcard. The first
+  entry is also sent as the internal readiness check's `Host` header.
 - `CORS_ORIGIN_REGEX`: an anchored HTTPS expression matching only approved web
   origins. Native applications do not need a CORS entry.
 - `RATE_LIMIT_ENABLED=true`.
@@ -87,8 +88,11 @@ environment file: configure `EXPO_PUBLIC_API_URL` separately in the selected
 EAS environment, using the same HTTPS API URL. This URL is public configuration,
 not a secret.
 
-Use a stable operator-controlled hostname. Staging and production reject
-Cloudflare Quick Tunnel `*.trycloudflare.com` URLs. Set
+Prefer a stable operator-controlled hostname for launch. The dedicated GCP
+raw-IP rehearsal is documented in
+[`docs/GCP_IP_PRODUCTION_DEPLOYMENT.md`](docs/GCP_IP_PRODUCTION_DEPLOYMENT.md).
+Staging and production reject Cloudflare Quick Tunnel `*.trycloudflare.com`
+URLs. Set
 `EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS` to a value longer than the backend SMTP
 timeout (the documented defaults are 120000 ms and 10 seconds respectively).
 
@@ -103,9 +107,10 @@ and static web ports only to host loopback. The optional connector reaches the
 services through a separate internal Docker origin network:
 
 ```text
-Compose tunnel: remote -> Cloudflare -> cloudflared -> backend:8000 / frontend-web:8080
-External ingress: remote -> HTTPS ingress -> 127.0.0.1:8000 / 127.0.0.1:8080
-PostgreSQL   -> Compose network only; no host or router port
+Compose tunnel:       remote -> Cloudflare -> cloudflared -> backend / frontend-web
+Public-IP overlay:    remote -> :80/:443 -> nginx -> ip_ingress -> backend / frontend-web
+External host ingress: remote -> HTTPS ingress -> 127.0.0.1:8000 / 127.0.0.1:8080
+PostgreSQL:           Compose network only; no host or router port
 ```
 
 Do not change either Compose binding to `0.0.0.0`. Do not port-forward 5432,
@@ -114,6 +119,8 @@ of the following:
 
 - a host-local reverse proxy that terminates valid public TLS and exposes only
   443 (optionally 80 solely for an HTTPS redirect); or
+- the reviewed Compose public-IP overlay in the dedicated GCP rehearsal
+  runbook; or
 - an authenticated outbound tunnel with fixed HTTPS hostnames.
 
 Cloudflare Tunnel is inbound HTTPS transport only. Authentication email leaves
@@ -242,9 +249,13 @@ docker compose @composeArgs logs --tail=100 notification-worker
 ## Legacy local-media import and server transfer
 
 Legacy workbook files and `data/attachments/attachments` are private migration inputs. Keep them
-outside Git and do not copy them to the production server. Run the reconciliation against an
-isolated PostgreSQL database whose name contains `migration_review`, writing media to two explicit
-directories that match the public/private runtime split:
+outside Git. The default transfer procedure builds a coordinated set off-host. The dedicated GCP
+rehearsal runbook is the reviewed exception: it permits mode-`0700` one-time staging under
+`/srv/aisw-import/incoming` on the operator-controlled test VM, verifies the approved source
+manifest, imports only into an isolated PostgreSQL database whose name contains
+`migration_review`, and retains the raw set until device QA. Never place the inputs in the
+checkout, a web-served directory, an image, or a Git artifact. The lower-level importer writes
+media to two explicit directories that match the public/private runtime split:
 
 ```powershell
 $reviewDatabaseUrl = $env:AISW_MIGRATION_REVIEW_DATABASE_URL

@@ -329,6 +329,12 @@ Scope:
 - Run backend checks, frontend typecheck, and runtime API smoke test.
 - Verify iOS and Android builds or document blockers.
 - Prepare Phase 5 QA issue list.
+- Implemented for the GCP rehearsal branch: a single-VM raw-public-IP HTTPS
+  overlay with pinned Nginx/Certbot images, exact proxy trust, short-lived IP
+  certificate renewal, production runtime validation, a fail-closed one-time
+  legacy import/restore gate, and PC web/Expo device handoff documentation.
+  Live certificate issuance, VM container smoke, SMTP/alert delivery, and
+  physical Android/iOS evidence remain deployment-time checks.
 
 Definition of done:
 

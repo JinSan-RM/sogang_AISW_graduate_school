@@ -1481,9 +1481,6 @@ def import_attachments(
         for media in existing_media.values()
         if (match := re.fullmatch(r"legacy-(.+?)(?:\.[^.]+)?", media.stored_filename))
     }
-    admin = db.scalar(select(User).where(User.role == "admin").order_by(User.id))
-    if apply and admin is None:
-        raise RuntimeError("A review-database administrator is required for archived media ownership.")
     ledger_by_article = {
         (record.entity_type, record.source_id): record
         for record in db.scalars(
@@ -1638,7 +1635,7 @@ def import_attachments(
                 stored_filename = destination.name
             if media is None:
                 media = MediaAsset(
-                    owner_id=post.author_id if post else admin.id,
+                    owner_id=post.author_id if post else None,
                     original_filename=filename,
                     stored_filename=stored_filename,
                     content_type=content_type,

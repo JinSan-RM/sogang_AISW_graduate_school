@@ -66,6 +66,18 @@ def test_complete_production_runtime_is_accepted() -> None:
     production_settings().validate_runtime()
 
 
+def test_public_ipv4_production_runtime_is_accepted() -> None:
+    production_settings(
+        allowed_hosts="34.50.35.119",
+        public_api_url="https://34.50.35.119/api",
+        support_url="https://34.50.35.119/legal/support",
+        privacy_policy_url="https://34.50.35.119/legal/privacy",
+        account_deletion_url="https://34.50.35.119/legal/account-deletion",
+        cors_origin_regex=r"^https://34\.50\.35\.119$",
+        rate_limit_trusted_proxy_ips="172.30.251.14/32",
+    ).validate_runtime()
+
+
 def test_deployed_runtime_rejects_demo_seed() -> None:
     with pytest.raises(RuntimeError, match="SEED_DEMO_DATA"):
         production_settings(seed_demo_data=True).validate_runtime()

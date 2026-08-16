@@ -1,0 +1,169 @@
+# Public-IP HTTPS ingress for the single-VM deployment. Combine with
+# docker-compose.yml and docker-compose.production.example.yml.
+services:
+  backend:
+    networks:
+      ip_ingress:
+
+  frontend-web:
+    networks:
+      ip_ingress:
+
+  nginx-bootstrap:
+    image: nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
+    profiles:
+      - certificate
+    init: true
+    read_only: true
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:?Set PUBLIC_IP in .env.production}
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/ip-bootstrap.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot_webroot:/var/www/certbot:ro
+    tmpfs:
+      - /etc/nginx/conf.d
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  nginx:
+    image: nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
+    init: true
+    read_only: true
+    restart: unless-stopped
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:?Set PUBLIC_IP in .env.production}
+      CERTIFICATE_WATCH_INTERVAL_SECONDS: ${CERTIFICATE_WATCH_INTERVAL_SECONDS:-300}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend-web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/ip.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/nginx/40-start-certificate-watch.sh:/docker-entrypoint.d/40-start-certificate-watch.sh:ro
+      - ./deploy/nginx/watch-certificates.sh:/usr/local/bin/watch-certificates.sh:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    networks:
+      ip_ingress:
+        ipv4_address: ${IP_INGRESS_PROXY_IP:-172.30.251.14}
+      ip_public:
+    tmpfs:
+      - /etc/nginx/conf.d
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q --no-check-certificate -O /dev/null https://127.0.0.1/health
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE
+      - SETGID
+      - SETUID
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  certbot:
+    image: certbot/certbot:v5.7.0@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4
+    profiles:
+      - certificate
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:?Set PUBLIC_IP in .env.production}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+
+  certbot-staging:
+    image: certbot/certbot:v5.7.0@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4
+    profiles:
+      - certificate
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:?Set PUBLIC_IP in .env.production}
+    volumes:
+      - letsencrypt_staging:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+
+  certificate-renewer:
+    image: certbot/certbot:v5.7.0@sha256:34ee91d2f43008eb78a007d22f23ed4b2eaa9a454cb27ca2c042b49527a695b4
+    init: true
+    read_only: true
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - >-
+        trap 'exit 0' TERM INT;
+        while :; do
+          certbot renew --quiet --preferred-profile shortlived
+            --webroot --webroot-path /var/www/certbot;
+          sleep 43200 & wait $$!;
+        done
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    tmpfs:
+      - /tmp
+      - /var/lib/letsencrypt
+      - /var/log/letsencrypt
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  letsencrypt:
+    name: ${LETSENCRYPT_VOLUME_NAME:-aisw-production_letsencrypt}
+  letsencrypt_staging:
+    name: ${LETSENCRYPT_STAGING_VOLUME_NAME:-aisw-production_letsencrypt_staging}
+  certbot_webroot:
+    name: ${CERTBOT_WEBROOT_VOLUME_NAME:-aisw-production_certbot_webroot}
+
+networks:
+  ip_ingress:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${IP_INGRESS_SUBNET:-172.30.251.0/28}
+  ip_public:
+    driver: bridge
