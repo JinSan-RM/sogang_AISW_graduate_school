@@ -4,11 +4,11 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingState from "../../components/LoadingState";
-import { eventApi } from "../../services/api";
-import { formatBoardDateTime } from "../../utils/dateFormat";
+import LoadingState from "../../../components/LoadingState";
+import { eventApi } from "../../../services/api";
+import { formatBoardDateTime } from "../../../utils/dateFormat";
 
-import { BackIcon } from "../../components/icons";
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",

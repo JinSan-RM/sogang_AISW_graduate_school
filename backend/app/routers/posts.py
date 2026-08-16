@@ -53,6 +53,16 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
     return metadata
 
 
+def _participant_label(payer: DuesPayer) -> str:
+    # 학번 A73006의 A 다음 두 자리가 기수 → "73기 홍길동"으로 표기한다.
+    # ponytail: 기수 2자리(99기까지)는 학번 체계(A+5자리)의 한계 — 100기부터는 학번 형식이
+    # 바뀌어야 하며, 그 경우 이 규칙에 안 걸려 이름만 표기된다(오파싱 없음). 형식 확정 시 갱신.
+    number = payer.student_number or ""
+    if len(number) == 6 and number[0] == "A" and number[1:].isdigit():
+        return f"{int(number[1:3])}기 {payer.name}"
+    return payer.name
+
+
 def _invalid_dues_payer() -> AppException:
     return AppException(
         status_code=422,
@@ -179,7 +189,7 @@ def _canonical_activity_metadata(
     if len(payers_by_id) != len(payer_ids):
         raise _invalid_dues_payer()
 
-    metadata["participants"] = ", ".join(payers_by_id[payer_id].name for payer_id in payer_ids)
+    metadata["participants"] = ", ".join(_participant_label(payers_by_id[payer_id]) for payer_id in payer_ids)
     metadata["participant_dues_payer_ids"] = payer_ids
     metadata.pop("participant_user_ids", None)
     return metadata

@@ -1,0 +1,58 @@
+# 로컬 개발 전용. `docker compose up` 시 자동으로 합쳐진다.
+# qa/production은 `-f docker-compose.yml -f docker-compose.qa.yml`처럼 파일을 명시해서
+# 실행하므로 이 파일이 적용되지 않는다.
+services:
+  # 인증 메일을 실제로 보내되 밖으로 나가지 않게 잡아두는 메일 캐처.
+  # 받은 메일은 http://localhost:8025 에서 확인한다.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    init: true
+    ports:
+      - "127.0.0.1:8025:8025"
+
+  # base compose가 db 자격증명/볼륨을 오버레이(qa/production)로 옮겨서,
+  # 로컬 `docker compose up`용 설정을 여기서 복원한다. pgdata 볼륨 이름이
+  # 예전과 같아서 기존 로컬 데이터가 그대로 유지된다.
+  db:
+    environment:
+      POSTGRES_DB: sogang_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  notification-worker:
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
+      NOTIFICATION_JOB_HOUR: "9"
+      NOTIFICATION_JOB_MINUTE: "0"
+      NOTIFICATION_JOB_RUN_ON_START: "false"
+    volumes:
+      - ./backend:/app
+
+  backend:
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/sogang_app
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_AUTH: none
+      SMTP_SECURITY: plain
+      SMTP_FROM_EMAIL: noreply@sogang.ac.kr
+      # 같은 주소로 반복 테스트할 때 429에 막히지 않도록.
+      RATE_LIMIT_ENABLED: "false"
+      # 재전송 쿨다운은 그대로 둔다. 이 값이 화면의 "재전송 (04:59)" 타이머다.
+      # 대기가 길어 불편하면 60 정도로 줄인다(0으로 두면 타이머가 사라진다).
+      EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS: "300"
+      PASSWORD_RESET_RESEND_COOLDOWN_SECONDS: "300"
+    depends_on:
+      mailpit:
+        condition: service_started
+
+volumes:
+  pgdata:

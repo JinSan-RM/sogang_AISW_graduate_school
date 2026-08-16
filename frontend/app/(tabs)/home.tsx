@@ -110,9 +110,12 @@ function monthLabel(date: Date) {
 function noticeDotColor(value?: string | null) {
   const category = value?.trim().toLowerCase() ?? "";
   if (category.includes("event") || category.includes("webinar") || category.includes("행사") || category.includes("특강")) {
-    return "#E25576";
+    return "#993556"; // Figma 행사공지
   }
-  return COLORS.primary;
+  if (category.includes("academic") || category.includes("학사")) {
+    return "#0C447C"; // Figma 학사공지
+  }
+  return "#6543A2"; // Figma 기타공지
 }
 
 function dDayLabel(value?: string | null) {
@@ -910,23 +913,23 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   noticeRow: {
-    minHeight: 62,
+    minHeight: 60, // Figma 공지 항목 60h, padding 12/0
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
     paddingHorizontal: 0,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEF0F3",
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
   },
   noticeRowLast: {
     borderBottomWidth: 0,
   },
   noticeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    marginTop: 7,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
   },
   noticeContent: {
     flex: 1,
@@ -936,12 +939,13 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
-    lineHeight: 20,
+    lineHeight: 17,
   },
   noticeMeta: {
     color: COLORS.muted,
     fontSize: 12,
     fontWeight: "400",
+    lineHeight: 15,
     marginTop: 4,
   },
   calendarCard: {

@@ -15,6 +15,7 @@ import {
 import { passwordResetResendControl } from "../../utils/passwordResetUi";
 
 import { BackIcon } from "../../components/icons";
+import { resendCountdownLabel } from "../../utils/signupVerificationUi";
 const COLORS = {
   primary: "#2761FF", // primary/500
   text: "#15171C", // gray/900 (Figma)
@@ -356,7 +357,9 @@ export default function PasswordResetScreen() {
                   onPress={() => void requestCode(true)}
                   style={[styles.primaryButton, isSubmitting || resendCooldown > 0 ? styles.submittingButton : null]}
                 >
-                  <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 재전송"}</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {isSubmitting ? "발송 중" : resendCooldown > 0 ? resendCountdownLabel(resendCooldown) : "인증코드 재전송"}
+                  </Text>
                 </Pressable>
               ) : (
                 <Pressable

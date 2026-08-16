@@ -3,21 +3,21 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { AttachFileIcon, AttachImageIcon, BackIcon, CameraAddIcon, CloseIcon } from "../../../components/icons";
-import { useBoardsQuery } from "../../../hooks/useApi";
-import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
-import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/usePosts";
-import CompletionState from "../../../components/CompletionState";
-import LoadingState from "../../../components/LoadingState";
-import { MediaImageBackground } from "../../../components/MediaImage";
-import { duesPayerApi, postApi } from "../../../services/api";
-import type { MediaAsset, PostListItem } from "../../../types";
+import { AttachFileIcon, AttachImageIcon, BackIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
+import { useBoardsQuery } from "../../../../hooks/useApi";
+import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
+import { useCreatePost, usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
+import CompletionState from "../../../../components/CompletionState";
+import LoadingState from "../../../../components/LoadingState";
+import { MediaImageBackground } from "../../../../components/MediaImage";
+import { duesPayerApi, postApi } from "../../../../services/api";
+import type { MediaAsset, PostListItem } from "../../../../types";
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   activityParticipantSelectionError,
@@ -27,8 +27,8 @@ import {
   buildActivityCertificationMetadata,
   formatActivityParticipant,
   type ActivityParticipant,
-} from "../../../utils/activityCertification";
-import { formatBoardDate } from "../../../utils/dateFormat";
+} from "../../../../utils/activityCertification";
+import { formatBoardDate } from "../../../../utils/dateFormat";
 import {
   calendarMonthFromDotDate,
   formatDotDate,
@@ -36,18 +36,18 @@ import {
   isMutualAidEventDateAllowed,
   maximumActivityCertificationDate,
   minimumMutualAidEventDate,
-} from "../../../utils/dateSelection";
-import { createFormNotice, requiredFieldNotice, type FormNotice } from "../../../utils/formNotice";
-import { openMediaUrl } from "../../../utils/mediaOpener";
-import { pickAndUploadDocuments, pickAndUploadImages } from "../../../utils/mediaPicker";
+} from "../../../../utils/dateSelection";
+import { createFormNotice, requiredFieldNotice, type FormNotice } from "../../../../utils/formNotice";
+import { openMediaUrl } from "../../../../utils/mediaOpener";
+import { pickAndUploadDocuments, pickAndUploadImages } from "../../../../utils/mediaPicker";
 import {
   canEditMutualAidRequest,
   isUnchangedMutualAidEventDate,
   mutualAidEventTypeLabel,
   mutualAidRelationLabel,
   normalizeMutualAidEventDate,
-} from "../../../utils/mutualAid";
-import { writeAttachmentActions } from "../../../utils/postAttachments";
+} from "../../../../utils/mutualAid";
+import { writeAttachmentActions } from "../../../../utils/postAttachments";
 
 const COLORS = {
   primary: "#2761FF",
@@ -108,6 +108,25 @@ function FormField({ label, required, requiredStar, optional, helper, error, chi
       {helper ? <Text style={styles.helperText}>{helper}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
+  );
+}
+
+// Figma: 입력 중(포커스) 상태는 1.5px #21262E 테두리
+function FormTextInput({ style, onBlur, onFocus, ...props }: ComponentProps<typeof TextInput>) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <TextInput
+      {...props}
+      onBlur={(event) => {
+        setFocused(false);
+        onBlur?.(event);
+      }}
+      onFocus={(event) => {
+        setFocused(true);
+        onFocus?.(event);
+      }}
+      style={[style, focused ? styles.inputFocused : null, { outlineStyle: "none" } as never]}
+    />
   );
 }
 
@@ -300,6 +319,8 @@ export default function PostCreateScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [participantQuery, setParticipantQuery] = useState("");
+  const [participantSearchFocused, setParticipantSearchFocused] = useState(false);
+  const [evidenceLinkFocused, setEvidenceLinkFocused] = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<ActivityParticipant[]>([]);
   const [selectionSheet, setSelectionSheet] = useState<"activity" | "mutualType" | "mutualRelation" | "board" | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -779,6 +800,11 @@ export default function PostCreateScreen() {
         <Pressable
           accessibilityLabel="닫기"
           onPress={() => {
+            // 활동 인증 작성 화면의 <는 스택 이전 화면(홈 등)이 아니라 인증 목록으로 돌아간다.
+            if (isActivity && !postId) {
+              router.replace(`/board/${boardId}` as never);
+              return;
+            }
             if (router.canGoBack()) router.back();
             else router.replace(`/board/${boardId}` as never);
           }}
@@ -845,7 +871,7 @@ export default function PostCreateScreen() {
               control={control}
               name="content"
               render={({ field, fieldState }) => (
-                <TextInput
+                <FormTextInput
                   multiline
                   onChangeText={field.onChange}
                   placeholder="활동에 대한 소감을 남겨주세요"
@@ -892,7 +918,7 @@ export default function PostCreateScreen() {
                 control={control}
                 name="bankAccount"
                 render={({ field }) => (
-                  <TextInput
+                  <FormTextInput
                     editable={canEditActivityBankAccount}
                     onChangeText={field.onChange}
                     placeholder={canEditActivityBankAccount ? "은행 / 계좌번호를 입력하세요" : "기존 계좌 정보가 유지됩니다"}
@@ -918,13 +944,15 @@ export default function PostCreateScreen() {
                 render={() => {
                   return (
                     <>
-                      <View style={styles.activityInputWithIcon}>
+                      <View style={[styles.activityInputWithIcon, participantSearchFocused ? styles.activityInputWithIconFocused : null]}>
                         <Ionicons name="search-outline" size={16} color="#A6ACB7" />
                         <TextInput
+                          onBlur={() => setParticipantSearchFocused(false)}
                           onChangeText={setParticipantQuery}
+                          onFocus={() => setParticipantSearchFocused(true)}
                           placeholder="이름 또는 학번으로 검색"
                           placeholderTextColor="#A6ACB7"
-                          style={styles.activityInlineInput}
+                          style={[styles.activityInlineInput, { outlineStyle: "none" } as never]}
                           value={participantQuery}
                         />
                       </View>
@@ -1075,8 +1103,8 @@ export default function PostCreateScreen() {
           control={control}
           name="title"
           render={({ field, fieldState }) => (
-            <FormField label={compactCreate ? "" : labels.title} required error={fieldState.error?.message}>
-              <TextInput
+            <FormField label={compactCreate || isStudyRecruit ? "" : labels.title} required error={fieldState.error?.message}>
+              <FormTextInput
                 onChangeText={field.onChange}
                 placeholder={labels.titlePlaceholder}
                 placeholderTextColor="#A6ACB7"
@@ -1140,7 +1168,7 @@ export default function PostCreateScreen() {
                   ))}
                 </View>
               ) : (
-                <TextInput
+                <FormTextInput
                   onChangeText={field.onChange}
                   placeholder={labels.categoryPlaceholder}
                   placeholderTextColor="#A6ACB7"
@@ -1160,7 +1188,7 @@ export default function PostCreateScreen() {
             name="activityDate"
             render={({ field }) => (
               <FormField label="활동일" required>
-                <TextInput
+                <FormTextInput
                   onChangeText={field.onChange}
                   placeholder="YYYY.MM.DD"
                   placeholderTextColor="#A6ACB7"
@@ -1175,7 +1203,7 @@ export default function PostCreateScreen() {
             name="participants"
             render={({ field }) => (
               <FormField label="참가자" required helper="여러 명이면 쉼표로 구분해 입력하세요.">
-                <TextInput
+                <FormTextInput
                   onChangeText={field.onChange}
                   placeholder="예: 홍길동, 김서강"
                   placeholderTextColor="#A6ACB7"
@@ -1190,7 +1218,7 @@ export default function PostCreateScreen() {
             name="bankAccount"
             render={({ field }) => (
               <FormField label="입금 계좌" required helper="은행명, 계좌번호, 예금주를 함께 입력하세요.">
-                <TextInput
+                <FormTextInput
                   onChangeText={field.onChange}
                   placeholder="예: 신한 110-000-000000 홍길동"
                   placeholderTextColor="#A6ACB7"
@@ -1300,15 +1328,17 @@ export default function PostCreateScreen() {
                 ) : null}
               </>
             ) : (
-              <View style={styles.evidenceLinkField}>
+              <View style={[styles.evidenceLinkField, evidenceLinkFocused ? styles.evidenceLinkFieldFocused : null]}>
                 <Ionicons name="link-outline" size={16} color={COLORS.muted} />
                 <TextInput
                   autoCapitalize="none"
                   keyboardType="url"
+                  onBlur={() => setEvidenceLinkFocused(false)}
                   onChangeText={setEvidenceLink}
+                  onFocus={() => setEvidenceLinkFocused(true)}
                   placeholder="청첩장·부고장 링크를 입력해주세요"
                   placeholderTextColor={COLORS.muted}
-                  style={styles.evidenceLinkInput}
+                  style={[styles.evidenceLinkInput, { outlineStyle: "none" } as never]}
                   value={evidenceLink}
                 />
               </View>
@@ -1323,7 +1353,7 @@ export default function PostCreateScreen() {
             name="content"
             render={({ field }) => (
               <FormField label="비고" optional>
-                <TextInput
+                <FormTextInput
                   multiline
                   onChangeText={field.onChange}
                   placeholder="전달하고 싶은 내용이 있다면 적어주세요"
@@ -1343,8 +1373,8 @@ export default function PostCreateScreen() {
           control={control}
           name="content"
           render={({ field, fieldState }) => (
-            <FormField label={compactCreate ? "" : labels.content} required={!isMutualAid} error={fieldState.error?.message}>
-              <TextInput
+            <FormField label={compactCreate || isStudyRecruit ? "" : labels.content} required={!isMutualAid} error={fieldState.error?.message}>
+              <FormTextInput
                 multiline
                 onChangeText={field.onChange}
                 placeholder={labels.contentPlaceholder}
@@ -1364,7 +1394,7 @@ export default function PostCreateScreen() {
           name="contact"
           render={({ field }) => (
             <FormField label="스터디장 연락수단">
-              <TextInput
+              <FormTextInput
                 multiline
                 onChangeText={field.onChange}
                 placeholder={"스터디원들과 연락할 수단을 입력해주세요.\n(이메일, 카카오톡 ID, 휴대폰번호 등)"}
@@ -1384,7 +1414,7 @@ export default function PostCreateScreen() {
           name="applicationUrl"
           render={({ field }) => (
             <FormField label="참여 버튼 링크" required helper={`상세 화면의 ${isNetworkingProgram ? "참가 신청" : "가입 신청"} 버튼이 이 주소를 엽니다.`}>
-              <TextInput
+              <FormTextInput
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="url"
@@ -1960,6 +1990,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
     paddingHorizontal: 14,
   },
+  activityInputWithIconFocused: {
+    borderWidth: 1.5, // Figma 참가자검색 focus: 1.5px #21262E
+    borderColor: "#21262E",
+    paddingHorizontal: 13, // 굵어진 테두리만큼 보정해 내용 흔들림 방지
+  },
   activityInlineInput: {
     flex: 1,
     minHeight: 41,
@@ -2326,6 +2361,10 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     lineHeight: 15,
   },
+  evidenceLinkFieldFocused: {
+    borderWidth: 1.5, // Figma focus: 1.5px #21262E
+    borderColor: "#21262E",
+  },
   evidenceNotice: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2387,6 +2426,12 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  inputFocused: {
+    borderWidth: 1.5, // Figma 참가자검색 focus와 동일: 1.5px #21262E
+    borderColor: "#21262E",
+    paddingHorizontal: 13, // 굵어진 테두리만큼 보정
+    paddingVertical: 11,
   },
   inputDisabled: {
     backgroundColor: "#F3F4F6",

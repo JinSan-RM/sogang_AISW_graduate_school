@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingState from "../components/LoadingState";
-import NaturalAspectMediaImage from "../components/NaturalAspectMediaImage";
-import { faqApi } from "../services/api";
-import type { FAQItem } from "../types";
+import LoadingState from "../../components/LoadingState";
+import NaturalAspectMediaImage from "../../components/NaturalAspectMediaImage";
+import { faqApi } from "../../services/api";
+import type { FAQItem } from "../../types";
 
-import { BackIcon, EmptyDocumentIcon } from "../components/icons";
+import { BackIcon, EmptyDocumentIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   qBadgeBg: "#E6F1FB", // Figma 62:77 Q badge

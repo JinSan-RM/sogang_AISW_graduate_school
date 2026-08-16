@@ -15,7 +15,7 @@ export type ReportSubmission = {
 export type ReportEntryState = {
   visible: boolean;
   label: "신고" | "신고됨";
-  action: "open" | "own-unavailable" | "none";
+  action: "open" | "none";
 };
 
 export function getReportEntryState({
@@ -27,13 +27,9 @@ export function getReportEntryState({
   isReported: boolean;
   isAllowedTarget: boolean;
 }): ReportEntryState {
-  if (!isAllowedTarget) return { visible: false, label: "신고", action: "none" };
+  if (!isAllowedTarget || isMine) return { visible: false, label: "신고", action: "none" };
   if (isReported) return { visible: true, label: "신고됨", action: "none" };
-  return {
-    visible: true,
-    label: "신고",
-    action: isMine ? "own-unavailable" : "open",
-  };
+  return { visible: true, label: "신고", action: "open" };
 }
 
 export function getReportSubmission(reason: ReportReason, detail: string): ReportSubmission | null {

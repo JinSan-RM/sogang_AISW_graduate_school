@@ -5,10 +5,10 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import LoadingState from "../../components/LoadingState";
-import { eventApi } from "../../services/api";
-import type { EventItem } from "../../types";
-import { formatTime24 } from "../../utils/dateFormat";
+import LoadingState from "../../../components/LoadingState";
+import { eventApi } from "../../../services/api";
+import type { EventItem } from "../../../types";
+import { formatTime24 } from "../../../utils/dateFormat";
 import {
   calendarMonthRange,
   currentKoreaMonth,
@@ -16,9 +16,9 @@ import {
   eventOccursOnCalendarDate,
   koreaCalendarDate,
   shiftCalendarMonth,
-} from "../../utils/eventCalendar";
+} from "../../../utils/eventCalendar";
 
-import { BackIcon } from "../../components/icons";
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",

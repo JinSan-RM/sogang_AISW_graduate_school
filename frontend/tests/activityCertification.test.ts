@@ -17,10 +17,17 @@ test("참가자 안내는 미납자·졸업자 제외와 본인 추가를 설명
   assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도 검색해서 추가해주세요/);
 });
 
-test("원우회비 납부자는 이름 전공 학번을 띄어쓰기로 표시한다", () => {
+test("납부자 칩은 학번 앞 두 자리를 기수로 읽어 '기수 이름'으로 표시한다", () => {
   assert.equal(
     formatActivityParticipant({ id: 4, name: "김서강", major: "AI", student_number: "A74001" }),
-    "김서강 AI A74001",
+    "74기 김서강",
+  );
+});
+
+test("기수 규칙에 맞지 않는 학번은 이름 전공 학번 표기로 대체한다", () => {
+  assert.equal(
+    formatActivityParticipant({ id: 5, name: "김서강", major: "AI", student_number: "B74001" }),
+    "김서강 AI B74001",
   );
 });
 

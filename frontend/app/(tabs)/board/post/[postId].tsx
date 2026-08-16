@@ -1,18 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import CommentItem from "../../../components/CommentItem";
-import ExpandableNaturalAspectMediaImage from "../../../components/ExpandableNaturalAspectMediaImage";
-import LoadingState from "../../../components/LoadingState";
-import MediaImage from "../../../components/MediaImage";
-import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
-import { BookmarkIcon, CalendarSmallIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../components/icons";
-import { useBoardsQuery } from "../../../hooks/useApi";
-import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
+import CommentItem from "../../../../components/CommentItem";
+import ExpandableNaturalAspectMediaImage from "../../../../components/ExpandableNaturalAspectMediaImage";
+import LoadingState from "../../../../components/LoadingState";
+import MediaImage from "../../../../components/MediaImage";
+import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
+import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { useBoardsQuery } from "../../../../hooks/useApi";
+import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import {
   useCreateComment,
   useDeleteComment,
@@ -24,25 +24,25 @@ import {
   useUpdateComment,
   useUpdateMutualAid,
   useUpdateSuggestion,
-} from "../../../hooks/usePosts";
-import { reportApi, userApi } from "../../../services/api";
-import { useUserStore } from "../../../stores/userStore";
-import type { MutualAidStatus } from "../../../types";
-import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
-import { activityCertificationDetailHeading } from "../../../utils/activityDetailPresentation";
-import { navigateFromPostDetail } from "../../../utils/appRoutes";
-import { commentKeyAction, commentSubmissionValue } from "../../../utils/commentKeyboard";
-import { COMMENT_DELETE_COPY } from "../../../utils/commentPresentation";
-import { formatBoardDate } from "../../../utils/dateFormat";
-import { openMediaUrl } from "../../../utils/mediaOpener";
-import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
-import { isAdminUser } from "../../../utils/permissions";
-import { postDetailImagePresentation } from "../../../utils/postDetailImagePresentation";
-import { shouldShowPostAuthorBlock } from "../../../utils/postMenu";
-import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../utils/reportForm";
-import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../utils/replyComposer";
-import { resourceCategoryLabel } from "../../../utils/resourceBoards";
-import { formatCohortName } from "../../../utils/userLabel";
+} from "../../../../hooks/usePosts";
+import { reportApi, userApi } from "../../../../services/api";
+import { useUserStore } from "../../../../stores/userStore";
+import type { MutualAidStatus } from "../../../../types";
+import { navigateFromPostDetail } from "../../../../utils/appRoutes";
+import { commentKeyAction, commentSubmissionValue } from "../../../../utils/commentKeyboard";
+import { formatBoardDate } from "../../../../utils/dateFormat";
+import { openMediaUrl } from "../../../../utils/mediaOpener";
+import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../../utils/mutualAid";
+import { isAdminUser } from "../../../../utils/permissions";
+import { formatCohortName } from "../../../../utils/userLabel";
+import { activityCertificationBadgeLabel } from "../../../../utils/activityCertification";
+import { activityCertificationDetailHeading } from "../../../../utils/activityDetailPresentation";
+import { COMMENT_DELETE_COPY } from "../../../../utils/commentPresentation";
+import { postDetailImagePresentation } from "../../../../utils/postDetailImagePresentation";
+import { shouldShowPostAuthorBlock } from "../../../../utils/postMenu";
+import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../../utils/reportForm";
+import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../../utils/replyComposer";
+import { resourceCategoryLabel } from "../../../../utils/resourceBoards";
 
 const COLORS = {
   primary: "#2761FF",
@@ -166,8 +166,9 @@ export default function PostDetailScreen() {
   const comments = commentRes?.data ?? [];
 
   const [commentText, setCommentText] = useState("");
-  const [commentInputHeight, setCommentInputHeight] = useState(38);
+  const [commentInputHeight, setCommentInputHeight] = useState(36); // Figma: 입력창 36h
   const commentSubmitLockRef = useRef(false);
+  const commentInputRef = useRef<TextInput>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const replyComposer = getReplyComposerState(replyTarget);
   const [isLiked, setIsLiked] = useState(false);
@@ -177,13 +178,17 @@ export default function PostDetailScreen() {
   const [reportReason, setReportReason] = useState<ReportReason>(REPORT_REASONS[0].value);
   const [reportDetail, setReportDetail] = useState("");
   const [isReporting, setIsReporting] = useState(false);
-  const [isBlockingAuthor, setIsBlockingAuthor] = useState(false);
   const [reportedTargets, setReportedTargets] = useState<Record<string, boolean>>({});
   const [suggestionStatus, setSuggestionStatus] = useState("received");
   const [suggestionReply, setSuggestionReply] = useState("");
   const [mutualAidStatus, setMutualAidStatus] = useState<MutualAidStatus>("processing");
   const [mutualAidRejectionReason, setMutualAidRejectionReason] = useState("");
   const [showPostMenu, setShowPostMenu] = useState(false);
+  // 공지 세로 이미지: 360px 박스로 접어두고 "사진 전체보기"로 펼친다 (Figma Detail-ImageVertical)
+  // 이미지가 박스보다 작으면(가로형 등) 버튼 없이 원본 비율 그대로 보여준다 (Detail-ImageWithAttachments)
+  const [expandedImages, setExpandedImages] = useState<Record<number, boolean>>({});
+  const [imageAspects, setImageAspects] = useState<Record<number, number>>({});
+  const NOTICE_IMAGE_COLLAPSE_ASPECT = 320 / 360; // 이보다 세로로 길면 접는다
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<number | null>(null);
   const [commentDeleteError, setCommentDeleteError] = useState<string | null>(null);
@@ -215,6 +220,11 @@ export default function PostDetailScreen() {
 
   const handlePostBack = useCallback(() => {
     if (!post) return;
+    // 활동 인증 글은 참여활동 탭 루트(동아리·안내로 초기화)가 아니라 해당 인증 목록으로 돌아간다.
+    if (board?.board_type === "activity_certification") {
+      router.replace(`/board/${post.board_id}` as never);
+      return;
+    }
     navigateFromPostDetail(board, {
       canGoBack: () => router.canGoBack(),
       back: () => router.back(),
@@ -299,6 +309,10 @@ export default function PostDetailScreen() {
     isAdminOnlyBoard,
     boardSlug: board?.slug,
   });
+  // 더보기 시트의 마지막 항목에는 구분선을 그리지 않는다 (Figma Report/MoreMenu)
+  const lastMenuItem = [canEditOwn && "edit", canDeleteOwn && "delete", showReportItem && "report"]
+    .filter(Boolean)
+    .pop();
   const hasPostMenu = canEditOwn || canDeleteOwn || showReportItem || showBlockItem;
   const currentSuggestionLabel =
     SUGGESTION_STATUSES.find((status) => status.value === (post.suggestion?.status ?? suggestionStatus))?.label ??
@@ -429,30 +443,6 @@ export default function PostDetailScreen() {
     } finally {
       setIsReporting(false);
     }
-  };
-
-  const handleBlockAuthor = () => {
-    const authorId = post.author_id;
-    if (!requireLogin() || authorId === null || isMine || isBlockingAuthor) return;
-    Alert.alert("작성자 차단", "이 작성자의 게시글과 댓글을 내 화면에서 숨길까요?", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "차단",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setIsBlockingAuthor(true);
-            await userApi.blockUser({ blocked_user_id: authorId, reason: "post_detail" });
-            Alert.alert("차단 완료", "차단한 작성자의 콘텐츠를 숨겼습니다.");
-            router.replace(`/board/${post.board_id}`);
-          } catch {
-            Alert.alert("차단 실패", "잠시 후 다시 시도하세요.");
-          } finally {
-            setIsBlockingAuthor(false);
-          }
-        },
-      },
-    ]);
   };
 
   const handleLike = async () => {
@@ -687,7 +677,7 @@ export default function PostDetailScreen() {
                   ? `${formatBoardDate(post.created_at)} · 조회 ${post.view_count}`
                   : isMutualAidRequest
                     ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(post.created_at)}`
-                  : commentsDisabled
+                  : commentsDisabled || board?.slug === "exam-archive"
                     ? formatBoardDate(post.created_at)
                   : isResource || isStudyRecruit
                     ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(post.created_at)}`
@@ -702,13 +692,6 @@ export default function PostDetailScreen() {
         ) : null}
         {!isPhotoAlbum && !isMutualAidRequest && post.content.trim() ? <Text style={[styles.body, isActivityCertification ? styles.bodyTopGapCert : isAdminParticipationGuide ? styles.bodyTopGap : null]}>{post.content}</Text> : null}
 
-        {board?.board_type === "notice" && contentUrl ? (
-          <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.externalLinkButton}>
-            <Ionicons name="link-outline" size={18} color={COLORS.primary} />
-            <Text numberOfLines={1} style={styles.externalLinkText}>{contentUrl}</Text>
-            <Ionicons name="open-outline" size={17} color={COLORS.primary} />
-          </Pressable>
-        ) : null}
 
         {isActivityCertification ? (
           <>
@@ -737,7 +720,7 @@ export default function PostDetailScreen() {
           </>
         ) : isStudyRecruit ? (
           typeof metadata.contact === "string" && metadata.contact.trim() ? (
-            <View style={styles.certDateRow}>
+            <View style={[styles.certDateRow, styles.studyContactRow]}>
               <Ionicons name="mail-outline" size={15} color={COLORS.muted} />
               <Text style={styles.certDateText}>스터디장 연락수단 {metadata.contact}</Text>
             </View>
@@ -777,6 +760,13 @@ export default function PostDetailScreen() {
             {isMutualAidRequest ? <Text style={styles.mutualAidSectionLabel}>증빙서류</Text> : null}
             {visibleAttachments.map((attachment) => {
               const isImage = attachment.content_type.startsWith("image/");
+              const attachmentAspect = imageAspects[attachment.id];
+              const collapseNoticeImage =
+                isNotice &&
+                isImage &&
+                attachmentAspect !== undefined &&
+                attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT &&
+                !expandedImages[attachment.id];
               return (
                 <Pressable
                   key={attachment.id}
@@ -794,27 +784,55 @@ export default function PostDetailScreen() {
                       Alert.alert("파일 열기 실패", "첨부 파일에 접근할 수 없습니다.");
                     }
                   }}
-                  style={isImage ? styles.imageAttachment : styles.fileAttachment}
+                  style={isImage ? [styles.imageAttachment, collapseNoticeImage ? styles.noticeImageAttachment : null, isNotice ? styles.noticeImageRadius : null] : styles.fileAttachment}
                 >
-                  {isImage && attachmentImagePresentation === "natural" ? (
-                    isNotice ? (
-                      <ExpandableNaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
-                    ) : (
-                      <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
-                    )
+                  {isImage ? (
+                    <>
+                      <NaturalAspectMediaImage
+                        media={attachment}
+                        onAspectRatio={(nextAspect) => {
+                          setImageAspects((current) =>
+                            current[attachment.id] === nextAspect ? current : { ...current, [attachment.id]: nextAspect }
+                          );
+                        }}
+                        style={styles.attachmentImage}
+                      />
+                      {collapseNoticeImage ? (
+                        <>
+                          <LinearGradient colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.94)"]} style={styles.noticeImageFade} />
+                          <Pressable
+                            accessibilityLabel="사진 전체보기"
+                            onPress={() => setExpandedImages((current) => ({ ...current, [attachment.id]: true }))}
+                            style={styles.noticeImageExpandButton}
+                          >
+                            <Text style={styles.noticeImageExpandText}>사진 전체보기</Text>
+                          </Pressable>
+                        </>
+                      ) : null}
+                    </>
                   ) : null}
                   {!isImage ? (
                     <>
-                      <Ionicons name="document-outline" size={18} color={COLORS.subtle} />
+                      <AttachDocIcon size={18} />
                       <Text numberOfLines={1} style={styles.fileName}>
                         {attachment.original_filename}
                       </Text>
-                      <Ionicons name="download-outline" size={18} color={COLORS.primary} />
+                      <DownloadIcon size={18} />
                     </>
                   ) : null}
                 </Pressable>
               );
             })}
+          </View>
+        ) : null}
+
+        {board?.board_type === "notice" && contentUrl ? (
+          <View style={[styles.attachments, visibleAttachments.length > 0 ? styles.attachmentsFollowup : null]}>
+            <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.fileAttachment}>
+              <AttachLinkIcon size={16} />
+              <Text numberOfLines={1} style={styles.fileName}>{contentUrl}</Text>
+              <ExternalLinkIcon size={18} />
+            </Pressable>
           </View>
         ) : null}
 
@@ -965,9 +983,10 @@ export default function PostDetailScreen() {
           <View style={styles.commentSection}>
             <Text style={styles.commentTitle}>댓글 {post.comment_count}</Text>
             {comments.length === 0 ? <Text style={styles.emptyComment}>아직 댓글이 없어요. 첫 댓글을 남겨보세요!</Text> : null}
-            {comments.map((comment) => (
+            {comments.map((comment, index) => (
+              <Fragment key={comment.id}>
+                {index > 0 ? <View style={styles.commentThreadDivider} /> : null}
               <CommentItem
-                key={comment.id}
                 comment={comment}
                 currentUserId={userId}
                 onDelete={handleDeleteComment}
@@ -979,11 +998,20 @@ export default function PostDetailScreen() {
                     throw error;
                   }
                 }}
-                onOwnReport={() => Alert.alert("신고할 수 없어요", "본인 댓글은 신고할 수 없어요.")}
                 onReport={startReport}
                 reportedTargets={reportedTargets}
-                onReply={(comment) => setReplyTarget(createReplyTarget(comment))}
+                // 스터디 모집 댓글에는 답글(대댓글)을 제공하지 않는다.
+                onReply={
+                  isStudyRecruit
+                    ? undefined
+                    : (comment) => {
+                        setReplyTarget(createReplyTarget(comment));
+                        // 답글을 누르면 바로 입력창에 커서를 준다.
+                        commentInputRef.current?.focus();
+                      }
+                }
               />
+              </Fragment>
             ))}
           </View>
         ) : null}
@@ -993,10 +1021,7 @@ export default function PostDetailScreen() {
         <View style={[styles.commentBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           {replyComposer.noticeText ? (
             <View style={styles.replyNotice}>
-              <View style={styles.replyNoticeTarget}>
-                <Ionicons name="arrow-undo-outline" size={14} color={COLORS.primary} />
-                <Text style={styles.replyNoticeText}>{replyComposer.noticeText}</Text>
-              </View>
+              <Text style={styles.replyNoticeText}>{replyComposer.noticeText}</Text>
               <Pressable accessibilityLabel="답글 대상 취소" onPress={() => setReplyTarget(null)}>
                 <Text style={styles.replyCancelText}>취소</Text>
               </Pressable>
@@ -1004,12 +1029,13 @@ export default function PostDetailScreen() {
           ) : null}
           <View style={styles.commentInputRow}>
             <TextInput
+              ref={commentInputRef}
               blurOnSubmit={Platform.OS === "web" ? false : undefined}
               multiline
               value={commentText}
               onChangeText={setCommentText}
               onContentSizeChange={(event) => {
-                setCommentInputHeight(Math.min(88, Math.max(38, event.nativeEvent.contentSize.height)));
+                setCommentInputHeight(Math.min(88, Math.max(36, event.nativeEvent.contentSize.height)));
               }}
               onKeyPress={handleCommentKeyPress}
               onSubmitEditing={Platform.OS === "web" ? undefined : handleCreateComment}
@@ -1020,8 +1046,8 @@ export default function PostDetailScreen() {
               style={[styles.commentInput, { height: commentInputHeight }, { outlineStyle: "none" } as never]}
               submitBehavior={Platform.OS === "web" ? "newline" : "submit"}
             />
-            <Pressable disabled={createCommentMutation.isPending} onPress={handleCreateComment} style={styles.sendButton}>
-              <Ionicons name="send" size={17} color="#FFFFFF" />
+            <Pressable accessibilityLabel="댓글 등록" disabled={createCommentMutation.isPending} onPress={handleCreateComment}>
+              <SendIcon size={36} />
             </Pressable>
           </View>
         </View>
@@ -1041,10 +1067,7 @@ export default function PostDetailScreen() {
                     router.push(`/board/post/edit/${post.id}`);
                   }
                 }}
-                style={[
-                  styles.sheetMenuItem,
-                  !canDeleteOwn && !showReportItem && !showBlockItem ? styles.sheetMenuItemLast : null,
-                ]}
+                style={[styles.sheetMenuItem, lastMenuItem === "edit" ? styles.sheetMenuItemLast : null]}
               >
                 <PencilIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>수정</Text>
@@ -1056,10 +1079,7 @@ export default function PostDetailScreen() {
                   setShowPostMenu(false);
                   handleDeletePost();
                 }}
-                style={[
-                  styles.sheetMenuItem,
-                  !showReportItem && !showBlockItem ? styles.sheetMenuItemLast : null,
-                ]}
+                style={[styles.sheetMenuItem, lastMenuItem === "delete" ? styles.sheetMenuItemLast : null]}
               >
                 <TrashIcon size={20} color="#D64545" />
                 <Text style={[styles.sheetMenuText, styles.sheetMenuDangerText]}>삭제</Text>
@@ -1070,32 +1090,12 @@ export default function PostDetailScreen() {
                 disabled={postReportEntry.action === "none"}
                 onPress={() => {
                   setShowPostMenu(false);
-                  if (postReportEntry.action === "own-unavailable") {
-                    Alert.alert("신고할 수 없어요", "본인 게시글은 신고할 수 없어요.");
-                    return;
-                  }
                   startReport({ type: "post", id: post.id, label: "게시글" });
                 }}
-                style={[
-                  styles.sheetMenuItem,
-                  !showBlockItem ? styles.sheetMenuItemLast : null,
-                ]}
+                style={[styles.sheetMenuItem, lastMenuItem === "report" ? styles.sheetMenuItemLast : null]}
               >
                 <FlagIcon size={20} color={COLORS.text} />
                 <Text style={styles.sheetMenuText}>{postReportEntry.label}</Text>
-              </Pressable>
-            ) : null}
-            {showBlockItem ? (
-              <Pressable
-                disabled={isBlockingAuthor}
-                onPress={() => {
-                  setShowPostMenu(false);
-                  handleBlockAuthor();
-                }}
-                style={[styles.sheetMenuItem, styles.sheetMenuItemLast]}
-              >
-                <Ionicons name="remove-circle-outline" size={20} color={COLORS.text} />
-                <Text style={styles.sheetMenuText}>{isBlockingAuthor ? "차단 중" : "작성자 차단"}</Text>
               </Pressable>
             ) : null}
           </Pressable>
@@ -1109,15 +1109,16 @@ export default function PostDetailScreen() {
             <Text style={styles.reportSheetTitle}>신고하기</Text>
             <Text style={styles.reportSheetSubtitle}>신고 사유를 선택해주세요</Text>
             <View style={styles.reportReasonList}>
-              {REPORT_REASONS.map((reason) => {
+              {REPORT_REASONS.map((reason, index) => {
                 const selected = reportReason === reason.value;
+                const isLast = index === REPORT_REASONS.length - 1;
                 return (
                   <Pressable
                     accessibilityRole="radio"
                     accessibilityState={{ checked: selected }}
                     key={reason.value}
                     onPress={() => setReportReason(reason.value)}
-                    style={[styles.reportReasonItem, { outlineStyle: "none" } as never]}
+                    style={[styles.reportReasonItem, isLast ? styles.reportReasonItemLast : null, { outlineStyle: "none" } as never]}
                   >
                     <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
                       {selected ? <View style={styles.radioInner} /> : null}
@@ -1383,6 +1384,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#EAECEF",
   },
+  reportReasonItemLast: {
+    borderBottomWidth: 0,
+  },
   radioOuter: {
     width: 18,
     height: 18,
@@ -1441,13 +1445,13 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(17, 24, 39, 0.38)",
+    backgroundColor: "rgba(0, 0, 0, 0.4)", // Figma 딤드배경
     paddingHorizontal: 28,
     zIndex: 60,
   },
   confirmCard: {
     width: "100%",
-    maxWidth: 272,
+    maxWidth: 280, // Figma 댓글삭제확인모달 280w
     borderRadius: 16,
     backgroundColor: COLORS.surface,
     padding: 20,
@@ -1503,6 +1507,7 @@ const styles = StyleSheet.create({
     color: "#4B5160",
     fontSize: 16,
     fontWeight: "500",
+    lineHeight: 24,
   },
   confirmDeleteButton: {
     height: 40,
@@ -1516,6 +1521,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "500",
+    lineHeight: 24,
   },
   postMenu: {
     position: "absolute",
@@ -1688,6 +1694,7 @@ const styles = StyleSheet.create({
     color: "#A6ACB7",
     fontSize: 12,
     fontWeight: "400",
+    lineHeight: 15,
     marginTop: 8,
   },
   metaNotice: {
@@ -1738,6 +1745,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "500",
     lineHeight: 21, // Figma: 17/21
+  },
+  studyContactRow: {
+    gap: 6, // Figma: 스터디 연락처행 gap 6
   },
   certDateRow: {
     flexDirection: "row",
@@ -1871,10 +1881,10 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   fileAttachment: {
-    minHeight: 46,
+    minHeight: 42, // Figma 첨부파일/첨부링크 42h
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
+    gap: 10,
     borderWidth: 0.5,
     borderColor: "#E1E4E9",
     borderRadius: 8,
@@ -1885,6 +1895,44 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden",
     backgroundColor: "#F3F4F6",
+  },
+  noticeImageAttachment: {
+    height: 360, // Figma 이미지첨부 360h
+    backgroundColor: "#F1F0E8",
+  },
+  noticeImageRadius: {
+    borderRadius: 12,
+  },
+  noticeAttachmentImage: {
+    width: "100%",
+    height: "100%",
+  },
+  noticeImageFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 110, // Figma 하단 그라데이션
+  },
+  noticeImageExpandButton: {
+    position: "absolute",
+    alignSelf: "center",
+    bottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 0.5,
+    borderColor: "#E1E4E9",
+    backgroundColor: "#FFFFFF",
+  },
+  noticeImageExpandText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 16,
+  },
+  attachmentsFollowup: {
+    marginTop: 12, // 첨부목록과의 간격 (Figma gap 12)
   },
   attachmentImage: {
     width: "100%",
@@ -2125,6 +2173,11 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "500",
+    lineHeight: 17,
+  },
+  commentThreadDivider: {
+    height: 1,
+    backgroundColor: "#E1E4E9",
   },
   emptyComment: {
     color: "#A6ACB7",
@@ -2141,29 +2194,31 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   replyNotice: {
+    // Figma 답글대상표시: 풀폭 #F7F7F5 바, padding 10/16, 상단 0.5 구분선
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
-    borderRadius: 8,
-    backgroundColor: COLORS.primary50,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  replyNoticeTarget: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
+    gap: 8,
+    marginHorizontal: -16,
+    marginTop: -10,
+    marginBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "#F7F7F5",
+    borderTopWidth: 0.5,
+    borderTopColor: "#E1E4E9",
   },
   replyNoticeText: {
-    color: COLORS.primary,
+    color: "#6B7280",
     fontSize: 12,
-    fontWeight: "500",
+    fontWeight: "400",
+    lineHeight: 15,
   },
   replyCancelText: {
-    color: COLORS.muted,
+    color: "#A6ACB7",
     fontSize: 12,
     fontWeight: "500",
+    lineHeight: 15,
   },
   commentInputRow: {
     flexDirection: "row",
@@ -2172,7 +2227,7 @@ const styles = StyleSheet.create({
   },
   commentInput: {
     flex: 1,
-    minHeight: 38,
+    minHeight: 36,
     maxHeight: 88,
     borderWidth: 0.5,
     borderColor: "#E1E4E9",
@@ -2180,6 +2235,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
     paddingHorizontal: 14,
     paddingVertical: 9,
     textAlignVertical: "top",

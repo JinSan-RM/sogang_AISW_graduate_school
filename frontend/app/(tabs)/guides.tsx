@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ScrollView, Text, View } from "react-native";
 
-import BackButton from "../components/BackButton";
+import BackButton from "../../components/BackButton";
 
 const COLORS = {
   navy: "#112d4e",

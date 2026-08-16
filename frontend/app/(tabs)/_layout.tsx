@@ -80,6 +80,11 @@ export default function TabsLayout() {
             tabBarStyle: hideTabBar ? { display: "none" } : TAB_BAR_STYLE,
           }}
         />
+        {/* 탭바를 유지한 채 여는 화면들 — 탭 버튼으로는 노출하지 않는다.
+            board/events는 중첩 Stack이라 진입마다 새 화면이 push되어 params/상태가 늘 새것이다. */}
+        {["search", "events", "faq", "guides", "notifications", "board", "council/mutual-aid-complete"].map((name) => (
+          <Tabs.Screen key={name} name={name} options={{ href: null }} />
+        ))}
       </Tabs>
     </MyPageDrawerProvider>
   );

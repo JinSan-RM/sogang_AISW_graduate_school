@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const postCardSource = readFileSync("components/PostCard.tsx", "utf8");
-const postDetailSource = readFileSync("app/board/post/[postId].tsx", "utf8");
-const postCreateSource = readFileSync("app/board/post/create.tsx", "utf8");
-const boardDetailSource = readFileSync("app/board/[boardId].tsx", "utf8");
+const postDetailSource = readFileSync("app/(tabs)/board/post/[postId].tsx", "utf8");
+const postCreateSource = readFileSync("app/(tabs)/board/post/create.tsx", "utf8");
+const boardDetailSource = readFileSync("app/(tabs)/board/[boardId].tsx", "utf8");
 const homeSource = readFileSync("app/(tabs)/home.tsx", "utf8");
 const communitySource = readFileSync("app/(tabs)/community.tsx", "utf8");
 const loginSource = readFileSync("app/auth/login.tsx", "utf8");

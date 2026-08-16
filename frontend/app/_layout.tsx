@@ -56,19 +56,6 @@ export default function RootLayout() {
             </Stack.Protected>
             <Stack.Protected guard={isAuthenticated}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="search" options={{ headerShown: false }} />
-              <Stack.Screen name="events" options={{ headerShown: false }} />
-              <Stack.Screen name="events/calendar" options={{ headerShown: false }} />
-              <Stack.Screen name="events/day/[date]" options={{ headerShown: false }} />
-              <Stack.Screen name="events/[eventId]" options={{ headerShown: false }} />
-              <Stack.Screen name="faq" options={{ headerShown: false }} />
-              <Stack.Screen name="guides" options={{ title: "가이드" }} />
-              <Stack.Screen name="notifications" options={{ headerShown: false }} />
-              <Stack.Screen name="board/[boardId]" options={{ headerShown: false }} />
-              <Stack.Screen name="board/post/[postId]" options={{ headerShown: false }} />
-              <Stack.Screen name="board/post/create" options={{ headerShown: false }} />
-              <Stack.Screen name="board/post/edit/[postId]" options={{ headerShown: false }} />
-              <Stack.Screen name="council/mutual-aid-complete" options={{ headerShown: false }} />
             </Stack.Protected>
             <Stack.Protected guard={isAdmin}>
               <Stack.Screen name="admin/index" options={{ title: "관리자" }} />
