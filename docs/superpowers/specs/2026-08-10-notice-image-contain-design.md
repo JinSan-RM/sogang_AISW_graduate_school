@@ -1,5 +1,7 @@
 # Notice Detail Image Containment Design
 
+> Superseded on 2026-08-16 by `2026-08-16-adaptive-post-images-design.md`. The fixed `230px` notice frame below is retained only as historical context.
+
 ## Goal
 
 공지사항 상세 글의 이미지 첨부가 원본 비율에 따라 화면을 과도하게 늘리거나 잘리지 않도록, 일정한 크기의 이미지 영역 안에서 사진 전체를 보여준다.

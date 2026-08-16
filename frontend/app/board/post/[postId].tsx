@@ -6,6 +6,7 @@ import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleShee
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../components/CommentItem";
+import ExpandableNaturalAspectMediaImage from "../../../components/ExpandableNaturalAspectMediaImage";
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../components/NaturalAspectMediaImage";
@@ -36,6 +37,7 @@ import { formatBoardDate } from "../../../utils/dateFormat";
 import { openMediaUrl } from "../../../utils/mediaOpener";
 import { canDeleteMutualAidRequest, canEditMutualAidRequest } from "../../../utils/mutualAid";
 import { isAdminUser } from "../../../utils/permissions";
+import { postDetailImagePresentation } from "../../../utils/postDetailImagePresentation";
 import { shouldShowPostAuthorBlock } from "../../../utils/postMenu";
 import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../utils/reportForm";
 import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../utils/replyComposer";
@@ -345,8 +347,19 @@ export default function PostDetailScreen() {
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
   const hasVisualHero = board?.board_type === "album" || isActivityCertification || isAdminParticipationGuide || isCouncilActivityEntry;
-  // Figma: 활동 인증 상세는 240px 고정 슬라이더를 쓴다.
-  const hasNaturalHero = isCouncilActivityEntry;
+  const heroImagePresentation = postDetailImagePresentation({
+    placement: "hero",
+    boardType: board?.board_type,
+    boardSlug: board?.slug,
+    isCouncilActivityEntry,
+  });
+  const attachmentImagePresentation = postDetailImagePresentation({
+    placement: "attachment",
+    boardType: board?.board_type,
+    boardSlug: board?.slug,
+  });
+  const hasNaturalHero = heroImagePresentation === "natural";
+  const hasExpandableHero = isActivityCertification || isAdminParticipationGuide;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -580,12 +593,20 @@ export default function PostDetailScreen() {
       <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
         {hasVisualHero ? (
           <View style={styles.visualHeroBlock}>
-            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null]}>
+            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum ? styles.visualHeroAlbum : null]}>
               {heroAttachment ? (
                 hasNaturalHero ? (
-                  <NaturalAspectMediaImage media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                  hasExpandableHero ? (
+                    <ExpandableNaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                  ) : (
+                    <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} style={styles.visualHeroNaturalImage} />
+                  )
                 ) : (
-                  <MediaImage media={heroAttachment} resizeMode={isPhotoAlbum ? "contain" : "cover"} style={styles.visualHeroImage} />
+                  <MediaImage
+                    media={heroAttachment}
+                    resizeMode={heroImagePresentation === "fixed-contain" ? "contain" : "cover"}
+                    style={styles.visualHeroImage}
+                  />
                 )
               ) : (
                 <LinearGradient
@@ -773,11 +794,11 @@ export default function PostDetailScreen() {
                       Alert.alert("파일 열기 실패", "첨부 파일에 접근할 수 없습니다.");
                     }
                   }}
-                  style={isImage ? [styles.imageAttachment, isNotice ? styles.noticeImageAttachment : null] : styles.fileAttachment}
+                  style={isImage ? styles.imageAttachment : styles.fileAttachment}
                 >
-                  {isImage ? (
+                  {isImage && attachmentImagePresentation === "natural" ? (
                     isNotice ? (
-                      <MediaImage media={attachment} resizeMode="contain" style={styles.noticeAttachmentImage} />
+                      <ExpandableNaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
                     ) : (
                       <NaturalAspectMediaImage media={attachment} style={styles.attachmentImage} />
                     )
@@ -1864,13 +1885,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden",
     backgroundColor: "#F3F4F6",
-  },
-  noticeImageAttachment: {
-    height: 230,
-  },
-  noticeAttachmentImage: {
-    width: "100%",
-    height: "100%",
   },
   attachmentImage: {
     width: "100%",
