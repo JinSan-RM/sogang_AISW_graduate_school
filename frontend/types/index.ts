@@ -156,6 +156,7 @@ export type PostListItem = {
   is_notice: boolean;
   status: string;
   category?: string;
+  activity_source_title?: string | null;
   metadata?: Record<string, unknown>;
   suggestion?: SuggestionDetail | null;
   mutual_aid?: MutualAidDetail | null;
@@ -187,6 +188,7 @@ export type PostDetail = {
   is_notice: boolean;
   status: string;
   category?: string;
+  activity_source_title?: string | null;
   metadata?: Record<string, unknown>;
   suggestion?: SuggestionDetail | null;
   mutual_aid?: MutualAidDetail | null;
