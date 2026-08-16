@@ -6,10 +6,21 @@ import {
   ACCOUNT_DELETION_ITEMS,
   ACCOUNT_RETENTION_NOTICE,
   accountDeletionErrorMessage,
+  getMemberAccountDeletionSuccessPresentation,
   isAccountDeletionCodeValid,
   isDeletionConfirmationValid,
   publicAccountDeletionErrorMessage,
 } from "../utils/accountDeletion";
+
+test("인앱 탈퇴 완료 신호만 간결한 완료 화면과 로그인 확인 동작을 선택한다", () => {
+  assert.deepEqual(getMemberAccountDeletionSuccessPresentation("1"), {
+    title: "탈퇴가 완료되었어요!",
+    buttonLabel: "확인",
+    confirmRoute: "/auth/login",
+  });
+  assert.equal(getMemberAccountDeletionSuccessPresentation(undefined), null);
+  assert.equal(getMemberAccountDeletionSuccessPresentation("0"), null);
+});
 
 test("탈퇴 안내는 모든 작성 콘텐츠와 상조회 자료 보존을 명확히 알린다", () => {
   const notice = [...ACCOUNT_DELETION_ITEMS, ACCOUNT_RETENTION_NOTICE].join(" ");

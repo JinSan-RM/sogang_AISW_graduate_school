@@ -10,6 +10,23 @@ export const ACCOUNT_DELETION_ITEMS = [
 export const ACCOUNT_RETENTION_NOTICE =
   "탈퇴 후에는 유지된 게시글, 댓글, 상조회 신청과 첨부자료를 수정하거나 삭제할 수 없습니다. 상조회 증빙자료의 정기 파기 등 별도 보존 정책은 그대로 적용됩니다.";
 
+export type MemberAccountDeletionSuccessPresentation = {
+  title: "탈퇴가 완료되었어요!";
+  buttonLabel: "확인";
+  confirmRoute: "/auth/login";
+};
+
+export function getMemberAccountDeletionSuccessPresentation(
+  completed?: string,
+): MemberAccountDeletionSuccessPresentation | null {
+  if (completed !== "1") return null;
+  return {
+    title: "탈퇴가 완료되었어요!",
+    buttonLabel: "확인",
+    confirmRoute: "/auth/login",
+  };
+}
+
 export function isDeletionConfirmationValid(value: string) {
   return value.trim() === ACCOUNT_DELETION_CONFIRMATION;
 }
