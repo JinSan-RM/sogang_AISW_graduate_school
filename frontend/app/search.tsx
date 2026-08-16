@@ -12,6 +12,7 @@ import type { SearchResult } from "../types";
 import { formatBoardDate } from "../utils/dateFormat";
 import { formatCohortName } from "../utils/userLabel";
 
+import { BackIcon } from "../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -140,7 +141,7 @@ export default function SearchScreen() {
       {isNoticeSearch ? (
         <View style={[styles.noticeSearchHeader, { paddingTop: Math.max(insets.top, 10) }]}>
           <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/notices"))} style={[styles.iconButton, styles.noticeBackButton]}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+            <BackIcon size={24} color={COLORS.text} />
           </Pressable>
           {searchInput}
         </View>
@@ -148,7 +149,7 @@ export default function SearchScreen() {
         <>
           <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
             <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/home"))} style={styles.iconButton}>
-              <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+              <BackIcon size={24} color={COLORS.text} />
             </Pressable>
             <Text style={styles.appBarTitle}>검색</Text>
             <View style={styles.iconButton} />

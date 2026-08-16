@@ -13,6 +13,7 @@ import {
   passwordError,
 } from "../../utils/authValidation";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF", // primary/500
   text: "#15171C", // gray/900 (Figma)
@@ -237,7 +238,7 @@ export default function PasswordResetScreen() {
       {mode !== "complete" ? (
         <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
           <Pressable accessibilityLabel="뒤로" onPress={goBack} style={styles.iconButton}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+            <BackIcon size={24} color={COLORS.text} />
           </Pressable>
           <Text style={styles.appBarTitle}>{title}</Text>
           <View style={styles.iconButton} />

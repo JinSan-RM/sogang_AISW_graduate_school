@@ -9,6 +9,7 @@ import { eventApi } from "../../../services/api";
 import type { EventItem } from "../../../types";
 import { formatBoardDate, formatTime24 } from "../../../utils/dateFormat";
 
+import { BackIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -87,7 +88,7 @@ export default function EventDayScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>일정</Text>
         <View style={styles.iconButton} />

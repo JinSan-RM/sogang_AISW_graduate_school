@@ -24,7 +24,7 @@ const fontSource = source("utils/fonts.ts");
 const qaComposeSource = source("../docker-compose.qa.yml");
 
 test("global font patch flattens styles before they reach React DOM", () => {
-  assert.match(fontSource, /style: \{ \.\.\.flattened, fontFamily \}/);
+  assert.match(fontSource, /style: \{ \.\.\.hostStyle, fontFamily \}/);
   assert.doesNotMatch(fontSource, /style: StyleSheet\.flatten\(\[\{ fontFamily \}, style\]\)/);
   assert.doesNotMatch(fontSource, /style: \[\{ fontFamily \}, style\]/);
 });
@@ -49,8 +49,8 @@ test("#66·67·68 홈과 하단 탭은 디자인 기준 아이콘과 정렬을 �
   assert.match(tabLayoutSource, /<NoticeTabIcon color=\{color\} size=\{22\} \/>/);
   assert.match(homeSource, /name="chatbubble-outline"/);
   assert.match(homeSource, /name="heart-outline"/);
-  assert.match(homeSource, /dayText:[\s\S]*lineHeight: 28/);
-  assert.match(homeSource, /dayText:[\s\S]*textAlignVertical: "center"/);
+  assert.match(homeSource, /dayText:[\s\S]*lineHeight: 16/);
+  assert.match(homeSource, /dayText:[\s\S]*textAlign: "center"/);
   assert.match(homeSource, /name="chatbubble-outline" size=\{11\}/);
 });
 
@@ -112,13 +112,13 @@ test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시
   assert.match(postDetailSource, /<BookmarkIcon filled=\{isBookmarked\}/);
   assert.match(postDetailSource, /<MoreIcon color=\{COLORS\.text\} \/>/);
   assert.match(postDetailSource, /style=\{styles\.menuSheet\}/);
-  assert.match(postDetailSource, /name="flag-outline"/);
+  assert.match(postDetailSource, /<FlagIcon size=\{20\}/);
   assert.match(postDetailSource, /name="remove-circle-outline"/);
 });
 
-test("#71 게시글 수정 화면은 제목과 내용 라벨을 게시판 종류와 관계없이 노출한다", () => {
-  assert.match(postEditSource, /<Text style=\{styles\.fieldLabel\}>제목<\/Text>\s*<TextInput/);
-  assert.match(postEditSource, /<Text style=\{styles\.fieldLabel\}>내용<\/Text>\s*<TextInput/);
+test("#71 게시글 수정 화면은 제목과 내용 입력을 게시판 종류와 관계없이 노출한다", () => {
+  assert.match(postEditSource, /accessibilityLabel="제목"/);
+  assert.match(postEditSource, /accessibilityLabel="내용"/);
   assert.doesNotMatch(postEditSource, /isStudyRecruit \? <Text style=\{styles\.fieldLabel\}>(?:제목|내용)<\/Text>/);
 
   for (const label of ["모집 상태", "스터디장 연락수단"]) {

@@ -9,6 +9,7 @@ import { useUserStore } from "../../stores/userStore";
 import SchoolEmailInput from "../../components/SchoolEmailInput";
 import { composeSchoolEmail, emailIdError } from "../../utils/authValidation";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF", // primary/500
   text: "#15171C", // gray/900 (Figma)
@@ -66,7 +67,7 @@ export default function LoginScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>로그인</Text>
         <View style={styles.iconButton} />

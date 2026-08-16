@@ -20,6 +20,7 @@ import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
+import { BackIcon } from "./icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -177,7 +178,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
             >
               <View style={styles.appBar}>
                 <Pressable accessibilityLabel="닫기" onPress={closeDrawer} style={styles.iconButton}>
-                  <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+                  <BackIcon size={24} color={COLORS.text} />
                 </Pressable>
                 <Text style={styles.appBarTitle}>마이페이지</Text>
                 <View style={styles.iconButton} />

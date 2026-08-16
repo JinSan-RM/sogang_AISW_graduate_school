@@ -11,7 +11,8 @@ export default function TabsLayout() {
           tabBarActiveTintColor: "#2761FF",
           tabBarInactiveTintColor: "#8A919C",
           tabBarIconStyle: { marginTop: 0 },
-          tabBarLabelStyle: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 14, marginTop: 3, marginBottom: 0 },
+          // Figma: 라벨 11/13 Regular (react-navigation 기본 fontWeight 500 오버라이드)
+          tabBarLabelStyle: { fontSize: 11, fontFamily: "Inter_400Regular", fontWeight: "400", lineHeight: 13, marginTop: 3, marginBottom: 0 },
           tabBarItemStyle: { paddingVertical: 0 },
           tabBarStyle: {
             height: 74,

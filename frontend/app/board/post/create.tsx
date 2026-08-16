@@ -9,7 +9,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { CameraAddIcon } from "../../../components/icons";
+import { AttachFileIcon, AttachImageIcon, BackIcon, CameraAddIcon, CloseIcon } from "../../../components/icons";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../hooks/usePosts";
@@ -46,7 +46,7 @@ import {
   mutualAidRelationLabel,
   normalizeMutualAidEventDate,
 } from "../../../utils/mutualAid";
-import { examArchiveAttachmentActions } from "../../../utils/postAttachments";
+import { writeAttachmentActions } from "../../../utils/postAttachments";
 
 const COLORS = {
   primary: "#2761FF",
@@ -235,7 +235,7 @@ function InlineCalendar({
     <View style={styles.calCard}>
       <View style={styles.calHeader}>
         <Pressable hitSlop={10} onPress={goPrev} style={styles.calNav}>
-          <Ionicons name="chevron-back" size={20} color={COLORS.text} />
+          <BackIcon size={20} color={COLORS.text} />
         </Pressable>
         <Text style={styles.calTitle}>{`${view.y}년 ${view.m + 1}월`}</Text>
         <Pressable hitSlop={10} onPress={goNext} style={styles.calNav}>
@@ -327,7 +327,6 @@ export default function PostCreateScreen() {
   const isMutualAid = boardType === "mutual_aid";
   const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
-  const isExamArchive = board?.slug === "exam-archive";
   const isStudyRecruit = board?.slug === "study-recruit";
   // 처음 올릴 때부터 마감 상태인 모집글을 막는다. 마감 전환은 등록 후 수정에서만.
   const canCloseRecruitment = Boolean(postId);
@@ -471,7 +470,7 @@ export default function PostCreateScreen() {
       : isActivity
         ? "활동 내용과 소감을 적어주세요"
         : isSuggestion
-          ? "원우회에 건의하고 싶은 내용을 자유롭게 작성해주세요"
+          ? "원우회에 건의하고 싶은 내용을 자유롭게 작성해 주세요"
         : isStudyRecruit
           ? "스터디 내용, 진행 요일/시간 등을 입력하세요"
           : "내용을 입력하세요",
@@ -701,7 +700,7 @@ export default function PostCreateScreen() {
       : () => pickAndUploadDocuments(setUploadProgress, isMutualAid)
   );
 
-  const examAttachmentActions = examArchiveAttachmentActions(board?.slug, {
+  const compactAttachmentActions = writeAttachmentActions({
     images: () => void uploadAttachments(() => pickAndUploadImages(setUploadProgress)),
     documents: () => void uploadAttachments(() => pickAndUploadDocuments(setUploadProgress)),
   });
@@ -822,7 +821,7 @@ export default function PostCreateScreen() {
                           onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
                           style={styles.activityPhotoRemove}
                         >
-                          <Ionicons name="close" size={12} color="#FFFFFF" />
+                          <CloseIcon size={12} color="#FFFFFF" />
                         </Pressable>
                       </MediaImageBackground>
                     );
@@ -968,7 +967,7 @@ export default function PostCreateScreen() {
                           {selectedParticipants.map((participant) => (
                             <Pressable key={participant.id} onPress={() => removeParticipant(participant.id)} style={styles.activityMemberChip}>
                               <Text style={styles.activityMemberChipText}>{formatActivityParticipant(participant)}</Text>
-                              <Ionicons name="close" size={12} color={COLORS.muted} />
+                              <CloseIcon size={12} color={COLORS.muted} />
                             </Pressable>
                           ))}
                         </View>
@@ -994,7 +993,7 @@ export default function PostCreateScreen() {
               <Text style={[styles.selectText, !board ? styles.selectPlaceholder : null]} numberOfLines={1}>
                 {board?.name ?? "게시판을 선택하세요"}
               </Text>
-              <Ionicons name={selectionSheet === "board" ? "chevron-up" : "chevron-down"} size={18} color={COLORS.subtle} />
+              <Ionicons name={selectionSheet === "board" ? "chevron-up" : "chevron-down"} size={16} color="#A6ACB7" />
             </Pressable>
             {selectionSheet === "board" ? (
               <View style={styles.boardDropdown}>
@@ -1037,7 +1036,7 @@ export default function PostCreateScreen() {
           name="category"
           render={({ field }) => (
             <View style={styles.studyStatusWrap}>
-              <Text style={styles.label}>모집 상태</Text>
+              <Text style={[styles.label, styles.studyStatusLabel]}>모집 상태</Text>
               <View style={styles.recruitmentStatusRow}>
                 {["진행중", "마감"].map((status) => {
                   const disabled = status === "마감" && !canCloseRecruitment;
@@ -1270,9 +1269,9 @@ export default function PostCreateScreen() {
             </View>
             {evidenceMode === "file" ? (
               <>
-                <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
+                <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, styles.evidenceFileButton, isUploading ? styles.attachButtonDisabled : null]}>
                   <Ionicons name="document-outline" size={16} color={COLORS.muted} />
-                  <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
+                  <Text style={[styles.compactAttachText, styles.evidenceFileButtonText]}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
                 </Pressable>
                 {attachments.length > 0 ? (
                   <View style={styles.compactAttachmentList}>
@@ -1307,7 +1306,7 @@ export default function PostCreateScreen() {
                   keyboardType="url"
                   onChangeText={setEvidenceLink}
                   placeholder="청첩장·부고장 링크를 입력해주세요"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={COLORS.muted}
                   style={styles.evidenceLinkInput}
                   value={evidenceLink}
                 />
@@ -1349,7 +1348,7 @@ export default function PostCreateScreen() {
                 onChangeText={field.onChange}
                 placeholder={labels.contentPlaceholder}
                 placeholderTextColor="#A6ACB7"
-                style={[styles.input, styles.textArea, fieldState.error ? styles.inputError : null]}
+                style={[styles.input, styles.textArea, isSuggestion ? styles.suggestionContentInput : isStudyRecruit ? styles.studyContentInput : styles.generalContentInput, fieldState.error ? styles.inputError : null]}
                 textAlignVertical="top"
                 value={field.value ?? ""}
               />
@@ -1409,24 +1408,20 @@ export default function PostCreateScreen() {
               </View>
             </View>
           ) : null}
-          {isExamArchive ? (
-            <View style={styles.examArchiveAttachActions}>
-              {examAttachmentActions.map((action) => (
+          {!isAdminParticipationPost ? (
+            <View style={styles.compactAttachActions}>
+              {compactAttachmentActions.map((action) => (
                 <Pressable
                   disabled={isUploading}
                   key={action.picker}
                   onPress={action.onPress}
-                  style={[
-                    styles.compactAttachButton,
-                    styles.examArchiveAttachButton,
-                    isUploading ? styles.attachButtonDisabled : null,
-                  ]}
+                  style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
                 >
-                  <Ionicons
-                    name={action.picker === "images" ? "image-outline" : "document-text-outline"}
-                    size={16}
-                    color={COLORS.muted}
-                  />
+                  {action.picker === "images" ? (
+                    <AttachImageIcon size={16} color={COLORS.muted} />
+                  ) : (
+                    <AttachFileIcon size={16} color={COLORS.muted} />
+                  )}
                   <Text style={styles.compactAttachText}>
                     {isUploading ? `업로드 ${uploadProgress || 0}%` : action.label}
                   </Text>
@@ -1436,7 +1431,7 @@ export default function PostCreateScreen() {
           ) : (
             <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
               <Ionicons name="image-outline" size={16} color={COLORS.muted} />
-              <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : isAdminParticipationPost ? "대표 사진 첨부" : "이미지 첨부"}</Text>
+              <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "대표 사진 첨부"}</Text>
             </Pressable>
           )}
           {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
@@ -1455,7 +1450,7 @@ export default function PostCreateScreen() {
                       onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
                       style={styles.writeImageRemove}
                     >
-                      <Ionicons name="close" size={12} color="#FFFFFF" />
+                      <CloseIcon size={12} color="#FFFFFF" />
                     </Pressable>
                   </MediaImageBackground>
                 );
@@ -1468,11 +1463,12 @@ export default function PostCreateScreen() {
                 .filter((item) => !item.content_type.startsWith("image/"))
                 .map((attachment) => (
                   <View key={attachment.id} style={styles.compactAttachmentItem}>
+                    <Ionicons name="document-outline" size={18} color={COLORS.muted} />
                     <Text numberOfLines={1} style={styles.compactAttachmentName}>
                       {attachment.original_filename}
                     </Text>
                     <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                      <Ionicons name="close-circle" size={18} color={COLORS.subtle} />
+                      <CloseIcon size={18} color={COLORS.muted} />
                     </Pressable>
                   </View>
                 ))}
@@ -1764,6 +1760,7 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 14,
     fontWeight: "500",
+    lineHeight: 17,
   },
   recruitmentStatusTextActive: {
     color: COLORS.primary,
@@ -2145,7 +2142,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   selectLike: {
-    height: 48,
+    height: 41, // Figma: 게시판 선택 41h
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -2160,6 +2157,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17,
   },
   selectPlaceholder: {
     color: "#A6ACB7",
@@ -2230,7 +2228,10 @@ const styles = StyleSheet.create({
   },
   guideBoxSuggestion: {
     alignItems: "flex-start",
+    gap: 8, // Figma: 익명안내 padding 12/14, gap 8
     backgroundColor: "#E6F1FB", // Figma 134:7 banner bg
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   guideBodySuggestion: {
     color: "#0C447C", // Figma 134:7 banner text
@@ -2295,16 +2296,27 @@ const styles = StyleSheet.create({
   evidenceModeTextActive: {
     color: COLORS.primary,
   },
+  evidenceFileButton: {
+    // Figma: 상조회 첨부버튼 36h, padding 10/12, 텍스트 12/15
+    width: "100%",
+    height: 36,
+    paddingVertical: 10,
+  },
+  evidenceFileButtonText: {
+    fontSize: 12,
+    lineHeight: 15,
+  },
   evidenceLinkField: {
+    // Figma: 링크입력필드 40h, padding 12/14, gap 8
     flexDirection: "row",
     alignItems: "center",
-    gap: 6, // Figma 첨부버튼과 동일한 형태
-    height: 36,
+    gap: 8,
+    height: 40,
     borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   evidenceLinkInput: {
     flex: 1,
@@ -2385,12 +2397,24 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 70, // Figma: 비고필드 70h
   },
+  suggestionContentInput: {
+    minHeight: 180, // Figma: 건의 내용입력 180h
+  },
+  generalContentInput: {
+    minHeight: 100, // Figma: 일반 글쓰기 내용입력 100h
+  },
   contactInput: {
     minHeight: 60,
   },
   studyStatusWrap: {
     width: "100%",
     gap: 6,
+  },
+  studyStatusLabel: {
+    color: COLORS.muted, // Figma: 모집 상태 라벨 #6B7280
+  },
+  studyContentInput: {
+    minHeight: 111, // Figma: 스터디 내용입력 111h
   },
   helperText: {
     color: COLORS.muted,
@@ -2512,20 +2536,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  examArchiveAttachActions: {
+  compactAttachActions: {
     width: "100%",
     flexDirection: "row",
-    gap: 8,
-  },
-  examArchiveAttachButton: {
-    flex: 1,
-    justifyContent: "center",
+    gap: 8, // Figma: 첨부 옵션 버튼 간격 8
   },
   compactAttachText: {
     color: COLORS.muted,
-    fontSize: 12, // Figma: Regular 12/15
+    fontSize: 13, // Figma: 이미지 첨부 13/16
     fontWeight: "400",
-    lineHeight: 15,
+    lineHeight: 16,
   },
   writeImageGrid: {
     flexDirection: "row",
@@ -2555,16 +2575,20 @@ const styles = StyleSheet.create({
   },
   compactAttachmentList: {
     width: "100%",
-    gap: 7,
+    gap: 8,
   },
   compactAttachmentItem: {
-    minHeight: 34,
+    // Figma: 첨부파일 미리보기 42h, padding 12/14, border 0.5
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
+    borderWidth: 0.5,
+    borderColor: COLORS.border,
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 10,
+    backgroundColor: COLORS.bg,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   compactAttachmentOpen: {
     minHeight: 34,
@@ -2575,9 +2599,10 @@ const styles = StyleSheet.create({
   },
   compactAttachmentName: {
     flex: 1,
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "800",
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 16,
   },
   submitButton: {
     height: 48,

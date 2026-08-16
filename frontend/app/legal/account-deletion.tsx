@@ -32,6 +32,7 @@ import {
 } from "../../utils/authValidation";
 import { clearStoredPushToken } from "../../utils/pushTokenStorage";
 
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -227,7 +228,7 @@ export default function PublicAccountDeletionScreen() {
           }}
           style={styles.iconButton}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.text} />
+          <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text accessibilityRole="header" style={styles.appBarTitle}>
           계정 삭제 요청
