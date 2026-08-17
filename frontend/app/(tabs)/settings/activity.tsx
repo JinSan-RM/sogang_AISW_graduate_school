@@ -8,11 +8,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LoadingState from "../../../components/LoadingState";
 import { BackIcon, BookmarkIcon } from "../../../components/icons";
 import { userApi } from "../../../services/api";
-import type { UserActivityItem } from "../../../types";
 import { MY_PAGE_ROUTE, postDetailRoute } from "../../../utils/appRoutes";
 import { formatBoardDate } from "../../../utils/dateFormat";
-import { resourceCategoryLabel } from "../../../utils/resourceBoards";
-import { formatCohortName } from "../../../utils/userLabel";
+import {
+  bookmarkActivityMeta,
+  userActivityCategoryLabel,
+} from "../../../utils/userActivityPresentation";
 
 const COLORS = {
   primary: "#2761FF",
@@ -42,20 +43,6 @@ type FilterValue = (typeof FILTERS)[number]["value"];
 function normalizeType(value?: string | string[]): FilterValue {
   const raw = Array.isArray(value) ? value[0] : value;
   return raw === "comments" || raw === "bookmarks" || raw === "posts" ? raw : "posts";
-}
-
-function itemLabel(item: UserActivityItem) {
-  if (item.type === "bookmark") return "스크랩";
-  if (item.type === "comment") return "댓글";
-  return "게시글";
-}
-
-function activityCategoryLabel(item: UserActivityItem) {
-  const resourceLabel = resourceCategoryLabel({ name: item.board_name }, item.category);
-  if (resourceLabel) return resourceLabel;
-
-  const raw = item.category?.trim() || item.board_name?.trim() || itemLabel(item);
-  return raw;
 }
 
 export default function ActivityScreen() {
@@ -124,7 +111,7 @@ export default function ActivityScreen() {
           }
           ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 18 }} /> : null}
           renderItem={({ item }) => {
-            const label = activityCategoryLabel(item);
+            const label = userActivityCategoryLabel(item);
             const tone = categoryTone(label);
             return (
               <Pressable onPress={() => router.push(postDetailRoute(item.post_id, undefined, "/(tabs)/settings/activity") as never)} style={styles.row}>
@@ -137,7 +124,7 @@ export default function ActivityScreen() {
                   </Text>
                   <Text style={styles.meta}>
                     {item.type === "bookmark"
-                      ? [formatCohortName(item.author_cohort, item.author_nickname), formatBoardDate(item.created_at)].filter(Boolean).join(" · ")
+                      ? bookmarkActivityMeta(item)
                       : `${formatBoardDate(item.created_at)} · 댓글 ${item.comment_count ?? 0} · 추천 ${item.like_count ?? 0}`}
                   </Text>
                 </View>
