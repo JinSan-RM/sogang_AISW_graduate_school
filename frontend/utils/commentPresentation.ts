@@ -3,7 +3,7 @@ export const COMMENT_DELETE_COPY = {
   body: "댓글을 삭제하시겠어요?\n삭제한 댓글은 복구할 수 없어요.",
 } as const;
 
-export type CommentReportAction = "open" | "own-unavailable" | "none";
+export type CommentReportAction = "open" | "none";
 
 export type CommentActionState = {
   showReply: boolean;
@@ -11,6 +11,7 @@ export type CommentActionState = {
   showDelete: boolean;
   showSave: boolean;
   showCancel: boolean;
+  showReport: boolean;
   reportLabel: "신고" | "신고됨";
   reportAction: CommentReportAction;
 };
@@ -32,8 +33,9 @@ export function getCommentActionState({
     showDelete: isMine && !isEditing,
     showSave: isMine && isEditing,
     showCancel: isMine && isEditing,
+    showReport: !isMine,
     reportLabel: isReported ? "신고됨" : "신고",
-    reportAction: isReported ? "none" : isMine ? "own-unavailable" : "open",
+    reportAction: isReported || isMine ? "none" : "open",
   };
 }
 

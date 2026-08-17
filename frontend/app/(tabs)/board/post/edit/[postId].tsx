@@ -7,14 +7,14 @@ import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { useBoardsQuery } from "../../../../hooks/useApi";
-import { usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
-import LoadingState from "../../../../components/LoadingState";
-import type { MediaAsset } from "../../../../types";
-import { pickAndUploadImages } from "../../../../utils/mediaPicker";
-import { resourceCategoryLabel, resourcePostEditBoards } from "../../../../utils/resourceBoards";
+import { useBoardsQuery } from "../../../../../hooks/useApi";
+import { usePostDetail, useUpdatePost } from "../../../../../hooks/usePosts";
+import LoadingState from "../../../../../components/LoadingState";
+import type { MediaAsset } from "../../../../../types";
+import { pickAndUploadImages } from "../../../../../utils/mediaPicker";
+import { resourceCategoryLabel, resourcePostEditBoards } from "../../../../../utils/resourceBoards";
 
-import { CloseIcon } from "../../../../components/icons";
+import { CloseIcon } from "../../../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -244,8 +244,8 @@ export default function PostEditScreen() {
             control={control}
             name="category"
             render={({ field }) => (
-              <View>
-                <Text style={styles.fieldLabel}>모집 상태</Text>
+              <View style={styles.labeledField}>
+                <Text style={[styles.fieldLabel, styles.fieldLabelMuted]}>모집 상태</Text>
                 <View style={styles.statusRow}>
                   {["진행중", "마감"].map((status) => {
                     const selected = field.value === status;
@@ -268,12 +268,12 @@ export default function PostEditScreen() {
             <View>
               <TextInput
                 accessibilityLabel="제목"
-                multiline
+                multiline={!isStudyRecruit}
                 onBlur={field.onBlur}
                 onChangeText={field.onChange}
                 placeholder="제목을 입력하세요"
                 placeholderTextColor={COLORS.subtle}
-                style={[styles.input, styles.titleInput, fieldState.error ? styles.inputError : null]}
+                style={[styles.input, isStudyRecruit ? null : styles.titleInput, fieldState.error ? styles.inputError : null]}
                 textAlignVertical="top"
                 value={field.value}
               />
@@ -295,7 +295,7 @@ export default function PostEditScreen() {
                   onChangeText={field.onChange}
                   placeholder="내용을 입력하세요"
                   placeholderTextColor={COLORS.subtle}
-                  style={[styles.input, styles.contentInput, fieldState.error ? styles.inputError : null]}
+                  style={[styles.input, isStudyRecruit ? styles.studyContentInput : styles.contentInput, fieldState.error ? styles.inputError : null]}
                   textAlignVertical="top"
                   value={field.value}
                 />
@@ -310,7 +310,7 @@ export default function PostEditScreen() {
             control={control}
             name="contact"
             render={({ field, fieldState }) => (
-              <View>
+              <View style={styles.labeledField}>
                 <Text style={styles.fieldLabel}>스터디장 연락수단</Text>
                 <TextInput
                   accessibilityLabel="연락 수단"
@@ -496,32 +496,44 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: "700",
   },
+  // Figma: 작성 화면과 동일한 세그먼트 컨트롤 (46h 트랙 + 38h 옵션)
   statusRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
+    width: "100%",
+    backgroundColor: "#F0F0EE",
+    padding: 4,
+    borderRadius: 10,
   },
   statusButton: {
     flex: 1,
-    minHeight: 44,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: 8,
   },
   statusButtonSelected: {
-    borderColor: COLORS.primary,
-    backgroundColor: "#EDF2FE",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   statusText: {
     color: COLORS.muted,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 17,
   },
   statusTextSelected: {
     color: COLORS.primary,
   },
+  labeledField: {
+    gap: 6, // Figma: 라벨-입력 간격 6
+  },
   input: {
-    minHeight: 46,
+    minHeight: 41, // Figma: 41h, padding 12/14
     borderWidth: 0.5,
     borderColor: COLORS.border,
     borderRadius: 8,
@@ -529,6 +541,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -537,6 +550,9 @@ const styles = StyleSheet.create({
   },
   contentInput: {
     height: 116,
+  },
+  studyContentInput: {
+    height: 111, // Figma: 스터디 내용입력 111h
   },
   inputError: {
     borderColor: COLORS.danger,
@@ -549,9 +565,13 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: COLORS.text,
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 7,
+    fontSize: 13, // Figma: 라벨 13/16 Medium
+    fontWeight: "500",
+    lineHeight: 16,
+    marginBottom: 0,
+  },
+  fieldLabelMuted: {
+    color: COLORS.muted, // Figma: 모집 상태 라벨 #6B7280
   },
   helperText: {
     color: COLORS.muted,
@@ -600,7 +620,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   submitButton: {
-    minHeight: 46,
+    minHeight: 48, // Figma: 완료 버튼 48h
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
@@ -614,5 +634,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "500",
+    lineHeight: 18, // Figma: 15/18 Medium
   },
 });

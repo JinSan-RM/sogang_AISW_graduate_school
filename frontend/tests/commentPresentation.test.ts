@@ -7,7 +7,7 @@ import {
   getCommentActionState,
 } from "../utils/commentPresentation";
 
-test("내 최상위 댓글은 답글·수정·삭제와 본인 신고 안내 상태를 제공한다", () => {
+test("내 최상위 댓글은 답글·수정·삭제만 제공하고 신고는 숨긴다", () => {
   assert.deepEqual(
     getCommentActionState({ depth: 0, isMine: true, isEditing: false, isReported: false }),
     {
@@ -16,8 +16,9 @@ test("내 최상위 댓글은 답글·수정·삭제와 본인 신고 안내 상
       showDelete: true,
       showSave: false,
       showCancel: false,
+      showReport: false,
       reportLabel: "신고",
-      reportAction: "own-unavailable",
+      reportAction: "none",
     },
   );
 });
@@ -31,8 +32,9 @@ test("댓글 수정 중에는 저장과 취소만 표시한다", () => {
       showDelete: false,
       showSave: true,
       showCancel: true,
+      showReport: false,
       reportLabel: "신고",
-      reportAction: "own-unavailable",
+      reportAction: "none",
     },
   );
 });
@@ -46,6 +48,7 @@ test("다른 작성자의 대댓글은 추가 답글 없이 신고할 수 있다
       showDelete: false,
       showSave: false,
       showCancel: false,
+      showReport: true,
       reportLabel: "신고",
       reportAction: "open",
     },

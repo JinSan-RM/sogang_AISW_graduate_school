@@ -5,14 +5,14 @@ import { useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { searchApi } from "../services/api";
-import LoadingState from "../components/LoadingState";
-import NoticeRow from "../components/NoticeRow";
-import type { SearchResult } from "../types";
-import { formatBoardDate } from "../utils/dateFormat";
-import { formatCohortName } from "../utils/userLabel";
+import { searchApi } from "../../services/api";
+import LoadingState from "../../components/LoadingState";
+import NoticeRow from "../../components/NoticeRow";
+import type { SearchResult } from "../../types";
+import { formatBoardDate } from "../../utils/dateFormat";
+import { formatCohortName } from "../../utils/userLabel";
 
-import { BackIcon } from "../components/icons";
+import { BackIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",

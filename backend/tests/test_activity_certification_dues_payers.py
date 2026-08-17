@@ -59,7 +59,7 @@ def test_activity_certification_uses_roster_names_in_selected_order(api) -> None
     assert response.status_code == 200
     with api.session() as db:
         post = db.get(Post, response.json()["data"]["id"])
-        assert post.metadata_json["participants"] == "김서강, 홍길동"
+        assert post.metadata_json["participants"] == "74기 김서강, 74기 홍길동"
         assert post.metadata_json["participant_dues_payer_ids"] == [second_id, first_id]
         assert "participant_user_ids" not in post.metadata_json
 
@@ -114,7 +114,7 @@ def test_roster_deletion_does_not_remove_activity_participant_snapshot(api) -> N
     assert deleted.status_code == 200
     with api.session() as db:
         post = db.get(Post, created.json()["data"]["id"])
-        assert post.metadata_json["participants"] == "홍길동"
+        assert post.metadata_json["participants"] == "74기 홍길동"
         assert post.metadata_json["participant_dues_payer_ids"] == [first_id]
 
 

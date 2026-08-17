@@ -20,7 +20,6 @@ type Props = {
   onEdit?: (commentId: number, content: string) => Promise<void> | void;
   onDelete?: (commentId: number) => void;
   onReport?: (target: CommentReportTarget) => void;
-  onOwnReport?: () => void;
   reportedTargets?: Record<string, boolean>;
 };
 
@@ -36,7 +35,6 @@ export default function CommentItem({
   onEdit,
   onDelete,
   onReport,
-  onOwnReport,
   reportedTargets = {},
 }: Props) {
   const [isEditing, setIsEditing] = useState(false);
@@ -78,39 +76,36 @@ export default function CommentItem({
         paddingTop: 12,
         paddingBottom: depth === 0 ? 16 : 12,
         paddingHorizontal: depth > 0 ? 12 : 0,
-        borderBottomWidth: depth === 0 ? 1 : 0,
-        borderBottomColor: "#EAECEF",
+        // 스레드 사이 구분선은 상세 화면이 그린다 — 마지막 댓글 밑에 줄이 남지 않도록 자체 밑줄은 없앤다.
         borderRadius: depth > 0 ? 8 : 0,
         backgroundColor: depth > 0 ? "#F7F7F8" : undefined,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 27 }}>
-        <Text style={{ color: "#15171C", fontSize: 13, fontWeight: "500" }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: depth > 0 ? 16 : 27 }}>
+        <Text style={{ color: "#15171C", fontSize: 13, fontWeight: "500", lineHeight: 16 }}>
           {formatCohortName(comment.author_cohort, comment.author_nickname)}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          disabled={actionState.reportAction === "none"}
-          onPress={() => {
-            if (actionState.reportAction === "own-unavailable") {
-              onOwnReport?.();
-              return;
-            }
-            if (actionState.reportAction === "open") {
-              onReport?.({ type: "comment", id: comment.id, label: `댓글 #${comment.id}` });
-            }
-          }}
-        >
-          <Text
-            style={{
-              color: actionState.reportAction === "none" ? "#15803D" : "#A6ACB7",
-              fontSize: 11,
-              fontWeight: "400",
+        {actionState.showReport ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={actionState.reportAction === "none"}
+            onPress={() => {
+              if (actionState.reportAction === "open") {
+                onReport?.({ type: "comment", id: comment.id, label: `댓글 #${comment.id}` });
+              }
             }}
           >
-            {actionState.reportLabel}
-          </Text>
-        </Pressable>
+            <Text
+              style={{
+                color: actionState.reportAction === "none" ? "#15803D" : "#A6ACB7",
+                fontSize: 11,
+                fontWeight: "400",
+              }}
+            >
+              {actionState.reportLabel}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {isEditing ? (
@@ -121,16 +116,17 @@ export default function CommentItem({
           onChangeText={setDraft}
           style={[
             {
-              marginTop: 8,
-              minHeight: 52,
-              borderWidth: 1.5,
+              marginTop: 4,
+              minHeight: depth > 0 ? 44 : 60,
+              borderWidth: 1.3,
               borderColor: "#2761FF",
               borderRadius: 8,
+              backgroundColor: "#FFFFFF",
               color: "#15171C",
               fontSize: 13,
-              lineHeight: 20,
-              paddingHorizontal: 10,
-              paddingVertical: 9,
+              lineHeight: 16,
+              paddingHorizontal: depth > 0 ? 10 : 12,
+              paddingVertical: depth > 0 ? 8 : 10,
               textAlignVertical: "top",
             },
             { outlineStyle: "none" } as never,
@@ -138,22 +134,34 @@ export default function CommentItem({
           value={draft}
         />
       ) : (
-        <Text style={{ marginTop: 4, color: "#6B7280", fontSize: 13, lineHeight: 20 }}>{comment.content}</Text>
+        <Text style={{ marginTop: 4, color: "#6B7280", fontSize: 13, lineHeight: depth > 0 ? 16 : 20 }}>
+          {comment.content}
+        </Text>
       )}
 
-      <Text style={{ marginTop: 4, color: "#A6ACB7", fontSize: 11 }}>{formatCommentDate(comment.created_at)}</Text>
+      <Text
+        style={{
+          marginTop: 4,
+          color: "#A6ACB7",
+          fontSize: 11,
+          lineHeight: 13,
+          alignSelf: "flex-start",
+        }}
+      >
+        {formatCommentDate(comment.created_at)}
+      </Text>
 
       {hasActionRow ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14, marginTop: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
           {actionState.showReply && onReply ? (
             <Pressable onPress={() => onReply(comment)}>
-              <Text style={{ color: "#2761FF", fontSize: 12, fontWeight: "500" }}>답글</Text>
+              <Text style={{ color: "#2761FF", fontSize: 11, fontWeight: "500", lineHeight: 13 }}>답글</Text>
             </Pressable>
           ) : null}
 
           {actionState.showSave ? (
             <Pressable disabled={isSaving} onPress={saveEdit}>
-              <Text style={{ color: "#2761FF", fontSize: 12, fontWeight: "500" }}>
+              <Text style={{ color: "#2761FF", fontSize: depth > 0 ? 11 : 12, fontWeight: "500", lineHeight: depth > 0 ? 13 : 15 }}>
                 {isSaving ? "저장 중" : "저장"}
               </Text>
             </Pressable>
@@ -167,7 +175,7 @@ export default function CommentItem({
                 setIsEditing(false);
               }}
             >
-              <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "500" }}>취소</Text>
+              <Text style={{ color: "#A6ACB7", fontSize: depth > 0 ? 11 : 12, fontWeight: "500", lineHeight: depth > 0 ? 13 : 15 }}>취소</Text>
             </Pressable>
           ) : null}
 
@@ -178,13 +186,13 @@ export default function CommentItem({
                 setIsEditing(true);
               }}
             >
-              <Text style={{ color: "#2761FF", fontSize: 12, fontWeight: "500" }}>수정</Text>
+              <Text style={{ color: "#A6ACB7", fontSize: 11, fontWeight: "500", lineHeight: 13 }}>수정</Text>
             </Pressable>
           ) : null}
 
           {actionState.showDelete ? (
             <Pressable onPress={() => onDelete?.(comment.id)}>
-              <Text style={{ color: "#D64545", fontSize: 12, fontWeight: "500" }}>삭제</Text>
+              <Text style={{ color: "#D64545", fontSize: 11, fontWeight: "500", lineHeight: 13 }}>삭제</Text>
             </Pressable>
           ) : null}
         </View>
@@ -200,7 +208,6 @@ export default function CommentItem({
           onEdit={onEdit}
           onReply={onReply}
           onReport={onReport}
-          onOwnReport={onOwnReport}
           reportedTargets={reportedTargets}
         />
       ))}

@@ -5,7 +5,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.author_snapshots import resolve_author_display
-from app.board_policies import ANONYMOUS_NO_COMMENT_BOARD_SLUGS
+from app.board_policies import ANONYMOUS_BOARD_SLUGS
 from app.deps import get_current_user, get_db
 from app.models.board import Board
 from app.models.post import Post
@@ -70,7 +70,7 @@ def search(
         filters.append(
             or_(
                 Post.is_anonymous.is_(True),
-                Board.slug.in_(ANONYMOUS_NO_COMMENT_BOARD_SLUGS),
+                Board.slug.in_(ANONYMOUS_BOARD_SLUGS),
                 Post.author_id.is_(None),
                 Post.author_id.not_in(blocked_author_ids),
             )
@@ -90,7 +90,7 @@ def search(
                 Post.content.ilike(keyword),
                 and_(
                     Post.is_anonymous.is_(False),
-                    Board.slug.not_in(ANONYMOUS_NO_COMMENT_BOARD_SLUGS),
+                    Board.slug.not_in(ANONYMOUS_BOARD_SLUGS),
                     or_(
                         User.nickname.ilike(keyword),
                         Post.author_nickname_snapshot.ilike(keyword),
@@ -137,7 +137,7 @@ def search(
             "author_nickname": (
                 "Anonymous"
                 if (post.is_anonymous and current_user.role != "admin")
-                or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
+                or (board_slug in ANONYMOUS_BOARD_SLUGS and current_user.role != "admin")
                 else resolve_author_display(
                     live_nickname=nickname,
                     live_cohort=cohort,
@@ -147,7 +147,7 @@ def search(
             ),
             "author_cohort": None
             if (post.is_anonymous and current_user.role != "admin")
-            or (board_slug in ANONYMOUS_NO_COMMENT_BOARD_SLUGS and current_user.role != "admin")
+            or (board_slug in ANONYMOUS_BOARD_SLUGS and current_user.role != "admin")
             else resolve_author_display(
                 live_nickname=nickname,
                 live_cohort=cohort,

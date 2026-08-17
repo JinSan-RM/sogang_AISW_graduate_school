@@ -12,7 +12,7 @@ import { pickAndUploadImage } from "../../../utils/mediaPicker";
 import { apiErrorCode, phoneError } from "../../../utils/authValidation";
 import { buildProfileUpdatePayload } from "../../../utils/profileUpdate";
 
-import { BackIcon } from "../../../components/icons";
+import { BackIcon, DefaultAvatarIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#E6F1FB",
@@ -58,6 +58,7 @@ export default function ProfileSettingsScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fieldError, setFieldError] = useState("");
   const [majorModalVisible, setMajorModalVisible] = useState(false);
+  const [photoSheetVisible, setPhotoSheetVisible] = useState(false);
 
   useEffect(() => {
     const profile = profileQuery.data?.data;
@@ -170,30 +171,17 @@ export default function ProfileSettingsScreen() {
       ) : (
         <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
         <View style={styles.avatarSection}>
-          <Pressable disabled={isUploadingImage} onPress={selectProfileImage} style={styles.avatarButton}>
+          <Pressable disabled={isUploadingImage} onPress={() => setPhotoSheetVisible(true)} style={styles.avatarButton}>
             {hasProfileImage ? (
               <MediaImage media={{ id: profileImageMediaId, url: profileImageUrl }} style={styles.avatarImage} />
             ) : (
-              <View style={styles.avatar}>
-                <Ionicons name="person" size={24} color={COLORS.primary} />
-              </View>
+              <DefaultAvatarIcon size={80} />
             )}
             <View style={styles.cameraBadge}>
-              <Ionicons name="camera" size={14} color="#FFFFFF" />
+              <Ionicons name="camera" size={12} color="#FFFFFF" />
             </View>
           </Pressable>
           {isUploadingImage ? <Text style={styles.uploadText}>업로드 {uploadProgress || 0}%</Text> : null}
-          {hasProfileImage ? (
-            <Pressable
-              onPress={() => {
-                setProfileImageUrl(null);
-                setProfileImageMediaId(null);
-              }}
-              style={styles.removeButton}
-            >
-              <Text style={styles.removeButtonText}>사진 제거</Text>
-            </Pressable>
-          ) : null}
         </View>
 
         <View style={styles.form}>
@@ -280,6 +268,34 @@ export default function ProfileSettingsScreen() {
                 {fields.major === option.name ? <Ionicons name="checkmark" size={19} color={COLORS.primary} /> : null}
               </Pressable>
             ))}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal animationType="slide" transparent visible={photoSheetVisible} onRequestClose={() => setPhotoSheetVisible(false)}>
+        <Pressable onPress={() => setPhotoSheetVisible(false)} style={styles.modalBackdrop}>
+          <Pressable onPress={() => undefined} style={styles.modalCard}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>프로필 사진 변경</Text>
+            <Pressable
+              onPress={() => {
+                setPhotoSheetVisible(false);
+                void selectProfileImage();
+              }}
+              style={styles.modalOption}
+            >
+              <Text style={styles.modalOptionText}>앨범에서 사진 선택</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setProfileImageUrl(null);
+                setProfileImageMediaId(null);
+                setPhotoSheetVisible(false);
+              }}
+              style={styles.modalOption}
+            >
+              <Text style={styles.modalOptionText}>기본 이미지 적용</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -370,13 +386,13 @@ const styles = StyleSheet.create({
   },
   cameraBadge: {
     position: "absolute",
-    right: 2,
-    bottom: 2,
-    width: 24,
-    height: 24,
+    right: 4,
+    bottom: 4,
+    width: 22,
+    height: 22,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 12,
+    borderRadius: 11,
     backgroundColor: COLORS.primary,
     borderWidth: 2,
     borderColor: "#FFFFFF",
@@ -386,14 +402,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 10,
-  },
-  removeButton: {
-    paddingTop: 9,
-  },
-  removeButtonText: {
-    color: COLORS.danger,
-    fontSize: 13,
-    fontWeight: "900",
   },
   errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "800", marginTop: 10 },
   inlineError: { alignItems: "flex-start", gap: 8 },

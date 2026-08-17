@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import BoardPostsScreen from "../board/[boardId]";
+import BoardPostsScreen from "./board/[boardId]";
 import LoadingState from "../../components/LoadingState";
 import { useBoardsQuery } from "../../hooks/useApi";
 

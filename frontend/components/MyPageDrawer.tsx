@@ -20,7 +20,7 @@ import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
-import { BackIcon } from "./icons";
+import { BackIcon, DefaultAvatarIcon } from "./icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -192,9 +192,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
                       style={styles.avatarImage}
                     />
                   ) : (
-                    <View style={styles.avatar}>
-                      <Ionicons name="person" size={23} color={COLORS.primary} />
-                    </View>
+                    <DefaultAvatarIcon size={52} />
                   )}
                   <View style={styles.profileText}>
                     <Text style={styles.profileName}>{me?.nickname ?? "로그인이 필요합니다"}</Text>

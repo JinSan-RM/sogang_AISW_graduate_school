@@ -91,7 +91,7 @@ def test_activity_certification_owner_updates_date_and_participants_without_losi
         post = db.get(Post, post_id)
         assert post.metadata_json == {
             "activity_date": "2026.08.15",
-            "participants": "Owner payer, Other payer",
+            "participants": "74기 Owner payer, 74기 Other payer",
             "participant_dues_payer_ids": [1, 2],
             "activity_source_post_id": "3",
             "bank_account": "Sogang Bank 123-456",

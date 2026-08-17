@@ -5,28 +5,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, BackHandler, FlatList, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
-import { LedgerIcon, PersonAvatarIcon } from "../../components/icons";
-import LoadingState from "../../components/LoadingState";
-import PostCard from "../../components/PostCard";
-import { useBoardsQuery } from "../../hooks/useApi";
-import { useBoardPosts, useMultiBoardPosts } from "../../hooks/usePosts";
-import { API_ORIGIN } from "../../services/api";
-import { useUserStore } from "../../stores/userStore";
-import type { Board, PostListItem } from "../../types";
-import { boardParentRoute, postDetailRoute } from "../../utils/appRoutes";
-import { activityCertificationBadgeLabel } from "../../utils/activityCertification";
-import { formatBoardDate } from "../../utils/dateFormat";
-import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
-import { pastCouncilActivitiesFromMetadata } from "../../utils/pastCouncil";
+import MediaImage, { MediaImageBackground } from "../../../components/MediaImage";
+import { EmptyCalendarIcon, LedgerIcon, PersonAvatarIcon, SearchBackIcon, SearchIcon } from "../../../components/icons";
+import LoadingState from "../../../components/LoadingState";
+import PostCard from "../../../components/PostCard";
+import { useBoardsQuery } from "../../../hooks/useApi";
+import { useBoardPosts, useMultiBoardPosts } from "../../../hooks/usePosts";
+import { API_ORIGIN } from "../../../services/api";
+import { useUserStore } from "../../../stores/userStore";
+import type { Board, PostListItem } from "../../../types";
+import { boardParentRoute, postDetailRoute } from "../../../utils/appRoutes";
+import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
+import { formatBoardDate } from "../../../utils/dateFormat";
+import { toAbsoluteMediaUrl } from "../../../utils/mediaAccess";
+import { pastCouncilActivitiesFromMetadata } from "../../../utils/pastCouncil";
 import {
   RESOURCE_ALL_SLUGS,
   RESOURCE_FILTERS,
   RESOURCE_FILTER_SLUGS,
   resourceFilterAfterNavigation,
-} from "../../utils/resourceBoards";
-import type { ResourceFilter } from "../../utils/resourceBoards";
-import { formatCohortName } from "../../utils/userLabel";
+} from "../../../utils/resourceBoards";
+import type { ResourceFilter } from "../../../utils/resourceBoards";
+import { formatCohortName } from "../../../utils/userLabel";
 
 const COLORS = {
   primary: "#2761FF",
@@ -107,6 +107,7 @@ type CohortLeaderSummary = {
   greeting?: string;
   intro: string;
   bannerImageUrl?: string;
+  photoUrls: string[];
   captainImageUrl?: string;
   viceCaptainImageUrl?: string;
 };
@@ -119,6 +120,7 @@ type PastCouncilSummary = {
   vicePresidentCohort?: string;
   intro?: string;
   bannerImageUrl?: string;
+  photoUrls: string[];
   presidentImageUrl?: string;
   vicePresidentImageUrl?: string;
   activities: { date?: string; title: string }[];
@@ -323,6 +325,9 @@ function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, 
         greeting: stringValue("greeting"),
         intro: stringValue("intro") ?? "",
         bannerImageUrl: stringValue("banner_image_url"),
+        photoUrls: Array.isArray(record.photo_urls)
+          ? record.photo_urls.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+          : [],
         captainImageUrl: stringValue("captain_image_url"),
         viceCaptainImageUrl: stringValue("vice_captain_image_url"),
       }];
@@ -343,6 +348,7 @@ function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, 
         captain,
         viceCaptain: extractViceLeaderName(content, cohort),
         intro: firstMeaningfulParagraph(content),
+        photoUrls: [],
       };
     })
     .sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
@@ -392,11 +398,7 @@ function CohortLeaderScreen({
         <LoadingState />
       ) : selected ? (
         <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
-          {imageUrl(selected.bannerImageUrl) ? (
-            <MediaImage media={{ url: selected.bannerImageUrl }} resizeMode="contain" style={styles.cohortBanner} />
-          ) : (
-            <View style={styles.cohortBannerFallback} />
-          )}
+          <PhotoSlider key={selected.id} photos={sliderPhotos(selected.photoUrls, selected.bannerImageUrl)} />
           {selected.greeting ? <Text style={styles.cohortGreeting}>{selected.greeting}</Text> : null}
           {selected.intro ? <Text style={styles.cohortIntroText}>{selected.intro}</Text> : null}
           <View style={styles.executiveCard}>
@@ -473,6 +475,9 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
       vicePresidentCohort: value("vice_president_cohort") || undefined,
       intro: value("intro") || undefined,
       bannerImageUrl: value("banner_image_url") || undefined,
+      photoUrls: Array.isArray(record.photo_urls)
+        ? record.photo_urls.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+        : [],
       presidentImageUrl: value("president_image_url") || undefined,
       vicePresidentImageUrl: value("vice_president_image_url") || undefined,
       activities: pastCouncilActivitiesFromMetadata(record.activities),
@@ -480,46 +485,66 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
   }).sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
 }
 
+function PhotoSlider({ photos }: { photos: string[] }) {
+  const [index, setIndex] = useState(0);
+  const current = Math.min(index, Math.max(photos.length - 1, 0));
+  return (
+    <View style={styles.pastPhotoSlider}>
+      {photos.length > 0 ? (
+        <MediaImage media={{ url: photos[current] }} resizeMode="contain" style={styles.pastPhoto} />
+      ) : (
+        <LinearGradient colors={["#534AB7", "#AFA9EC"]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={styles.pastPhoto} />
+      )}
+      {photos.length > 1 ? (
+        <>
+          <Pressable
+            accessibilityLabel="이전 사진"
+            onPress={() => setIndex((prev) => (prev - 1 + photos.length) % photos.length)}
+            style={[styles.pastPhotoNav, { left: 10 }]}
+          >
+            <Ionicons name="chevron-back" size={16} color="#FFFFFF" />
+          </Pressable>
+          <Pressable
+            accessibilityLabel="다음 사진"
+            onPress={() => setIndex((prev) => (prev + 1) % photos.length)}
+            style={[styles.pastPhotoNav, { right: 10 }]}
+          >
+            <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.pastPhotoIndicator}>
+            <Text style={styles.pastPhotoIndicatorText}>{current + 1} / {photos.length}</Text>
+          </View>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function sliderPhotos(photoUrls: string[], bannerImageUrl?: string) {
+  return photoUrls.length > 0 ? photoUrls : [bannerImageUrl].filter((url): url is string => Boolean(imageUrl(url)));
+}
+
 function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; topInset: number; onBack: () => void }) {
   const councils = useMemo(() => pastCouncilsFromMetadata(board?.metadata), [board?.metadata]);
   const [selected, setSelected] = useState<PastCouncilSummary | null>(null);
-  const [tab, setTab] = useState<"members" | "activities">("members");
   const handleBack = () => selected ? setSelected(null) : onBack();
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(topInset, 10) }]}>
         <IconButton icon="chevron-back" label="뒤로" onPress={handleBack} />
-        <Text style={styles.appBarTitle}>{selected ? `${selected.cohort} 원우회` : "역대 원우회"}</Text>
+        <Text style={styles.appBarTitle}>{selected ? `${selected.cohort} 원우회 임원진` : "역대 원우회"}</Text>
         <View style={styles.iconButton} />
       </View>
       {selected ? (
         <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
-          <View style={styles.pastCouncilTabs}>
-            {([['members', '임원진 소개'], ['activities', '활동내역']] as const).map(([key, label]) => (
-              <Pressable key={key} onPress={() => setTab(key)} style={[styles.pastCouncilTab, tab === key ? styles.pastCouncilTabActive : null]}>
-                <Text style={[styles.pastCouncilTabText, tab === key ? styles.pastCouncilTabTextActive : null]}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {tab === "members" ? (
-            <>
-              {[{ name: selected.presidentName, cohort: selected.presidentCohort, role: "회장", image: selected.presidentImageUrl }, { name: selected.vicePresidentName, cohort: selected.vicePresidentCohort, role: "부회장", image: selected.vicePresidentImageUrl }].filter((member) => member.name).map((member) => (
-                <View key={member.role} style={styles.executiveCard}>
-                  {imageUrl(member.image) ? <MediaImage media={{ url: member.image }} style={styles.executiveAvatarImage} /> : <View style={styles.executiveAvatar}><Ionicons name="person" size={20} color={COLORS.primary} /></View>}
-                  <View style={styles.executiveText}><Text style={styles.executiveName}>{member.name}</Text><Text style={styles.executiveRole}>{[member.cohort, member.role].filter(Boolean).join(" ")}</Text></View>
-                </View>
-              ))}
-            </>
-          ) : (
-            <>
-              {selected.activities.length > 0 ? selected.activities.map((activity, index) => (
-                <View key={`${activity.title}-${index}`} style={styles.pastActivityItem}>
-                  {activity.date ? <Text style={styles.pastActivityDate}>{formatBoardDate(activity.date)}</Text> : null}
-                  <Text style={styles.pastActivityTitle}>{activity.title}</Text>
-                </View>
-              )) : <View style={styles.emptyBox}><Text style={styles.emptyText}>등록된 활동내역이 없습니다.</Text></View>}
-            </>
-          )}
+          <PhotoSlider key={selected.id} photos={sliderPhotos(selected.photoUrls, selected.bannerImageUrl)} />
+          {selected.intro ? <Text style={styles.cohortIntroText}>{selected.intro}</Text> : null}
+          {[{ name: selected.presidentName, cohort: selected.presidentCohort, role: "회장", image: selected.presidentImageUrl }, { name: selected.vicePresidentName, cohort: selected.vicePresidentCohort, role: "부회장", image: selected.vicePresidentImageUrl }].filter((member) => member.name).map((member) => (
+            <View key={member.role} style={styles.executiveCard}>
+              {imageUrl(member.image) ? <MediaImage media={{ url: member.image }} style={styles.executiveAvatarImage} /> : <PersonAvatarIcon size={48} />}
+              <View style={styles.executiveText}><Text style={styles.executiveName}>{member.name}</Text><Text style={styles.executiveRole}>{[member.cohort, member.role].filter(Boolean).join(" ")}</Text></View>
+            </View>
+          ))}
         </ScrollView>
       ) : (
         <FlatList
@@ -528,7 +553,7 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
           contentContainerStyle={[styles.executiveContent, councils.length === 0 ? styles.emptyContent : null]}
           ListEmptyComponent={<View style={styles.emptyBox}><Text style={styles.emptyText}>등록된 역대 원우회가 없습니다.</Text></View>}
           renderItem={({ item }) => (
-            <Pressable onPress={() => { setSelected(item); setTab("members"); }} style={styles.cohortCard}>
+            <Pressable onPress={() => setSelected(item)} style={styles.cohortCard}>
               <View style={styles.cohortBadge}><Text style={styles.cohortBadgeText}>{item.cohort}</Text></View>
               <View style={styles.executiveText}><Text style={styles.executiveRole}>회장</Text><Text style={styles.executiveName}>{[item.presidentCohort, item.presidentName].filter(Boolean).join(" ")}</Text></View>
             </Pressable>
@@ -986,17 +1011,19 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         {showSearch ? (
           <>
-            <IconButton
-              icon="chevron-back"
-              label="검색 닫기"
+            <Pressable
+              accessibilityLabel="검색 닫기"
               onPress={() => {
                 setShowSearch(false);
                 setQuery("");
                 setQueryInput("");
               }}
-            />
+              style={styles.iconButton}
+            >
+              <SearchBackIcon size={16} />
+            </Pressable>
             <View style={styles.searchBar}>
-              <Ionicons name="search-outline" size={18} color="#A6ACB7" />
+              <SearchIcon size={18} color="#8A919C" />
               <TextInput
                 autoFocus
                 value={queryInput}
@@ -1017,7 +1044,9 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
               <IconButton icon="chevron-back" label="뒤로" onPress={exitBoardDepth} />
             )}
             <Text style={styles.appBarTitle}>{display.name}</Text>
-            <IconButton icon="search-outline" label="검색" onPress={() => setShowSearch(true)} />
+            <Pressable accessibilityLabel="검색" onPress={() => setShowSearch(true)} style={styles.iconButton}>
+              <SearchIcon size={20} />
+            </Pressable>
           </>
         )}
       </View>
@@ -1108,7 +1137,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
               </Pressable>
             ) : (
               <View style={styles.emptyBox}>
-                <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
+                <EmptyCalendarIcon size={32} />
                 <Text style={styles.emptyText}>
                   {query ? "검색 결과가 없어요" : isMutualAid ? "등록된 상조회 신청이 없어요" : isSuggestion ? "등록된 건의사항이 없어요" : board?.slug === "study-recruit" ? "모집 중인 스터디가 없어요" : isParticipationGuideCards ? (participationGroupKey(board) === "networking" ? "등록된 네트워킹이 없어요" : "등록된 동아리가 없어요") : isAlbum ? "등록된 사진이 없어요" : "아직 게시물이 없어요"}
                 </Text>
@@ -1447,7 +1476,7 @@ const styles = StyleSheet.create({
   },
   activityThumb: {
     position: "relative",
-    aspectRatio: 2.05,
+    aspectRatio: 328 / 219, // Figma 인증사진 328x219
     borderRadius: 8,
     overflow: "hidden",
   },
@@ -1472,25 +1501,26 @@ const styles = StyleSheet.create({
     color: "#0C447C",
     fontSize: 11,
     fontWeight: "400",
+    lineHeight: 13,
   },
   activityTitle: {
     color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "900",
-    lineHeight: 21,
-    marginTop: 7,
+    fontSize: 15, // Figma 인증피드카드 제목 15/18 Medium
+    fontWeight: "500",
+    lineHeight: 18,
   },
   activityPreview: {
-    color: COLORS.text,
+    color: COLORS.muted, // Figma 소감 13/150% #6B7280
     fontSize: 13,
     fontWeight: "400",
     lineHeight: 20,
     marginTop: 8,
   },
   activityDate: {
-    color: "#A6ACB7",
+    color: "#A6ACB7", // Figma 메타 12/15 #A6ACB7
     fontSize: 12,
     fontWeight: "400",
+    lineHeight: 15,
     marginTop: 8,
   },
   center: {
@@ -1674,39 +1704,42 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 32,
   },
-  cohortBanner: {
+  pastPhotoSlider: {
     marginHorizontal: -20, // full-bleed (cancel content padding)
     marginTop: -14,
-    height: 180, // Figma 134:28 대표 사진
-    backgroundColor: COLORS.primary50,
-    marginBottom: 16,
+    height: 240, // Figma 사진슬라이더
+    marginBottom: 8,
   },
-  cohortBannerFallback: {
-    marginHorizontal: -20,
-    marginTop: -14,
-    height: 180,
-    backgroundColor: "#85B7EB", // Figma 대표 사진 placeholder
-    marginBottom: 16,
+  pastPhoto: {
+    width: "100%",
+    height: 240,
+    backgroundColor: "#F7F7F5", // contain 시 여백(레터박스) 배경
   },
-  pastCouncilTabs: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
-    marginBottom: 16,
-  },
-  pastCouncilTab: {
-    flex: 1,
+  pastPhotoNav: {
+    position: "absolute",
+    top: 106,
+    width: 28,
+    height: 28,
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    justifyContent: "center",
+    borderRadius: 14,
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
   },
-  pastCouncilTabActive: { borderBottomColor: COLORS.text },
-  pastCouncilTabText: { color: COLORS.muted, fontSize: 14, fontWeight: "400" }, // Figma 232 서브탭
-  pastCouncilTabTextActive: { color: COLORS.text, fontWeight: "500" },
-  pastActivityItem: { gap: 4, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "#EAECEF", width: "100%" }, // Figma 232:40
-  pastActivityDate: { color: "#A6ACB7", fontSize: 12, fontWeight: "400" },
-  pastActivityTitle: { color: COLORS.text, fontSize: 15, fontWeight: "400" },
+  pastPhotoIndicator: {
+    position: "absolute",
+    right: 16,
+    bottom: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+  },
+  pastPhotoIndicatorText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: "400",
+  },
   cohortGreeting: {
     color: COLORS.text,
     fontSize: 14,

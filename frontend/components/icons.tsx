@@ -426,3 +426,84 @@ export function NoticeAlertIcon({ size = 14, color = "#854F0B" }: IconProps) {
     </Svg>
   );
 }
+
+// 기본 프로필 아바타 — 디자인 원본 80x80 (파란 배경 원 + 흰 실루엣, 카메라 배지는 별도 오버레이).
+export function DefaultAvatarIcon({ size = 80 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 80 80" fill="none">
+      <Rect width={80} height={80} rx={40} fill="#E6F1FB" />
+      <Path d="M40 39.9998C44.2342 39.9998 47.6667 36.5674 47.6667 32.3332C47.6667 28.099 44.2342 24.6665 40 24.6665C35.7658 24.6665 32.3333 28.099 32.3333 32.3332C32.3333 36.5674 35.7658 39.9998 40 39.9998Z" fill="#FFFFFF" />
+      <Path d="M24.6667 55.3333C24.6667 46.9 31.5667 40 40 40C48.4333 40 55.3333 46.9 55.3333 55.3333" fill="#FFFFFF" />
+    </Svg>
+  );
+}
+
+// 댓글 전송 버튼 — 디자인 원본 36x36 (파란 원 + 흰 종이비행기).
+export function SendIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#2761FF" />
+      <Path d="M11.5 18L24.5 12.5L20 25.5L17.5 20L12 18H11.5Z" stroke="#FFFFFF" strokeWidth={1.4} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 공지 첨부파일 다운로드 아이콘 — 디자인 원본 18x18.
+export function DownloadIcon({ size = 18, color = "#2761FF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path d="M9 2.5V11.5M12.5 8L9 11.5L5.5 8" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M3.5 14H14.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 공지 첨부링크 바로가기 아이콘 — 디자인 원본 18x18.
+export function ExternalLinkIcon({ size = 18, color = "#2761FF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path d="M7 2H4C2.89543 2 2 2.89543 2 4V14C2 15.1046 2.89543 16 4 16H14C15.1046 16 16 15.1046 16 14V11" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M11 2H16V7" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M16.0005 2L9.00049 9" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 공지 첨부 PDF/문서 아이콘 — 디자인 원본 18x18.
+export function AttachDocIcon({ size = 18, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path d="M4.99997 2.5H11L14 5.5V13.5C14 13.8978 13.8419 14.2794 13.5606 14.5607C13.2793 14.842 12.8978 15 12.5 15H4.99997C4.69323 14.8921 4.42984 14.6875 4.24948 14.417C4.06912 14.1464 3.98155 13.8246 3.99997 13.5V4C3.99997 3.60218 4.158 3.22064 4.43931 2.93934C4.72061 2.65804 5.10214 2.5 5.49997 2.5H4.99997Z" stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
+      <Path d="M11 2.5V5.5H14" stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 공지 첨부링크 체인 아이콘 — 디자인 원본 16x16.
+export function AttachLinkIcon({ size = 16, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path d="M8.00006 8.99992H8.97139C10.0921 8.99992 11.0001 8.0067 11.0001 6.70003C11.0001 6.07232 10.7863 5.47032 10.4059 5.02646C10.0254 4.58261 9.50943 4.33325 8.97139 4.33325H5.00004H3.36204C2.24137 4.33325 1.33337 5.32647 1.33337 6.63314C1.33337 7.26085 1.54711 7.86285 1.92756 8.30671C2.30801 8.75056 2.82401 8.99992 3.36204 8.99992" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M8.33332 7.00008H7.36198C6.24132 7.00008 5.33332 7.9933 5.33332 9.29997C5.33332 9.92768 5.54705 10.5297 5.9275 10.9735C6.30795 11.4174 6.82395 11.6667 7.36198 11.6667H11.3333H12.9713C14.092 11.6667 15 10.6735 15 9.36686C15 8.73915 14.7863 8.13715 14.4058 7.69329C14.0254 7.24944 13.5094 7.00008 12.9713 7.00008" stroke={color} strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 상단바 돋보기 아이콘 — 디자인 원본 20x20, stroke 1.6.
+export function SearchIcon({ size = 20, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke={color} strokeWidth={1.6} />
+      <Path d="M13 13L17 17" stroke={color} strokeWidth={1.6} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 게시판 검색 모드 뒤로가기 — 디자인 원본 10x16, stroke 1.6.
+export function SearchBackIcon({ size = 16, color = "#15171C" }: IconProps) {
+  return (
+    <Svg width={(size * 10) / 16} height={size} viewBox="0 0 10 16" fill="none">
+      <Path d="M8.33317 1.6001L1.6665 8.0001L8.33317 14.4001" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}

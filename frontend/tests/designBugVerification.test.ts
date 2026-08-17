@@ -7,14 +7,14 @@ const source = (path: string) => readFileSync(path, "utf8");
 const tabLayoutSource = source("app/(tabs)/_layout.tsx");
 const homeSource = source("app/(tabs)/home.tsx");
 const noticeListSource = source("app/(tabs)/notices.tsx");
-const boardSource = source("app/board/[boardId].tsx");
-const postDetailSource = source("app/board/post/[postId].tsx");
-const postCreateSource = source("app/board/post/create.tsx");
-const postEditSource = source("app/board/post/edit/[postId].tsx");
-const mutualAidCompleteSource = source("app/council/mutual-aid-complete.tsx");
-const searchSource = source("app/search.tsx");
+const boardSource = source("app/(tabs)/board/[boardId].tsx");
+const postDetailSource = source("app/(tabs)/board/post/[postId].tsx");
+const postCreateSource = source("app/(tabs)/board/post/create.tsx");
+const postEditSource = source("app/(tabs)/board/post/edit/[postId].tsx");
+const mutualAidCompleteSource = source("app/(tabs)/council/mutual-aid-complete.tsx");
+const searchSource = source("app/(tabs)/search.tsx");
 const loginSource = source("app/auth/login.tsx");
-const eventsSource = source("app/events.tsx");
+const eventsSource = source("app/(tabs)/events/index.tsx");
 const councilSource = source("app/(tabs)/council.tsx");
 const schoolEmailSource = source("components/SchoolEmailInput.tsx");
 const legalDocumentSource = source("components/LegalDocumentScreen.tsx");
@@ -63,6 +63,17 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
+test("#41·45 공지 상세 세로 이미지는 360 프레임으로 접고 사진 전체보기로 펼친다", () => {
+  assert.match(postDetailSource, /<NaturalAspectMediaImage key=\{heroAttachment\.id\} media=\{heroAttachment\}/);
+  // 세로로 긴 이미지(비율 임계값 미만)만 접힌 프레임 + 전체보기 버튼을 쓴다
+  assert.match(postDetailSource, /attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT/);
+  assert.match(postDetailSource, /collapseNoticeImage \? styles\.noticeImageAttachment : null/);
+  assert.match(postDetailSource, /사진 전체보기/);
+  assert.match(postDetailSource, /<NaturalAspectMediaImage[\s\S]*media=\{attachment\}/);
+  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 360/);
+  assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
+});
+
 test("#29·31 상조회 입력 안내는 일반 굵기이고 상세 비고는 증빙서류 바로 앞에 표시된다", () => {
   const noteIndex = postDetailSource.indexOf(">비고</Text>");
   const evidenceIndex = postDetailSource.indexOf(">증빙서류</Text>");
@@ -80,7 +91,7 @@ test("#48 완료 화면은 공통 CompletionState를 공유한다", () => {
 });
 
 test("#38·39 기본 프로필과 개인정보 동의 상태는 임의 값을 만들지 않는다", () => {
-  assert.match(myPageDrawerSource, /name="person"/);
+  assert.match(myPageDrawerSource, /<DefaultAvatarIcon size=\{52\} \/>/);
   assert.match(legalDocumentSource, /Boolean\(consentLabel\)/);
   assert.doesNotMatch(legalDocumentSource, /consentLabel \|\|/);
 });
@@ -105,7 +116,8 @@ test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시
   assert.match(postDetailSource, /<MoreIcon color=\{COLORS\.text\} \/>/);
   assert.match(postDetailSource, /style=\{styles\.menuSheet\}/);
   assert.match(postDetailSource, /<FlagIcon size=\{20\}/);
-  assert.match(postDetailSource, /name="remove-circle-outline"/);
+  // 작성자 차단 항목은 디자인(Report/MoreMenu)에 없어 제거됐다
+  assert.doesNotMatch(postDetailSource, /작성자 차단/);
 });
 
 test("#71 게시글 수정 화면은 제목과 내용 입력을 게시판 종류와 관계없이 노출한다", () => {

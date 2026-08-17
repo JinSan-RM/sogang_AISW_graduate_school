@@ -11,12 +11,12 @@ import {
   NotificationEventIcon,
   NotificationLikeIcon,
   NotificationSuggestionIcon,
-} from "../components/icons";
+} from "../../components/icons";
 
-import LoadingState from "../components/LoadingState";
-import { notificationApi } from "../services/api";
-import type { NotificationItem } from "../types";
-import { formatKoreanTime, formatShortDate } from "../utils/dateFormat";
+import LoadingState from "../../components/LoadingState";
+import { notificationApi } from "../../services/api";
+import type { NotificationItem } from "../../types";
+import { formatKoreanTime, formatShortDate } from "../../utils/dateFormat";
 
 const COLORS = {
   primary: "#2761FF",

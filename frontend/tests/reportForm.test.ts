@@ -27,7 +27,7 @@ test("선택형 사유는 상세 입력을 전송하지 않는다", () => {
 test("본인 게시글은 신고 메뉴를 표시하되 API 대신 로컬 안내를 사용한다", () => {
   assert.deepEqual(
     getReportEntryState({ isMine: true, isReported: false, isAllowedTarget: true }),
-    { visible: true, label: "신고", action: "own-unavailable" },
+    { visible: false, label: "신고", action: "none" },
   );
 });
 
