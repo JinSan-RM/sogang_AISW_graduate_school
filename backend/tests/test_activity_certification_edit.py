@@ -98,3 +98,20 @@ def test_activity_certification_owner_updates_date_and_participants_without_losi
         }
         attachments = db.query(PostAttachment).filter(PostAttachment.post_id == post_id).all()
         assert [attachment.media_id for attachment in attachments] == [1]
+
+
+def test_activity_certification_owner_replaces_hidden_bank_account(api) -> None:
+    _, post_id = _create_activity_certification(api)
+    payload = _update_payload()
+    payload["metadata"]["bank_account"] = "Replacement Bank 999-000"
+
+    response = api.client.put(
+        f"/api/posts/{post_id}",
+        json=payload,
+        headers=api.headers["owner"],
+    )
+
+    assert response.status_code == 200
+    with api.session() as db:
+        post = db.get(Post, post_id)
+        assert post.metadata_json["bank_account"] == "Replacement Bank 999-000"

@@ -20,6 +20,7 @@ import { duesPayerApi, postApi } from "../../../../services/api";
 import type { MediaAsset, PostListItem } from "../../../../types";
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
+  activityBankAccountFieldState,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostFilters,
@@ -354,7 +355,7 @@ export default function PostCreateScreen() {
   const canCloseRecruitment = Boolean(postId);
   const isNetworkingProgram = board?.slug === "networking-programs";
   const isAdminParticipationPost = board?.slug === "club-promo" || isNetworkingProgram;
-  const canEditActivityBankAccount = !postId || typeof existingPost?.metadata?.bank_account === "string";
+  const bankAccountField = activityBankAccountFieldState(postId);
   const compactCreate = !isActivity && !isMutualAid;
   const requiresAttachment = isActivity || isMutualAid || isAlbum || isAdminParticipationPost;
   const canPickBoard =
@@ -412,7 +413,7 @@ export default function PostCreateScreen() {
       content: existingPost.content,
       activityDate: typeof metadata.activity_date === "string" ? metadata.activity_date : "",
       participants: typeof metadata.participants === "string" ? metadata.participants : "",
-      bankAccount: typeof metadata.bank_account === "string" ? metadata.bank_account : "",
+      bankAccount: "",
       eventDate: normalizeMutualAidEventDate(
         existingPost.mutual_aid?.event_date ??
           (typeof metadata.event_date === "string" ? metadata.event_date : undefined),
@@ -605,7 +606,7 @@ export default function PostCreateScreen() {
         requireValue(values.category, "활동 대상") ||
         requireValue(values.activityDate, "활동일") ||
         requireValue(values.participants, "참가자") ||
-        (canEditActivityBankAccount && requireValue(values.bankAccount, "입금 계좌"))
+        (bankAccountField.required && requireValue(values.bankAccount, "입금 계좌"))
       ) {
         return;
       }
@@ -919,20 +920,17 @@ export default function PostCreateScreen() {
                 name="bankAccount"
                 render={({ field }) => (
                   <FormTextInput
-                    editable={canEditActivityBankAccount}
                     onChangeText={field.onChange}
-                    placeholder={canEditActivityBankAccount ? "은행 / 계좌번호를 입력하세요" : "기존 계좌 정보가 유지됩니다"}
+                    placeholder={bankAccountField.placeholder}
                     placeholderTextColor="#A6ACB7"
-                    style={[styles.input, !canEditActivityBankAccount ? styles.inputDisabled : null]}
+                    style={styles.input}
                     value={field.value ?? ""}
                   />
                 )}
               />
               <View style={styles.activityWarning}>
                 <Ionicons name="alert-circle-outline" size={14} color="#854F0B" style={styles.activityWarningIcon} />
-                <Text style={styles.activityWarningText}>
-                  {canEditActivityBankAccount ? "계좌는 본인 명의로만 등록 가능해요" : "보안을 위해 기존 계좌는 표시하지 않고 그대로 유지해요"}
-                </Text>
+                <Text style={styles.activityWarningText}>{bankAccountField.guidance}</Text>
               </View>
             </View>
 
@@ -2432,10 +2430,6 @@ const styles = StyleSheet.create({
     borderColor: "#21262E",
     paddingHorizontal: 13, // 굵어진 테두리만큼 보정
     paddingVertical: 11,
-  },
-  inputDisabled: {
-    backgroundColor: "#F3F4F6",
-    color: COLORS.muted,
   },
   inputError: {
     borderColor: COLORS.danger,

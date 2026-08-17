@@ -18,6 +18,21 @@ const GENERIC_CLUB_ACTIVITY_LABELS = new Set(["동아리 활동 인증", "활동
 export const ACTIVITY_PARTICIPANT_GUIDANCE =
   "원우회비 미납자, 졸업자는 검색되지 않아요. 지원금은 참가자 목록 기준 지급되니 본인도 검색해서 추가해주세요.";
 
+export function activityBankAccountFieldState(postId: number | null) {
+  if (postId) {
+    return {
+      required: false,
+      placeholder: "새 계좌번호를 입력하면 변경돼요",
+      guidance: "기존 계좌는 표시되지 않아요. 변경할 경우 새 계좌를 입력해주세요.",
+    } as const;
+  }
+  return {
+    required: true,
+    placeholder: "은행 / 계좌번호를 입력하세요",
+    guidance: "계좌는 본인 명의로만 등록 가능해요",
+  } as const;
+}
+
 export function formatActivityParticipant(participant: ActivityParticipant): string {
   // 학번 A73006의 A 다음 두 자리가 기수 → 디자인 표기 "73기 손예진"
   // ponytail: 기수 2자리는 학번 체계(A+5자리)의 한계 — 100기부터는 학번 형식이 바뀌므로
