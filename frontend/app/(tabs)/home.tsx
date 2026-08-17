@@ -12,6 +12,7 @@ import {
   type NativeSyntheticEvent,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -41,6 +42,7 @@ import {
 } from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { homeNoticeCategory, homeNoticePosts, isNoticeContentBoard } from "../../utils/noticeFeed";
+import { enabledRefetch, refreshQueries } from "../../utils/pullToRefresh";
 
 const COLORS = {
   primary: "#2761FF",
@@ -628,6 +630,7 @@ export default function HomeScreen() {
     data: boardGroups,
     isError: boardsError,
     isLoading: boardsLoading,
+    isRefetching: boardsRefetching,
     refetch: refetchBoards,
   } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardGroups?.data), [boardGroups?.data]);
@@ -654,7 +657,6 @@ export default function HomeScreen() {
     queryKey: ["notifications", "home-badge"],
     queryFn: () => notificationApi.getNotifications(1, 100),
     enabled: isAuthenticated,
-    refetchInterval: 60_000,
   });
 
   const banners = bannersQuery.data?.data ?? [];
@@ -666,11 +668,28 @@ export default function HomeScreen() {
   const albumPosts = albumQuery.data?.data ?? [];
   const hasUnreadNotifications = (notificationQuery.data?.data ?? []).some((notification) => !notification.is_read);
   const displayName = user?.nickname || "서강인";
+  const isRefreshing = boardsRefetching
+    || bannersQuery.isRefetching
+    || noticesQuery.isRefetching
+    || eventsQuery.isRefetching
+    || albumQuery.isRefetching
+    || notificationQuery.isRefetching;
+  const refreshHome = () => {
+    void refreshQueries([
+      refetchBoards,
+      bannersQuery.refetch,
+      eventsQuery.refetch,
+      enabledRefetch(isAuthenticated, notificationQuery.refetch),
+      noticeBoardIds.length > 0 ? noticesQuery.refetch : undefined,
+      albumBoardId ? albumQuery.refetch : undefined,
+    ]);
+  };
 
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 12, 21) }]}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refreshHome} tintColor={COLORS.primary} />}
     >
       <View style={styles.header}>
         <View style={styles.greetingWrap}>

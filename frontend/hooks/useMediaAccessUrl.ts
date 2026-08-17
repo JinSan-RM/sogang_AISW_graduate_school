@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { API_ORIGIN, mediaApi } from "../services/api";
-import type { MediaReference } from "../utils/mediaAccess";
+import {
+  mediaAccessQueryOptions as mediaAccessQueryPolicy,
+  type MediaReference,
+} from "../utils/mediaAccess";
 import {
   managedMediaPathFromReference,
   mediaIdFromReference,
@@ -9,9 +11,13 @@ import {
   toAbsoluteMediaUrl,
 } from "../utils/mediaAccess";
 
-const ACCESS_URL_REFRESH_MS = 4 * 60 * 1000;
+function getMediaApi() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- keeps query option tests independent of Expo runtime modules.
+  return require("../services/api") as typeof import("../services/api");
+}
 
 export async function resolveMediaAccessUrl(reference?: MediaReference | null): Promise<string | null> {
+  const { API_ORIGIN, mediaApi } = getMediaApi();
   const fallback = toAbsoluteMediaUrl(reference?.url, API_ORIGIN);
   if (!shouldRequestMediaAccess(reference)) return fallback;
 
@@ -28,19 +34,18 @@ export async function resolveMediaAccessUrl(reference?: MediaReference | null): 
   return fallback;
 }
 
+export function mediaAccessQueryOptions(reference?: MediaReference | null) {
+  return {
+    ...mediaAccessQueryPolicy(reference),
+    queryFn: () => resolveMediaAccessUrl(reference),
+  } as const;
+}
+
 export function useMediaAccessUrl(reference?: MediaReference | null) {
   const requiresAccessUrl = shouldRequestMediaAccess(reference);
-  const mediaId = mediaIdFromReference(reference);
-  const managedPath = managedMediaPathFromReference(reference?.url);
+  const { API_ORIGIN } = getMediaApi();
   const fallback = toAbsoluteMediaUrl(reference?.url, API_ORIGIN);
-  const query = useQuery({
-    queryKey: ["media-access-url", mediaId, managedPath],
-    queryFn: () => resolveMediaAccessUrl(reference),
-    enabled: requiresAccessUrl,
-    staleTime: ACCESS_URL_REFRESH_MS,
-    refetchInterval: requiresAccessUrl ? ACCESS_URL_REFRESH_MS : false,
-    retry: 1,
-  });
+  const query = useQuery(mediaAccessQueryOptions(reference));
 
   return {
     uri: requiresAccessUrl ? query.data ?? null : fallback,

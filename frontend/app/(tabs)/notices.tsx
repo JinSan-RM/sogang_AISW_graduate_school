@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBoardsQuery } from "../../hooks/useApi";
@@ -11,6 +11,7 @@ import { useMultiBoardPosts } from "../../hooks/usePosts";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { NOTICES_TAB_ROUTE } from "../../utils/appRoutes";
+import { refreshQueries } from "../../utils/pullToRefresh";
 import {
   isNoticeContentBoard,
   NOTICE_FILTERS,
@@ -168,6 +169,18 @@ export default function NoticesScreen() {
         style={styles.listScroller}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.listContent, !isLoading && visibleRows.length === 0 ? styles.listContentEmpty : null]}
+        refreshControl={
+          <RefreshControl
+            refreshing={boardsFetching || postsQuery.isRefetching}
+            onRefresh={() => {
+              void refreshQueries([
+                refetchBoards,
+                noticeBoardIds.length > 0 ? postsQuery.refetch : undefined,
+              ]);
+            }}
+            tintColor={COLORS.primary}
+          />
+        }
       >
         {isLoading ? <LoadingRows /> : null}
         {!isLoading && visibleRows.length > 0 ? (
@@ -184,12 +197,6 @@ export default function NoticesScreen() {
           />
         ) : null}
       </ScrollView>
-
-      {boardsFetching && !boardsLoading ? (
-        <View style={styles.refreshIndicator}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -309,18 +316,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "400",
     lineHeight: 18,
-  },
-  refreshIndicator: {
-    position: "absolute",
-    right: 24,
-    bottom: 18,
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surface,
   },
 });

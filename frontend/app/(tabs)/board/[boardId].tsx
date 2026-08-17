@@ -19,6 +19,7 @@ import { activityCertificationBadgeLabel } from "../../../utils/activityCertific
 import { formatBoardDate } from "../../../utils/dateFormat";
 import { toAbsoluteMediaUrl } from "../../../utils/mediaAccess";
 import { pastCouncilActivitiesFromMetadata } from "../../../utils/pastCouncil";
+import { enabledRefetch, refreshQueries } from "../../../utils/pullToRefresh";
 import {
   RESOURCE_ALL_SLUGS,
   RESOURCE_FILTERS,
@@ -359,6 +360,8 @@ function CohortLeaderScreen({
   posts,
   isLoading,
   isError,
+  refreshing,
+  onRefresh,
   onRetry,
   onBack,
   topInset,
@@ -367,6 +370,8 @@ function CohortLeaderScreen({
   posts: PostListItem[];
   isLoading: boolean;
   isError: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
   onRetry: () => void;
   onBack: () => void;
   topInset: number;
@@ -426,6 +431,8 @@ function CohortLeaderScreen({
         <FlatList
           data={leaders}
           keyExtractor={(item) => item.id}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           contentContainerStyle={[styles.executiveContent, leaders.length === 0 ? styles.emptyContent : null]}
           ListEmptyComponent={
             isError ? (
@@ -620,6 +627,8 @@ function CouncilActivityHistoryScreen({
   posts,
   isLoading,
   isError,
+  refreshing,
+  onRefresh,
   onRetry,
   onBack,
   originBoardId,
@@ -629,6 +638,8 @@ function CouncilActivityHistoryScreen({
   posts: PostListItem[];
   isLoading: boolean;
   isError: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
   onRetry: () => void;
   onBack: () => void;
   originBoardId: number;
@@ -648,6 +659,8 @@ function CouncilActivityHistoryScreen({
         <FlatList
           data={posts}
           keyExtractor={(item) => String(item.id)}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           contentContainerStyle={[styles.councilActivityContent, posts.length === 0 ? styles.emptyContent : null]}
           ListEmptyComponent={
             isError ? (
@@ -879,6 +892,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const isLoading = isResourceAll ? resourceAllQuery.isLoading : boardPostsQuery.isLoading;
   const isError = isResourceAll ? resourceAllQuery.isError : boardPostsQuery.isError;
   const refetch = isResourceAll ? resourceAllQuery.refetch : boardPostsQuery.refetch;
+  const isRefetching = isResourceAll ? resourceAllQuery.isRefetching : boardPostsQuery.isRefetching;
   const fetchNextPage = boardPostsQuery.fetchNextPage;
   const hasNextPage = isResourceAll ? false : boardPostsQuery.hasNextPage;
   const isFetchingNextPage = isResourceAll ? false : boardPostsQuery.isFetchingNextPage;
@@ -984,6 +998,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         posts={posts}
         isLoading={isLoading}
         isError={isError}
+        refreshing={isRefetching}
+        onRefresh={() => void refetch()}
         onRetry={() => void refetch()}
         topInset={insets.top}
         onBack={exitBoardDepth}
@@ -1001,6 +1017,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         posts={councilActivityPosts}
         isLoading={isLoading || councilNoticeQuery.isLoading}
         isError={isError || councilNoticeQuery.isError}
+        refreshing={isRefetching || councilNoticeQuery.isRefetching}
+        onRefresh={() => void refreshQueries([refetch, enabledRefetch(noticeBoardIds.length > 0, councilNoticeQuery.refetch)])}
         onRetry={() => void Promise.all([refetch(), councilNoticeQuery.refetch()])}
         originBoardId={boardId}
         detailReturnRoute={detailReturnRoute}
@@ -1128,6 +1146,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           numColumns={isAlbum ? 2 : 1}
           data={posts}
           keyExtractor={(item) => String(item.id)}
+          refreshing={isRefetching}
+          onRefresh={() => void refetch()}
           contentContainerStyle={[
             isAlbum ? styles.albumContent : isParticipationGuideCards ? styles.guideContent : isActivityCards ? styles.cardContent : styles.listContent,
             posts.length === 0 ? styles.emptyContent : null,

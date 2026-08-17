@@ -4,6 +4,18 @@ export type MediaReference = {
   is_private?: boolean;
 };
 
+export function mediaAccessQueryOptions(reference?: MediaReference | null) {
+  const mediaId = mediaIdFromReference(reference);
+  const managedPath = managedMediaPathFromReference(reference?.url);
+
+  return {
+    queryKey: ["media-access-url", mediaId, managedPath],
+    enabled: shouldRequestMediaAccess(reference),
+    staleTime: Infinity,
+    retry: 1,
+  } as const;
+}
+
 const DIRECT_URI_PATTERN = /^(?:https?:|file:|blob:|data:)/i;
 const NON_HTTP_URI_PATTERN = /^(?:file:|blob:|data:)/i;
 
