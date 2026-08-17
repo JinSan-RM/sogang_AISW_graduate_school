@@ -68,3 +68,45 @@ exit code 0 (no whitespace errors)
 ## Concerns
 
 - The full suite remains red only because the pre-existing source-text assertion expects the removed duplicate drawer implementation. It should be updated by the owning test-maintenance task to assert runtime behavior instead.
+
+## Fix round 1 evidence
+
+Reviewer feedback identified the stale source-text assertion as the sole full-suite failure. Removed only the `myPageDrawerSource` fixture and its `<DefaultAvatarIcon size={52} />` assertion from `frontend/tests/designBugVerification.test.ts`; the legal-consent assertions in the same test remain unchanged. No replacement source regex was added.
+
+Focused avatar test:
+
+```text
+npx tsx --test tests/profileAvatar.test.ts
+3 tests, 3 pass, 0 fail
+```
+
+Affected design verification test:
+
+```text
+npx tsx --test tests/designBugVerification.test.ts
+15 tests, 15 pass, 0 fail
+```
+
+Full frontend test suite:
+
+```text
+npm test
+207 tests, 207 pass, 0 fail, 0 cancelled, 0 skipped
+```
+
+Typecheck:
+
+```text
+npm run typecheck
+> tsc --noEmit
+exit code 0
+```
+
+Diff check:
+
+```text
+git diff --check
+exit code 0 (no whitespace errors; Git emitted normal LF-to-CRLF conversion warnings)
+```
+
+Fix-round concern: none identified.

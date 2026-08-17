@@ -18,7 +18,6 @@ const eventsSource = source("app/(tabs)/events/index.tsx");
 const councilSource = source("app/(tabs)/council.tsx");
 const schoolEmailSource = source("components/SchoolEmailInput.tsx");
 const legalDocumentSource = source("components/LegalDocumentScreen.tsx");
-const myPageDrawerSource = source("components/MyPageDrawer.tsx");
 const postCardSource = source("components/PostCard.tsx");
 const fontSource = source("utils/fonts.ts");
 const qaComposeSource = source("../docker-compose.qa.yml");
@@ -91,7 +90,6 @@ test("#48 완료 화면은 공통 CompletionState를 공유한다", () => {
 });
 
 test("#38·39 기본 프로필과 개인정보 동의 상태는 임의 값을 만들지 않는다", () => {
-  assert.match(myPageDrawerSource, /<DefaultAvatarIcon size=\{52\} \/>/);
   assert.match(legalDocumentSource, /Boolean\(consentLabel\)/);
   assert.doesNotMatch(legalDocumentSource, /consentLabel \|\|/);
 });
