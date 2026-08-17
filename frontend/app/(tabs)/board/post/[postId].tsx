@@ -220,17 +220,12 @@ export default function PostDetailScreen() {
 
   const handlePostBack = useCallback(() => {
     if (!post) return;
-    // 활동 인증 글은 참여활동 탭 루트(동아리·안내로 초기화)가 아니라 해당 인증 목록으로 돌아간다.
-    if (board?.board_type === "activity_certification") {
-      router.replace(`/board/${post.board_id}` as never);
-      return;
-    }
-    navigateFromPostDetail(board, {
+    navigateFromPostDetail(board, params.fromBoardId, {
       canGoBack: () => router.canGoBack(),
       back: () => router.back(),
       replace: (route) => router.replace(route as never),
     });
-  }, [board, post]);
+  }, [board, params.fromBoardId, post]);
 
   useFocusEffect(
     useCallback(() => {

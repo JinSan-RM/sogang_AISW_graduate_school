@@ -11,14 +11,18 @@ type BoardRouteInfo = {
   board_type: string;
 };
 
+type PostDetailFallbackRoute =
+  | ReturnType<typeof boardParentRoute>
+  | ReturnType<typeof boardRoute>;
+
 export type PostDetailBackDecision =
   | { action: "back" }
-  | { action: "replace"; route: ReturnType<typeof boardParentRoute> };
+  | { action: "replace"; route: PostDetailFallbackRoute };
 
 type PostDetailNavigator = {
   canGoBack: () => boolean;
   back: () => void;
-  replace: (route: ReturnType<typeof boardParentRoute>) => void;
+  replace: (route: PostDetailFallbackRoute) => void;
 };
 
 export function routeBoardId(value: unknown): number | null {
@@ -39,20 +43,21 @@ export function postDetailRoute(postId: number, fromBoardId?: number) {
 
 export function postDetailBackDecision(
   board: BoardRouteInfo | null | undefined,
-  canGoBack: boolean
+  canGoBack: boolean,
+  fromBoardId?: unknown,
 ): PostDetailBackDecision {
-  const parentRoute = boardParentRoute(board);
-  if (parentRoute === COMMUNITY_TAB_ROUTE || parentRoute === PARTICIPATION_TAB_ROUTE || !canGoBack) {
-    return { action: "replace", route: parentRoute };
-  }
-  return { action: "back" };
+  if (canGoBack) return { action: "back" };
+  const sourceBoardId = routeBoardId(fromBoardId);
+  if (sourceBoardId) return { action: "replace", route: boardRoute(sourceBoardId) };
+  return { action: "replace", route: boardParentRoute(board) };
 }
 
 export function navigateFromPostDetail(
   board: BoardRouteInfo | null | undefined,
+  fromBoardId: unknown,
   navigator: PostDetailNavigator
 ) {
-  const decision = postDetailBackDecision(board, navigator.canGoBack());
+  const decision = postDetailBackDecision(board, navigator.canGoBack(), fromBoardId);
   if (decision.action === "back") {
     navigator.back();
     return;

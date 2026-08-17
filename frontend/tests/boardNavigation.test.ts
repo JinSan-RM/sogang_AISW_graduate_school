@@ -5,7 +5,6 @@ import {
   COMMUNITY_TAB_ROUTE,
   HOME_TAB_ROUTE,
   NOTICES_TAB_ROUTE,
-  PARTICIPATION_TAB_ROUTE,
   boardParentRoute,
   navigateFromPostDetail,
   postDetailBackDecision,
@@ -32,17 +31,35 @@ test("게시판 목록에서 연 상세 글에는 원래 게시판 ID를 기록�
   assert.equal(postDetailRoute(91, 16), "/board/post/91?fromBoardId=16");
 });
 
-test("커뮤니티 글 상세는 탐색 기록이 있어도 커뮤니티 탭으로 바로 복귀한다", () => {
+test("탐색 기록이 있으면 게시판 종류와 무관하게 실제 이전 목록으로 복귀한다", () => {
+  for (const board of [
+    { slug: "academic-notices", category: "notice", board_type: "notice" },
+    { slug: "exam-archive", category: "resources", board_type: "resource" },
+    { slug: "study-activity", category: "study", board_type: "activity_certification" },
+  ]) {
+    assert.deepEqual(postDetailBackDecision(board, true, "13"), { action: "back" });
+  }
+});
+
+test("탐색 기록이 없으면 출발 게시판 목록으로 복귀한다", () => {
   assert.deepEqual(
-    postDetailBackDecision({ slug: "exam-archive", category: "resources", board_type: "resource" }, true),
-    { action: "replace", route: COMMUNITY_TAB_ROUTE }
+    postDetailBackDecision(
+      { slug: "study-activity", category: "study", board_type: "activity_certification" },
+      false,
+      "13",
+    ),
+    { action: "replace", route: "/board/13" },
   );
 });
 
-test("참여활동 글 상세는 탐색 기록이 있어도 참여활동 탭으로 바로 복귀한다", () => {
+test("잘못된 출발 게시판은 제품 상위 경로로 대체한다", () => {
   assert.deepEqual(
-    postDetailBackDecision({ slug: "networking-programs", category: "participation", board_type: "post" }, true),
-    { action: "replace", route: PARTICIPATION_TAB_ROUTE }
+    postDetailBackDecision(
+      { slug: "academic-notices", category: "notice", board_type: "notice" },
+      false,
+      "invalid",
+    ),
+    { action: "replace", route: NOTICES_TAB_ROUTE },
   );
 });
 
@@ -60,10 +77,11 @@ test("직접 링크로 연 일반 상세 글은 제품 상위 경로로 복귀�
   );
 });
 
-test("커뮤니티 상세의 공통 뒤로가기 실행기는 기존 목록 대신 탭 경로를 교체한다", () => {
+test("공통 뒤로가기 실행기는 탐색 기록이 있으면 기존 목록을 복원한다", () => {
   const calls: string[] = [];
   navigateFromPostDetail(
     { slug: "exam-archive", category: "resources", board_type: "resource" },
+    "16",
     {
       canGoBack: () => true,
       back: () => calls.push("back"),
@@ -71,7 +89,7 @@ test("커뮤니티 상세의 공통 뒤로가기 실행기는 기존 목록 대�
     }
   );
 
-  assert.deepEqual(calls, [`replace:${COMMUNITY_TAB_ROUTE}`]);
+  assert.deepEqual(calls, ["back"]);
 });
 
 test("게시판 경로 파라미터는 양의 정수만 허용한다", () => {
