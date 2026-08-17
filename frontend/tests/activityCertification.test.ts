@@ -3,11 +3,13 @@ import test from "node:test";
 
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
+  CURRENT_CLUB_NAMES,
   activityBankAccountFieldState,
   activityCertificationBadgeLabel,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostFilters,
+  currentClubActivitySourcePosts,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
@@ -184,4 +186,33 @@ test("스터디와 네트워킹 활동 인증 태그의 기존 분류는 유지�
 
 test("활동 인증의 원본 선택 목록은 공개된 운영진 게시글만 요청한다", () => {
   assert.deepEqual(activitySourcePostFilters(), { sort: "latest", status: "published" });
+});
+
+test("동아리 활동 인증 선택창은 현재 7개 동아리만 공식 순서로 반환한다", () => {
+  const posts = [
+    { id: 90, title: "예전 볼링 동아리" },
+    { id: 17, title: "FC리턴윈 (풋살)" },
+    { id: 16, title: "인간지능투자 (주식/코인)" },
+    { id: 15, title: "서강와인 (와인/위스키)" },
+    { id: 14, title: "서뽈링 (볼링)" },
+    { id: 13, title: "서강의 봄(등산)" },
+    { id: 12, title: "알바트로스냅(사진)" },
+    { id: 11, title: "SG_LLM (LLM구축)" },
+  ];
+
+  assert.deepEqual(CURRENT_CLUB_NAMES, [
+    "SG_LLM", "알바트로스냅", "서강의 봄", "서뽈링", "서강와인", "인간지능투자", "FC리턴윈",
+  ]);
+  assert.deepEqual(currentClubActivitySourcePosts(posts).map((post) => post.id), [11, 12, 13, 14, 15, 16, 17]);
+});
+
+test("현재 동아리 이름의 경계를 확인하고 최신 글 하나만 선택한다", () => {
+  const posts = [
+    { id: 31, title: "서뽈링 (현재)" },
+    { id: 30, title: "서뽈링 (이전 중복)" },
+    { id: 29, title: "서뽈링연합" },
+    { id: 28, title: "[종료] 서뽈링" },
+  ];
+
+  assert.deepEqual(currentClubActivitySourcePosts(posts), [{ id: 31, title: "서뽈링 (현재)" }]);
 });

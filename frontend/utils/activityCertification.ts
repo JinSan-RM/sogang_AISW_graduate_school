@@ -1,3 +1,5 @@
+import type { PostListItem } from "../types";
+
 export type ActivityParticipant = {
   id: number;
   name: string;
@@ -14,6 +16,42 @@ type ActivityBadgePost = {
 };
 
 const GENERIC_CLUB_ACTIVITY_LABELS = new Set(["동아리 활동 인증", "활동 인증", "안내"]);
+
+export const CURRENT_CLUB_NAMES = [
+  "SG_LLM",
+  "알바트로스냅",
+  "서강의 봄",
+  "서뽈링",
+  "서강와인",
+  "인간지능투자",
+  "FC리턴윈",
+] as const;
+
+function normalizedClubSourceTitle(value: string): string {
+  return value.normalize("NFKC").replace(/\s+/g, " ").trim();
+}
+
+function titleMatchesCurrentClub(title: string, clubName: string): boolean {
+  const normalizedTitle = normalizedClubSourceTitle(title);
+  const normalizedName = normalizedClubSourceTitle(clubName);
+  if (!normalizedTitle.startsWith(normalizedName)) return false;
+  const suffix = normalizedTitle.slice(normalizedName.length);
+  return suffix === "" || suffix.startsWith(" ") || suffix.startsWith("(") || suffix.startsWith("（");
+}
+
+export function currentClubActivitySourcePosts<
+  T extends Pick<PostListItem, "id" | "title">,
+>(posts: readonly T[]): T[] {
+  const selected = new Map<string, T>();
+  for (const post of posts) {
+    const clubName = CURRENT_CLUB_NAMES.find((name) => titleMatchesCurrentClub(post.title, name));
+    if (clubName && !selected.has(clubName)) selected.set(clubName, post);
+  }
+  return CURRENT_CLUB_NAMES.flatMap((name) => {
+    const post = selected.get(name);
+    return post ? [post] : [];
+  });
+}
 
 export const ACTIVITY_PARTICIPANT_GUIDANCE =
   "원우회비 미납자, 졸업자는 검색되지 않아요. 지원금은 참가자 목록 기준 지급되니 본인도 검색해서 추가해주세요.";

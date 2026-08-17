@@ -25,6 +25,7 @@ import {
   activityParticipantsFromMetadata,
   activitySourcePostFilters,
   activitySourcePostIdFromMetadata,
+  currentClubActivitySourcePosts,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
   type ActivityParticipant,
@@ -743,7 +744,12 @@ export default function PostCreateScreen() {
   };
 
   const participantResults = participantSearch.data?.data ?? [];
-  const activitySourcePosts: PostListItem[] = activitySourceQuery.data?.data ?? [];
+  const activitySourcePosts = useMemo(() => {
+    const posts: PostListItem[] = activitySourceQuery.data?.data ?? [];
+    return activitySourceBoard?.slug === "club-promo"
+      ? currentClubActivitySourcePosts(posts)
+      : posts;
+  }, [activitySourceBoard?.slug, activitySourceQuery.data?.data]);
   const activityOptions: SelectionOption[] = activitySourcePosts.map((post) => ({ key: String(post.id), label: post.title }));
   const mutualAidTypeOptions: SelectionOption[] = [
     { key: "marriage", label: "결혼" },
