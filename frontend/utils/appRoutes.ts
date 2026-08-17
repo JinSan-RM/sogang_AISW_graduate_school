@@ -15,13 +15,22 @@ type PostDetailFallbackRoute =
   | ReturnType<typeof boardParentRoute>
   | ReturnType<typeof boardRoute>;
 
+export type PostDetailReturnRoute =
+  | PostDetailFallbackRoute
+  | "/(tabs)/notifications"
+  | "/(tabs)/search"
+  | `/(tabs)/search?scope=${string}`
+  | "/(tabs)/settings/activity";
+
 export type PostDetailBackDecision =
   | { action: "back" }
+  | { action: "navigate"; route: PostDetailReturnRoute }
   | { action: "replace"; route: PostDetailFallbackRoute };
 
 type PostDetailNavigator = {
   canGoBack: () => boolean;
   back: () => void;
+  navigate: (route: PostDetailReturnRoute) => void;
   replace: (route: PostDetailFallbackRoute) => void;
 };
 
@@ -36,16 +45,45 @@ export function boardRoute(boardId: number) {
   return `/board/${boardId}` as const;
 }
 
-export function postDetailRoute(postId: number, fromBoardId?: number) {
+export function postDetailReturnRoute(value: unknown): PostDetailReturnRoute | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (typeof candidate !== "string") return null;
+  if (
+    candidate === HOME_TAB_ROUTE ||
+    candidate === NOTICES_TAB_ROUTE ||
+    candidate === COMMUNITY_TAB_ROUTE ||
+    candidate === PARTICIPATION_TAB_ROUTE ||
+    candidate === COUNCIL_TAB_ROUTE ||
+    candidate === "/(tabs)/notifications" ||
+    candidate === "/(tabs)/search" ||
+    candidate === "/(tabs)/settings/activity"
+  ) {
+    return candidate;
+  }
+  if (/^\/board\/[1-9]\d*$/.test(candidate)) return candidate as ReturnType<typeof boardRoute>;
+  if (/^\/\(tabs\)\/search\?scope=[a-z-]+$/.test(candidate)) {
+    return candidate as `/(tabs)/search?scope=${string}`;
+  }
+  return null;
+}
+
+export function postDetailRoute(postId: number, fromBoardId?: number, returnTo?: unknown) {
   const path = `/board/post/${postId}`;
-  return fromBoardId ? `${path}?fromBoardId=${fromBoardId}` : path;
+  const params: string[] = [];
+  if (fromBoardId) params.push(`fromBoardId=${fromBoardId}`);
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
+  return params.length > 0 ? `${path}?${params.join("&")}` : path;
 }
 
 export function postDetailBackDecision(
   board: BoardRouteInfo | null | undefined,
   canGoBack: boolean,
   fromBoardId?: unknown,
+  returnTo?: unknown,
 ): PostDetailBackDecision {
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) return { action: "navigate", route: safeReturnTo };
   if (canGoBack) return { action: "back" };
   const sourceBoardId = routeBoardId(fromBoardId);
   if (sourceBoardId) return { action: "replace", route: boardRoute(sourceBoardId) };
@@ -55,11 +93,16 @@ export function postDetailBackDecision(
 export function navigateFromPostDetail(
   board: BoardRouteInfo | null | undefined,
   fromBoardId: unknown,
+  returnTo: unknown,
   navigator: PostDetailNavigator
 ) {
-  const decision = postDetailBackDecision(board, navigator.canGoBack(), fromBoardId);
+  const decision = postDetailBackDecision(board, navigator.canGoBack(), fromBoardId, returnTo);
   if (decision.action === "back") {
     navigator.back();
+    return;
+  }
+  if (decision.action === "navigate") {
+    navigator.navigate(decision.route);
     return;
   }
   navigator.replace(decision.route);

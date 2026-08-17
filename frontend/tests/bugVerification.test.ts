@@ -18,7 +18,8 @@ test("#14·15 행사 사진첩 더보기는 커뮤니티 탭 루트를 사용한
 test("#16 전공 커뮤니티 상세는 목록으로 복귀하고 전체 보드 탭을 사용하지 않는다", () => {
   assert.doesNotMatch(boardDetailSource, /\/\(tabs\)\/boards/);
   assert.doesNotMatch(homeSource, /\/\(tabs\)\/boards/);
-  assert.match(boardDetailSource, /postDetailRoute\(postId, boardId\)/);
+  assert.match(boardDetailSource, /postDetailRoute\(postId, boardId, detailReturnRoute\)/);
+  assert.match(postDetailSource, /router\.navigate\(route as never\)/);
   assert.match(postDetailSource, /onPress=\{handlePostBack\}/);
   assert.match(postDetailSource, /BackHandler\.addEventListener\("hardwareBackPress"/);
   assert.match(boardDetailSource, /BackHandler\.addEventListener\("hardwareBackPress"/);

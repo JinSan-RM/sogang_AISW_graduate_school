@@ -4,13 +4,15 @@
 
 **Goal:** Restore the exact pre-detail list state for every post type and allow club/study activity-certification authors to replace a hidden bank account without exposing its stored value.
 
-**Architecture:** Centralize post-detail back decisions in `frontend/utils/appRoutes.ts`: use the real navigation stack whenever it exists, then fall back to the recorded source board or the product parent route. Centralize activity bank-field presentation in `frontend/utils/activityCertification.ts`; creation remains required, while edit is blank, editable, and optional so the existing backend omit-to-preserve contract remains intact.
+**Architecture:** Centralize post-detail back decisions in `frontend/utils/appRoutes.ts`: reactivate a validated originating list when supplied, otherwise use navigation history, then fall back to the recorded source board or the product parent route. Centralize activity bank-field presentation in `frontend/utils/activityCertification.ts`; creation remains required, while edit is blank, editable, and optional so the existing backend omit-to-preserve contract remains intact.
+
+**Execution correction (2026-08-17):** Local browser verification showed that `router.back()` from Expo Router's hidden board tab returns to the first tab (`home`) even though the originating participation screen remains mounted. The final implementation therefore adds a validated `returnTo` to app-internal detail links and uses `router.navigate(returnTo)` before the history/fallback rules. This correction supersedes the `back()`-first snippets in Task 1 below.
 
 **Tech Stack:** React Native 0.81, Expo Router 6, TypeScript 5.9, Node test runner, FastAPI, pytest.
 
 ## Global Constraints
 
-- Internal navigation must restore the real prior screen with `router.back()` so tabs, filters, search, sorting, and scroll position survive.
+- Internal navigation must reactivate the mounted originating screen through a validated `returnTo` so tabs, filters, search, sorting, and scroll position survive.
 - Direct links with no prior screen must fall back to a valid `fromBoardId`, otherwise `boardParentRoute`.
 - Existing activity bank-account values must not be shown to ordinary members.
 - Activity creation requires a bank account; activity edit treats a blank bank field as “preserve the stored value.”

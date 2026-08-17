@@ -9,7 +9,7 @@ import LoadingState from "../../../components/LoadingState";
 import { BackIcon, BookmarkIcon } from "../../../components/icons";
 import { userApi } from "../../../services/api";
 import type { UserActivityItem } from "../../../types";
-import { MY_PAGE_ROUTE } from "../../../utils/appRoutes";
+import { MY_PAGE_ROUTE, postDetailRoute } from "../../../utils/appRoutes";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import { resourceCategoryLabel } from "../../../utils/resourceBoards";
 import { formatCohortName } from "../../../utils/userLabel";
@@ -127,7 +127,7 @@ export default function ActivityScreen() {
             const label = activityCategoryLabel(item);
             const tone = categoryTone(label);
             return (
-              <Pressable onPress={() => router.push(`/board/post/${item.post_id}` as never)} style={styles.row}>
+              <Pressable onPress={() => router.push(postDetailRoute(item.post_id, undefined, "/(tabs)/settings/activity") as never)} style={styles.row}>
                 <View style={styles.rowText}>
                   <View style={[styles.pill, { backgroundColor: tone.bg }]}>
                     <Text style={[styles.pillText, { color: tone.fg }]}>{label}</Text>

@@ -28,7 +28,7 @@ import { useAllMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
-import { COMMUNITY_TAB_ROUTE } from "../../utils/appRoutes";
+import { COMMUNITY_TAB_ROUTE, HOME_TAB_ROUTE, postDetailRoute } from "../../utils/appRoutes";
 import { formatBoardDate, formatHomeScheduleDate } from "../../utils/dateFormat";
 import {
   calendarDateKey,
@@ -422,7 +422,7 @@ function NoticeList({
         return (
           <Pressable
             key={post.id}
-            onPress={() => router.push(`/board/post/${post.id}` as never)}
+            onPress={() => router.push(postDetailRoute(post.id, undefined, HOME_TAB_ROUTE) as never)}
             style={[styles.noticeRow, index === rows.length - 1 ? styles.noticeRowLast : null]}
           >
             <View style={[styles.noticeDot, { backgroundColor: noticeDotColor(category) }]} />
@@ -544,7 +544,7 @@ function HomePopularPostsSection({
       ) : (
         <View style={[styles.popularGrid, compact ? styles.popularGridCompact : null]}>
           {rows.map((post) => (
-            <Pressable key={post.id} onPress={() => router.push(`/board/post/${post.id}` as never)} style={styles.popularCard}>
+            <Pressable key={post.id} onPress={() => router.push(postDetailRoute(post.id, undefined, HOME_TAB_ROUTE) as never)} style={styles.popularCard}>
               <View style={styles.categoryPill}>
                 <Text style={styles.categoryPillText} numberOfLines={1}>
                   {post.category || "커뮤니티"}
@@ -588,7 +588,7 @@ function AlbumStrip({ posts }: { posts: PostListItem[] }) {
       {rows.map((post, index) => {
         const image = thumbnailUrl(post);
         return (
-          <Pressable key={post.id} onPress={() => router.push(`/board/post/${post.id}` as never)} style={styles.albumCard}>
+          <Pressable key={post.id} onPress={() => router.push(postDetailRoute(post.id, undefined, HOME_TAB_ROUTE) as never)} style={styles.albumCard}>
             {image ? (
               <MediaImageBackground
                 media={{ id: post.thumbnail_media_id, url: image }}

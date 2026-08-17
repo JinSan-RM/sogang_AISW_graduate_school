@@ -10,6 +10,7 @@ import NoticeRow, { type NoticeRowModel } from "../../components/NoticeRow";
 import { useMultiBoardPosts } from "../../hooks/usePosts";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
+import { NOTICES_TAB_ROUTE } from "../../utils/appRoutes";
 import {
   isNoticeContentBoard,
   NOTICE_FILTERS,
@@ -172,7 +173,7 @@ export default function NoticesScreen() {
         {!isLoading && visibleRows.length > 0 ? (
           <View style={styles.list}>
             {visibleRows.map((item, index) => (
-              <NoticeRow key={item.key} item={item} isLast={index === visibleRows.length - 1} />
+              <NoticeRow key={item.key} item={item} isLast={index === visibleRows.length - 1} returnTo={NOTICES_TAB_ROUTE} />
             ))}
           </View>
         ) : null}

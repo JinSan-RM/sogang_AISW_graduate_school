@@ -14,7 +14,7 @@ import { useBoardPosts, useMultiBoardPosts } from "../../../hooks/usePosts";
 import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
-import { boardParentRoute, postDetailRoute } from "../../../utils/appRoutes";
+import { boardParentRoute, boardRoute, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
 import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import { toAbsoluteMediaUrl } from "../../../utils/mediaAccess";
@@ -623,6 +623,7 @@ function CouncilActivityHistoryScreen({
   onRetry,
   onBack,
   originBoardId,
+  detailReturnRoute,
   topInset,
 }: {
   posts: PostListItem[];
@@ -631,6 +632,7 @@ function CouncilActivityHistoryScreen({
   onRetry: () => void;
   onBack: () => void;
   originBoardId: number;
+  detailReturnRoute: PostDetailReturnRoute;
   topInset: number;
 }) {
   return (
@@ -660,7 +662,7 @@ function CouncilActivityHistoryScreen({
             )
           }
           renderItem={({ item }) => (
-            <Pressable onPress={() => router.push(postDetailRoute(item.id, originBoardId) as never)} style={styles.councilActivityRow}>
+            <Pressable onPress={() => router.push(postDetailRoute(item.id, originBoardId, detailReturnRoute) as never)} style={styles.councilActivityRow}>
               <View style={styles.councilActivityText}>
                 <Text style={styles.councilActivityDate}>{formatBoardDate(item.created_at)}</Text>
                 <Text numberOfLines={1} style={styles.councilActivityTitle}>
@@ -838,6 +840,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const { data: boardsRes } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardsRes?.data), [boardsRes?.data]);
   const board = useMemo(() => boards.find((item) => item.id === boardId), [boardId, boards]);
+  const detailReturnRoute = isTabRoot ? boardParentRoute(board) : boardRoute(boardId);
   const display = getBoardDisplay(board);
   const filters = filterOptions(board);
   const isAlbum = board?.board_type === "album";
@@ -1000,6 +1003,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         isError={isError || councilNoticeQuery.isError}
         onRetry={() => void Promise.all([refetch(), councilNoticeQuery.refetch()])}
         originBoardId={boardId}
+        detailReturnRoute={detailReturnRoute}
         topInset={insets.top}
         onBack={exitBoardDepth}
       />
@@ -1150,13 +1154,13 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           renderItem={({ item, index }) => {
             const itemBoard = boards.find((candidate) => candidate.id === item.board_id) ?? board;
             return isAlbum ? (
-              <AlbumTile post={item} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
+              <AlbumTile post={item} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             ) : isParticipationGuideCards ? (
-              <ParticipationGuideTile post={item} board={itemBoard} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
+              <ParticipationGuideTile post={item} board={itemBoard} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             ) : isActivityCards ? (
-              <ActivityTile post={item} boardSlug={itemBoard?.slug ?? board?.slug} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
+              <ActivityTile post={item} boardSlug={itemBoard?.slug ?? board?.slug} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             ) : (
-              <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} isLast={index === posts.length - 1} onPress={(postId) => router.push(postDetailRoute(postId, boardId) as never)} />
+              <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} isLast={index === posts.length - 1} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             );
           }}
           onEndReached={() => {

@@ -145,7 +145,7 @@ function IconButton({ icon, onPress, label, size = 24, color = COLORS.text }: { 
 }
 
 export default function PostDetailScreen() {
-  const params = useLocalSearchParams<{ postId: string; fromBoardId?: string }>();
+  const params = useLocalSearchParams<{ postId: string; fromBoardId?: string; returnTo?: string }>();
   const insets = useSafeAreaInsets();
   const postId = Number(params.postId);
   const userId = useUserStore((state) => state.userId);
@@ -220,12 +220,13 @@ export default function PostDetailScreen() {
 
   const handlePostBack = useCallback(() => {
     if (!post) return;
-    navigateFromPostDetail(board, params.fromBoardId, {
+    navigateFromPostDetail(board, params.fromBoardId, params.returnTo, {
       canGoBack: () => router.canGoBack(),
       back: () => router.back(),
+      navigate: (route) => router.navigate(route as never),
       replace: (route) => router.replace(route as never),
     });
-  }, [board, params.fromBoardId, post]);
+  }, [board, params.fromBoardId, params.returnTo, post]);
 
   useFocusEffect(
     useCallback(() => {

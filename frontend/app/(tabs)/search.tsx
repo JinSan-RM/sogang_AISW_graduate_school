@@ -11,6 +11,7 @@ import NoticeRow from "../../components/NoticeRow";
 import type { SearchResult } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { formatCohortName } from "../../utils/userLabel";
+import { postDetailRoute } from "../../utils/appRoutes";
 
 import { BackIcon } from "../../components/icons";
 const COLORS = {
@@ -59,6 +60,7 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const isNoticeSearch = params.scope === "notices";
+  const detailReturnRoute = isNoticeSearch ? "/(tabs)/search?scope=notices" as const : "/(tabs)/search" as const;
   const [query, setQuery] = useState("");
   const [searchedQuery, setSearchedQuery] = useState("");
   const [selectedNoticeFilter, setSelectedNoticeFilter] = useState<NoticeFilter>("all");
@@ -214,6 +216,7 @@ export default function SearchScreen() {
               return (
                 <NoticeRow
                   isLast={index === results.length - 1}
+                  returnTo={detailReturnRoute}
                   item={{
                     key: String(item.id),
                     postId: item.id,
@@ -225,7 +228,7 @@ export default function SearchScreen() {
               );
             }
             return (
-              <Pressable onPress={() => router.push(`/board/post/${item.id}` as never)} style={styles.resultRow}>
+              <Pressable onPress={() => router.push(postDetailRoute(item.id, undefined, detailReturnRoute) as never)} style={styles.resultRow}>
                 <View style={styles.boardPill}><Text style={styles.boardPillText}>{item.board_name}</Text></View>
                 <Text numberOfLines={2} style={styles.resultTitle}>{item.title}</Text>
                 <Text numberOfLines={2} style={styles.preview}>{item.content_preview}</Text>

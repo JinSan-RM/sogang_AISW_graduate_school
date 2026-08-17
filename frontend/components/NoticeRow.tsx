@@ -2,6 +2,8 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { postDetailRoute, type PostDetailReturnRoute } from "../utils/appRoutes";
+
 // 공지 리스트/검색 결과가 항상 같은 디자인을 쓰도록 공용화한 행 컴포넌트.
 
 export type NoticeRowModel = {
@@ -26,9 +28,10 @@ export function noticeRowTone(category: string) {
   return { backgroundColor: "#E6F1FB", color: "#0C447C" };
 }
 
-export default function NoticeRow({ item, isLast }: { item: NoticeRowModel; isLast?: boolean }) {
+export default function NoticeRow({ item, isLast, returnTo }: { item: NoticeRowModel; isLast?: boolean; returnTo?: PostDetailReturnRoute }) {
   const tone = noticeRowTone(item.category);
-  const handlePress = item.postId ? () => router.push(`/board/post/${item.postId}` as never) : undefined;
+  const postId = item.postId;
+  const handlePress = postId ? () => router.push(postDetailRoute(postId, undefined, returnTo) as never) : undefined;
 
   return (
     <Pressable
