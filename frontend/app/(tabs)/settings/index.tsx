@@ -4,7 +4,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, V
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../../../hooks/useApi";
-import MediaImage from "../../../components/MediaImage";
+import ProfileAvatar from "../../../components/ProfileAvatar";
 import { authApi, notificationApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../../../utils/pushTokenStorage";
@@ -37,7 +37,6 @@ export default function SettingsScreen() {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clearSession = useUserStore((state) => state.clearSession);
   const me = data?.data;
-  const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
   const logout = async () => {
     const pushToken = await getStoredPushToken().catch(() => null);
@@ -80,15 +79,12 @@ export default function SettingsScreen() {
             <View style={styles.avatar}>
               <ActivityIndicator size="small" color={COLORS.primary} />
             </View>
-          ) : hasProfileImage ? (
-            <MediaImage
-              media={{ id: me?.profile_image_media_id, url: me?.profile_image_url }}
-              style={styles.avatarImage}
-            />
           ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{me?.nickname?.slice(0, 1) ?? "?"}</Text>
-            </View>
+            <ProfileAvatar
+              mediaId={me?.profile_image_media_id}
+              mediaUrl={me?.profile_image_url}
+              size={52}
+            />
           )}
           <View style={styles.profileText}>
             <Text style={styles.profileName}>{me?.nickname ?? "로그인이 필요합니다"}</Text>
@@ -182,17 +178,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 26,
     backgroundColor: COLORS.avatar,
-  },
-  avatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.avatar,
-  },
-  avatarText: {
-    color: COLORS.primary,
-    fontSize: 20,
-    fontWeight: "500",
   },
   profileText: {
     flex: 1,

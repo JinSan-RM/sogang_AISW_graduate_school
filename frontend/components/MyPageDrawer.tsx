@@ -15,13 +15,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../hooks/useApi";
-import MediaImage from "./MediaImage";
+import ProfileAvatar from "./ProfileAvatar";
 import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import { navigateBackToMyPageDrawer } from "../utils/myPageNavigation";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
-import { BackIcon, DefaultAvatarIcon } from "./icons";
+import { BackIcon } from "./icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -30,7 +30,6 @@ const COLORS = {
   muted: "#6B7280",
   subtle: "#A6ACB7",
   border: "#E1E4E9",
-  avatar: "#EAF4FF",
   bg: "#FFFFFF",
   danger: "#E24B4A",
   backdrop: "rgba(17,24,39,0.24)",
@@ -71,7 +70,6 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const returningToDrawerRef = useRef(false);
   const me = data?.data;
-  const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
   useEffect(() => {
     if (!isVisible) {
@@ -208,14 +206,11 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
 
               <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
                 <Pressable onPress={() => navigateTo("/settings/profile")} style={styles.profileRow}>
-                  {hasProfileImage ? (
-                    <MediaImage
-                      media={{ id: me?.profile_image_media_id, url: me?.profile_image_url }}
-                      style={styles.avatarImage}
-                    />
-                  ) : (
-                    <DefaultAvatarIcon size={52} />
-                  )}
+                  <ProfileAvatar
+                    mediaId={me?.profile_image_media_id}
+                    mediaUrl={me?.profile_image_url}
+                    size={52}
+                  />
                   <View style={styles.profileText}>
                     <Text style={styles.profileName}>{me?.nickname ?? "로그인이 필요합니다"}</Text>
                     <Text style={styles.profileMeta}>
@@ -308,20 +303,6 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     paddingHorizontal: 16,
     paddingVertical: 14,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 26,
-    backgroundColor: COLORS.avatar,
-  },
-  avatarImage: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: COLORS.avatar,
   },
   profileText: {
     flex: 1,
