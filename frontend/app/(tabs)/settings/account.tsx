@@ -15,7 +15,7 @@ const COLORS = {
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const returnToMyPageDrawer = useReturnToMyPageDrawer();
+  const returnToMyPageDrawer = useReturnToMyPageDrawer("/settings/account");
 
   return (
     <View style={styles.screen}>

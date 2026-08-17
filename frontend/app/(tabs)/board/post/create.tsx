@@ -23,11 +23,11 @@ import {
   activityBankAccountFieldState,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
-  activitySourcePostFilters,
   activitySourcePostIdFromMetadata,
   currentClubActivitySourcePosts,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
+  loadPublishedActivitySourcePosts,
   type ActivityParticipant,
 } from "../../../../utils/activityCertification";
 import { formatBoardDate } from "../../../../utils/dateFormat";
@@ -381,8 +381,12 @@ export default function PostCreateScreen() {
     return boards.find((item) => item.slug === "club-promo");
   }, [board?.slug, boards, isActivity]);
   const activitySourceQuery = useQuery({
-    queryKey: ["activity-source-options", activitySourceBoard?.id],
-    queryFn: () => postApi.getPosts(activitySourceBoard?.id ?? 0, 1, 50, activitySourcePostFilters()),
+    queryKey: ["activity-source-options", activitySourceBoard?.id, activitySourceBoard?.slug],
+    queryFn: () => loadPublishedActivitySourcePosts(
+      activitySourceBoard?.id ?? 0,
+      activitySourceBoard?.slug,
+      postApi.getPosts,
+    ),
     enabled: isActivity && Boolean(activitySourceBoard?.id),
     retry: false,
   });
@@ -745,11 +749,11 @@ export default function PostCreateScreen() {
 
   const participantResults = participantSearch.data?.data ?? [];
   const activitySourcePosts = useMemo(() => {
-    const posts: PostListItem[] = activitySourceQuery.data?.data ?? [];
+    const posts: PostListItem[] = activitySourceQuery.data ?? [];
     return activitySourceBoard?.slug === "club-promo"
       ? currentClubActivitySourcePosts(posts)
       : posts;
-  }, [activitySourceBoard?.slug, activitySourceQuery.data?.data]);
+  }, [activitySourceBoard?.slug, activitySourceQuery.data]);
   const activityOptions: SelectionOption[] = activitySourcePosts.map((post) => ({ key: String(post.id), label: post.title }));
   const mutualAidTypeOptions: SelectionOption[] = [
     { key: "marriage", label: "결혼" },

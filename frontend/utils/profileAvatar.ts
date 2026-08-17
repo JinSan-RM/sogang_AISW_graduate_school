@@ -8,7 +8,9 @@ export function profileAvatarPresentation(
   mediaId?: number | null,
   mediaUrl?: string | null,
 ): ProfileAvatarPresentation {
-  return mediaId || mediaUrl
-    ? { kind: "image", media: { id: mediaId, url: mediaUrl } }
+  const normalizedId = Number.isInteger(mediaId) && Number(mediaId) > 0 ? mediaId : null;
+  const normalizedUrl = typeof mediaUrl === "string" && mediaUrl.trim() ? mediaUrl.trim() : null;
+  return normalizedId || normalizedUrl
+    ? { kind: "image", media: { id: normalizedId, url: normalizedUrl } }
     : { kind: "default" };
 }

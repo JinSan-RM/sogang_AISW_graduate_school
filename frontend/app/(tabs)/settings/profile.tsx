@@ -34,7 +34,7 @@ type FieldValues = {
 
 export default function ProfileSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const returnToMyPageDrawer = useReturnToMyPageDrawer();
+  const returnToMyPageDrawer = useReturnToMyPageDrawer("/settings/profile");
   const queryClient = useQueryClient();
   const registrationOptionsQuery = useQuery({
     queryKey: ["registration-options"],

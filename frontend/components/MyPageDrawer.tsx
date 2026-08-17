@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, usePathname } from "expo-router";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -18,7 +18,12 @@ import { useMeQuery } from "../hooks/useApi";
 import ProfileAvatar from "./ProfileAvatar";
 import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
-import { navigateBackToMyPageDrawer } from "../utils/myPageNavigation";
+import {
+  type MyPageOriginRoute,
+  myPageOriginOrHome,
+  myPageOriginRoute,
+  navigateBackToMyPageDrawer,
+} from "../utils/myPageNavigation";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
 import { BackIcon } from "./icons";
@@ -59,6 +64,7 @@ export function useMyPageDrawer() {
 }
 
 export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { data } = useMeQuery();
@@ -69,7 +75,16 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const drawerWidth = width;
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const returningToDrawerRef = useRef(false);
+  const lastMountedOriginRef = useRef<MyPageOriginRoute | null>(null);
+  const drawerOriginRef = useRef<MyPageOriginRoute | null>(null);
   const me = data?.data;
+
+  useEffect(() => {
+    const origin = myPageOriginRoute(pathname);
+    if (!origin) return;
+    lastMountedOriginRef.current = origin;
+    if (!isVisible) drawerOriginRef.current = null;
+  }, [isVisible, pathname]);
 
   useEffect(() => {
     if (!isVisible) {
@@ -85,7 +100,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
     }).start(() => setIsVisible(false));
   }, [drawerWidth, translateX]);
 
-  const openDrawer = useCallback(() => {
+  const showDrawer = useCallback(() => {
     if (!isAuthenticated) {
       router.push("/auth/login" as never);
       return;
@@ -99,21 +114,27 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
     }).start();
   }, [drawerWidth, isAuthenticated, translateX]);
 
+  const openDrawer = useCallback(() => {
+    drawerOriginRef.current = myPageOriginRoute(pathname) ?? lastMountedOriginRef.current;
+    showDrawer();
+  }, [pathname, showDrawer]);
+
   const returnToDrawer = useCallback(() => {
     if (returningToDrawerRef.current) return;
     returningToDrawerRef.current = true;
+    const returnOrigin = myPageOriginOrHome(drawerOriginRef.current);
     navigateBackToMyPageDrawer(
+      returnOrigin,
       {
-        canGoBack: () => router.canGoBack(),
-        back: () => router.back(),
-        replace: (route) => router.replace(route as never),
+        navigate: (route) => router.navigate(route as never),
       },
       () => {
-        openDrawer();
+        drawerOriginRef.current = returnOrigin;
+        showDrawer();
         returningToDrawerRef.current = false;
       },
     );
-  }, [openDrawer]);
+  }, [showDrawer]);
 
   const navigateTo = (href: string) => {
     closeDrawer();

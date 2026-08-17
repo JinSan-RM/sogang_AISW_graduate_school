@@ -11,7 +11,7 @@ import { useMultiBoardPosts } from "../../hooks/usePosts";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { NOTICES_TAB_ROUTE } from "../../utils/appRoutes";
-import { refreshQueries } from "../../utils/pullToRefresh";
+import { noticeRefreshControlRefreshing, refreshQueries } from "../../utils/pullToRefresh";
 import {
   isNoticeContentBoard,
   NOTICE_FILTERS,
@@ -83,7 +83,7 @@ function EmptyState({ title, description }: { title: string; description?: strin
 export default function NoticesScreen() {
   const insets = useSafeAreaInsets();
   const [selectedFilter, setSelectedFilter] = useState<NoticeFilter>("all");
-  const { data: boardData, isLoading: boardsLoading, isError: boardsError, isFetching: boardsFetching, refetch: refetchBoards } = useBoardsQuery();
+  const { data: boardData, isLoading: boardsLoading, isError: boardsError, isRefetching: boardsRefetching, refetch: refetchBoards } = useBoardsQuery();
 
   const noticeBoards = useMemo(
     () =>
@@ -171,7 +171,11 @@ export default function NoticesScreen() {
         contentContainerStyle={[styles.listContent, !isLoading && visibleRows.length === 0 ? styles.listContentEmpty : null]}
         refreshControl={
           <RefreshControl
-            refreshing={boardsFetching || postsQuery.isRefetching}
+            refreshing={noticeRefreshControlRefreshing({
+              boardsLoading,
+              boardsRefetching,
+              postsRefetching: postsQuery.isRefetching,
+            })}
             onRefresh={() => {
               void refreshQueries([
                 refetchBoards,

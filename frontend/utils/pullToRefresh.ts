@@ -4,6 +4,18 @@ export function enabledRefetch(enabled: boolean, refetch: Refetch): Refetch | un
   return enabled ? refetch : undefined;
 }
 
+export function noticeRefreshControlRefreshing({
+  boardsLoading,
+  boardsRefetching,
+  postsRefetching,
+}: {
+  boardsLoading: boolean;
+  boardsRefetching: boolean;
+  postsRefetching: boolean;
+}): boolean {
+  return !boardsLoading && (boardsRefetching || postsRefetching);
+}
+
 export async function refreshQueries(
   refreshers: readonly (Refetch | null | undefined)[],
 ): Promise<void> {

@@ -10,6 +10,8 @@ import {
   activityParticipantsFromMetadata,
   activitySourcePostFilters,
   currentClubActivitySourcePosts,
+  loadAllPublishedActivitySourcePosts,
+  loadPublishedActivitySourcePosts,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
@@ -215,4 +217,111 @@ test("현재 동아리 이름의 경계를 확인하고 최신 글 하나만 선
   ];
 
   assert.deepEqual(currentClubActivitySourcePosts(posts), [{ id: 31, title: "서뽈링 (현재)" }]);
+});
+
+test("동아리 원본 글은 실제 pagination 계약을 따라 공개 글의 모든 페이지를 읽는다", async () => {
+  const calls: { boardId: number; page: number; size: number; filters?: object }[] = [];
+  const pages = new Map([
+    [1, {
+      status: "success" as const,
+      data: [{ id: 51, title: "SG_LLM (이전)", created_at: "2026-01-01T00:00:00Z" }],
+      pagination: { page: 1, size: 2, total: 5, total_pages: 3 },
+    }],
+    [2, {
+      status: "success" as const,
+      data: [{ id: 52, title: "SG_LLM (현재)", created_at: "2026-08-01T00:00:00Z" }],
+      pagination: { page: 2, size: 2, total: 5, total_pages: 3 },
+    }],
+    [3, {
+      status: "success" as const,
+      data: [{ id: 53, title: "과거 동아리", created_at: "2026-08-02T00:00:00Z" }],
+      pagination: { page: 3, size: 2, total: 5, total_pages: 3 },
+    }],
+  ]);
+
+  const posts = await loadAllPublishedActivitySourcePosts(
+    9,
+    async (boardId, page, size, filters) => {
+      calls.push({ boardId, page, size, filters });
+      const response = pages.get(page);
+      assert.ok(response);
+      return response;
+    },
+    2,
+  );
+
+  assert.deepEqual(posts.map((post) => post.id), [51, 52, 53]);
+  assert.deepEqual(calls, [
+    { boardId: 9, page: 1, size: 2, filters: { sort: "latest", status: "published" } },
+    { boardId: 9, page: 2, size: 2, filters: { sort: "latest", status: "published" } },
+    { boardId: 9, page: 3, size: 2, filters: { sort: "latest", status: "published" } },
+  ]);
+});
+
+test("페이지 응답이 진행하지 않으면 동아리 원본 조회를 안전하게 중단한다", async () => {
+  let callCount = 0;
+  const posts = await loadAllPublishedActivitySourcePosts(
+    9,
+    async () => {
+      callCount += 1;
+      return {
+        status: "success" as const,
+        data: [{ id: callCount, title: "SG_LLM", created_at: "2026-01-01T00:00:00Z" }],
+        pagination: { page: 1, size: 1, total: 3, total_pages: 3 },
+      };
+    },
+    1,
+  );
+
+  assert.equal(callCount, 2);
+  assert.deepEqual(posts.map((post) => post.id), [1, 2]);
+});
+
+test("비어 있는 페이지를 받으면 잘못된 다음 페이지 수와 무관하게 조회를 중단한다", async () => {
+  let callCount = 0;
+  const posts = await loadAllPublishedActivitySourcePosts(
+    9,
+    async () => {
+      callCount += 1;
+      if (callCount > 1) throw new Error("empty page must stop pagination");
+      return {
+        status: "success" as const,
+        data: [],
+        pagination: { page: 1, size: 50, total: 5, total_pages: 3 },
+      };
+    },
+  );
+
+  assert.equal(callCount, 1);
+  assert.deepEqual(posts, []);
+});
+
+test("고정된 예전 글보다 created_at이 최신인 중복 글을 선택하고 같은 시각에는 큰 ID를 사용한다", () => {
+  const posts = [
+    { id: 70, title: "서뽈링 (고정된 예전 글)", created_at: "2025-03-01T00:00:00Z", is_pinned: true },
+    { id: 71, title: "서뽈링 (새 안내)", created_at: "2026-08-01T00:00:00Z", is_pinned: false },
+    { id: 80, title: "FC리턴윈 (낮은 ID)", created_at: "2026-08-02T00:00:00Z", is_pinned: true },
+    { id: 81, title: "FC리턴윈 (높은 ID)", created_at: "2026-08-02T00:00:00Z", is_pinned: false },
+  ];
+
+  assert.deepEqual(currentClubActivitySourcePosts(posts).map((post) => post.id), [71, 81]);
+});
+
+test("스터디·네트워킹 원본 선택은 기존처럼 첫 페이지만 조회한다", async () => {
+  const calls: number[] = [];
+  const posts = await loadPublishedActivitySourcePosts(
+    11,
+    "study-recruit",
+    async (_boardId, page) => {
+      calls.push(page);
+      return {
+        status: "success" as const,
+        data: [{ id: 91, title: "스터디 모집", created_at: "2026-08-01T00:00:00Z" }],
+        pagination: { page: 1, size: 50, total: 70, total_pages: 2 },
+      };
+    },
+  );
+
+  assert.deepEqual(calls, [1]);
+  assert.deepEqual(posts.map((post) => post.id), [91]);
 });

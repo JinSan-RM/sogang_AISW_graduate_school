@@ -1,4 +1,4 @@
-import type { PostListItem } from "../types";
+import type { ApiSuccess, PostListItem } from "../types";
 
 export type ActivityParticipant = {
   id: number;
@@ -40,17 +40,72 @@ function titleMatchesCurrentClub(title: string, clubName: string): boolean {
 }
 
 export function currentClubActivitySourcePosts<
-  T extends Pick<PostListItem, "id" | "title">,
+  T extends Pick<PostListItem, "id" | "title"> & Partial<Pick<PostListItem, "created_at">>,
 >(posts: readonly T[]): T[] {
   const selected = new Map<string, T>();
   for (const post of posts) {
     const clubName = CURRENT_CLUB_NAMES.find((name) => titleMatchesCurrentClub(post.title, name));
-    if (clubName && !selected.has(clubName)) selected.set(clubName, post);
+    if (!clubName) continue;
+    const current = selected.get(clubName);
+    const postCreatedAt = post.created_at ? Date.parse(post.created_at) : Number.NEGATIVE_INFINITY;
+    const currentCreatedAt = current?.created_at ? Date.parse(current.created_at) : Number.NEGATIVE_INFINITY;
+    const postTime = Number.isFinite(postCreatedAt) ? postCreatedAt : Number.NEGATIVE_INFINITY;
+    const currentTime = Number.isFinite(currentCreatedAt) ? currentCreatedAt : Number.NEGATIVE_INFINITY;
+    if (!current || postTime > currentTime || (postTime === currentTime && post.id > current.id)) {
+      selected.set(clubName, post);
+    }
   }
   return CURRENT_CLUB_NAMES.flatMap((name) => {
     const post = selected.get(name);
     return post ? [post] : [];
   });
+}
+
+type ActivitySourcePost = Pick<PostListItem, "id" | "title" | "created_at">;
+type ActivitySourcePageLoader<T extends ActivitySourcePost> = (
+  boardId: number,
+  page: number,
+  size: number,
+  filters: ReturnType<typeof activitySourcePostFilters>,
+) => Promise<ApiSuccess<T[]>>;
+
+export async function loadAllPublishedActivitySourcePosts<T extends ActivitySourcePost>(
+  boardId: number,
+  loadPage: ActivitySourcePageLoader<T>,
+  pageSize = 50,
+): Promise<T[]> {
+  const posts: T[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await loadPage(boardId, page, pageSize, activitySourcePostFilters());
+    posts.push(...response.data);
+    if (response.data.length === 0) return posts;
+
+    const pagination = response.pagination;
+    if (
+      !pagination
+      || !Number.isInteger(pagination.page)
+      || !Number.isInteger(pagination.total_pages)
+      || pagination.page >= pagination.total_pages
+    ) return posts;
+    const nextPage = pagination.page + 1;
+    if (nextPage <= page) return posts;
+    page = nextPage;
+  }
+}
+
+export async function loadPublishedActivitySourcePosts<T extends ActivitySourcePost>(
+  boardId: number,
+  boardSlug: string | undefined,
+  loadPage: ActivitySourcePageLoader<T>,
+  pageSize = 50,
+): Promise<T[]> {
+  if (boardSlug === "club-promo") {
+    return loadAllPublishedActivitySourcePosts(boardId, loadPage, pageSize);
+  }
+  const response = await loadPage(boardId, 1, pageSize, activitySourcePostFilters());
+  return response.data;
 }
 
 export const ACTIVITY_PARTICIPANT_GUIDANCE =

@@ -51,7 +51,7 @@ const SETTING_ROWS: { key: keyof NotificationSettings; label: string }[] = [
 
 export default function NotificationSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const returnToMyPageDrawer = useReturnToMyPageDrawer();
+  const returnToMyPageDrawer = useReturnToMyPageDrawer("/settings/notifications");
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
