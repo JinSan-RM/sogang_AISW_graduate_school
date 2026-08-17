@@ -18,6 +18,7 @@ import { useMeQuery } from "../hooks/useApi";
 import MediaImage from "./MediaImage";
 import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
+import { navigateBackToMyPageDrawer } from "../utils/myPageNavigation";
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
 import { BackIcon, DefaultAvatarIcon } from "./icons";
@@ -45,6 +46,7 @@ const MENU_ITEMS = [
 type MyPageDrawerContextValue = {
   openDrawer: () => void;
   closeDrawer: () => void;
+  returnToDrawer: () => void;
 };
 
 const MyPageDrawerContext = createContext<MyPageDrawerContextValue | null>(null);
@@ -67,6 +69,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const [isVisible, setIsVisible] = useState(false);
   const drawerWidth = width;
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
+  const returningToDrawerRef = useRef(false);
   const me = data?.data;
   const hasProfileImage = Boolean(me?.profile_image_media_id || me?.profile_image_url);
 
@@ -97,6 +100,22 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
       useNativeDriver: true,
     }).start();
   }, [drawerWidth, isAuthenticated, translateX]);
+
+  const returnToDrawer = useCallback(() => {
+    if (returningToDrawerRef.current) return;
+    returningToDrawerRef.current = true;
+    navigateBackToMyPageDrawer(
+      {
+        canGoBack: () => router.canGoBack(),
+        back: () => router.back(),
+        replace: (route) => router.replace(route as never),
+      },
+      () => {
+        openDrawer();
+        returningToDrawerRef.current = false;
+      },
+    );
+  }, [openDrawer]);
 
   const navigateTo = (href: string) => {
     closeDrawer();
@@ -153,7 +172,10 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
     extrapolate: "clamp",
   });
 
-  const contextValue = useMemo(() => ({ openDrawer, closeDrawer }), [openDrawer, closeDrawer]);
+  const contextValue = useMemo(
+    () => ({ openDrawer, closeDrawer, returnToDrawer }),
+    [closeDrawer, openDrawer, returnToDrawer],
+  );
 
   return (
     <MyPageDrawerContext.Provider value={contextValue}>

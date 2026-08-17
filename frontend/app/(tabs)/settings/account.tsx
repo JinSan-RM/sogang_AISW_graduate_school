@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BackIcon } from "../../../components/icons";
+import { useReturnToMyPageDrawer } from "../../../hooks/useReturnToMyPageDrawer";
 const COLORS = {
   text: "#15171C",
   subtle: "#A6ACB7",
@@ -14,6 +15,7 @@ const COLORS = {
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
+  const returnToMyPageDrawer = useReturnToMyPageDrawer();
 
   return (
     <View style={styles.screen}>
@@ -21,10 +23,7 @@ export default function AccountSettingsScreen() {
         <Pressable
           accessibilityLabel="뒤로"
           accessibilityRole="button"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(tabs)/settings");
-          }}
+          onPress={returnToMyPageDrawer}
           style={styles.iconButton}
         >
           <BackIcon size={24} color={COLORS.text} />

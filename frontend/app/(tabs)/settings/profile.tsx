@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../components/LoadingState";
 import MediaImage from "../../../components/MediaImage";
+import { useReturnToMyPageDrawer } from "../../../hooks/useReturnToMyPageDrawer";
 import { registrationApi, userApi } from "../../../services/api";
 import { pickAndUploadImage } from "../../../utils/mediaPicker";
 import { apiErrorCode, phoneError } from "../../../utils/authValidation";
@@ -33,6 +34,7 @@ type FieldValues = {
 
 export default function ProfileSettingsScreen() {
   const insets = useSafeAreaInsets();
+  const returnToMyPageDrawer = useReturnToMyPageDrawer();
   const queryClient = useQueryClient();
   const registrationOptionsQuery = useQuery({
     queryKey: ["registration-options"],
@@ -147,10 +149,7 @@ export default function ProfileSettingsScreen() {
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(tabs)/settings");
-          }}
+          onPress={returnToMyPageDrawer}
           style={styles.iconButton}
         >
           <BackIcon size={24} color={COLORS.text} />

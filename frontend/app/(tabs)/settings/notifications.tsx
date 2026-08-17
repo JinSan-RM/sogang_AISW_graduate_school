@@ -5,6 +5,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../components/LoadingState";
+import { useReturnToMyPageDrawer } from "../../../hooks/useReturnToMyPageDrawer";
 import { notificationApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { NotificationSettings } from "../../../types";
@@ -50,6 +51,7 @@ const SETTING_ROWS: { key: keyof NotificationSettings; label: string }[] = [
 
 export default function NotificationSettingsScreen() {
   const insets = useSafeAreaInsets();
+  const returnToMyPageDrawer = useReturnToMyPageDrawer();
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,10 +99,7 @@ export default function NotificationSettingsScreen() {
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(tabs)/settings");
-          }}
+          onPress={returnToMyPageDrawer}
           style={styles.iconButton}
         >
           <BackIcon size={24} color={COLORS.text} />
