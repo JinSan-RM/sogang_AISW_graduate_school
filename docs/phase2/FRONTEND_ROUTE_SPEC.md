@@ -169,7 +169,7 @@ Required behavior:
 
 - Local draft autosave is a deferred P1/v1.1 item and is not required for the Phase 5 entry gate.
 - Validate required title and content while allowing mutual-aid remarks to remain empty.
-- For mutual-aid creation, accept only `Asia/Seoul` today + 2 calendar days or later. Recompute the boundary at submission time; do not rely only on disabled calendar cells.
+- For mutual-aid creation, accept `Asia/Seoul` today or later and reject past dates. Recompute the boundary at submission time; do not rely only on disabled calendar cells.
 - Prevent duplicate submit.
 - Show upload progress when attachments exist.
 
