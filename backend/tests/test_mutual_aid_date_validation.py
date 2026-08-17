@@ -38,31 +38,30 @@ def _payload(evidence_id: int, event_date: str, *, content: str = "") -> dict:
 def test_mutual_aid_minimum_date_uses_seoul_calendar_day() -> None:
     assert posts_router._minimum_mutual_aid_event_date(
         datetime(2026, 8, 1, 14, 59, 59, tzinfo=timezone.utc)
-    ) == date(2026, 8, 3)
+    ) == date(2026, 8, 1)
     assert posts_router._minimum_mutual_aid_event_date(
         datetime(2026, 8, 1, 15, 0, 0, tzinfo=timezone.utc)
-    ) == date(2026, 8, 4)
+    ) == date(2026, 8, 2)
 
 
-def test_mutual_aid_create_rejects_dates_before_d_plus_two(
+def test_mutual_aid_create_rejects_past_and_accepts_today(
     api,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     evidence_id = _create_private_evidence(api, "create-boundary")
     monkeypatch.setattr(posts_router, "_minimum_mutual_aid_event_date", lambda: date(2026, 8, 4))
 
-    for event_date in ("2026.08.01", "2026.08.02", "2026.08.03"):
-        response = api.client.post(
-            "/api/boards/1/posts",
-            json=_payload(evidence_id, event_date),
-            headers=api.headers["owner"],
-        )
-        assert response.status_code == 422
-        assert response.json() == {
-            "status": "error",
-            "message": "Mutual-aid event date must be at least two days from today.",
-            "code": "MUTUAL_AID_DATE_TOO_SOON",
-        }
+    response = api.client.post(
+        "/api/boards/1/posts",
+        json=_payload(evidence_id, "2026.08.03"),
+        headers=api.headers["owner"],
+    )
+    assert response.status_code == 422
+    assert response.json() == {
+        "status": "error",
+        "message": "Mutual-aid event date cannot be before today.",
+        "code": "MUTUAL_AID_DATE_TOO_SOON",
+    }
 
     allowed = api.client.post(
         "/api/boards/1/posts",

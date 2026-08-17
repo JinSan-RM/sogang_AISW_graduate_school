@@ -6,7 +6,7 @@ Scope: Phase 1 through Phase 4.
 
 Policy update checked on 2026-07-05: `정책_정의서_260705.pdf`, `AISW UI.pdf`, and `AISW APP DESIGN GUIDE _ 260624.pdf` are the current product/UI override for implementation details. The app is member-only: non-members may access login, signup/email verification, password reset, token refresh, registration options, legal screens, and health/docs, but no content route.
 
-QA override accepted on 2026-08-02 for bug #47: a new or changed mutual-aid event date is selectable from the `Asia/Seoul` calendar date D+2 onward. Past dates, today, and tomorrow are rejected by both the mobile form and API. This replaces the earlier unconfirmed `event date ±30 days` proposal for the implemented lower bound; no maximum future horizon is introduced without a separate council policy decision.
+QA 144 supersedes the 2026-08-02 D+2 decision: a new or changed mutual-aid event date is selectable from the current `Asia/Seoul` calendar date onward. KST today and future dates are allowed, and past days are rejected by both the mobile form and API. This replaces the earlier unconfirmed `event date ±30 days` proposal for the implemented lower bound; no maximum future horizon is introduced without a separate council policy decision.
 
 Security/integration decision checked on 2026-07-27:
 

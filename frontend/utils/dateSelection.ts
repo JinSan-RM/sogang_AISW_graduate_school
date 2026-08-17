@@ -3,7 +3,7 @@ export type CalendarMonthView = {
   monthIndex: number;
 };
 
-export const MUTUAL_AID_MIN_LEAD_DAYS = 2;
+export const MUTUAL_AID_MIN_LEAD_DAYS = 0;
 
 const KOREA_TIME_ZONE = "Asia/Seoul";
 const DOT_DATE_PATTERN = /^(\d{4})\.(\d{2})\.(\d{2})$/;

@@ -38,7 +38,7 @@ router = APIRouter()
 
 ADMIN_PARTICIPATION_BOARD_SLUGS = frozenset({"club-promo", "networking-programs"})
 COUNCIL_MEMBER_WRITABLE_TYPES = frozenset({"suggestion", "mutual_aid"})
-MUTUAL_AID_MIN_LEAD_DAYS = 2
+MUTUAL_AID_MIN_LEAD_DAYS = 0
 SEOUL_TIME_ZONE = ZoneInfo("Asia/Seoul")
 
 
@@ -655,7 +655,7 @@ def _validate_mutual_aid_event_date(event_date: date) -> None:
         return
     raise AppException(
         status_code=422,
-        message="Mutual-aid event date must be at least two days from today.",
+        message="Mutual-aid event date cannot be before today.",
         code="MUTUAL_AID_DATE_TOO_SOON",
     )
 

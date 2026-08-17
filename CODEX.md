@@ -161,7 +161,7 @@ P1 strongly recommended:
 - Completed: signup privacy consent reuses the My Page policy content, lets the checkbox toggle consent directly, and opens the freely closable full document only from the right chevron.
 - Completed: pagination and empty/error/loading states for notifications, search, and activity lists.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
-- Completed P1 bug #47: mutual-aid event dates are disabled and revalidated before KST D+2 in the mobile form, and the API rejects direct create/date-change bypasses while allowing unchanged historical dates during other edits.
+- Completed QA 144: mutual-aid event dates before KST today are disabled and revalidated in the mobile form, and the API rejects direct create/date-change bypasses while allowing today, future dates, and unchanged historical dates during other edits.
 - Completed mutual-aid status/edit alignment: completed requests cannot be deleted, rejected requests can be deleted, and processing-request edits reuse the full application form with existing private-evidence open/remove/add support.
 - Completed P1 bug #46: missing required fields, attachments, invalid dates/links, upload failures, and server rejections use an in-app notice modal that renders consistently on native and web instead of relying on React Native Web's no-op `Alert.alert()`.
 

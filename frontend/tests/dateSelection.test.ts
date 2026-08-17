@@ -22,23 +22,23 @@ test("선택한 활동일의 월을 열고 잘못된 날짜는 현재 월로 대
   assert.deepEqual(calendarMonthFromDotDate(undefined, fallback), { year: 2026, monthIndex: 7 });
 });
 
-test("상조회 최소 신청일은 한국시간 기준 오늘의 이틀 뒤다", () => {
-  assert.equal(minimumMutualAidEventDate(new Date("2026-08-01T14:59:59Z")), "2026.08.03");
-  assert.equal(minimumMutualAidEventDate(new Date("2026-08-01T15:00:00Z")), "2026.08.04");
+test("상조회 최소 신청일은 한국시간 기준 오늘이다", () => {
+  assert.equal(minimumMutualAidEventDate(new Date("2026-08-01T14:59:59Z")), "2026.08.01");
+  assert.equal(minimumMutualAidEventDate(new Date("2026-08-01T15:00:00Z")), "2026.08.02");
 });
 
-test("상조회 신청일은 D+1까지 거부하고 D+2부터 허용한다", () => {
+test("상조회 신청일은 어제를 거부하고 오늘부터 허용한다", () => {
   const now = new Date("2026-08-01T15:00:00Z");
 
-  assert.equal(isMutualAidEventDateAllowed("2026.08.03", now), false);
-  assert.equal(isMutualAidEventDateAllowed("2026.08.04", now), true);
-  assert.equal(isMutualAidEventDateAllowed("2026.08.05", now), true);
+  assert.equal(isMutualAidEventDateAllowed("2026.08.01", now), false);
+  assert.equal(isMutualAidEventDateAllowed("2026.08.02", now), true);
+  assert.equal(isMutualAidEventDateAllowed("2026.08.03", now), true);
 });
 
 test("상조회 최소 신청일 계산은 월말·연말·윤년을 넘겨도 정확하다", () => {
-  assert.equal(minimumMutualAidEventDate(new Date("2026-08-30T15:00:00Z")), "2026.09.02");
-  assert.equal(minimumMutualAidEventDate(new Date("2026-12-30T15:00:00Z")), "2027.01.02");
-  assert.equal(minimumMutualAidEventDate(new Date("2028-02-27T15:00:00Z")), "2028.03.01");
+  assert.equal(minimumMutualAidEventDate(new Date("2026-08-30T15:00:00Z")), "2026.08.31");
+  assert.equal(minimumMutualAidEventDate(new Date("2026-12-30T15:00:00Z")), "2026.12.31");
+  assert.equal(minimumMutualAidEventDate(new Date("2028-02-27T15:00:00Z")), "2028.02.28");
 });
 
 test("상조회 신청일의 잘못된 형식과 존재하지 않는 날짜를 거부한다", () => {
