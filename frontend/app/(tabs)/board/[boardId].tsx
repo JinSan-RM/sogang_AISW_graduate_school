@@ -17,6 +17,14 @@ import type { Board, PostListItem } from "../../../types";
 import { boardParentRoute, boardRoute, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
 import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
+import {
+  cohortLeaderFormsFromMetadata,
+  councilIntroductionContent,
+  currentCouncilScreenState,
+  fixedCouncilMemberProfile,
+  pastCouncilFormsFromMetadata,
+  type CouncilMemberFormData,
+} from "../../../utils/councilIntroductions";
 import { toAbsoluteMediaUrl } from "../../../utils/mediaAccess";
 import { pastCouncilActivitiesFromMetadata } from "../../../utils/pastCouncil";
 import { enabledRefetch, refreshQueries } from "../../../utils/pullToRefresh";
@@ -98,32 +106,33 @@ type ExecutiveMember = {
   cohort?: string;
   role: string;
   imageUrl?: string;
-  intro?: string;
 };
-type CohortLeaderSummary = {
+type CurrentCouncilSummary = {
   id: string;
-  cohort: string;
-  captain: string;
-  viceCaptain?: string;
+  title: string;
   greeting?: string;
   intro: string;
   bannerImageUrl?: string;
   photoUrls: string[];
-  captainImageUrl?: string;
-  viceCaptainImageUrl?: string;
+  members: ExecutiveMember[];
+};
+type CohortLeaderSummary = {
+  id: string;
+  cohort: string;
+  greeting?: string;
+  intro: string;
+  bannerImageUrl?: string;
+  photoUrls: string[];
+  members: ExecutiveMember[];
 };
 type PastCouncilSummary = {
   id: string;
   cohort: string;
-  presidentName: string;
-  presidentCohort?: string;
-  vicePresidentName?: string;
-  vicePresidentCohort?: string;
+  greeting?: string;
   intro?: string;
   bannerImageUrl?: string;
   photoUrls: string[];
-  presidentImageUrl?: string;
-  vicePresidentImageUrl?: string;
+  members: ExecutiveMember[];
   activities: { date?: string; title: string }[];
 };
 
@@ -239,26 +248,56 @@ function metadataString(metadata: Record<string, unknown> | null | undefined, ke
   return undefined;
 }
 
-function executivesFromMetadata(metadata: Record<string, unknown> | null | undefined): ExecutiveMember[] {
-  const executives = metadata?.executives;
-  if (!Array.isArray(executives)) {
-    return [];
-  }
+function executiveMembersFromForms(members: CouncilMemberFormData[]): ExecutiveMember[] {
+  return members.flatMap((member) => member.name && member.role ? [{
+    name: member.name,
+    cohort: member.cohort || undefined,
+    role: member.role,
+    imageUrl: member.image_url || undefined,
+  }] : []);
+}
 
-  const parsed = executives
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const record = item as Record<string, unknown>;
-      const name = typeof record.name === "string" ? record.name.trim() : "";
-      const cohort = typeof record.cohort === "string" ? record.cohort.trim() : "";
-      const role = typeof record.role === "string" ? record.role.trim() : "";
-      const imageUrl = typeof record.image_url === "string" ? record.image_url.trim() : undefined;
-      const intro = typeof record.intro === "string" ? record.intro.trim() : undefined;
-      return name && role ? { name, cohort: cohort || undefined, role, imageUrl, intro } : null;
-    })
-    .filter(Boolean) as ExecutiveMember[];
+function FixedCouncilMemberProfileCard({
+  member,
+  fallbackCohort = "",
+}: {
+  member: ExecutiveMember;
+  fallbackCohort?: string;
+}) {
+  const profile = fixedCouncilMemberProfile({
+    name: member.name,
+    cohort: member.cohort ?? "",
+    role: member.role,
+    image_url: member.imageUrl ?? "",
+    intro: "",
+  }, fallbackCohort);
 
-  return parsed;
+  return (
+    <View style={styles.executiveCard}>
+      {imageUrl(profile.imageUrl) ? (
+        <MediaImage media={{ url: profile.imageUrl }} style={styles.executiveAvatarImage} />
+      ) : <PersonAvatarIcon size={48} />}
+      <View style={styles.executiveText}>
+        <Text style={styles.executiveName}>{profile.name}</Text>
+        <Text style={styles.executiveRole}>{profile.subtitle}</Text>
+      </View>
+    </View>
+  );
+}
+
+function currentCouncilFromMetadata(metadata: Record<string, unknown> | null | undefined): CurrentCouncilSummary | null {
+  const state = currentCouncilScreenState(metadata);
+  if (state.kind === "empty") return null;
+  const card = state.council;
+  return {
+    id: "current-council",
+    title: card.title,
+    greeting: card.greeting || undefined,
+    intro: card.intro,
+    bannerImageUrl: card.banner_image_url || undefined,
+    photoUrls: [],
+    members: executiveMembersFromForms(card.members),
+  };
 }
 
 function cleanPostTitle(title: string) {
@@ -308,34 +347,20 @@ function firstMeaningfulParagraph(content: string) {
 }
 
 function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, unknown> | null) {
-  const configured = metadata?.cohort_leaders;
-  if (Array.isArray(configured)) {
-    const parsed = configured.flatMap((item, index): CohortLeaderSummary[] => {
-      if (!item || typeof item !== "object") return [];
-      const record = item as Record<string, unknown>;
-      const rawCohort = typeof record.cohort === "string" ? record.cohort.trim() : "";
-      const captain = typeof record.captain_name === "string" ? record.captain_name.trim() : "";
-      if (!rawCohort || !captain) return [];
-      const cohort = rawCohort.endsWith("기") ? rawCohort : `${rawCohort}기`;
-      const stringValue = (key: string) => typeof record[key] === "string" && record[key].trim() ? record[key].trim() : undefined;
-      return [{
-        id: `configured-${cohort}-${index}`,
-        cohort,
-        captain,
-        viceCaptain: stringValue("vice_captain_name"),
-        greeting: stringValue("greeting"),
-        intro: stringValue("intro") ?? "",
-        bannerImageUrl: stringValue("banner_image_url"),
-        photoUrls: Array.isArray(record.photo_urls)
-          ? record.photo_urls.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
-          : [],
-        captainImageUrl: stringValue("captain_image_url"),
-        viceCaptainImageUrl: stringValue("vice_captain_image_url"),
-      }];
-    });
-    if (parsed.length > 0) {
-      return parsed.sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
-    }
+  const configured = cohortLeaderFormsFromMetadata(metadata).map((card, index): CohortLeaderSummary => {
+    const cohort = card.cohort.endsWith("기") ? card.cohort : `${card.cohort}기`;
+    return {
+      id: `configured-${cohort}-${index}`,
+      cohort,
+      greeting: card.greeting || undefined,
+      intro: card.intro,
+      bannerImageUrl: card.banner_image_url || undefined,
+      photoUrls: [],
+      members: executiveMembersFromForms(card.members),
+    };
+  });
+  if (configured.length > 0) {
+    return configured;
   }
 
   return posts
@@ -346,10 +371,12 @@ function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, 
       return {
         id: `legacy-${post.id}`,
         cohort,
-        captain,
-        viceCaptain: extractViceLeaderName(content, cohort),
         intro: firstMeaningfulParagraph(content),
         photoUrls: [],
+        members: [
+          { name: captain, cohort, role: "기장" },
+          ...(extractViceLeaderName(content, cohort) ? [{ name: extractViceLeaderName(content, cohort) as string, cohort, role: "부기장" }] : []),
+        ],
       };
     })
     .sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
@@ -402,31 +429,15 @@ function CohortLeaderScreen({
       {isLoading ? (
         <LoadingState />
       ) : selected ? (
-        <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
-          <PhotoSlider key={selected.id} photos={sliderPhotos(selected.photoUrls, selected.bannerImageUrl)} />
-          {selected.greeting ? <Text style={styles.cohortGreeting}>{selected.greeting}</Text> : null}
-          {selected.intro ? <Text style={styles.cohortIntroText}>{selected.intro}</Text> : null}
-          <View style={styles.executiveCard}>
-            {imageUrl(selected.captainImageUrl) ? (
-              <MediaImage media={{ url: selected.captainImageUrl }} style={styles.executiveAvatarImage} />
-            ) : <PersonAvatarIcon size={48} />}
-            <View style={styles.executiveText}>
-              <Text style={styles.executiveName}>{selected.captain}</Text>
-              <Text style={styles.executiveRole}>{selected.cohort} 기장</Text>
-            </View>
-          </View>
-          {selected.viceCaptain ? (
-            <View style={styles.executiveCard}>
-              {imageUrl(selected.viceCaptainImageUrl) ? (
-                <MediaImage media={{ url: selected.viceCaptainImageUrl }} style={styles.executiveAvatarImage} />
-              ) : <PersonAvatarIcon size={48} />}
-              <View style={styles.executiveText}>
-                <Text style={styles.executiveName}>{selected.viceCaptain}</Text>
-                <Text style={styles.executiveRole}>{selected.cohort} 부기장</Text>
-              </View>
-            </View>
-          ) : null}
-        </ScrollView>
+        <CouncilIntroductionDetail
+          id={selected.id}
+          photoUrls={selected.photoUrls}
+          bannerImageUrl={selected.bannerImageUrl}
+          greeting={selected.greeting}
+          intro={selected.intro}
+          members={selected.members}
+          fallbackCohort={selected.cohort}
+        />
       ) : (
         <FlatList
           data={leaders}
@@ -452,8 +463,8 @@ function CohortLeaderScreen({
                 <Text style={styles.cohortBadgeText}>{item.cohort}</Text>
               </View>
               <View style={styles.executiveText}>
-                <Text style={styles.executiveRole}>기장</Text>
-                <Text style={styles.executiveName}>{item.captain}{item.viceCaptain ? " 외 1명" : ""}</Text>
+                <Text style={styles.executiveRole}>{item.members[0]?.role || "임원진"}</Text>
+                <Text style={styles.executiveName}>{item.members[0]?.name || "등록된 임원 없음"}{item.members.length > 1 ? ` 외 ${item.members.length - 1}명` : ""}</Text>
               </View>
             </Pressable>
           )}
@@ -464,32 +475,19 @@ function CohortLeaderScreen({
 }
 
 function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): PastCouncilSummary[] {
-  const councils = metadata?.past_councils;
-  if (!Array.isArray(councils)) return [];
-  return councils.flatMap((item, index): PastCouncilSummary[] => {
-    if (!item || typeof item !== "object") return [];
-    const record = item as Record<string, unknown>;
-    const value = (key: string) => typeof record[key] === "string" ? (record[key] as string).trim() : "";
-    const cohort = value("cohort");
-    const presidentName = value("president_name");
-    if (!cohort || !presidentName) return [];
-    return [{
+  return pastCouncilFormsFromMetadata(metadata).map((card, index): PastCouncilSummary => {
+    const cohort = card.cohort.endsWith("대") ? card.cohort : `${card.cohort.replace(/기$/, "")}대`;
+    return {
       id: `past-${cohort}-${index}`,
-      cohort: cohort.endsWith("기") ? cohort : `${cohort}기`,
-      presidentName,
-      presidentCohort: value("president_cohort") || undefined,
-      vicePresidentName: value("vice_president_name") || undefined,
-      vicePresidentCohort: value("vice_president_cohort") || undefined,
-      intro: value("intro") || undefined,
-      bannerImageUrl: value("banner_image_url") || undefined,
-      photoUrls: Array.isArray(record.photo_urls)
-        ? record.photo_urls.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
-        : [],
-      presidentImageUrl: value("president_image_url") || undefined,
-      vicePresidentImageUrl: value("vice_president_image_url") || undefined,
-      activities: pastCouncilActivitiesFromMetadata(record.activities),
-    }];
-  }).sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
+      cohort,
+      greeting: card.greeting || undefined,
+      intro: card.intro || undefined,
+      bannerImageUrl: card.banner_image_url || undefined,
+      photoUrls: [],
+      members: executiveMembersFromForms(card.members),
+      activities: pastCouncilActivitiesFromMetadata(card.activities),
+    };
+  });
 }
 
 function PhotoSlider({ photos }: { photos: string[] }) {
@@ -527,8 +525,42 @@ function PhotoSlider({ photos }: { photos: string[] }) {
   );
 }
 
-function sliderPhotos(photoUrls: string[], bannerImageUrl?: string) {
-  return photoUrls.length > 0 ? photoUrls : [bannerImageUrl].filter((url): url is string => Boolean(imageUrl(url)));
+function CouncilIntroductionDetail({
+  id,
+  photoUrls,
+  bannerImageUrl,
+  greeting,
+  intro,
+  members,
+  fallbackCohort = "",
+}: {
+  id: string;
+  photoUrls: string[];
+  bannerImageUrl?: string;
+  greeting?: string;
+  intro?: string;
+  members: ExecutiveMember[];
+  fallbackCohort?: string;
+}) {
+  const content = councilIntroductionContent({ photoUrls, bannerImageUrl, greeting, intro });
+
+  return (
+    <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
+      {content.representativeImages.length > 0 ? <PhotoSlider key={id} photos={content.representativeImages} /> : null}
+      {content.textSections.map((section) => (
+        <Text key={section.kind} style={section.kind === "greeting" ? styles.cohortGreeting : styles.cohortIntroText}>
+          {section.text}
+        </Text>
+      ))}
+      {members.map((member, index) => (
+        <FixedCouncilMemberProfileCard
+          key={`${member.name}-${member.role}-${index}`}
+          member={member}
+          fallbackCohort={fallbackCohort}
+        />
+      ))}
+    </ScrollView>
+  );
 }
 
 function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; topInset: number; onBack: () => void }) {
@@ -543,16 +575,14 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
         <View style={styles.iconButton} />
       </View>
       {selected ? (
-        <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.cohortDetailContent}>
-          <PhotoSlider key={selected.id} photos={sliderPhotos(selected.photoUrls, selected.bannerImageUrl)} />
-          {selected.intro ? <Text style={styles.cohortIntroText}>{selected.intro}</Text> : null}
-          {[{ name: selected.presidentName, cohort: selected.presidentCohort, role: "회장", image: selected.presidentImageUrl }, { name: selected.vicePresidentName, cohort: selected.vicePresidentCohort, role: "부회장", image: selected.vicePresidentImageUrl }].filter((member) => member.name).map((member) => (
-            <View key={member.role} style={styles.executiveCard}>
-              {imageUrl(member.image) ? <MediaImage media={{ url: member.image }} style={styles.executiveAvatarImage} /> : <PersonAvatarIcon size={48} />}
-              <View style={styles.executiveText}><Text style={styles.executiveName}>{member.name}</Text><Text style={styles.executiveRole}>{[member.cohort, member.role].filter(Boolean).join(" ")}</Text></View>
-            </View>
-          ))}
-        </ScrollView>
+        <CouncilIntroductionDetail
+          id={selected.id}
+          photoUrls={selected.photoUrls}
+          bannerImageUrl={selected.bannerImageUrl}
+          greeting={selected.greeting}
+          intro={selected.intro}
+          members={selected.members}
+        />
       ) : (
         <FlatList
           data={councils}
@@ -562,7 +592,10 @@ function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; 
           renderItem={({ item }) => (
             <Pressable onPress={() => setSelected(item)} style={styles.cohortCard}>
               <View style={styles.cohortBadge}><Text style={styles.cohortBadgeText}>{item.cohort}</Text></View>
-              <View style={styles.executiveText}><Text style={styles.executiveRole}>회장</Text><Text style={styles.executiveName}>{[item.presidentCohort, item.presidentName].filter(Boolean).join(" ")}</Text></View>
+              <View style={styles.executiveText}>
+                <Text style={styles.executiveRole}>{item.members[0]?.role || "임원진"}</Text>
+                <Text style={styles.executiveName}>{item.members[0]?.name || "등록된 임원 없음"}{item.members.length > 1 ? ` 외 ${item.members.length - 1}명` : ""}</Text>
+              </View>
             </Pressable>
           )}
         />
@@ -583,42 +616,31 @@ function participationBadgeLabel(post: PostListItem, board?: Board | null) {
 }
 
 function ExecutiveIntroScreen({ board, topInset, onBack }: { board?: Board | null; topInset: number; onBack: () => void }) {
-  const executives = executivesFromMetadata(board?.metadata);
+  const council = useMemo(() => currentCouncilFromMetadata(board?.metadata), [board?.metadata]);
 
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(topInset, 10) }]}>
         <IconButton icon="chevron-back" label="뒤로" onPress={onBack} />
-        <Text style={styles.appBarTitle}>원우회 임원진 소개</Text>
+        <Text style={styles.appBarTitle}>{council?.title || "원우회 임원진 소개"}</Text>
         <View style={styles.iconButton} />
       </View>
-      <ScrollView style={styles.executiveScroller} contentContainerStyle={styles.executiveContent}>
-        {executives.length === 0 ? (
-          <View style={styles.executiveEmptyState}>
-            <Ionicons name="people-outline" size={32} color="#AAB2BF" />
-            <Text style={styles.executiveEmptyTitle}>등록된 임원진 정보가 없어요</Text>
-            <Text style={styles.executiveEmptyDescription}>관리자에서 임원진 정보를 등록해주세요</Text>
-          </View>
-        ) : null}
-        {executives.map((member) => (
-          <View key={`${member.name}-${member.role}`} style={styles.executiveCard}>
-            {imageUrl(member.imageUrl) ? (
-              <MediaImage media={{ url: member.imageUrl }} style={styles.executiveAvatarImage} />
-            ) : (
-              <View style={styles.executiveAvatar}>
-                <Ionicons name="person" size={22} color={COLORS.primary} />
-              </View>
-            )}
-            <View style={styles.executiveText}>
-              <Text style={styles.executiveName}>
-                {[member.name, member.cohort].filter(Boolean).join(" · ")}
-              </Text>
-              <Text style={styles.executiveRole}>{member.role}</Text>
-              {member.intro ? <Text style={styles.executiveIntro}>{member.intro}</Text> : null}
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+      {council ? (
+        <CouncilIntroductionDetail
+          id={council.id}
+          photoUrls={council.photoUrls}
+          bannerImageUrl={council.bannerImageUrl}
+          greeting={council.greeting}
+          intro={council.intro}
+          members={council.members}
+        />
+      ) : (
+        <View style={styles.executiveEmptyState}>
+          <Ionicons name="people-outline" size={32} color="#AAB2BF" />
+          <Text style={styles.executiveEmptyTitle}>등록된 원우회 소개가 없어요</Text>
+          <Text style={styles.executiveEmptyDescription}>관리자에서 대표 이미지, 소개와 임원 카드를 등록해주세요</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1646,13 +1668,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 28,
-  },
-  executiveIntro: {
-    color: COLORS.muted,
-    fontSize: 12,
-    fontWeight: "400",
-    lineHeight: 18,
-    marginTop: 6,
   },
   executiveEmptyState: {
     flex: 1,

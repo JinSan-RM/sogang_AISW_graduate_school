@@ -16,6 +16,22 @@ import { useUserStore } from "../../stores/userStore";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
+import {
+  canSaveCohortLeaderCards,
+  canSaveCurrentCouncilCards,
+  canSavePastCouncilCards,
+  cohortLeaderFormsFromMetadata,
+  currentCouncilFormsFromMetadata,
+  moveCouncilIntroductionItem,
+  pastCouncilFormsFromMetadata,
+  withCohortLeaderMetadata,
+  withCurrentCouncilMetadata,
+  withPastCouncilMetadata,
+  type CohortLeaderFormData,
+  type CouncilMemberFormData,
+  type CurrentCouncilFormData,
+  type PastCouncilFormData,
+} from "../../utils/councilIntroductions";
 import { formatCohortName } from "../../utils/userLabel";
 import type {
   AdminReportItem,
@@ -125,38 +141,10 @@ type NoticeForm = {
   deadline_at: string;
 };
 
-type ExecutiveFormMember = {
-  name: string;
-  cohort: string;
-  role: string;
-  image_url: string;
-  intro: string;
-};
-
-type CohortLeaderForm = {
-  cohort: string;
-  captain_name: string;
-  vice_captain_name: string;
-  greeting: string;
-  intro: string;
-  banner_image_url: string;
-  captain_image_url: string;
-  vice_captain_image_url: string;
-};
-type CohortLeaderImageField = "banner_image_url" | "captain_image_url" | "vice_captain_image_url";
-type PastCouncilForm = {
-  cohort: string;
-  president_name: string;
-  president_cohort: string;
-  vice_president_name: string;
-  vice_president_cohort: string;
-  intro: string;
-  activities_text: string;
-  banner_image_url: string;
-  president_image_url: string;
-  vice_president_image_url: string;
-};
-type PastCouncilImageField = "banner_image_url" | "president_image_url" | "vice_president_image_url";
+type ExecutiveFormMember = CouncilMemberFormData;
+type CohortLeaderForm = CohortLeaderFormData;
+type PastCouncilForm = Omit<PastCouncilFormData, "activities"> & { activities_text: string };
+type IntroImageTarget = { cardIndex: number; memberIndex?: number };
 
 type FAQForm = {
   question: string;
@@ -221,31 +209,30 @@ const emptyExecutiveMember: ExecutiveFormMember = {
   intro: "",
 };
 
-const emptyCohortLeader: CohortLeaderForm = {
-  cohort: "",
-  captain_name: "",
-  vice_captain_name: "",
+const emptyCurrentCouncil: CurrentCouncilFormData = {
+  title: "",
   greeting: "",
   intro: "",
   banner_image_url: "",
-  captain_image_url: "",
-  vice_captain_image_url: "",
+  members: [],
 };
 
-const COHORT_LEADER_IMAGE_FIELDS: { field: CohortLeaderImageField; label: string }[] = [
-  { field: "banner_image_url", label: "대표 이미지" },
-  { field: "captain_image_url", label: "기장 프로필" },
-  { field: "vice_captain_image_url", label: "부기장 프로필" },
-];
-const emptyPastCouncil: PastCouncilForm = {
-  cohort: "", president_name: "", president_cohort: "", vice_president_name: "", vice_president_cohort: "",
-  intro: "", activities_text: "", banner_image_url: "", president_image_url: "", vice_president_image_url: "",
+const emptyCohortLeader: CohortLeaderForm = {
+  cohort: "",
+  greeting: "",
+  intro: "",
+  banner_image_url: "",
+  members: [],
 };
-const PAST_COUNCIL_IMAGE_FIELDS: { field: PastCouncilImageField; label: string }[] = [
-  { field: "banner_image_url", label: "대표 이미지" },
-  { field: "president_image_url", label: "회장 프로필" },
-  { field: "vice_president_image_url", label: "부회장 프로필" },
-];
+
+const emptyPastCouncil: PastCouncilForm = {
+  cohort: "",
+  greeting: "",
+  intro: "",
+  activities_text: "",
+  banner_image_url: "",
+  members: [],
+};
 
 const emptyFAQ: FAQForm = {
   question: "",
@@ -259,7 +246,7 @@ const SECTIONS: { key: AdminSection; label: string; icon: IconName }[] = [
   { key: "banners", label: "배너", icon: "albums-outline" },
   { key: "notices", label: "공지사항", icon: "megaphone-outline" },
   { key: "boards", label: "게시판", icon: "grid-outline" },
-  { key: "executives", label: "임원진", icon: "people-circle-outline" },
+  { key: "executives", label: "원우회 소개", icon: "people-circle-outline" },
   { key: "cohortLeaders", label: "기장단", icon: "ribbon-outline" },
   { key: "pastCouncils", label: "역대 원우회", icon: "time-outline" },
   { key: "posts", label: "게시글", icon: "document-text-outline" },
@@ -444,59 +431,6 @@ function bannerFormFromItem(item: BannerItem): BannerForm {
     ends_at: item.ends_at?.slice(0, 16) ?? "",
     deadline_at: item.deadline_at?.slice(0, 16) ?? "",
   };
-}
-
-function executiveMembersFromMetadata(metadata?: Record<string, unknown> | null): ExecutiveFormMember[] {
-  const executives = metadata?.executives;
-  if (!Array.isArray(executives)) return [];
-  return executives.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const record = item as Record<string, unknown>;
-    const name = typeof record.name === "string" ? record.name : "";
-    const cohort = typeof record.cohort === "string" ? record.cohort : "";
-    const role = typeof record.role === "string" ? record.role : "";
-    const imageUrl = typeof record.image_url === "string" ? record.image_url : "";
-    const intro = typeof record.intro === "string" ? record.intro : "";
-    return name || cohort || role || imageUrl || intro ? [{ name, cohort, role, image_url: imageUrl, intro }] : [];
-  });
-}
-
-function cohortLeadersFromMetadata(metadata?: Record<string, unknown> | null): CohortLeaderForm[] {
-  const leaders = metadata?.cohort_leaders;
-  if (!Array.isArray(leaders)) return [];
-  return leaders.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const record = item as Record<string, unknown>;
-    const value = (key: keyof CohortLeaderForm) => typeof record[key] === "string" ? record[key] as string : "";
-    const parsed: CohortLeaderForm = {
-      cohort: value("cohort"),
-      captain_name: value("captain_name"),
-      vice_captain_name: value("vice_captain_name"),
-      greeting: value("greeting"),
-      intro: value("intro"),
-      banner_image_url: value("banner_image_url"),
-      captain_image_url: value("captain_image_url"),
-      vice_captain_image_url: value("vice_captain_image_url"),
-    };
-    return parsed.cohort || parsed.captain_name ? [parsed] : [];
-  });
-}
-
-function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): PastCouncilForm[] {
-  const councils = metadata?.past_councils;
-  if (!Array.isArray(councils)) return [];
-  return councils.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const record = item as Record<string, unknown>;
-    const value = (key: keyof Omit<PastCouncilForm, "activities_text">) => typeof record[key] === "string" ? record[key] as string : "";
-    const parsed: PastCouncilForm = {
-      cohort: value("cohort"), president_name: value("president_name"), president_cohort: value("president_cohort"),
-      vice_president_name: value("vice_president_name"), vice_president_cohort: value("vice_president_cohort"), intro: value("intro"),
-      activities_text: formatPastCouncilActivitiesForEditing(record.activities),
-      banner_image_url: value("banner_image_url"), president_image_url: value("president_image_url"), vice_president_image_url: value("vice_president_image_url"),
-    };
-    return parsed.cohort || parsed.president_name ? [parsed] : [];
-  });
 }
 
 function mediaUrl(value?: string | null) {
@@ -832,6 +766,90 @@ function ActionButton({
       {icon ? <Ionicons name={icon} size={17} color={color} /> : null}
       <Text style={{ color, fontWeight: "900" }}>{label}</Text>
     </Pressable>
+  );
+}
+
+function IntroBannerEditor({
+  value,
+  uploading,
+  onUpload,
+  onRemove,
+}: {
+  value: string;
+  uploading: boolean;
+  onUpload: () => void;
+  onRemove: () => void;
+}) {
+  const previewUrl = mediaUrl(value);
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>대표 이미지</Text>
+      {previewUrl ? (
+        <MediaImage media={{ url: value }} style={{ width: "100%", aspectRatio: 2.2, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
+      ) : null}
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1 }}>
+          <ActionButton icon="image-outline" label={uploading ? "업로드 중" : "대표 이미지 등록"} onPress={onUpload} disabled={uploading} tone="outline" />
+        </View>
+        {value ? <View style={{ flex: 1 }}><ActionButton label="대표 이미지 삭제" onPress={onRemove} tone="danger" /></View> : null}
+      </View>
+    </View>
+  );
+}
+
+function IntroMemberEditor({
+  member,
+  index,
+  uploading,
+  uploadDisabled,
+  canMoveUp,
+  canMoveDown,
+  onChange,
+  onUpload,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+}: {
+  member: ExecutiveFormMember;
+  index: number;
+  uploading: boolean;
+  uploadDisabled: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onChange: (patch: Partial<ExecutiveFormMember>) => void;
+  onUpload: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onRemove: () => void;
+}) {
+  const previewUrl = mediaUrl(member.image_url);
+  return (
+    <View style={{ gap: 10, borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12 }}>
+      <Text style={{ color: COLORS.primary900, fontWeight: "900" }}>임원 카드 {index + 1}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {previewUrl ? (
+          <MediaImage media={{ url: member.image_url }} style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.primary50 }} />
+        ) : (
+          <View style={{ width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
+            <Ionicons name="person" size={30} color={COLORS.primary} />
+          </View>
+        )}
+        <View style={{ flex: 1, gap: 8 }}>
+          <ActionButton icon="image-outline" label={uploading ? "업로드 중" : "프로필 사진"} onPress={onUpload} disabled={uploadDisabled} tone="outline" />
+          {member.image_url ? <ActionButton label="사진 삭제" onPress={() => onChange({ image_url: "" })} tone="danger" /> : null}
+        </View>
+      </View>
+      <Field value={member.name} onChangeText={(value) => onChange({ name: value })} placeholder="이름" />
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1 }}><Field value={member.cohort} onChangeText={(value) => onChange({ cohort: value })} placeholder="기수 예: 75기" /></View>
+        <View style={{ flex: 1 }}><Field value={member.role} onChangeText={(value) => onChange({ role: value })} placeholder="직책" /></View>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="위로" onPress={onMoveUp} disabled={uploadDisabled || !canMoveUp} tone="outline" /></View>
+        <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="아래로" onPress={onMoveDown} disabled={uploadDisabled || !canMoveDown} tone="outline" /></View>
+      </View>
+      <ActionButton icon="trash-outline" label="이 임원 카드 삭제" onPress={onRemove} disabled={uploadDisabled} tone="danger" />
+    </View>
   );
 }
 
@@ -1460,14 +1478,14 @@ export default function AdminScreen() {
   const [noticeMetadata, setNoticeMetadata] = useState<Record<string, unknown>>({});
   const [noticeUploading, setNoticeUploading] = useState(false);
   const [noticeUploadProgress, setNoticeUploadProgress] = useState(0);
-  const [executiveMembers, setExecutiveMembers] = useState<ExecutiveFormMember[]>([]);
-  const [executiveUploadingIndex, setExecutiveUploadingIndex] = useState<number | null>(null);
+  const [currentCouncils, setCurrentCouncils] = useState<CurrentCouncilFormData[]>([]);
+  const [currentCouncilUploading, setCurrentCouncilUploading] = useState<IntroImageTarget | null>(null);
   const [executivesSaving, setExecutivesSaving] = useState(false);
   const [cohortLeaders, setCohortLeaders] = useState<CohortLeaderForm[]>([]);
-  const [cohortLeaderUploading, setCohortLeaderUploading] = useState<{ index: number; field: CohortLeaderImageField } | null>(null);
+  const [cohortLeaderUploading, setCohortLeaderUploading] = useState<IntroImageTarget | null>(null);
   const [cohortLeadersSaving, setCohortLeadersSaving] = useState(false);
   const [pastCouncils, setPastCouncils] = useState<PastCouncilForm[]>([]);
-  const [pastCouncilUploading, setPastCouncilUploading] = useState<{ index: number; field: PastCouncilImageField } | null>(null);
+  const [pastCouncilUploading, setPastCouncilUploading] = useState<IntroImageTarget | null>(null);
   const [pastCouncilsSaving, setPastCouncilsSaving] = useState(false);
   const [editingFAQId, setEditingFAQId] = useState<number | null>(null);
   const [faqForm, setFAQForm] = useState<FAQForm>(emptyFAQ);
@@ -1649,18 +1667,21 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (!executivesBoard) return;
-    const parsed = executiveMembersFromMetadata(executivesBoard.metadata);
-    setExecutiveMembers(parsed);
+    const current = currentCouncilFormsFromMetadata(executivesBoard.metadata)[0];
+    setCurrentCouncils([{ ...(current ?? emptyCurrentCouncil), members: [...(current?.members ?? [])] }]);
   }, [executivesBoard]);
 
   useEffect(() => {
     if (!cohortLeadersBoard) return;
-    setCohortLeaders(cohortLeadersFromMetadata(cohortLeadersBoard.metadata));
+    setCohortLeaders(cohortLeaderFormsFromMetadata(cohortLeadersBoard.metadata));
   }, [cohortLeadersBoard]);
 
   useEffect(() => {
     if (!pastCouncilsBoard) return;
-    setPastCouncils(pastCouncilsFromMetadata(pastCouncilsBoard.metadata));
+    setPastCouncils(pastCouncilFormsFromMetadata(pastCouncilsBoard.metadata).map((card) => {
+      const { activities, ...rest } = card;
+      return { ...rest, activities_text: formatPastCouncilActivitiesForEditing(activities) };
+    }));
   }, [pastCouncilsBoard]);
 
   if (!isAdmin) {
@@ -2097,22 +2118,29 @@ export default function AdminScreen() {
     ]);
   };
 
-  const updateExecutiveMember = (index: number, patch: Partial<ExecutiveFormMember>) => {
-    setExecutiveMembers((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  const updateCurrentCouncil = (cardIndex: number, patch: Partial<CurrentCouncilFormData>) => {
+    setCurrentCouncils((current) => current.map((item, index) => index === cardIndex ? { ...item, ...patch } : item));
   };
 
-  const handleUploadExecutiveImage = async (index: number) => {
-    if (executiveUploadingIndex !== null) return;
+  const updateCurrentCouncilMember = (cardIndex: number, memberIndex: number, patch: Partial<ExecutiveFormMember>) => {
+    setCurrentCouncils((current) => current.map((card, index) => index === cardIndex
+      ? { ...card, members: card.members.map((member, itemIndex) => itemIndex === memberIndex ? { ...member, ...patch } : member) }
+      : card));
+  };
+
+  const handleUploadCurrentCouncilImage = async (cardIndex: number, memberIndex?: number) => {
+    if (currentCouncilUploading) return;
     try {
-      setExecutiveUploadingIndex(index);
+      setCurrentCouncilUploading({ cardIndex, memberIndex });
       const uploaded = await pickAndUploadContentImage();
       if (uploaded?.url) {
-        updateExecutiveMember(index, { image_url: uploaded.url });
+        if (memberIndex === undefined) updateCurrentCouncil(cardIndex, { banner_image_url: uploaded.url });
+        else updateCurrentCouncilMember(cardIndex, memberIndex, { image_url: uploaded.url });
       }
     } catch {
-      Alert.alert("사진 업로드 실패", "임원진 프로필 이미지를 다시 선택해주세요.");
+      Alert.alert("사진 업로드 실패", "원우회 소개 이미지를 다시 선택해주세요.");
     } finally {
-      setExecutiveUploadingIndex(null);
+      setCurrentCouncilUploading(null);
     }
   };
 
@@ -2121,30 +2149,30 @@ export default function AdminScreen() {
       Alert.alert("임원진 저장", "gsa-executives 게시판을 찾을 수 없습니다.");
       return;
     }
-    const normalized = executiveMembers.map((item) => ({
-      name: item.name.trim(),
-      cohort: item.cohort.trim(),
-      role: item.role.trim(),
-      image_url: item.image_url.trim(),
-      intro: item.intro.trim(),
+    const normalized = currentCouncils.slice(0, 1).map((card) => ({
+      title: card.title.trim(),
+      greeting: card.greeting.trim(),
+      intro: card.intro.trim(),
+      banner_image_url: card.banner_image_url.trim(),
+      members: card.members.map((member) => ({
+        name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
+        image_url: member.image_url.trim(), intro: member.intro.trim(),
+      })),
     }));
-    if (normalized.length === 0 || normalized.some((item) => !item.name || !item.cohort || !item.role)) {
-      Alert.alert("임원진 저장", "모든 임원진의 이름, 기수, 직책을 입력하세요.");
+    if (!canSaveCurrentCouncilCards(normalized)) {
+      Alert.alert("원우회 소개 저장", "원우회 이름·소개글과 모든 임원의 이름·기수·직책을 입력하세요.");
       return;
     }
     try {
       setExecutivesSaving(true);
       await boardApi.updateAdminBoard(executivesBoard.id, {
-        metadata: {
-          ...(executivesBoard.metadata ?? {}),
-          executives: normalized,
-        },
+        metadata: withCurrentCouncilMetadata(executivesBoard.metadata, normalized),
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
         queryClient.invalidateQueries({ queryKey: ["boards"] }),
       ]);
-      Alert.alert("저장 완료", "원우회 임원진 소개가 저장되었습니다.");
+      Alert.alert("저장 완료", "원우회 소개와 임원 카드가 저장되었습니다.");
     } catch {
       Alert.alert("저장 실패", "임원진 소개를 저장할 수 없습니다.");
     } finally {
@@ -2156,12 +2184,21 @@ export default function AdminScreen() {
     setCohortLeaders((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   };
 
-  const handleUploadCohortLeaderImage = async (index: number, field: CohortLeaderImageField) => {
+  const updateCohortLeaderMember = (cardIndex: number, memberIndex: number, patch: Partial<ExecutiveFormMember>) => {
+    setCohortLeaders((current) => current.map((card, index) => index === cardIndex
+      ? { ...card, members: card.members.map((member, itemIndex) => itemIndex === memberIndex ? { ...member, ...patch } : member) }
+      : card));
+  };
+
+  const handleUploadCohortLeaderImage = async (cardIndex: number, memberIndex?: number) => {
     if (cohortLeaderUploading) return;
     try {
-      setCohortLeaderUploading({ index, field });
+      setCohortLeaderUploading({ cardIndex, memberIndex });
       const uploaded = await pickAndUploadContentImage();
-      if (uploaded?.url) updateCohortLeader(index, { [field]: uploaded.url });
+      if (uploaded?.url) {
+        if (memberIndex === undefined) updateCohortLeader(cardIndex, { banner_image_url: uploaded.url });
+        else updateCohortLeaderMember(cardIndex, memberIndex, { image_url: uploaded.url });
+      }
     } catch {
       Alert.alert("사진 업로드 실패", "기장단 이미지를 다시 선택해주세요.");
     } finally {
@@ -2176,22 +2213,22 @@ export default function AdminScreen() {
     }
     const normalized = cohortLeaders.map((item) => ({
       cohort: item.cohort.trim().replace(/기$/, ""),
-      captain_name: item.captain_name.trim(),
-      vice_captain_name: item.vice_captain_name.trim(),
       greeting: item.greeting.trim(),
       intro: item.intro.trim(),
       banner_image_url: item.banner_image_url.trim(),
-      captain_image_url: item.captain_image_url.trim(),
-      vice_captain_image_url: item.vice_captain_image_url.trim(),
+      members: item.members.map((member) => ({
+        name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
+        image_url: member.image_url.trim(), intro: member.intro.trim(),
+      })),
     }));
-    if (normalized.length === 0 || normalized.some((item) => !item.cohort || !item.captain_name || !item.intro)) {
-      Alert.alert("기장단 저장", "각 기수의 기수, 기장 이름, 소개글을 입력하세요.");
+    if (!canSaveCohortLeaderCards(normalized)) {
+      Alert.alert("기장단 저장", "각 기수의 기수·소개글과 모든 임원의 이름·기수·직책을 입력하세요.");
       return;
     }
     try {
       setCohortLeadersSaving(true);
       await boardApi.updateAdminBoard(cohortLeadersBoard.id, {
-        metadata: { ...(cohortLeadersBoard.metadata ?? {}), cohort_leaders: normalized },
+        metadata: withCohortLeaderMetadata(cohortLeadersBoard.metadata, normalized),
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
@@ -2208,12 +2245,22 @@ export default function AdminScreen() {
   const updatePastCouncil = (index: number, patch: Partial<PastCouncilForm>) => {
     setPastCouncils((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   };
-  const handleUploadPastCouncilImage = async (index: number, field: PastCouncilImageField) => {
+
+  const updatePastCouncilMember = (cardIndex: number, memberIndex: number, patch: Partial<ExecutiveFormMember>) => {
+    setPastCouncils((current) => current.map((card, index) => index === cardIndex
+      ? { ...card, members: card.members.map((member, itemIndex) => itemIndex === memberIndex ? { ...member, ...patch } : member) }
+      : card));
+  };
+
+  const handleUploadPastCouncilImage = async (cardIndex: number, memberIndex?: number) => {
     if (pastCouncilUploading) return;
     try {
-      setPastCouncilUploading({ index, field });
+      setPastCouncilUploading({ cardIndex, memberIndex });
       const uploaded = await pickAndUploadContentImage();
-      if (uploaded?.url) updatePastCouncil(index, { [field]: uploaded.url });
+      if (uploaded?.url) {
+        if (memberIndex === undefined) updatePastCouncil(cardIndex, { banner_image_url: uploaded.url });
+        else updatePastCouncilMember(cardIndex, memberIndex, { image_url: uploaded.url });
+      }
     } catch {
       Alert.alert("사진 업로드 실패", "역대 원우회 이미지를 다시 선택해주세요.");
     } finally {
@@ -2226,18 +2273,23 @@ export default function AdminScreen() {
       return;
     }
     const normalized = pastCouncils.map((item) => ({
-      cohort: item.cohort.trim().replace(/기$/, ""), president_name: item.president_name.trim(), president_cohort: item.president_cohort.trim().replace(/기$/, ""),
-      vice_president_name: item.vice_president_name.trim(), vice_president_cohort: item.vice_president_cohort.trim().replace(/기$/, ""), intro: item.intro.trim(),
-      activities: parsePastCouncilActivitiesForStorage(item.activities_text), banner_image_url: item.banner_image_url.trim(),
-      president_image_url: item.president_image_url.trim(), vice_president_image_url: item.vice_president_image_url.trim(),
+      cohort: item.cohort.trim().replace(/기$/, ""),
+      greeting: item.greeting.trim(),
+      intro: item.intro.trim(),
+      activities: parsePastCouncilActivitiesForStorage(item.activities_text),
+      banner_image_url: item.banner_image_url.trim(),
+      members: item.members.map((member) => ({
+        name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
+        image_url: member.image_url.trim(), intro: member.intro.trim(),
+      })),
     }));
-    if (normalized.length === 0 || normalized.some((item) => !item.cohort || !item.president_name)) {
-      Alert.alert("역대 원우회 저장", "각 원우회의 대수와 회장 이름을 입력하세요.");
+    if (!canSavePastCouncilCards(normalized)) {
+      Alert.alert("역대 원우회 저장", "각 원우회의 대수·소개글과 모든 임원의 이름·기수·직책을 입력하세요.");
       return;
     }
     try {
       setPastCouncilsSaving(true);
-      await boardApi.updateAdminBoard(pastCouncilsBoard.id, { metadata: { ...(pastCouncilsBoard.metadata ?? {}), past_councils: normalized } });
+      await boardApi.updateAdminBoard(pastCouncilsBoard.id, { metadata: withPastCouncilMetadata(pastCouncilsBoard.metadata, normalized) });
       await Promise.all([queryClient.invalidateQueries({ queryKey: ["admin-boards"] }), queryClient.invalidateQueries({ queryKey: ["boards"] })]);
       Alert.alert("저장 완료", "역대 원우회 정보가 저장되었습니다.");
     } catch {
@@ -2567,10 +2619,17 @@ export default function AdminScreen() {
             />
             <ShortcutCard
               icon="people-circle-outline"
-              title="원우회 페이지 관리"
-              description="원우회 임원진, 활동내역, 회계장부, FAQ 같은 원우회 메뉴 게시판을 관리합니다."
+              title="원우회 게시판 설정"
+              description="활동내역, 회계장부, 상조회 같은 원우회 메뉴 게시판의 권한과 노출을 관리합니다."
               meta={`${councilBoardCount}개 원우회 게시판 설정`}
               onPress={() => openAdminSection("boards", "council")}
+            />
+            <ShortcutCard
+              icon="people-circle-outline"
+              title="원우회 소개 등록"
+              description="현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록합니다."
+              meta={currentCouncils[0]?.members.length ? `${currentCouncils[0].members.length}개 임원 카드 등록` : "등록 필요"}
+              onPress={() => openAdminSection("executives")}
             />
             <ShortcutCard
               icon="ribbon-outline"
@@ -3159,9 +3218,9 @@ export default function AdminScreen() {
           <View style={{ gap: 12 }}>
             <Panel>
               <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 임원진 소개 관리</Text>
+                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 소개 관리</Text>
                 <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  이름, 기수, 직책, 소개와 프로필 이미지를 등록하면 원우회 임원진 소개 화면에 바로 반영됩니다.
+                  현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
                 </Text>
               </View>
             </Panel>
@@ -3170,65 +3229,46 @@ export default function AdminScreen() {
                 <Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-executives 게시판을 찾을 수 없습니다.</Text>
               </Panel>
             ) : null}
-            {executiveMembers.map((member, index) => {
-              const previewUrl = mediaUrl(member.image_url);
-              return (
-                <Panel key={`executive-${index}`}>
-                  <View style={{ gap: 10 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                      {previewUrl ? (
-                        <MediaImage media={{ url: member.image_url }} style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.primary50 }} />
-                      ) : (
-                        <View style={{ width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
-                          <Ionicons name="person" size={30} color={COLORS.primary} />
-                        </View>
-                      )}
-                      <View style={{ flex: 1, gap: 8 }}>
-                        <ActionButton
-                          icon="image-outline"
-                          label={executiveUploadingIndex === index ? "업로드 중" : "프로필 사진"}
-                          onPress={() => void handleUploadExecutiveImage(index)}
-                          disabled={executiveUploadingIndex !== null}
-                          tone="outline"
-                        />
-                        {member.image_url ? (
-                          <ActionButton label="사진 삭제" onPress={() => updateExecutiveMember(index, { image_url: "" })} tone="danger" />
-                        ) : null}
-                      </View>
-                    </View>
-                    <Field value={member.name} onChangeText={(value) => updateExecutiveMember(index, { name: value })} placeholder="이름" />
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      <View style={{ flex: 1 }}>
-                        <Field value={member.cohort} onChangeText={(value) => updateExecutiveMember(index, { cohort: value })} placeholder="기수 예: 72기" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Field value={member.role} onChangeText={(value) => updateExecutiveMember(index, { role: value })} placeholder="직책" />
-                      </View>
-                    </View>
-                    <Field value={member.intro} onChangeText={(value) => updateExecutiveMember(index, { intro: value })} placeholder="소개" multiline />
-                    <ActionButton
-                      icon="trash-outline"
-                      label="임원 삭제"
-                      onPress={() => setExecutiveMembers((current) => current.filter((_, itemIndex) => itemIndex !== index))}
-                      tone="danger"
+            {currentCouncils.map((council, cardIndex) => (
+              <Panel key={`current-council-${cardIndex}`}>
+                <View style={{ gap: 10 }}>
+                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.title || "현재 원우회"}</Text>
+                  <Field value={council.title} onChangeText={(value) => updateCurrentCouncil(cardIndex, { title: value })} placeholder="원우회 이름 예: 제30대 원우회" />
+                  <Field value={council.greeting} onChangeText={(value) => updateCurrentCouncil(cardIndex, { greeting: value })} placeholder="인사말" multiline />
+                  <Field value={council.intro} onChangeText={(value) => updateCurrentCouncil(cardIndex, { intro: value })} placeholder="원우회 소개글" multiline />
+                  <IntroBannerEditor
+                    value={council.banner_image_url}
+                    uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === undefined}
+                    onUpload={() => void handleUploadCurrentCouncilImage(cardIndex)}
+                    onRemove={() => updateCurrentCouncil(cardIndex, { banner_image_url: "" })}
+                  />
+                  {council.members.map((member, memberIndex) => (
+                    <IntroMemberEditor
+                      key={`current-council-${cardIndex}-member-${memberIndex}`}
+                      member={member}
+                      index={memberIndex}
+                      uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === memberIndex}
+                      uploadDisabled={Boolean(currentCouncilUploading)}
+                      canMoveUp={memberIndex > 0}
+                      canMoveDown={memberIndex < council.members.length - 1}
+                      onChange={(patch) => updateCurrentCouncilMember(cardIndex, memberIndex, patch)}
+                      onUpload={() => void handleUploadCurrentCouncilImage(cardIndex, memberIndex)}
+                      onMoveUp={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
+                      onMoveDown={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
+                      onRemove={() => updateCurrentCouncil(cardIndex, { members: council.members.filter((_, index) => index !== memberIndex) })}
                     />
-                  </View>
-                </Panel>
-              );
-            })}
+                  ))}
+                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCurrentCouncil(cardIndex, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(currentCouncilUploading)} tone="outline" />
+                </View>
+              </Panel>
+            ))}
             <Panel>
               <View style={{ gap: 8 }}>
                 <ActionButton
-                  icon="person-add-outline"
-                  label="임원 추가"
-                  onPress={() => setExecutiveMembers((current) => [...current, { ...emptyExecutiveMember }])}
-                  tone="outline"
-                />
-                <ActionButton
                   icon="save-outline"
-                  label={executivesSaving ? "저장 중" : "임원진 소개 저장"}
+                  label={executivesSaving ? "저장 중" : "원우회 소개 저장"}
                   onPress={() => void handleSaveExecutives()}
-                  disabled={executivesSaving || executiveUploadingIndex !== null || !executivesBoard}
+                  disabled={executivesSaving || Boolean(currentCouncilUploading) || !executivesBoard}
                 />
               </View>
             </Panel>
@@ -3241,7 +3281,7 @@ export default function AdminScreen() {
               <View style={{ gap: 10 }}>
                 <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>기수별 기장단 소개 관리</Text>
                 <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  관리자만 등록·수정할 수 있습니다. 기수, 기장·부기장, 인사말과 소개 이미지가 원우회 기장단 화면에 반영됩니다.
+                  기수별 대표 이미지, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.
                 </Text>
               </View>
             </Panel>
@@ -3253,42 +3293,42 @@ export default function AdminScreen() {
                 <View style={{ gap: 10 }}>
                   <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{leader.cohort || "새 기수"} 기장단</Text>
                   <Field value={leader.cohort} onChangeText={(value) => updateCohortLeader(index, { cohort: value })} placeholder="기수 예: 75" />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <View style={{ flex: 1 }}><Field value={leader.captain_name} onChangeText={(value) => updateCohortLeader(index, { captain_name: value })} placeholder="기장 이름" /></View>
-                    <View style={{ flex: 1 }}><Field value={leader.vice_captain_name} onChangeText={(value) => updateCohortLeader(index, { vice_captain_name: value })} placeholder="부기장 이름" /></View>
-                  </View>
                   <Field value={leader.greeting} onChangeText={(value) => updateCohortLeader(index, { greeting: value })} placeholder="인사말 예: 안녕하세요, 75기 기장 홍길동입니다!" />
                   <Field value={leader.intro} onChangeText={(value) => updateCohortLeader(index, { intro: value })} placeholder="기장단 소개글" multiline />
-                  {COHORT_LEADER_IMAGE_FIELDS.map(({ field, label }) => {
-                    const previewUrl = mediaUrl(leader[field]);
-                    const uploading = cohortLeaderUploading?.index === index && cohortLeaderUploading.field === field;
-                    return (
-                      <View key={field} style={{ gap: 8 }}>
-                        <Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>{label}</Text>
-                        {previewUrl ? (
-                          <MediaImage
-                            media={{ url: leader[field] }}
-                            style={field === "banner_image_url" ? { width: "100%", aspectRatio: 2.2, borderRadius: 8, backgroundColor: COLORS.primary50 } : { width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.primary50 }}
-                          />
-                        ) : null}
-                        <View style={{ flexDirection: "row", gap: 8 }}>
-                          <View style={{ flex: 1 }}>
-                            <ActionButton icon="image-outline" label={uploading ? "업로드 중" : `${label} 등록`} onPress={() => void handleUploadCohortLeaderImage(index, field)} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
-                          </View>
-                          {leader[field] ? (
-                            <View style={{ flex: 1 }}><ActionButton label="삭제" onPress={() => updateCohortLeader(index, { [field]: "" })} tone="danger" /></View>
-                          ) : null}
-                        </View>
-                      </View>
-                    );
-                  })}
-                  <ActionButton icon="trash-outline" label="이 기수 삭제" onPress={() => setCohortLeaders((current) => current.filter((_, itemIndex) => itemIndex !== index))} tone="danger" />
+                  <IntroBannerEditor
+                    value={leader.banner_image_url}
+                    uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === undefined}
+                    onUpload={() => void handleUploadCohortLeaderImage(index)}
+                    onRemove={() => updateCohortLeader(index, { banner_image_url: "" })}
+                  />
+                  {leader.members.map((member, memberIndex) => (
+                    <IntroMemberEditor
+                      key={`cohort-leader-${index}-member-${memberIndex}`}
+                      member={member}
+                      index={memberIndex}
+                      uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === memberIndex}
+                      uploadDisabled={Boolean(cohortLeaderUploading)}
+                      canMoveUp={memberIndex > 0}
+                      canMoveDown={memberIndex < leader.members.length - 1}
+                      onChange={(patch) => updateCohortLeaderMember(index, memberIndex, patch)}
+                      onUpload={() => void handleUploadCohortLeaderImage(index, memberIndex)}
+                      onMoveUp={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex - 1) })}
+                      onMoveDown={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex + 1) })}
+                      onRemove={() => updateCohortLeader(index, { members: leader.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
+                    />
+                  ))}
+                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCohortLeader(index, { members: [...leader.members, { ...emptyExecutiveMember }] })} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="기수 위로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(cohortLeaderUploading) || index === 0} tone="outline" /></View>
+                    <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="기수 아래로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(cohortLeaderUploading) || index === cohortLeaders.length - 1} tone="outline" /></View>
+                  </View>
+                  <ActionButton icon="trash-outline" label="이 기수 삭제" onPress={() => setCohortLeaders((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(cohortLeaderUploading)} tone="danger" />
                 </View>
               </Panel>
             ))}
             <Panel>
               <View style={{ gap: 8 }}>
-                <ActionButton icon="person-add-outline" label="기수 추가" onPress={() => setCohortLeaders((current) => [...current, { ...emptyCohortLeader }])} tone="outline" />
+                <ActionButton icon="person-add-outline" label="기수 추가" onPress={() => setCohortLeaders((current) => [...current, { ...emptyCohortLeader, members: [] }])} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
                 <ActionButton icon="save-outline" label={cohortLeadersSaving ? "저장 중" : "기장단 소개 저장"} onPress={() => void handleSaveCohortLeaders()} disabled={cohortLeadersSaving || Boolean(cohortLeaderUploading) || !cohortLeadersBoard} />
               </View>
             </Panel>
@@ -3297,27 +3337,48 @@ export default function AdminScreen() {
 
         {section === "pastCouncils" ? (
           <View style={{ gap: 12 }}>
-            <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>FAQ 및 현재 임원진과 분리된 관리자 전용 영역입니다. 대수별 임원진, 소개와 활동내역을 등록합니다.</Text></View></Panel>
+            <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
             {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>DB 마이그레이션 후 gsa-past-councils 게시판을 사용할 수 있습니다.</Text></Panel> : null}
             {pastCouncils.map((council, index) => (
               <Panel key={`past-council-${index}`}>
                 <View style={{ gap: 10 }}>
                   <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.cohort || "새 역대 원우회"} 원우회</Text>
                   <Field value={council.cohort} onChangeText={(value) => updatePastCouncil(index, { cohort: value })} placeholder="원우회 대수 예: 29" />
-                  <View style={{ flexDirection: "row", gap: 8 }}><View style={{ flex: 1 }}><Field value={council.president_name} onChangeText={(value) => updatePastCouncil(index, { president_name: value })} placeholder="회장 이름" /></View><View style={{ flex: 1 }}><Field value={council.president_cohort} onChangeText={(value) => updatePastCouncil(index, { president_cohort: value })} placeholder="회장 기수" /></View></View>
-                  <View style={{ flexDirection: "row", gap: 8 }}><View style={{ flex: 1 }}><Field value={council.vice_president_name} onChangeText={(value) => updatePastCouncil(index, { vice_president_name: value })} placeholder="부회장 이름" /></View><View style={{ flex: 1 }}><Field value={council.vice_president_cohort} onChangeText={(value) => updatePastCouncil(index, { vice_president_cohort: value })} placeholder="부회장 기수" /></View></View>
+                  <Field value={council.greeting} onChangeText={(value) => updatePastCouncil(index, { greeting: value })} placeholder="인사말" multiline />
                   <Field value={council.intro} onChangeText={(value) => updatePastCouncil(index, { intro: value })} placeholder="원우회 소개글" multiline />
                   <Field value={council.activities_text} onChangeText={(value) => updatePastCouncil(index, { activities_text: value })} placeholder={'활동내역을 한 줄에 하나씩 입력\n예: 25.05.05 기말 세미나 개최'} multiline />
-                  {PAST_COUNCIL_IMAGE_FIELDS.map(({ field, label }) => {
-                    const previewUrl = mediaUrl(council[field]);
-                    const uploading = pastCouncilUploading?.index === index && pastCouncilUploading.field === field;
-                    return <View key={field} style={{ gap: 7 }}><Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>{label}</Text>{previewUrl ? <MediaImage media={{ url: council[field] }} style={field === "banner_image_url" ? { width: "100%", aspectRatio: 2.2, borderRadius: 8 } : { width: 72, height: 72, borderRadius: 36 }} /> : null}<View style={{ flexDirection: "row", gap: 8 }}><View style={{ flex: 1 }}><ActionButton icon="image-outline" label={uploading ? "업로드 중" : `${label} 등록`} onPress={() => void handleUploadPastCouncilImage(index, field)} disabled={Boolean(pastCouncilUploading)} tone="outline" /></View>{council[field] ? <View style={{ flex: 1 }}><ActionButton label="삭제" onPress={() => updatePastCouncil(index, { [field]: "" })} tone="danger" /></View> : null}</View></View>;
-                  })}
-                  <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} tone="danger" />
+                  <IntroBannerEditor
+                    value={council.banner_image_url}
+                    uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined}
+                    onUpload={() => void handleUploadPastCouncilImage(index)}
+                    onRemove={() => updatePastCouncil(index, { banner_image_url: "" })}
+                  />
+                  {council.members.map((member, memberIndex) => (
+                    <IntroMemberEditor
+                      key={`past-council-${index}-member-${memberIndex}`}
+                      member={member}
+                      index={memberIndex}
+                      uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === memberIndex}
+                      uploadDisabled={Boolean(pastCouncilUploading)}
+                      canMoveUp={memberIndex > 0}
+                      canMoveDown={memberIndex < council.members.length - 1}
+                      onChange={(patch) => updatePastCouncilMember(index, memberIndex, patch)}
+                      onUpload={() => void handleUploadPastCouncilImage(index, memberIndex)}
+                      onMoveUp={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
+                      onMoveDown={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
+                      onRemove={() => updatePastCouncil(index, { members: council.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
+                    />
+                  ))}
+                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updatePastCouncil(index, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(pastCouncilUploading)} tone="outline" />
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="원우회 위로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(pastCouncilUploading) || index === 0} tone="outline" /></View>
+                    <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="원우회 아래로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(pastCouncilUploading) || index === pastCouncils.length - 1} tone="outline" /></View>
+                  </View>
+                  <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(pastCouncilUploading)} tone="danger" />
                 </View>
               </Panel>
             ))}
-            <Panel><View style={{ gap: 8 }}><ActionButton icon="add-circle-outline" label="역대 원우회 추가" onPress={() => setPastCouncils((current) => [...current, { ...emptyPastCouncil }])} tone="outline" /><ActionButton icon="save-outline" label={pastCouncilsSaving ? "저장 중" : "역대 원우회 저장"} onPress={() => void handleSavePastCouncils()} disabled={pastCouncilsSaving || Boolean(pastCouncilUploading) || !pastCouncilsBoard} /></View></Panel>
+            <Panel><View style={{ gap: 8 }}><ActionButton icon="add-circle-outline" label="역대 원우회 추가" onPress={() => setPastCouncils((current) => [...current, { ...emptyPastCouncil, members: [] }])} disabled={Boolean(pastCouncilUploading)} tone="outline" /><ActionButton icon="save-outline" label={pastCouncilsSaving ? "저장 중" : "역대 원우회 저장"} onPress={() => void handleSavePastCouncils()} disabled={pastCouncilsSaving || Boolean(pastCouncilUploading) || !pastCouncilsBoard} /></View></Panel>
           </View>
         ) : null}
 

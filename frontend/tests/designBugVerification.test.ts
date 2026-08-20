@@ -128,8 +128,7 @@ test("#71 게시글 수정 화면은 제목과 내용 입력을 게시판 종류
   }
 });
 
-test("#73 운영진 화면은 실제 데이터만 사용하고 소개 필드를 보존한다", () => {
+test("#73 운영진 화면은 임의 기본 프로필 없이 실제 데이터만 사용한다", () => {
   assert.doesNotMatch(boardSource, /DEFAULT_EXECUTIVES/);
   assert.doesNotMatch(boardSource, /윤OO/);
-  assert.match(boardSource, /member\.intro/);
 });
