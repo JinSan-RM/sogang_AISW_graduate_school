@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
+import json
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+import zipfile
 
 import pytest
 from sqlalchemy import select
@@ -156,6 +159,41 @@ def _upload(
 def _signed_file_response(api, access_response):
     signed_url = access_response.json()["data"]["url"]
     return api.client.get(signed_url)
+
+
+def _zip_bytes() -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("answer.txt", "exam answer")
+    return output.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "body"),
+    [
+        ("exam-materials.zip", "application/zip", _zip_bytes()),
+        ("exam-notes.txt", "text/plain", "시험 자료\n".encode()),
+        (
+            "analysis.ipynb",
+            "application/x-ipynb+json",
+            json.dumps({"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}).encode(),
+        ),
+    ],
+)
+def test_upload_accepts_archive_text_and_notebook_files(
+    api,
+    media_storage,
+    filename: str,
+    content_type: str,
+    body: bytes,
+) -> None:
+    response = _upload(api, filename=filename, content_type=content_type, body=body)
+
+    assert response.status_code == 200
+    access = api.client.get(response.json()["data"]["url"], headers=api.headers["owner"])
+    downloaded = _signed_file_response(api, access)
+    assert downloaded.status_code == 200
+    assert downloaded.content == body
 
 
 @pytest.mark.parametrize(

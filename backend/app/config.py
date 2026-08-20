@@ -76,10 +76,11 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
         "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
-        "application/x-hwp,application/haansofthwp,application/vnd.hancom.hwp"
+        "application/x-hwp,application/haansofthwp,application/vnd.hancom.hwp,"
+        "application/zip,text/plain,application/x-ipynb+json,application/json"
     )
     media_allowed_extensions: str = (
-        ".jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.hwp"
+        ".jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.pdf,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.hwp,.zip,.txt,.ipynb"
     )
     support_email: str | None = None
     public_api_url: str | None = None

@@ -1,7 +1,7 @@
 from app.models.board import Board
 
 
-ANONYMOUS_BOARD_SLUGS = frozenset({"lecture-reviews", "exam-archive"})
+ANONYMOUS_BOARD_SLUGS = frozenset({"lecture-reviews"})
 NO_COMMENT_BOARD_SLUGS = frozenset({"lecture-reviews"})
 RESOURCE_CATEGORY_LABELS = {
     "lecture-reviews": "강의후기",

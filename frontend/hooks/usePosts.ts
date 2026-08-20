@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { commentApi, postApi } from "../services/api";
 import type { ApiSuccess, PostDetail } from "../types";
 import { loadAllBoardPosts } from "../utils/noticeFeed";
+import { applyBookmarkResult } from "../utils/postDetailCache";
 
 const PAGE_SIZE = 20;
 
@@ -177,18 +178,7 @@ export function useToggleBookmark(postId: number) {
   return useMutation({
     mutationFn: () => postApi.toggleBookmark(postId),
     onSuccess: (response) => {
-      queryClient.setQueryData<ApiSuccess<PostDetail>>(["post", postId], (current) =>
-        current
-          ? {
-              ...current,
-              data: {
-                ...current.data,
-                is_bookmarked: response.data.is_bookmarked,
-              },
-            }
-          : current
-      );
-      queryClient.invalidateQueries({ queryKey: ["post", postId] });
+      applyBookmarkResult(queryClient, postId, response.data.is_bookmarked);
     },
   });
 }

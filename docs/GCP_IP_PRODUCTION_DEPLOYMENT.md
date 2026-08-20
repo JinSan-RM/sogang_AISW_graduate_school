@@ -141,9 +141,10 @@ Expected gates for the approved `attachments_ver2` and
 - database: 685 posts, 247 comments, 196 inactive legacy users, no seeded
   administrator, no authorless post/comment, 25 ownerless special-content media
   assets, and 1,923 provenance ledger records;
-- supported media: 637 files and exactly 706,706,761 verified bytes;
-- unsupported media: 11 entries deliberately archived in the migration ledger
-  (4 ZIP, 4 MP4, 2 TXT, and 1 IPYNB), not silently dropped;
+- supported media: 644 files and exactly 710,833,138 verified bytes, including
+  4 ZIP, 2 TXT, and 1 IPYNB legacy attachment;
+- unsupported media: 4 MP4 entries deliberately archived in the migration ledger,
+  not silently dropped;
 - production media verification: the same generated SHA-256 manifest as the
   review database.
 

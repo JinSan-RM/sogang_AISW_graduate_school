@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+import io
+import json
 from pathlib import Path
+import zipfile
 
 import pytest
 from openpyxl import Workbook
@@ -112,6 +115,17 @@ def test_attachment_type_uses_file_signature_over_legacy_filename(tmp_path: Path
     path.write_bytes(b"\xff\xd8\xff\xe0" + b"legacy-jpeg")
 
     assert _detected_content_type(path, "image/png", "image/png") == "image/jpeg"
+
+
+def test_attachment_type_distinguishes_hwp_from_legacy_word_ole_container(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-10946091.doc"
+    path.write_bytes(
+        b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+        + (b"\x00" * 128)
+        + b"HWP Document File"
+    )
+
+    assert _detected_content_type(path, "application/msword") == "application/x-hwp"
 
 
 def test_special_entry_keeps_banner_and_all_attachments() -> None:
@@ -483,12 +497,146 @@ def test_local_faq_image_is_returned_and_authorized(
     assert file_response.content == png
 
 
-def test_unsupported_legacy_download_is_archived_without_exposing_media(api, tmp_path: Path) -> None:
+def _legacy_supported_file_bytes(extension: str) -> bytes:
+    if extension == ".zip":
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            archive.writestr("answer.txt", "exam answer")
+        return output.getvalue()
+    if extension == ".txt":
+        return "기말고사 예상문제\n".encode()
+    if extension == ".ipynb":
+        return json.dumps({"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}).encode()
+    raise AssertionError(f"Unsupported fixture extension: {extension}")
+
+
+def test_supported_legacy_archive_text_and_notebook_files_are_restored(api, tmp_path: Path) -> None:
+    source_dir = tmp_path / "supported-source"
+    public_dir = tmp_path / "supported-public"
+    private_dir = tmp_path / "supported-private"
+    source_dir.mkdir()
+    extensions = (".zip", ".txt", ".ipynb")
+    rows: list[SourceRow] = []
+    for index, extension in enumerate(extensions, start=1):
+        storage_id = f"supported-{index}"
+        (source_dir / f"{storage_id}{extension}").write_bytes(_legacy_supported_file_bytes(extension))
+        rows.append(
+            SourceRow(
+                "board_articles_ver2.xlsx",
+                "첨부파일",
+                index + 1,
+                {
+                    "writeId": "article-1",
+                    "fileStorageId": storage_id,
+                    "subject": f"exam-material{extension}",
+                    "sequence": index - 1,
+                },
+            )
+        )
+
+    with api.session() as db:
+        post = db.get(Post, 3)
+        stats = import_attachments(
+            db,
+            rows,
+            {},
+            {"article-1": post},
+            public_media_dir=public_dir,
+            private_media_dir=private_dir,
+            attachment_source_dir=source_dir,
+            apply=True,
+            skip_downloads=False,
+        )
+        db.commit()
+        imported = db.scalars(
+            select(MediaAsset)
+            .where(MediaAsset.stored_filename.like("legacy-supported-%"))
+            .order_by(MediaAsset.stored_filename)
+        ).all()
+
+    assert stats["created_attachments"] == 3
+    assert [Path(media.stored_filename).suffix for media in imported] == [".zip", ".txt", ".ipynb"]
+    assert all((public_dir / media.stored_filename).is_file() for media in imported)
+
+
+def test_legacy_import_repairs_hwp_mislabeled_as_doc(api, tmp_path: Path) -> None:
+    source_dir = tmp_path / "hwp-source"
+    public_dir = tmp_path / "hwp-public"
+    private_dir = tmp_path / "hwp-private"
+    source_dir.mkdir()
+    public_dir.mkdir()
+    hwp_body = (
+        b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+        + (b"\x00" * 128)
+        + b"HWP Document File"
+    )
+    (source_dir / "10946091.doc").write_bytes(hwp_body)
+    mislabeled_path = public_dir / "legacy-10946091.doc"
+    mislabeled_path.write_bytes(hwp_body)
+    row = SourceRow(
+        "board_articles_ver2.xlsx",
+        "첨부파일",
+        586,
+        {
+            "writeId": "article-1",
+            "fileStorageId": "10946091",
+            "subject": None,
+            "sequence": 0,
+        },
+    )
+    source_url = (
+        "https://files.example/10946091/"
+        "%EC%A0%95%EB%B3%B4%ED%86%B5%EC%8B%A0%EB%8C%80%ED%95%99%EC%9B%90"
+        "%ED%95%80%ED%85%8C%ED%81%AC%EA%B0%9C%EB%A1%A0mb_up.hwp"
+    )
+
+    with api.session() as db:
+        post = db.get(Post, 3)
+        media = MediaAsset(
+            owner_id=post.author_id,
+            original_filename="legacy-10946091",
+            stored_filename=mislabeled_path.name,
+            content_type="application/msword",
+            file_size=len(hwp_body),
+            url=None,
+            is_private=False,
+            status="ready",
+        )
+        db.add(media)
+        db.flush()
+        media.url = f"/api/media/{media.id}/access-url"
+        db.add(PostAttachment(post_id=post.id, media_id=media.id, sort_order=0))
+        db.commit()
+
+        stats = import_attachments(
+            db,
+            [row],
+            {"10946091": source_url},
+            {"article-1": post},
+            public_media_dir=public_dir,
+            private_media_dir=private_dir,
+            attachment_source_dir=source_dir,
+            apply=True,
+            skip_downloads=False,
+        )
+        db.commit()
+        db.refresh(media)
+
+        assert stats["updated_attachments"] == 1
+        assert media.content_type == "application/x-hwp"
+        assert media.stored_filename == "legacy-10946091.hwp"
+        assert media.original_filename.endswith(".hwp")
+
+    assert not mislabeled_path.exists()
+    assert (public_dir / "legacy-10946091.hwp").read_bytes() == hwp_body
+
+
+def test_unsupported_legacy_video_is_archived_without_exposing_media(api, tmp_path: Path) -> None:
     source_dir = tmp_path / "unsupported-source"
     public_dir = tmp_path / "unsupported-public"
     private_dir = tmp_path / "unsupported-private"
     source_dir.mkdir()
-    (source_dir / "12621604.zip").write_bytes(b"PK\x03\x04legacy-archive")
+    (source_dir / "12621604.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42legacy-video")
     row = SourceRow(
         "board_articles_ver2.xlsx",
         "첨부파일",
@@ -496,7 +644,7 @@ def test_unsupported_legacy_download_is_archived_without_exposing_media(api, tmp
         {
             "writeId": "article-1",
             "fileStorageId": "12621604",
-            "subject": "source.zip",
+            "subject": "source.mp4",
             "sequence": 0,
         },
     )

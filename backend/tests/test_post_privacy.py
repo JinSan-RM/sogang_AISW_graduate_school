@@ -349,6 +349,51 @@ def test_anonymous_author_identity_is_not_exposed_to_other_members(api) -> None:
     assert [item["id"] for item in blocked_search] == [forced_post_id]
 
 
+def test_exam_archive_shows_author_unless_the_post_itself_is_anonymous(api) -> None:
+    with api.session() as db:
+        board = Board(
+            name="Exam Archive",
+            slug="exam-archive",
+            category="resources",
+            board_type="resource",
+            read_permission="user",
+            write_permission="user",
+            allow_anonymous=True,
+        )
+        db.add(board)
+        db.flush()
+        named_post = Post(
+            board_id=board.id,
+            author_id=1,
+            title="Named exam archive",
+            content="Show the contributor",
+            is_anonymous=False,
+        )
+        anonymous_post = Post(
+            board_id=board.id,
+            author_id=1,
+            title="Anonymous exam archive",
+            content="Hide only an explicitly anonymous contributor",
+            is_anonymous=True,
+        )
+        db.add_all([named_post, anonymous_post])
+        db.commit()
+        named_post_id = named_post.id
+        anonymous_post_id = anonymous_post.id
+
+    named = api.client.get(
+        f"/api/posts/{named_post_id}",
+        headers=api.headers["other"],
+    ).json()["data"]
+    anonymous = api.client.get(
+        f"/api/posts/{anonymous_post_id}",
+        headers=api.headers["other"],
+    ).json()["data"]
+
+    assert (named["author_id"], named["author_nickname"]) == (1, "Owner")
+    assert (anonymous["author_id"], anonymous["author_nickname"]) == (None, "Anonymous")
+
+
 def test_post_list_exposes_thumbnail_media_id_for_access_url_resolution(api) -> None:
     response = api.client.get("/api/boards/2/posts", headers=api.headers["owner"])
 

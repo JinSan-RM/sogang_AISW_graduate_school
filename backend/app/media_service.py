@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import re
 import time
@@ -45,10 +46,17 @@ MIME_EXTENSION_PAIRS: dict[str, frozenset[str]] = {
     "application/x-hwp": frozenset({".hwp"}),
     "application/haansofthwp": frozenset({".hwp"}),
     "application/vnd.hancom.hwp": frozenset({".hwp"}),
+    "application/zip": frozenset({".zip"}),
+    "text/plain": frozenset({".txt"}),
+    "application/x-ipynb+json": frozenset({".ipynb"}),
+    "application/json": frozenset({".ipynb"}),
 }
 MIME_ALIASES = {
     "image/jpg": "image/jpeg",
     "image/pjpeg": "image/jpeg",
+    "application/x-zip-compressed": "application/zip",
+    "application/haansofthwp": "application/x-hwp",
+    "application/vnd.hancom.hwp": "application/x-hwp",
 }
 OPENXML_MARKERS = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "word/",
@@ -66,6 +74,7 @@ OLE_MIME_TYPES = frozenset(
     }
 )
 OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+HWP_DOCUMENT_SIGNATURE = b"HWP Document File"
 STABLE_REFERENCE_RE = re.compile(r"^/api/media/(?P<media_id>[1-9]\d*)/access-url$")
 LEGACY_UPLOAD_RE = re.compile(r"^/uploads/(?P<stored_filename>[^/\\]{1,255})$")
 
@@ -227,7 +236,12 @@ def _matches_declared_content(path: Path, content_type: str) -> bool:
     if content_type == "application/pdf":
         return header.startswith(b"%PDF-")
     if content_type in OLE_MIME_TYPES:
-        return header.startswith(OLE_SIGNATURE)
+        if not header.startswith(OLE_SIGNATURE):
+            return False
+        is_hwp = HWP_DOCUMENT_SIGNATURE in path.read_bytes()
+        if content_type in {"application/x-hwp", "application/haansofthwp", "application/vnd.hancom.hwp"}:
+            return is_hwp
+        return not is_hwp
     marker = OPENXML_MARKERS.get(content_type)
     if marker is not None:
         try:
@@ -236,6 +250,21 @@ def _matches_declared_content(path: Path, content_type: str) -> bool:
         except (OSError, zipfile.BadZipFile):
             return False
         return "[Content_Types].xml" in names and any(name.startswith(marker) for name in names)
+    if content_type == "application/zip":
+        return zipfile.is_zipfile(path)
+    if content_type == "text/plain":
+        return b"\x00" not in path.read_bytes()
+    if content_type in {"application/x-ipynb+json", "application/json"}:
+        try:
+            notebook = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            return False
+        return (
+            isinstance(notebook, dict)
+            and isinstance(notebook.get("cells"), list)
+            and isinstance(notebook.get("metadata"), dict)
+            and isinstance(notebook.get("nbformat"), int)
+        )
     return False
 
 

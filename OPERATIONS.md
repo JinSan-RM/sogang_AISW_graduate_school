@@ -276,8 +276,11 @@ python backend/scripts/import_legacy_articles.py `
 Local files are selected strictly by `fileStorageId`; a missing file aborts before database work.
 The importer copies allowed files atomically, stores only stable `/api/media/{id}/access-url`
 references, links media to posts or FAQ records, and removes same-content duplicate links within a
-post. Legacy ZIP, MP4, text, and notebook files remain in the private source archive and are listed
-as `archived_unsupported_attachments`; they are not exposed through the application media endpoint.
+post. Legacy ZIP, text, and notebook files are validated and restored as member attachments. HWP
+OLE containers are identified by their internal signature so a misleading legacy Word MIME cannot
+rename them to `.doc`; an idempotent rerun also corrects an existing media row and stored filename.
+Legacy MP4 files remain in the private source archive and are listed as
+`archived_unsupported_attachments`; they are not exposed through the application media endpoint.
 Any unexpected missing, orphaned, invalid, or failed attachment rolls back the database transaction.
 
 Verify the review database and both media directories before packaging them:

@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { inferDocumentContentType } from "../utils/documentFiles";
+
+test("문서 선택기가 누락하거나 잘못 보고한 MIME을 허용된 확장자로 보정한다", () => {
+  assert.equal(inferDocumentContentType("exam.zip", "text/plain"), "application/zip");
+  assert.equal(inferDocumentContentType("notes.txt", "application/octet-stream"), "text/plain");
+  assert.equal(inferDocumentContentType("analysis.ipynb", ""), "application/x-ipynb+json");
+  assert.equal(inferDocumentContentType("exam.hwp", "application/octet-stream"), "application/x-hwp");
+  assert.equal(
+    inferDocumentContentType("slides.pptx", "application/octet-stream"),
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  );
+});
+
+test("알 수 없는 확장자는 선택기가 제공한 MIME 또는 안전한 기본값을 유지한다", () => {
+  assert.equal(inferDocumentContentType("archive.unknown", "application/custom"), "application/custom");
+  assert.equal(inferDocumentContentType("archive.unknown", ""), "application/octet-stream");
+});

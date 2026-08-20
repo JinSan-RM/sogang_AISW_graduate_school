@@ -116,6 +116,7 @@ ALLOWED_MIME_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/x-hwp", "application/haansofthwp", "application/vnd.hancom.hwp",
+    "application/zip", "text/plain", "application/x-ipynb+json", "application/json",
 }
 
 MIME_EXTENSIONS = {
@@ -135,6 +136,10 @@ MIME_EXTENSIONS = {
     "application/x-hwp": ".hwp",
     "application/haansofthwp": ".hwp",
     "application/vnd.hancom.hwp": ".hwp",
+    "application/zip": ".zip",
+    "text/plain": ".txt",
+    "application/x-ipynb+json": ".ipynb",
+    "application/json": ".ipynb",
 }
 
 # The cleaned workbook contains one article ID in two sheets.  Its board name
@@ -145,10 +150,9 @@ CANONICAL_DUPLICATE_ARTICLE_SHEETS = {
     "6764961": "사진첩",
 }
 
-# These legacy download formats are deliberately not added to the application
-# upload allowlist. They remain in the source archive and are reported instead
-# of being exposed through the member media endpoint.
-ARCHIVED_LEGACY_ATTACHMENT_EXTENSIONS = {".ipynb", ".mp4", ".txt", ".zip"}
+# Video remains outside the member attachment allowlist. Archive, text, and
+# notebook files are validated and restored through the normal media flow.
+ARCHIVED_LEGACY_ATTACHMENT_EXTENSIONS = {".mp4"}
 
 
 @dataclass(frozen=True)
@@ -1240,6 +1244,19 @@ def _safe_filename(value: str, fallback: str) -> str:
     return (basename or fallback)[:255]
 
 
+def _legacy_attachment_filename(subject: object, storage_id: str, url: str) -> str:
+    submitted_name = _safe_filename(value_as_text(subject), f"legacy-{storage_id}")
+    if Path(submitted_name).suffix:
+        return submitted_name
+    url_name = _safe_filename(
+        urllib.parse.unquote(Path(urllib.parse.urlparse(url).path).name),
+        "",
+    )
+    if Path(url_name).suffix:
+        return url_name
+    return submitted_name
+
+
 def _download_url(value: str) -> str:
     """Quote legacy object-storage paths without changing query parameters."""
     parsed = urllib.parse.urlsplit(value)
@@ -1268,6 +1285,10 @@ def _detected_content_type(path: Path, *candidates: str) -> str:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/zip",
+        "application/x-ipynb+json",
+        "application/json",
+        "text/plain",
         "application/msword",
         "application/vnd.ms-excel",
         "application/vnd.ms-powerpoint",
@@ -1564,7 +1585,7 @@ def import_attachments(
                     details={"article_id": article_id, "filename": value_as_text(row.data.get("subject"))},
                 )
             continue
-        filename = _safe_filename(value_as_text(row.data.get("subject")), f"legacy-{storage_id}")
+        filename = _legacy_attachment_filename(row.data.get("subject"), storage_id, url)
         guessed_extension = (
             Path(filename).suffix.lower()
             or (local_source.suffix.lower() if local_source is not None else "")
@@ -1601,6 +1622,7 @@ def import_attachments(
         action = "unchanged"
         sha256 = ""
         stored_now = False
+        renamed_from: Path | None = None
         post_attachment_id: int | None = None
         faq_attachment_id: int | None = None
         duplicate_of_media_asset_id: int | None = None
@@ -1615,6 +1637,14 @@ def import_attachments(
                 if not content_type:
                     raise ValueError("unsupported_or_invalid_existing_file")
                 file_size = destination.stat().st_size
+                corrected_destination = destination.with_suffix(MIME_EXTENSIONS[content_type])
+                if corrected_destination != destination:
+                    if corrected_destination.exists():
+                        raise ValueError("corrected_attachment_destination_exists")
+                    renamed_from = destination
+                    os.replace(destination, corrected_destination)
+                    destination = corrected_destination
+                stored_filename = destination.name
             elif local_source is not None:
                 content_type, file_size, sha256, destination = _copy_local_attachment(
                     local_source,
@@ -1752,6 +1782,8 @@ def import_attachments(
         except Exception as exc:
             if stored_now:
                 destination.unlink(missing_ok=True)
+            elif renamed_from is not None and destination.exists():
+                os.replace(destination, renamed_from)
             stats["failed_attachments"] += 1
             upsert_ledger(
                 db,

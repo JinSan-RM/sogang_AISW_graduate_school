@@ -52,7 +52,7 @@ def _add_resource_boards_and_posts(api) -> tuple[int, int]:
         return lecture_post.id, exam_post.id
 
 
-def test_exam_archive_hides_author_and_allows_comments(api) -> None:
+def test_exam_archive_shows_author_and_allows_comments(api) -> None:
     lecture_post_id, exam_post_id = _add_resource_boards_and_posts(api)
 
     lecture_detail = api.client.get(f"/api/posts/{lecture_post_id}", headers=api.headers["other"])
@@ -69,7 +69,7 @@ def test_exam_archive_hides_author_and_allows_comments(api) -> None:
         exam_detail.json()["data"]["author_id"],
         exam_detail.json()["data"]["author_nickname"],
         exam_detail.json()["data"]["author_cohort"],
-    ) == (None, "Anonymous", None)
+    ) == (1, "Owner", "72")
 
     lecture_create = api.client.post(
         f"/api/posts/{lecture_post_id}/comments",
@@ -120,7 +120,7 @@ def test_search_returns_visible_author_cohort_and_masks_hidden_identity(api) -> 
 
     assert exam_result.status_code == 200
     exam_item = next(item for item in exam_result.json()["data"] if item["id"] == exam_post_id)
-    assert (exam_item["author_nickname"], exam_item["author_cohort"]) == ("Anonymous", None)
+    assert (exam_item["author_nickname"], exam_item["author_cohort"]) == ("Owner", "72")
 
     assert lecture_result.status_code == 200
     lecture_item = next(item for item in lecture_result.json()["data"] if item["id"] == lecture_post_id)

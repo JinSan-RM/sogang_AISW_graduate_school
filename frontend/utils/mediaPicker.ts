@@ -4,6 +4,7 @@ import { Platform } from "react-native";
 
 import { mediaApi } from "../services/api";
 import type { MediaAsset } from "../types";
+import { inferDocumentContentType } from "./documentFiles";
 import { selectAndUploadProfileImage } from "./profileImagePicker";
 
 type UploadProgress = (progress: number) => void;
@@ -78,7 +79,15 @@ function pickLocalFiles({ accept, multiple }: { accept?: string; multiple?: bool
 export async function pickAndUploadDocuments(onProgress?: UploadProgress, isPrivate = false): Promise<MediaAsset[]> {
   if (Platform.OS === "web") {
     const files = await pickLocalFiles({ multiple: true });
-    return Promise.all(files.map((file) => uploadPickedFile(file, onProgress, isPrivate)));
+    return Promise.all(
+      files.map((file) => {
+        const type = inferDocumentContentType(file.name, file.type);
+        const normalizedFile = file.type === type
+          ? file
+          : new File([file], file.name, { type, lastModified: file.lastModified });
+        return uploadPickedFile(normalizedFile, onProgress, isPrivate);
+      })
+    );
   }
 
   const result = await DocumentPicker.getDocumentAsync({
@@ -96,7 +105,10 @@ export async function pickAndUploadDocuments(onProgress?: UploadProgress, isPriv
         {
           uri: asset.uri,
           name: asset.name || fileNameFromUri(asset.uri, "upload"),
-          type: asset.mimeType || "application/octet-stream",
+          type: inferDocumentContentType(
+            asset.name || fileNameFromUri(asset.uri, "upload"),
+            asset.mimeType,
+          ),
         },
         onProgress,
         isPrivate

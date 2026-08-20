@@ -1165,9 +1165,9 @@ Rules:
 
 - The server streams the upload to a temporary file in chunks and deletes partial files after every failure.
 - Default maximum size is 20 MiB and can be changed with `MEDIA_UPLOAD_MAX_BYTES`; streaming chunks default to 1 MiB via `MEDIA_UPLOAD_CHUNK_BYTES`.
-- Allowed extensions and MIME pairs are defined by `MEDIA_ALLOWED_EXTENSIONS` and `MEDIA_ALLOWED_MIME_TYPES`. The launch defaults are `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, `.heif`, `.pdf`, `.doc`, `.xls`, `.ppt`, `.docx`, `.xlsx`, `.pptx`, and `.hwp`, paired with the MIME values in `backend/.env.example`.
+- Allowed extensions and MIME pairs are defined by `MEDIA_ALLOWED_EXTENSIONS` and `MEDIA_ALLOWED_MIME_TYPES`. The launch defaults are `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, `.heif`, `.pdf`, `.doc`, `.xls`, `.ppt`, `.docx`, `.xlsx`, `.pptx`, `.hwp`, `.zip`, `.txt`, and `.ipynb`, paired with the MIME values in `backend/.env.example`.
 - Storage directories are configured with `MEDIA_UPLOAD_DIR` and `MEDIA_PRIVATE_UPLOAD_DIR` and must not be exposed by a web server.
-- Images, PDF, and the document formats used by the current UI are accepted; empty, oversized, forbidden, or mismatched files are rejected.
+- Images, PDF, office/HWP documents, ZIP archives, plain text, and valid Jupyter notebooks are accepted. ZIP structure, notebook JSON shape, HWP's internal signature, and other supported file signatures are validated; empty, oversized, forbidden, or mismatched files are rejected.
 - Stored URLs are never public `/uploads` paths.
 
 ### GET `/media/{media_id}`
