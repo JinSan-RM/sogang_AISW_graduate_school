@@ -1206,7 +1206,7 @@ Compatibility resolver for a server-relative stable reference (`/api/media/{id}/
 
 Auth: short-lived signed URL
 
-The signature is scoped to the media object and expiry. Missing, expired, or altered signatures are rejected. `/uploads/*` is not mounted.
+The signature is scoped to the media object and expiry. Missing, expired, or altered signatures are rejected. `/uploads/*` is not mounted. When a legacy row declares Word/`.doc` but the stored OLE bytes carry the HWP document signature, the response uses the HWP MIME and an `.hwp` download filename without updating the legacy media row or renaming the stored file.
 
 ## 9. Events
 

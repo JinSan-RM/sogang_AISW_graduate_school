@@ -12,6 +12,7 @@ import pytest
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import select
 
+from app.models.audit import LegacyImportRecord
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
 
@@ -107,7 +108,10 @@ def _prepare_source(tmp_path: Path, rows: list[tuple[str, str, str]]) -> tuple[P
     return articles, source, public, private
 
 
-def test_selected_repair_corrects_hwp_and_restores_archive_text_notebook_attachments(api, tmp_path: Path) -> None:
+def test_selected_repair_preserves_existing_hwp_and_inserts_only_missing_attachments(
+    api,
+    tmp_path: Path,
+) -> None:
     repair = _repair_module()
     expected_articles = repair.QA_175_176_EXPECTED_ARTICLE_IDS
     extensions = {
@@ -120,6 +124,7 @@ def test_selected_repair_corrects_hwp_and_restores_archive_text_notebook_attachm
         "12359031": ".txt",
         "12358946": ".ipynb",
     }
+    stored_extensions = {**extensions, "10946091": ".doc"}
     rows = [
         (article_id, storage_id, extensions[storage_id])
         for storage_id, article_id in expected_articles.items()
@@ -162,7 +167,47 @@ def test_selected_repair_corrects_hwp_and_restores_archive_text_notebook_attachm
         db.flush()
         media.url = f"/api/media/{media.id}/access-url"
         db.add(PostAttachment(post_id=hwp_post.id, media_id=media.id, sort_order=0))
+        legacy_record = LegacyImportRecord(
+            source_file=articles.name,
+            source_sheet="첨부파일",
+            source_row=3,
+            entity_type="attachment",
+            source_id="12621604",
+            source_parent_id=expected_articles["12621604"],
+            source_hash="a" * 64,
+            action="archived",
+            status="archived",
+            target_table=None,
+            target_id=None,
+            reason="preserve-existing-ledger",
+            redacted_details={"preserve": True},
+        )
+        db.add(legacy_record)
         db.commit()
+        original_media_id = media.id
+        original_media_values = (
+            media.original_filename,
+            media.stored_filename,
+            media.content_type,
+            media.file_size,
+            media.url,
+            media.is_private,
+            media.status,
+        )
+        original_media_count = len(db.scalars(select(MediaAsset)).all())
+        original_attachment_count = len(db.scalars(select(PostAttachment)).all())
+        original_legacy_record_values = (
+            legacy_record.source_row,
+            legacy_record.source_parent_id,
+            legacy_record.source_hash,
+            legacy_record.action,
+            legacy_record.status,
+            legacy_record.target_table,
+            legacy_record.target_id,
+            legacy_record.reason,
+            legacy_record.redacted_details,
+            legacy_record.updated_at,
+        )
 
         result = repair.repair_legacy_attachments(
             db,
@@ -175,14 +220,28 @@ def test_selected_repair_corrects_hwp_and_restores_archive_text_notebook_attachm
             apply=True,
         )
 
-        imported = db.scalars(
-            select(MediaAsset)
-            .where(
-                MediaAsset.stored_filename.in_(
-                    [f"legacy-{storage_id}{extension}" for storage_id, extension in extensions.items()]
-                )
-            )
-        ).all()
+        selected_media = [
+            item
+            for item in db.scalars(select(MediaAsset)).all()
+            if item.stored_filename.startswith("legacy-")
+            and item.stored_filename.split(".", 1)[0].removeprefix("legacy-") in expected_articles
+        ]
+        db.refresh(media)
+        db.refresh(legacy_record)
+        final_media_count = len(db.scalars(select(MediaAsset)).all())
+        final_attachment_count = len(db.scalars(select(PostAttachment)).all())
+        final_legacy_record_values = (
+            legacy_record.source_row,
+            legacy_record.source_parent_id,
+            legacy_record.source_hash,
+            legacy_record.action,
+            legacy_record.status,
+            legacy_record.target_table,
+            legacy_record.target_id,
+            legacy_record.reason,
+            legacy_record.redacted_details,
+            legacy_record.updated_at,
+        )
 
     assert result["mode"] == "apply"
     assert result["selected_storage_ids"] == list(expected_articles)
@@ -192,13 +251,87 @@ def test_selected_repair_corrects_hwp_and_restores_archive_text_notebook_attachm
     } == expected_articles
     assert len({item["post_id"] for item in result["planned_files"]}) == 7
     assert all(item["post_status"] == "published" for item in result["planned_files"])
-    assert result["attachment_stats"] == {"created_attachments": 7, "updated_attachments": 1}
-    assert not old_hwp.exists()
-    assert len(imported) == 8
+    assert result["attachment_stats"] == {"created_attachments": 7}
+    assert result["validated_existing_storage_ids"] == ["10946091"]
+    assert old_hwp.exists()
+    assert old_hwp.read_bytes() == _source_bytes(".hwp")
+    assert media.id == original_media_id
+    assert (
+        media.original_filename,
+        media.stored_filename,
+        media.content_type,
+        media.file_size,
+        media.url,
+        media.is_private,
+        media.status,
+    ) == original_media_values
+    assert final_media_count == original_media_count + 7
+    assert final_attachment_count == original_attachment_count + 7
+    assert final_legacy_record_values == original_legacy_record_values
+    assert len(selected_media) == 8
     assert {
         item.stored_filename.removeprefix("legacy-").split(".", 1)[0]: Path(item.stored_filename).suffix
-        for item in imported
-    } == extensions
+        for item in selected_media
+    } == stored_extensions
+
+
+def test_selected_repair_rejects_preexisting_insert_target_without_updates(
+    api,
+    tmp_path: Path,
+) -> None:
+    repair = _repair_module()
+    rows = [("article-1", "12621604", ".zip")]
+    articles, source, public, private = _prepare_source(tmp_path, rows)
+    existing_path = public / "legacy-12621604.zip"
+    existing_bytes = _source_bytes(".zip")
+    existing_path.write_bytes(existing_bytes)
+
+    with api.session() as db:
+        post = db.get(Post, 3)
+        post.status = "published"
+        post.deleted_at = None
+        post.metadata_json = {"legacy_write_id": "article-1"}
+        media = MediaAsset(
+            owner_id=post.author_id,
+            original_filename="do-not-update.zip",
+            stored_filename=existing_path.name,
+            content_type="application/zip",
+            file_size=existing_path.stat().st_size,
+            url=None,
+            is_private=False,
+            status="ready",
+        )
+        db.add(media)
+        db.flush()
+        media.url = f"/api/media/{media.id}/access-url"
+        db.add(PostAttachment(post_id=post.id, media_id=media.id, sort_order=9))
+        db.commit()
+        media_id = media.id
+
+        with pytest.raises(ValueError, match="insert-only repair targets already exist: 12621604"):
+            repair.repair_legacy_attachments(
+                db,
+                articles_xlsx=articles,
+                attachment_source_dir=source,
+                public_media_dir=public,
+                private_media_dir=private,
+                storage_ids=("12621604",),
+                apply=True,
+            )
+
+        unchanged = db.get(MediaAsset, media_id)
+        assert unchanged.original_filename == "do-not-update.zip"
+        assert unchanged.stored_filename == "legacy-12621604.zip"
+        assert unchanged.content_type == "application/zip"
+        link = db.scalar(
+            select(PostAttachment).where(
+                PostAttachment.post_id == post.id,
+                PostAttachment.media_id == media_id,
+            )
+        )
+        assert link.sort_order == 9
+
+    assert existing_path.read_bytes() == existing_bytes
 
 
 @pytest.mark.parametrize("invalid_bytes", [b"", b"%PDF-1.7\nnot-a-zip", b"\x00\xff\x00\xff" * 64])
@@ -655,13 +788,13 @@ def test_failed_selected_repair_rolls_back_database_and_media_files(
         db.add(PostAttachment(post_id=post.id, media_id=media.id, sort_order=0))
         db.commit()
 
-        original_import = repair.import_attachments
+        original_insert = repair._insert_missing_attachments
 
-        def fail_after_import(*args, **kwargs):
-            original_import(*args, **kwargs)
+        def fail_after_insert(*args, **kwargs):
+            original_insert(*args, **kwargs)
             raise RuntimeError("injected post-import failure")
 
-        monkeypatch.setattr(repair, "import_attachments", fail_after_import)
+        monkeypatch.setattr(repair, "_insert_missing_attachments", fail_after_insert)
 
         with pytest.raises(RuntimeError, match="injected post-import failure"):
             repair.repair_legacy_attachments(

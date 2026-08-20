@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter
 from contextlib import contextmanager
 import hashlib
-import json
 import mimetypes
 import os
 from pathlib import Path
@@ -21,13 +20,13 @@ from app.legacy_import import (
     SourceRow,
     _detected_content_type,
     _legacy_attachment_filename,
-    import_attachments,
     index_local_attachment_files,
     load_article_workbook,
     load_reference_attachment_urls,
     value_as_int,
     value_as_text,
 )
+from app.media_service import media_access_reference
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
 
@@ -45,6 +44,7 @@ REPAIR_CONTENT_TYPES_BY_SOURCE_EXTENSION = {
     ".ipynb": frozenset({"application/x-ipynb+json", "application/json"}),
 }
 QA_175_176_REPAIR_SET = "qa-175-176"
+QA_175_EXISTING_HWP_STORAGE_ID = "10946091"
 QA_175_176_EXPECTED_ARTICLE_IDS = {
     "10946091": "6471114",
     "12621604": "6912953",
@@ -56,13 +56,6 @@ QA_175_176_EXPECTED_ARTICLE_IDS = {
     "12358946": "6829569",
 }
 STORAGE_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
-FATAL_ATTACHMENT_STATS = (
-    "failed_attachments",
-    "invalid_attachment_rows",
-    "missing_attachment_urls",
-    "missing_local_attachment_files",
-    "orphan_attachments",
-)
 
 
 def _normalized_storage_ids(storage_ids: Sequence[str]) -> tuple[str, ...]:
@@ -404,6 +397,145 @@ def _matching_media_files(root: Path, storage_ids: tuple[str, ...]) -> list[Path
     ]
 
 
+def _media_candidates_for_storage_id(
+    all_media: list[MediaAsset],
+    storage_id: str,
+) -> list[MediaAsset]:
+    return [
+        media
+        for media in all_media
+        if re.fullmatch(
+            rf"legacy-{re.escape(storage_id)}(?:\.[^.]*)?",
+            media.stored_filename,
+        )
+    ]
+
+
+def _validate_preserved_existing_attachments(
+    db: Session,
+    planned_files: list[dict[str, object]],
+    *,
+    public_media_dir: Path,
+    private_media_dir: Path,
+) -> list[str]:
+    all_media = db.scalars(select(MediaAsset)).all()
+    errors: list[str] = []
+    validated: list[str] = []
+    for planned in planned_files:
+        storage_id = str(planned["storage_id"])
+        candidates = _media_candidates_for_storage_id(all_media, storage_id)
+        if len(candidates) != 1:
+            errors.append(f"{storage_id}: expected one existing media row, found {len(candidates)}")
+            continue
+        media = candidates[0]
+        expected_post_id = int(planned["post_id"])
+        link = db.scalar(
+            select(PostAttachment).where(
+                PostAttachment.post_id == expected_post_id,
+                PostAttachment.media_id == media.id,
+            )
+        )
+        root = private_media_dir if media.is_private else public_media_dir
+        target = root.expanduser().resolve() / media.stored_filename
+        detected_content_type = (
+            _detected_content_type(target, media.content_type)
+            if target.is_file() and not target.is_symlink()
+            else ""
+        )
+        valid = (
+            Path(media.stored_filename).name == media.stored_filename
+            and media.status == "ready"
+            and media.is_private is bool(planned["expected_is_private"])
+            and link is not None
+            and target.is_file()
+            and not target.is_symlink()
+            and target.stat().st_size == int(planned["source_size"])
+            and media.file_size == int(planned["source_size"])
+            and _sha256_file(target) == planned["source_sha256"]
+            and detected_content_type == planned["detected_content_type"]
+        )
+        if not valid:
+            errors.append(f"{storage_id}: existing media does not match the preflight source")
+            continue
+        validated.append(storage_id)
+    if errors:
+        raise RuntimeError("Legacy attachment repair postcondition failed: " + "; ".join(errors))
+    return validated
+
+
+def _reject_existing_insert_targets(
+    db: Session,
+    storage_ids: tuple[str, ...],
+    *,
+    public_media_dir: Path,
+    private_media_dir: Path,
+) -> None:
+    all_media = db.scalars(select(MediaAsset)).all()
+    existing = []
+    for storage_id in storage_ids:
+        media_exists = bool(_media_candidates_for_storage_id(all_media, storage_id))
+        file_exists = any(
+            _matching_media_files(root.expanduser().resolve(), (storage_id,))
+            for root in (public_media_dir, private_media_dir)
+        )
+        if media_exists or file_exists:
+            existing.append(storage_id)
+    if existing:
+        raise ValueError("insert-only repair targets already exist: " + ", ".join(existing))
+
+
+def _insert_missing_attachments(
+    db: Session,
+    planned_files: list[dict[str, object]],
+    *,
+    local_files: dict[str, Path],
+    public_media_dir: Path,
+    private_media_dir: Path,
+) -> Counter:
+    stats: Counter = Counter()
+    for planned in planned_files:
+        storage_id = str(planned["storage_id"])
+        source = local_files[storage_id]
+        stored_filename = f"legacy-{storage_id}{planned['target_extension']}"
+        root = private_media_dir if bool(planned["expected_is_private"]) else public_media_dir
+        destination = root.expanduser().resolve() / stored_filename
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with source.open("rb") as source_handle, destination.open("xb") as destination_handle:
+            shutil.copyfileobj(source_handle, destination_handle, length=1024 * 1024)
+        if (
+            destination.stat().st_size != int(planned["source_size"])
+            or _sha256_file(destination) != planned["source_sha256"]
+        ):
+            raise RuntimeError(f"Copied legacy attachment differs from preflight source: {storage_id}")
+
+        post = db.get(Post, int(planned["post_id"]))
+        if post is None:
+            raise RuntimeError(f"Legacy attachment repair parent disappeared: {storage_id}")
+        media = MediaAsset(
+            owner_id=post.author_id,
+            original_filename=str(planned["expected_original_filename"]),
+            stored_filename=stored_filename,
+            content_type=str(planned["detected_content_type"]),
+            file_size=int(planned["source_size"]),
+            url=None,
+            is_private=bool(planned["expected_is_private"]),
+            status="ready",
+        )
+        db.add(media)
+        db.flush()
+        media.url = media_access_reference(media.id)
+        db.add(
+            PostAttachment(
+                post_id=post.id,
+                media_id=media.id,
+                sort_order=int(planned["workbook_sequence"]),
+            )
+        )
+        db.flush()
+        stats["created_attachments"] += 1
+    return stats
+
+
 @contextmanager
 def _restore_media_files_on_error(
     public_media_dir: Path,
@@ -477,7 +609,7 @@ def repair_legacy_attachments(
         maximum_bytes,
         reference_urls,
     )
-    import_rows = _rows_with_fallback_filenames(
+    _rows_with_fallback_filenames(
         rows,
         local_files,
         reference_urls,
@@ -489,40 +621,48 @@ def repair_legacy_attachments(
     ):
         raise ValueError("Legacy attachment repair plan changed after the confirmed dry-run.")
 
-    def import_selected() -> Counter:
-        return import_attachments(
-            db,
-            import_rows,
-            reference_urls,
-            posts,
-            public_media_dir=public_media_dir,
-            private_media_dir=private_media_dir,
-            attachment_source_dir=attachment_source_dir,
-            apply=apply,
-            skip_downloads=False,
-            maximum_bytes=maximum_bytes,
-        )
+    preserved_plans = [
+        planned
+        for planned in planned_files
+        if planned["storage_id"] == QA_175_EXISTING_HWP_STORAGE_ID
+    ]
+    insert_plans = [
+        planned
+        for planned in planned_files
+        if planned["storage_id"] != QA_175_EXISTING_HWP_STORAGE_ID
+    ]
+    insert_storage_ids = tuple(str(planned["storage_id"]) for planned in insert_plans)
+    if apply:
+        db.scalars(select(MediaAsset).with_for_update()).all()
+    validated_existing_storage_ids = _validate_preserved_existing_attachments(
+        db,
+        preserved_plans,
+        public_media_dir=public_media_dir,
+        private_media_dir=private_media_dir,
+    )
+    _reject_existing_insert_targets(
+        db,
+        insert_storage_ids,
+        public_media_dir=public_media_dir,
+        private_media_dir=private_media_dir,
+    )
 
     if not apply:
-        stats = import_selected()
+        stats = Counter({"insert_candidates": len(insert_plans)})
     else:
-        db.scalars(select(MediaAsset).with_for_update()).all()
         try:
             with _restore_media_files_on_error(
                 public_media_dir,
                 private_media_dir,
-                selected_storage_ids,
+                insert_storage_ids,
             ):
-                stats = import_selected()
-                fatal = {
-                    key: int(stats.get(key, 0))
-                    for key in FATAL_ATTACHMENT_STATS
-                    if stats.get(key, 0)
-                }
-                if fatal:
-                    raise RuntimeError(
-                        "Legacy attachment repair failed: " + json.dumps(fatal, sort_keys=True)
-                    )
+                stats = _insert_missing_attachments(
+                    db,
+                    insert_plans,
+                    local_files=local_files,
+                    public_media_dir=public_media_dir,
+                    private_media_dir=private_media_dir,
+                )
                 current_posts = _posts_by_source_id(db, rows, lock=False)
                 if {
                     source_id: post.id for source_id, post in current_posts.items()
@@ -534,7 +674,7 @@ def repair_legacy_attachments(
                     )
                 verified_paths = _validate_applied_results(
                     db,
-                    planned_files,
+                    insert_plans,
                     public_media_dir=public_media_dir,
                     private_media_dir=private_media_dir,
                 )
@@ -550,6 +690,7 @@ def repair_legacy_attachments(
     return {
         "mode": "apply" if apply else "dry-run",
         "selected_storage_ids": list(selected_storage_ids),
+        "validated_existing_storage_ids": validated_existing_storage_ids,
         "planned_files": planned_files,
         "attachment_stats": dict(sorted(stats.items())),
     }

@@ -95,6 +95,12 @@ class StoredUpload:
     path: Path
 
 
+@dataclass(frozen=True)
+class MediaDownload:
+    filename: str
+    content_type: str
+
+
 def _csv_values(value: str) -> frozenset[str]:
     return frozenset(item.strip().lower() for item in value.split(",") if item.strip())
 
@@ -171,6 +177,15 @@ def media_download_filename(media: MediaAsset) -> str:
         return filename
     extension = min(extensions, key=lambda value: (len(value), value))
     return f"{filename}{extension}"
+
+
+def resolve_media_download(media: MediaAsset, path: Path) -> MediaDownload:
+    content_type = normalize_content_type(media.content_type)
+    filename = media_download_filename(media)
+    if content_type == "application/msword" and _matches_declared_content(path, "application/x-hwp"):
+        filename = f"{Path(filename).stem}.hwp"
+        content_type = "application/x-hwp"
+    return MediaDownload(filename=filename, content_type=content_type)
 
 
 def normalize_original_filename(filename: str | None) -> str:

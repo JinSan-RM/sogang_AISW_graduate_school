@@ -278,7 +278,8 @@ The importer copies allowed files atomically, stores only stable `/api/media/{id
 references, links media to posts or FAQ records, and removes same-content duplicate links within a
 post. Legacy ZIP, text, and notebook files are validated and restored as member attachments. HWP
 OLE containers are identified by their internal signature so a misleading legacy Word MIME cannot
-rename them to `.doc`; an idempotent rerun also corrects an existing media row and stored filename.
+rename a newly imported HWP to `.doc`. The targeted production procedure below intentionally does
+not rewrite an already-linked legacy HWP row or stored filename.
 Legacy MP4 files remain in the private source archive and are listed as
 `archived_unsupported_attachments`; they are not exposed through the application media endpoint.
 Any unexpected missing, orphaned, invalid, or failed attachment rolls back the database transaction.
@@ -332,9 +333,11 @@ docker compose "${compose_args[@]}" run --rm --no-deps \
   backend python scripts/repair_legacy_attachments.py "${repair_args[@]}"
 ```
 
-Review the JSON plan and confirm it selects eight records, corrects the HWP file rather than
-creating a Word document, maps each record to the expected published post, and reports no missing,
-orphaned, invalid, oversized, or failed attachment. Copy both `target_fingerprint` and
+Review the JSON plan and confirm it selects eight source records, reports `10946091` under
+`validated_existing_storage_ids`, reports exactly seven `insert_candidates`, maps each record to
+the expected published post, and reports no missing, invalid, oversized, or pre-existing insert
+target. The existing HWP media row, post link, `.doc` storage name, MIME metadata, and file bytes
+must remain unchanged. Copy both `target_fingerprint` and
 `plan_fingerprint` from that exact dry-run. The first binds the confirmation to the production
 environment, full database endpoint identity, public API URL, and configured media roots. The
 second binds it to the eight storage IDs, source filenames/hashes/sizes, workbook parent mapping,
@@ -363,10 +366,11 @@ docker compose "${compose_args[@]}" run --rm --no-deps \
 
 The one-shot container runs as root only because the private migration tree is mode `0700`; its
 source mount is read-only. `DAC_OVERRIDE` permits traversal of that operator-owned tree and writes
-only to the already mounted media volumes, while apply's `CHOWN` restores selected output files to
-the upload-volume owner's UID/GID. Apply mode commits the selected database links and byte-for-byte
-verified media files as one guarded operation. A failure rolls the database transaction back and
-restores the selected media-file paths and ownership.
+only to the already mounted media volumes, while apply's `CHOWN` restores the seven new output files
+to the upload-volume owner's UID/GID. Apply mode copies those seven files byte-for-byte and inserts
+only seven `media_assets` rows and seven `post_attachments` links as one guarded operation. It does
+not update posts, the existing HWP row/link/file, or legacy import ledger rows. A failure rolls the
+database transaction back and removes/restores only the seven insert-target media paths.
 
 If apply exits nonzero, keep the coordinated backup, inspect the reported rollback condition, and
 do not proceed as if the repair succeeded. The apply transaction also locks the selected live post
@@ -379,8 +383,9 @@ active in the serving backend:
 bash scripts/production-ip.sh Up .env.production .env.production.worker
 ```
 
-Retain the coordinated backup until post `414` downloads as `.hwp` and all selected
-ZIP/TXT/IPYNB downloads have passed authenticated API and client checks.
+The serving backend detects the unchanged post `414` file as HWP and supplies an HWP MIME and
+`.hwp` download filename at response time. Retain the coordinated backup until that download and all
+seven added ZIP/TXT/IPYNB downloads have passed authenticated API and client checks.
 
 Verify the review database and both media directories before packaging them:
 

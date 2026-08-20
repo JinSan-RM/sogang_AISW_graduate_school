@@ -10,11 +10,11 @@ from app.media_service import (
     create_media_access_url,
     delete_stored_upload,
     media_access_reference,
-    media_download_filename,
     media_storage_path,
     migrate_private_asset,
     migrate_private_files as migrate_private_files_for_session,
     require_media_access,
+    resolve_media_download,
     resolve_media_reference,
     store_upload,
     validate_media_file_signature,
@@ -142,11 +142,13 @@ def _serve_signed_media(
     if not path.is_file():
         raise AppException(status_code=404, message="Media file not found.", code="NOT_FOUND")
 
+    download = resolve_media_download(media, path)
+
     response = FileResponse(
         path,
-        media_type=media.content_type,
-        filename=media_download_filename(media),
-        content_disposition_type="inline" if media.content_type.startswith("image/") else "attachment",
+        media_type=download.content_type,
+        filename=download.filename,
+        content_disposition_type="inline" if download.content_type.startswith("image/") else "attachment",
     )
     response.headers["Cache-Control"] = "private, no-store" if media.is_private else "private, max-age=60"
     response.headers["X-Content-Type-Options"] = "nosniff"

@@ -38,6 +38,11 @@ and one Jupyter-compatible JSON notebook.
   and filename error rather than a different Word document.
 - The other seven selected storage IDs had no matching `MediaAsset` row at snapshot time.
 
+The approved repair therefore preserves media row 603, its existing post link, and
+`legacy-10946091.doc` byte-for-byte. The serving backend corrects only its download response MIME
+and filename. The other seven sources are copied exactly and receive new media rows and post links;
+the procedure does not update existing posts or legacy import ledger rows.
+
 ## Reproducible check shape
 
 The operator used these read-only command shapes, with exact paths and IDs from the protected

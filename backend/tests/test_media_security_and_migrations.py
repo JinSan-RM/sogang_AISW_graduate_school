@@ -24,6 +24,8 @@ from app.routers import media as media_router
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"test-image-body"
 PDF_BYTES = b"%PDF-1.7\n% test document\n"
+HWP_BYTES = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + (b"\x00" * 128) + b"HWP Document File"
+OLE_DOCUMENT_BYTES = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + (b"\x00" * 256)
 
 
 class FakeInspector:
@@ -168,9 +170,44 @@ def _zip_bytes() -> bytes:
     return output.getvalue()
 
 
+def _openxml_bytes(marker: str) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types />")
+        archive.writestr(marker, "<document />")
+    return output.getvalue()
+
+
 @pytest.mark.parametrize(
     ("filename", "content_type", "body"),
     [
+        ("photo.jpg", "image/jpeg", b"\xff\xd8\xfftest-jpeg"),
+        ("photo.jpeg", "image/jpeg", b"\xff\xd8\xfftest-jpeg"),
+        ("photo.png", "image/png", PNG_BYTES),
+        ("photo.gif", "image/gif", b"GIF89atest-gif"),
+        ("photo.webp", "image/webp", b"RIFF\x04\x00\x00\x00WEBPtest"),
+        ("photo.heic", "image/heic", b"\x00\x00\x00\x18ftypheic"),
+        ("photo.heif", "image/heif", b"\x00\x00\x00\x18ftypheif"),
+        ("handout.pdf", "application/pdf", PDF_BYTES),
+        ("legacy.doc", "application/msword", OLE_DOCUMENT_BYTES),
+        ("legacy.xls", "application/vnd.ms-excel", OLE_DOCUMENT_BYTES),
+        ("legacy.ppt", "application/vnd.ms-powerpoint", OLE_DOCUMENT_BYTES),
+        (
+            "document.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            _openxml_bytes("word/document.xml"),
+        ),
+        (
+            "workbook.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _openxml_bytes("xl/workbook.xml"),
+        ),
+        (
+            "slides.pptx",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            _openxml_bytes("ppt/presentation.xml"),
+        ),
+        ("exam.hwp", "application/x-hwp", HWP_BYTES),
         ("exam-materials.zip", "application/zip", _zip_bytes()),
         ("exam-notes.txt", "text/plain", "시험 자료\n".encode()),
         (
@@ -180,7 +217,7 @@ def _zip_bytes() -> bytes:
         ),
     ],
 )
-def test_upload_accepts_archive_text_and_notebook_files(
+def test_upload_accepts_safe_images_documents_presentations_and_data_files(
     api,
     media_storage,
     filename: str,
@@ -246,6 +283,48 @@ def test_signed_download_adds_missing_extension_without_renaming_valid_files(
     assert response.status_code == 200
     assert response.content == body
     assert response.headers["content-disposition"] == f'attachment; filename="{expected_filename}"'
+
+
+def test_signed_download_corrects_legacy_hwp_response_without_mutating_media(
+    api,
+    media_storage,
+) -> None:
+    public_directory, _ = media_storage
+    public_directory.mkdir(parents=True, exist_ok=True)
+    stored_filename = "legacy-10946091.doc"
+    stored_path = public_directory / stored_filename
+    stored_path.write_bytes(HWP_BYTES)
+    with api.session() as db:
+        media = MediaAsset(
+            owner_id=1,
+            original_filename="legacy-10946091",
+            stored_filename=stored_filename,
+            content_type="application/msword",
+            file_size=len(HWP_BYTES),
+            url=None,
+            is_private=False,
+            status="ready",
+        )
+        db.add(media)
+        db.flush()
+        media.url = f"/api/media/{media.id}/access-url"
+        media_id = media.id
+        db.commit()
+
+    access = api.client.get(f"/api/media/{media_id}/access-url", headers=api.headers["admin"])
+    response = _signed_file_response(api, access)
+
+    assert response.status_code == 200
+    assert response.content == HWP_BYTES
+    assert response.headers["content-type"] == "application/x-hwp"
+    assert response.headers["content-disposition"] == 'attachment; filename="legacy-10946091.hwp"'
+    assert stored_path.read_bytes() == HWP_BYTES
+    with api.session() as db:
+        unchanged = db.get(MediaAsset, media_id)
+        assert unchanged.original_filename == "legacy-10946091"
+        assert unchanged.stored_filename == stored_filename
+        assert unchanged.content_type == "application/msword"
+        assert unchanged.file_size == len(HWP_BYTES)
 
 
 def test_upload_stream_validation_and_cleanup(api, media_storage, monkeypatch: pytest.MonkeyPatch) -> None:
