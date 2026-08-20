@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import BoardPostsScreen from "./board/[boardId]";
 import LoadingState from "../../components/LoadingState";
 import { useBoardsQuery } from "../../hooks/useApi";
+import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 
 const COLORS = {
   primary: "#2761FF",
@@ -12,6 +13,12 @@ const COLORS = {
 };
 
 export default function CommunityScreen() {
+  const resetRevision = useTabRootResetStore((state) => state.revisions.community);
+
+  return <CommunityContent key={resetRevision} />;
+}
+
+function CommunityContent() {
   const { data, isLoading, isError, refetch } = useBoardsQuery();
   const boards = data?.data.flatMap((group) => group.boards) ?? [];
   const initialBoard =

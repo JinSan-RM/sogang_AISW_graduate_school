@@ -2,6 +2,7 @@ import { Tabs, usePathname } from "expo-router";
 
 import { CommunityTabIcon, CouncilTabIcon, HomeTabIcon, NoticeTabIcon, ParticipationTabIcon } from "../../components/icons";
 import { MyPageDrawerProvider } from "../../components/MyPageDrawer";
+import { requestTabRootReset, shouldRequestTabRootReset } from "../../stores/tabRootResetStore";
 import { shouldHideTabBar } from "../../utils/tabBarVisibility";
 
 const TAB_BAR_STYLE = {
@@ -39,6 +40,13 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="notices"
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              if (shouldRequestTabRootReset(navigation.isFocused())) {
+                requestTabRootReset("notices");
+              }
+            },
+          })}
           options={{
             title: "공지사항",
             tabBarIcon: ({ color }) => <NoticeTabIcon color={color} size={22} />,
@@ -46,6 +54,13 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="community"
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              if (shouldRequestTabRootReset(navigation.isFocused())) {
+                requestTabRootReset("community");
+              }
+            },
+          })}
           options={{
             title: "커뮤니티",
             tabBarIcon: ({ color }) => <CommunityTabIcon color={color} size={22} />,
@@ -53,6 +68,13 @@ export default function TabsLayout() {
         />
         <Tabs.Screen
           name="participation"
+          listeners={({ navigation }) => ({
+            tabPress: () => {
+              if (shouldRequestTabRootReset(navigation.isFocused())) {
+                requestTabRootReset("participation");
+              }
+            },
+          })}
           options={{
             title: "참여활동",
             tabBarIcon: ({ color }) => <ParticipationTabIcon color={color} size={22} />,

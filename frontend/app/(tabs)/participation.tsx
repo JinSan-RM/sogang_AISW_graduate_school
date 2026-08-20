@@ -9,6 +9,7 @@ import BoardPostsScreen from "./board/[boardId]";
 import LoadingState from "../../components/LoadingState";
 import { SearchIcon } from "../../components/icons";
 import { useBoardsQuery } from "../../hooks/useApi";
+import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 import type { Board } from "../../types";
 
 const COLORS = {
@@ -116,6 +117,12 @@ function BoardRow({ board }: { board: Board }) {
 }
 
 export default function ParticipationScreen() {
+  const resetRevision = useTabRootResetStore((state) => state.revisions.participation);
+
+  return <ParticipationContent key={resetRevision} />;
+}
+
+function ParticipationContent() {
   const insets = useSafeAreaInsets();
   const [activeGroup, setActiveGroup] = useState<GroupKey>("club");
   const [mode, setMode] = useState<ModeKey>("guide");

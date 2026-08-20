@@ -8,6 +8,7 @@ import { useBoardsQuery } from "../../hooks/useApi";
 import LoadingState from "../../components/LoadingState";
 import NoticeRow, { type NoticeRowModel } from "../../components/NoticeRow";
 import { useMultiBoardPosts } from "../../hooks/usePosts";
+import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { NOTICES_TAB_ROUTE } from "../../utils/appRoutes";
@@ -81,6 +82,12 @@ function EmptyState({ title, description }: { title: string; description?: strin
 }
 
 export default function NoticesScreen() {
+  const resetRevision = useTabRootResetStore((state) => state.revisions.notices);
+
+  return <NoticesContent key={resetRevision} />;
+}
+
+function NoticesContent() {
   const insets = useSafeAreaInsets();
   const [selectedFilter, setSelectedFilter] = useState<NoticeFilter>("all");
   const { data: boardData, isLoading: boardsLoading, isError: boardsError, isRefetching: boardsRefetching, refetch: refetchBoards } = useBoardsQuery();
