@@ -636,14 +636,14 @@ def test_unsupported_legacy_video_is_archived_without_exposing_media(api, tmp_pa
     public_dir = tmp_path / "unsupported-public"
     private_dir = tmp_path / "unsupported-private"
     source_dir.mkdir()
-    (source_dir / "12621604.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42legacy-video")
+    (source_dir / "unsupported-video.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42legacy-video")
     row = SourceRow(
         "board_articles_ver2.xlsx",
         "첨부파일",
         2,
         {
             "writeId": "article-1",
-            "fileStorageId": "12621604",
+            "fileStorageId": "unsupported-video",
             "subject": "source.mp4",
             "sequence": 0,
         },
@@ -672,7 +672,7 @@ def test_unsupported_legacy_video_is_archived_without_exposing_media(api, tmp_pa
         record = db.scalar(
             select(LegacyImportRecord).where(
                 LegacyImportRecord.entity_type == "attachment",
-                LegacyImportRecord.source_id == "12621604",
+                LegacyImportRecord.source_id == "unsupported-video",
             )
         )
 

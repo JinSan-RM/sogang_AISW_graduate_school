@@ -21,6 +21,34 @@ RFC1918_NETWORKS = (
     IPv4Network("172.16.0.0/12"),
     IPv4Network("192.168.0.0/16"),
 )
+REQUIRED_DEPLOYMENT_MEDIA_EXTENSIONS = frozenset(
+    {
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
+        ".pdf", ".doc", ".xls", ".ppt", ".docx", ".xlsx", ".pptx",
+        ".hwp", ".zip", ".txt", ".ipynb",
+    }
+)
+REQUIRED_DEPLOYMENT_MEDIA_MIME_TYPES = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+        "application/pdf",
+        "application/msword",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/x-hwp",
+        "application/zip",
+        "text/plain",
+        "application/x-ipynb+json",
+    }
+)
 
 
 class Settings(BaseSettings):
@@ -371,6 +399,20 @@ class Settings(BaseSettings):
         if not public_media.is_absolute() or not private_media.is_absolute() or public_media == private_media:
             raise RuntimeError(
                 "Deployment MEDIA_UPLOAD_DIR and MEDIA_PRIVATE_UPLOAD_DIR must be distinct absolute durable paths."
+            )
+        configured_extensions = frozenset(self._csv_values(self.media_allowed_extensions))
+        missing_extensions = sorted(REQUIRED_DEPLOYMENT_MEDIA_EXTENSIONS - configured_extensions)
+        if missing_extensions:
+            raise RuntimeError(
+                "Deployment MEDIA_ALLOWED_EXTENSIONS is missing launch attachment types: "
+                + ", ".join(missing_extensions)
+            )
+        configured_mime_types = frozenset(self._csv_values(self.media_allowed_mime_types))
+        missing_mime_types = sorted(REQUIRED_DEPLOYMENT_MEDIA_MIME_TYPES - configured_mime_types)
+        if missing_mime_types:
+            raise RuntimeError(
+                "Deployment MEDIA_ALLOWED_MIME_TYPES is missing launch attachment types: "
+                + ", ".join(missing_mime_types)
             )
         self._require_deployment_email("SUPPORT_EMAIL", self.support_email)
         self._require_deployment_public_https_url("PUBLIC_API_URL", self.public_api_url)

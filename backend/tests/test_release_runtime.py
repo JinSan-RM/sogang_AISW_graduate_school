@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from dotenv import dotenv_values
 import pytest
 from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session
@@ -64,6 +65,20 @@ def test_local_runtime_environments_keep_development_defaults(environment: str) 
 
 def test_complete_production_runtime_is_accepted() -> None:
     production_settings().validate_runtime()
+
+
+def test_production_environment_example_keeps_archive_text_and_notebook_uploads() -> None:
+    example_path = Path(__file__).resolve().parents[2] / ".env.production.example"
+    configured = dotenv_values(example_path)
+    extensions = Settings._csv_values(configured.get("MEDIA_ALLOWED_EXTENSIONS") or "")
+    mime_types = Settings._csv_values(configured.get("MEDIA_ALLOWED_MIME_TYPES") or "")
+
+    assert {".zip", ".txt", ".ipynb"}.issubset(extensions)
+    assert {
+        "application/zip",
+        "text/plain",
+        "application/x-ipynb+json",
+    }.issubset(mime_types)
 
 
 def test_public_ipv4_production_runtime_is_accepted() -> None:
@@ -251,6 +266,14 @@ def test_unknown_runtime_environment_cannot_bypass_deployment_validation() -> No
         (
             {"media_private_upload_dir": PRODUCTION_PUBLIC_MEDIA},
             "MEDIA_UPLOAD_DIR",
+        ),
+        (
+            {"media_allowed_extensions": ".jpg,.jpeg,.png,.pdf,.doc,.docx,.hwp"},
+            "MEDIA_ALLOWED_EXTENSIONS",
+        ),
+        (
+            {"media_allowed_mime_types": "image/jpeg,image/png,application/pdf,application/msword,application/x-hwp"},
+            "MEDIA_ALLOWED_MIME_TYPES",
         ),
         ({"support_email": None}, "SUPPORT_EMAIL"),
         ({"support_email": "replace-with-support@example.invalid"}, "SUPPORT_EMAIL"),

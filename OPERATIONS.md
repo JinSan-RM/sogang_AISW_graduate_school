@@ -283,6 +283,105 @@ Legacy MP4 files remain in the private source archive and are listed as
 `archived_unsupported_attachments`; they are not exposed through the application media endpoint.
 Any unexpected missing, orphaned, invalid, or failed attachment rolls back the database transaction.
 
+### Targeted QA 175/176 legacy attachment repair
+
+Use the targeted repair command for a small set of legacy files that was omitted from an existing
+production import. Do not rerun the full legacy importer or restore an old database over the live
+database. Before applying, create one coordinated PostgreSQL, public-media, and private-media backup
+as described in [Backup prerequisites and consistency](#backup-prerequisites-and-consistency).
+
+First update the untracked `.env.production` allowlists from the current
+`.env.production.example`, and keep the verified raw migration input at
+`/srv/aisw-import/incoming` readable only by the operator. Build the current backend image and run
+the production runtime validation before the dry-run:
+
+```bash
+bash scripts/production-ip.sh Config .env.production .env.production.worker
+```
+
+The current QA recovery set, rechecked read-only against the server source files and workbook on
+2026-08-20, is recorded with storage-to-article/post mappings, sizes, and SHA-256 hashes in
+[`docs/qa/QA_175_176_SERVER_SOURCE_VERIFICATION.md`](docs/qa/QA_175_176_SERVER_SOURCE_VERIFICATION.md):
+
+- HWP: `10946091`
+- ZIP: `12621604`, `12621345`, `12358989`, `10946120`
+- text: `12359030`, `12359031`
+- Jupyter notebook: `12358946`
+
+The archived MP4 storage IDs are intentionally excluded. Run a dry-run from the repository root
+against the deployed backend image. The source directory is mounted read-only and the command
+selects only the explicitly listed storage IDs:
+
+```bash
+compose_args=(
+  --env-file .env.production
+  -f docker-compose.yml
+  -f docker-compose.production.example.yml
+  -f docker-compose.ip.yml
+)
+repair_args=(
+  --articles-xlsx /migration/input/board_articles_ver3.xlsx
+  --legacy-reference-xlsx '/migration/input/board_articles(구분).xlsx'
+  --attachment-source-dir /migration/input/extracted/attachments_ver2/attachments
+  --repair-set qa-175-176
+)
+
+docker compose "${compose_args[@]}" run --rm --no-deps \
+  --user 0:0 --cap-add DAC_OVERRIDE \
+  --volume /srv/aisw-import/incoming:/migration/input:ro \
+  backend python scripts/repair_legacy_attachments.py "${repair_args[@]}"
+```
+
+Review the JSON plan and confirm it selects eight records, corrects the HWP file rather than
+creating a Word document, maps each record to the expected published post, and reports no missing,
+orphaned, invalid, oversized, or failed attachment. Copy both `target_fingerprint` and
+`plan_fingerprint` from that exact dry-run. The first binds the confirmation to the production
+environment, full database endpoint identity, public API URL, and configured media roots. The
+second binds it to the eight storage IDs, source filenames/hashes/sizes, workbook parent mapping,
+live post IDs, and selected output directories.
+
+Stop every backend writer before apply. The one-shot repair still connects to the running database
+service, while public API and notification-worker writes remain stopped:
+
+```bash
+docker compose "${compose_args[@]}" stop backend notification-worker
+```
+
+Then apply once:
+
+```bash
+expected_target_fingerprint='<copy the 64-character target_fingerprint from the dry-run JSON>'
+expected_plan_fingerprint='<copy the 64-character plan_fingerprint from the dry-run JSON>'
+docker compose "${compose_args[@]}" run --rm --no-deps \
+  --user 0:0 --cap-add DAC_OVERRIDE --cap-add CHOWN \
+  --volume /srv/aisw-import/incoming:/migration/input:ro \
+  backend python scripts/repair_legacy_attachments.py "${repair_args[@]}" \
+  --apply --expected-database-name aisw \
+  --expected-target-fingerprint "$expected_target_fingerprint" \
+  --expected-plan-fingerprint "$expected_plan_fingerprint"
+```
+
+The one-shot container runs as root only because the private migration tree is mode `0700`; its
+source mount is read-only. `DAC_OVERRIDE` permits traversal of that operator-owned tree and writes
+only to the already mounted media volumes, while apply's `CHOWN` restores selected output files to
+the upload-volume owner's UID/GID. Apply mode commits the selected database links and byte-for-byte
+verified media files as one guarded operation. A failure rolls the database transaction back and
+restores the selected media-file paths and ownership.
+
+If apply exits nonzero, keep the coordinated backup, inspect the reported rollback condition, and
+do not proceed as if the repair succeeded. The apply transaction also locks the selected live post
+and existing media rows until commit so a concurrent delete/update cannot invalidate its checks.
+
+Finally recreate the live services so the updated allowlists and startup fail-closed validation are
+active in the serving backend:
+
+```bash
+bash scripts/production-ip.sh Up .env.production .env.production.worker
+```
+
+Retain the coordinated backup until post `414` downloads as `.hwp` and all selected
+ZIP/TXT/IPYNB downloads have passed authenticated API and client checks.
+
 Verify the review database and both media directories before packaging them:
 
 ```powershell
