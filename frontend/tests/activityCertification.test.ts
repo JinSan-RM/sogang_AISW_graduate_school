@@ -5,6 +5,7 @@ import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   CURRENT_CLUB_NAMES,
   activityBankAccountFieldState,
+  activityCertificationFormLabels,
   activityCertificationBadgeLabel,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
@@ -12,6 +13,7 @@ import {
   currentClubActivitySourcePosts,
   loadAllPublishedActivitySourcePosts,
   loadPublishedActivitySourcePosts,
+  shouldShowActivityCertificationBadge,
   activitySourcePostIdFromMetadata,
   buildActivityCertificationMetadata,
   formatActivityParticipant,
@@ -20,6 +22,23 @@ import {
 test("참가자 안내는 미납자·졸업자 제외와 본인 추가를 설명한다", () => {
   assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /원우회비 미납자, 졸업자는 검색되지 않아요/);
   assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도 검색해서 추가해주세요/);
+});
+
+test("스터디 활동 인증 목록은 카드 배지를 숨긴다", () => {
+  assert.equal(shouldShowActivityCertificationBadge("study-activity"), false);
+});
+
+test("동아리와 네트워킹 활동 인증 목록은 카드 배지를 유지한다", () => {
+  assert.equal(shouldShowActivityCertificationBadge("club-activity"), true);
+  assert.equal(shouldShowActivityCertificationBadge("networking-activity"), true);
+});
+
+test("활동인증 폼은 사진과 소감의 고정 라벨을 제공한다", () => {
+  assert.deepEqual(activityCertificationFormLabels("activity_certification"), {
+    photo: "활동 사진",
+    reflection: "활동 소감",
+  });
+  assert.equal(activityCertificationFormLabels("mutual_aid"), null);
 });
 
 test("활동 인증 작성 계좌는 필수이고 수정 계좌는 새 값만 선택 입력한다", () => {

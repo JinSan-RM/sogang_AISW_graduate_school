@@ -157,6 +157,21 @@ export function activityCertificationBadgeLabel(post: ActivityBadgePost, boardSl
     ?? "동아리 활동 인증";
 }
 
+export function shouldShowActivityCertificationBadge(boardSlug?: string): boolean {
+  return boardSlug !== "study-activity";
+}
+
+export function activityCertificationFormLabels(boardType?: string): {
+  photo: string;
+  reflection: string;
+} | null {
+  if (boardType !== "activity_certification") return null;
+  return {
+    photo: "활동 사진",
+    reflection: "활동 소감",
+  };
+}
+
 export function activitySourcePostFilters(): { sort: "latest"; status: "published" } {
   return { sort: "latest", status: "published" };
 }

@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   calendarMonthFromDotDate,
   formatDotDate,
+  isActivityCertificationDateAllowed,
   isCalendarDateWithinBounds,
+  isCalendarMonthAfterMaximum,
   isMutualAidEventDateAllowed,
   maximumActivityCertificationDate,
   minimumMutualAidEventDate,
@@ -60,4 +62,22 @@ test("활동인증 달력은 오늘과 과거만 선택할 수 있다", () => {
   assert.equal(isCalendarDateWithinBounds("2026.08.10", { maximumDate }), true);
   assert.equal(isCalendarDateWithinBounds("2026.08.11", { maximumDate }), true);
   assert.equal(isCalendarDateWithinBounds("2026.08.12", { maximumDate }), false);
+});
+
+test("활동인증 저장은 한국시간 기준 오늘과 과거만 허용한다", () => {
+  const now = new Date("2026-08-01T15:00:00Z");
+
+  assert.equal(isActivityCertificationDateAllowed("2026.08.01", now), true);
+  assert.equal(isActivityCertificationDateAllowed("2026.08.02", now), true);
+  assert.equal(isActivityCertificationDateAllowed("2026.08.03", now), false);
+  assert.equal(isActivityCertificationDateAllowed("2026-08-02", now), false);
+  assert.equal(isActivityCertificationDateAllowed("2026.02.30", now), false);
+});
+
+test("활동인증 달력은 오늘이 속한 달 다음으로 이동하지 않는다", () => {
+  assert.equal(isCalendarMonthAfterMaximum(2026, 6, "2026.08.11"), false);
+  assert.equal(isCalendarMonthAfterMaximum(2026, 7, "2026.08.11"), false);
+  assert.equal(isCalendarMonthAfterMaximum(2026, 8, "2026.08.11"), true);
+  assert.equal(isCalendarMonthAfterMaximum(2027, 0, "2026.08.11"), true);
+  assert.equal(isCalendarMonthAfterMaximum(2026, 8, undefined), false);
 });

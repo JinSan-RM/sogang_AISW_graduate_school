@@ -15,7 +15,7 @@ import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
 import { boardParentRoute, boardRoute, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
-import { activityCertificationBadgeLabel } from "../../../utils/activityCertification";
+import { activityCertificationBadgeLabel, shouldShowActivityCertificationBadge } from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import {
   cohortLeaderFormsFromMetadata,
@@ -838,9 +838,11 @@ function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem;
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.activityThumb} />
       )}
       <View style={styles.activityBody}>
-        <View style={styles.activityPill}>
-          <Text style={styles.activityPillText}>{activityCertificationBadgeLabel(post, boardSlug)}</Text>
-        </View>
+        {shouldShowActivityCertificationBadge(boardSlug) ? (
+          <View style={styles.activityPill}>
+            <Text style={styles.activityPillText}>{activityCertificationBadgeLabel(post, boardSlug)}</Text>
+          </View>
+        ) : null}
         {preview ? (
           <Text numberOfLines={2} style={styles.activityPreview}>
             {preview}

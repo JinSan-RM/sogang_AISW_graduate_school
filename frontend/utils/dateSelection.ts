@@ -90,6 +90,23 @@ export function isCalendarDateWithinBounds(
   return true;
 }
 
+export function isCalendarMonthAfterMaximum(
+  year: number,
+  monthIndex: number,
+  maximumDate?: string,
+): boolean {
+  const maximum = calendarDateParts(maximumDate);
+  if (!maximum) return false;
+  return year > maximum.year || (year === maximum.year && monthIndex > maximum.month - 1);
+}
+
+export function isActivityCertificationDateAllowed(value?: string, now = new Date()): boolean {
+  if (!value) return false;
+  return isCalendarDateWithinBounds(value, {
+    maximumDate: maximumActivityCertificationDate(now),
+  });
+}
+
 export function isMutualAidEventDateAllowed(value?: string, now = new Date()): boolean {
   const parsed = calendarDateParts(value);
   if (!parsed) return false;

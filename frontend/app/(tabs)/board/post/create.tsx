@@ -21,6 +21,7 @@ import type { MediaAsset, PostListItem } from "../../../../types";
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   activityBankAccountFieldState,
+  activityCertificationFormLabels,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
@@ -34,7 +35,9 @@ import { formatBoardDate } from "../../../../utils/dateFormat";
 import {
   calendarMonthFromDotDate,
   formatDotDate,
+  isActivityCertificationDateAllowed,
   isCalendarDateWithinBounds,
+  isCalendarMonthAfterMaximum,
   isMutualAidEventDateAllowed,
   maximumActivityCertificationDate,
   minimumMutualAidEventDate,
@@ -137,10 +140,6 @@ function clean(value?: string) {
   return trimmed || undefined;
 }
 
-function todayDotDate() {
-  return formatDotDate(new Date());
-}
-
 const EVIDENCE_MODES = [
   { key: "file" as const, label: "파일 첨부" },
   { key: "link" as const, label: "링크 첨부" },
@@ -239,7 +238,11 @@ function InlineCalendar({
   onSelect: (dateStr: string) => void;
 }) {
   const [view, setView] = useState(() => {
-    const month = calendarMonthFromDotDate(value ?? minimumDate);
+    const month = calendarMonthFromDotDate(value ?? minimumDate ?? maximumDate);
+    if (isCalendarMonthAfterMaximum(month.year, month.monthIndex, maximumDate)) {
+      const maximumMonth = calendarMonthFromDotDate(maximumDate);
+      return { y: maximumMonth.year, m: maximumMonth.monthIndex };
+    }
     return { y: month.year, m: month.monthIndex };
   });
 
@@ -252,6 +255,8 @@ function InlineCalendar({
   const selected = value ?? "";
   const goPrev = () => setView((v) => (v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }));
   const goNext = () => setView((v) => (v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 }));
+  const nextView = view.m === 11 ? { y: view.y + 1, m: 0 } : { y: view.y, m: view.m + 1 };
+  const isNextDisabled = isCalendarMonthAfterMaximum(nextView.y, nextView.m, maximumDate);
 
   return (
     <View style={styles.calCard}>
@@ -260,8 +265,14 @@ function InlineCalendar({
           <BackIcon size={20} color={COLORS.text} />
         </Pressable>
         <Text style={styles.calTitle}>{`${view.y}년 ${view.m + 1}월`}</Text>
-        <Pressable hitSlop={10} onPress={goNext} style={styles.calNav}>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.text} />
+        <Pressable
+          accessibilityState={{ disabled: isNextDisabled }}
+          disabled={isNextDisabled}
+          hitSlop={10}
+          onPress={goNext}
+          style={[styles.calNav, isNextDisabled ? styles.calNavDisabled : null]}
+        >
+          <Ionicons name="chevron-forward" size={20} color={isNextDisabled ? COLORS.subtle : COLORS.text} />
         </Pressable>
       </View>
       <View style={styles.calWeekRow}>
@@ -348,6 +359,7 @@ export default function PostCreateScreen() {
   const boardType = board?.board_type ?? fallbackBoardType;
   const isSuggestion = boardType === "suggestion";
   const isActivity = boardType === "activity_certification";
+  const activityFormLabels = activityCertificationFormLabels(boardType);
   const isMutualAid = boardType === "mutual_aid";
   const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
@@ -397,7 +409,7 @@ export default function PostCreateScreen() {
       title: params.title ?? "",
       category: params.category ?? "",
       content: params.content ?? "",
-      activityDate: todayDotDate(),
+      activityDate: maximumActivityCertificationDate(),
       participants: "",
       bankAccount: "",
       eventDate: "",
@@ -613,6 +625,12 @@ export default function PostCreateScreen() {
         requireValue(values.participants, "참가자") ||
         (bankAccountField.required && requireValue(values.bankAccount, "입금 계좌"))
       ) {
+        return;
+      }
+      if (!isActivityCertificationDateAllowed(values.activityDate)) {
+        const message = "오늘 이후 날짜는 선택할 수 없어요.";
+        setError("activityDate", { message });
+        setFormNotice(createFormNotice("활동일", message));
         return;
       }
       const participantError = activityParticipantSelectionError(selectedParticipants, existingPost?.metadata);
@@ -847,57 +865,63 @@ export default function PostCreateScreen() {
               )}
             />
 
-            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.activityPhotoBox, isUploading ? styles.attachButtonDisabled : null]}>
-              {imageAttachments.length > 0 ? (
-                <View style={styles.activityPhotoGrid}>
-                  {imageAttachments.map((attachment) => {
-                    return (
-                      <MediaImageBackground key={attachment.id} media={attachment} imageStyle={styles.activityPhotoTileImage} style={styles.activityPhotoTile}>
-                        <Pressable
-                          accessibilityLabel={`${attachment.original_filename} 삭제`}
-                          hitSlop={6}
-                          onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                          style={styles.activityPhotoRemove}
-                        >
-                          <CloseIcon size={12} color="#FFFFFF" />
-                        </Pressable>
-                      </MediaImageBackground>
-                    );
-                  })}
-                  <View style={styles.activityPhotoAddTile}>
-                    <Ionicons name="add" size={20} color={COLORS.subtle} />
+            <View style={styles.activityFieldGroup}>
+              <Text style={styles.activityFieldTitle}>{activityFormLabels?.photo}</Text>
+              <Pressable disabled={isUploading} onPress={selectFile} style={[styles.activityPhotoBox, isUploading ? styles.attachButtonDisabled : null]}>
+                {imageAttachments.length > 0 ? (
+                  <View style={styles.activityPhotoGrid}>
+                    {imageAttachments.map((attachment) => {
+                      return (
+                        <MediaImageBackground key={attachment.id} media={attachment} imageStyle={styles.activityPhotoTileImage} style={styles.activityPhotoTile}>
+                          <Pressable
+                            accessibilityLabel={`${attachment.original_filename} 삭제`}
+                            hitSlop={6}
+                            onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                            style={styles.activityPhotoRemove}
+                          >
+                            <CloseIcon size={12} color="#FFFFFF" />
+                          </Pressable>
+                        </MediaImageBackground>
+                      );
+                    })}
+                    <View style={styles.activityPhotoAddTile}>
+                      <Ionicons name="add" size={20} color={COLORS.subtle} />
+                    </View>
                   </View>
-                </View>
-              ) : (
-                <>
-                  <CameraAddIcon size={26} />
-                  <Text style={styles.activityPhotoText}>
-                    {isUploading ? `업로드 ${uploadProgress || 0}%` : "활동 사진을 추가해주세요"}
-                  </Text>
-                </>
-              )}
-            </Pressable>
+                ) : (
+                  <>
+                    <CameraAddIcon size={26} />
+                    <Text style={styles.activityPhotoText}>
+                      {isUploading ? `업로드 ${uploadProgress || 0}%` : "활동 사진을 추가해주세요"}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
 
-            <Controller
-              control={control}
-              name="content"
-              render={({ field, fieldState }) => (
-                <FormTextInput
-                  multiline
-                  onChangeText={field.onChange}
-                  placeholder="활동에 대한 소감을 남겨주세요"
-                  placeholderTextColor="#A6ACB7"
-                  style={[styles.input, styles.activityFeedbackInput, fieldState.error ? styles.inputError : null]}
-                  textAlignVertical="top"
-                  value={field.value}
-                />
-              )}
-            />
+            <View style={styles.activityFieldGroup}>
+              <Text style={styles.activityFieldTitle}>{activityFormLabels?.reflection}</Text>
+              <Controller
+                control={control}
+                name="content"
+                render={({ field, fieldState }) => (
+                  <FormTextInput
+                    multiline
+                    onChangeText={field.onChange}
+                    placeholder="활동에 대한 소감을 남겨주세요"
+                    placeholderTextColor="#A6ACB7"
+                    style={[styles.input, styles.activityFeedbackInput, fieldState.error ? styles.inputError : null]}
+                    textAlignVertical="top"
+                    value={field.value}
+                  />
+                )}
+              />
+            </View>
 
             <Controller
               control={control}
               name="activityDate"
-              render={({ field }) => (
+              render={({ field, fieldState }) => (
                 <>
                   <Pressable
                     accessibilityHint="달력에서 실제 활동 날짜를 선택합니다"
@@ -915,10 +939,12 @@ export default function PostCreateScreen() {
                       value={field.value}
                       onSelect={(dateStr) => {
                         field.onChange(dateStr);
+                        clearErrors("activityDate");
                         setDatePickerOpen(false);
                       }}
                     />
                   ) : null}
+                  {fieldState.error?.message ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
                 </>
               )}
             />
@@ -2406,6 +2432,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   calNav: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  calNavDisabled: { opacity: 0.45 },
   calTitle: { color: COLORS.text, fontSize: 16, fontWeight: "600" },
   calWeekRow: { flexDirection: "row", marginBottom: 4 },
   calWeekday: { flex: 1, textAlign: "center", color: COLORS.subtle, fontSize: 12, fontWeight: "500" },
