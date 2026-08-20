@@ -9,6 +9,7 @@ import {
   boardParentRoute,
   navigateFromPostDetail,
   postDetailBackDecision,
+  postCreateCompletionRoute,
   postDetailRoute,
   postDetailReturnRoute,
   routeBoardId,
@@ -35,6 +36,18 @@ test("게시판 목록에서 연 상세 글에는 원래 게시판 ID를 기록�
     postDetailRoute(91, 16, PARTICIPATION_TAB_ROUTE),
     "/board/post/91?fromBoardId=16&returnTo=%2F(tabs)%2Fparticipation",
   );
+});
+
+test("활동 인증 작성 완료 상세는 참여활동 복귀 정보를 보존한다", () => {
+  assert.equal(
+    postCreateCompletionRoute("activity_certification", 170, 12),
+    "/board/post/170?fromBoardId=12&returnTo=%2F(tabs)%2Fparticipation",
+  );
+});
+
+test("상조회와 건의 작성 완료는 기존 게시판 복귀 경로를 유지한다", () => {
+  assert.equal(postCreateCompletionRoute("mutual_aid", 170, 12), "/board/12");
+  assert.equal(postCreateCompletionRoute("suggestion", 170, 12), "/board/12");
 });
 
 test("상세 복귀 경로는 앱 내부 목록 화면만 허용한다", () => {

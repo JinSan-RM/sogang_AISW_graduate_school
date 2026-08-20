@@ -27,6 +27,11 @@ export type PostDetailBackDecision =
   | { action: "navigate"; route: PostDetailReturnRoute }
   | { action: "replace"; route: PostDetailFallbackRoute };
 
+export type EventDayBackDecision =
+  | { action: "back" }
+  | { action: "navigate"; route: typeof HOME_TAB_ROUTE }
+  | { action: "replace"; route: typeof HOME_TAB_ROUTE };
+
 type PostDetailNavigator = {
   canGoBack: () => boolean;
   back: () => void;
@@ -43,6 +48,23 @@ export function routeBoardId(value: unknown): number | null {
 
 export function boardRoute(boardId: number) {
   return `/board/${boardId}` as const;
+}
+
+function eventDayReturnRoute(value: unknown): typeof HOME_TAB_ROUTE | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate === HOME_TAB_ROUTE ? HOME_TAB_ROUTE : null;
+}
+
+export function eventDayRoute(dateKey: string, returnTo?: unknown) {
+  const path = `/events/day/${dateKey}`;
+  const safeReturnTo = eventDayReturnRoute(returnTo);
+  return safeReturnTo ? `${path}?returnTo=${encodeURIComponent(safeReturnTo)}` : path;
+}
+
+export function eventDayBackDecision(returnTo: unknown, canGoBack: boolean): EventDayBackDecision {
+  if (eventDayReturnRoute(returnTo)) return { action: "navigate", route: HOME_TAB_ROUTE };
+  if (canGoBack) return { action: "back" };
+  return { action: "replace", route: HOME_TAB_ROUTE };
 }
 
 export function postDetailReturnRoute(value: unknown): PostDetailReturnRoute | null {
@@ -74,6 +96,13 @@ export function postDetailRoute(postId: number, fromBoardId?: number, returnTo?:
   const safeReturnTo = postDetailReturnRoute(returnTo);
   if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
   return params.length > 0 ? `${path}?${params.join("&")}` : path;
+}
+
+export function postCreateCompletionRoute(boardType: string | undefined, createdPostId: number, boardId: number) {
+  if (boardType === "activity_certification") {
+    return postDetailRoute(createdPostId, boardId, PARTICIPATION_TAB_ROUTE);
+  }
+  return boardRoute(boardId);
 }
 
 export function postDetailBackDecision(

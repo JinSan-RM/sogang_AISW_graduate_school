@@ -58,3 +58,8 @@ test("#32 회원 화면은 반려 사유를 분홍색 박스로 표시한다", (
   assert.match(postDetailSource, /post\.mutual_aid\?\.rejection_reason && !isAdmin/);
   assert.match(postDetailSource, /mutualAidRejectionBox:[\s\S]*backgroundColor: COLORS\.pink50/);
 });
+
+test("#177 시험족보 목록은 작성자를 표시하고 기존 익명 게시판 정책은 유지한다", () => {
+  assert.doesNotMatch(postCardSource, /isExamArchive/);
+  assert.match(postCardSource, /const showAuthor = !isLectureReview && !isSuggestion;/);
+});

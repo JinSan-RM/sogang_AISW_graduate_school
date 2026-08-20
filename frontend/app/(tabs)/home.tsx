@@ -29,7 +29,7 @@ import { useAllMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
-import { COMMUNITY_TAB_ROUTE, HOME_TAB_ROUTE, postDetailRoute } from "../../utils/appRoutes";
+import { COMMUNITY_TAB_ROUTE, HOME_TAB_ROUTE, eventDayRoute, postDetailRoute } from "../../utils/appRoutes";
 import { formatBoardDate, formatHomeScheduleDate } from "../../utils/dateFormat";
 import {
   calendarDateKey,
@@ -479,7 +479,7 @@ function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; m
             onPress={() => {
               if (!cell.day) return;
               const selectedDate = new Date(month.getFullYear(), month.getMonth(), cell.day);
-              router.push(`/events/day/${calendarDateKey(selectedDate)}` as never);
+              router.push(eventDayRoute(calendarDateKey(selectedDate), HOME_TAB_ROUTE) as never);
             }}
             style={styles.dayCell}
           >

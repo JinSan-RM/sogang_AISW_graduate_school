@@ -111,12 +111,11 @@ export default function PostCard({ post, onPress, boardType, boardSlug, isLast }
   const tone = categoryTone(label);
   const preview = compactPreview(post);
   const isLectureReview = boardSlug === "lecture-reviews";
-  const isExamArchive = boardSlug === "exam-archive";
   const isStudyRecruit = boardSlug === "study-recruit";
   const isMutualAid = boardType === "mutual_aid";
   const isSuggestion = boardType === "suggestion";
   const isWorkflowRequest = isMutualAid || isSuggestion;
-  const showAuthor = !isLectureReview && !isExamArchive && !isSuggestion;
+  const showAuthor = !isLectureReview && !isSuggestion;
   const showCommentCount = !isLectureReview && !isWorkflowRequest && !isStudyRecruit;
   const showLikeCount = !isWorkflowRequest && !isStudyRecruit;
 

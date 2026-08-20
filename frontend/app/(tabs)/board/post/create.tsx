@@ -31,6 +31,7 @@ import {
   loadPublishedActivitySourcePosts,
   type ActivityParticipant,
 } from "../../../../utils/activityCertification";
+import { postCreateCompletionRoute } from "../../../../utils/appRoutes";
 import { formatBoardDate } from "../../../../utils/dateFormat";
 import {
   calendarMonthFromDotDate,
@@ -818,7 +819,7 @@ export default function PostCreateScreen() {
     return (
       <CompletionState
         title={isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
-        onConfirm={() => router.replace(isMutualAid || isSuggestion ? (`/board/${boardId}` as never) : (`/board/post/${createdPostId}` as never))}
+        onConfirm={() => router.replace(postCreateCompletionRoute(boardType, createdPostId, boardId) as never)}
       />
     );
   }

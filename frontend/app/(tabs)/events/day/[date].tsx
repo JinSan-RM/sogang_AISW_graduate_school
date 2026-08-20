@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LoadingState from "../../../../components/LoadingState";
 import { eventApi } from "../../../../services/api";
 import type { EventItem } from "../../../../types";
+import { eventDayBackDecision } from "../../../../utils/appRoutes";
 import { formatBoardDate, formatTime24 } from "../../../../utils/dateFormat";
 
 import { BackIcon } from "../../../../components/icons";
@@ -68,7 +69,7 @@ function EventRow({ item }: { item: EventItem }) {
 
 export default function EventDayScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ date?: string | string[] }>();
+  const params = useLocalSearchParams<{ date?: string | string[]; returnTo?: string | string[] }>();
   const selectedDate = parseDateKey(params.date);
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["events", "day", selectedDate?.dateKey],
@@ -83,8 +84,10 @@ export default function EventDayScreen() {
         <Pressable
           accessibilityLabel="뒤로"
           onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/(tabs)/home");
+            const decision = eventDayBackDecision(params.returnTo, router.canGoBack());
+            if (decision.action === "navigate") router.navigate(decision.route as never);
+            else if (decision.action === "back") router.back();
+            else router.replace(decision.route as never);
           }}
           style={styles.iconButton}
         >
