@@ -1,6 +1,6 @@
 # Agent Guide
 
-This repository is the Sogang AI-SW community app renewal project.
+This repository is the AI·SW CAMPUS renewal project.
 
 ## Project Direction
 

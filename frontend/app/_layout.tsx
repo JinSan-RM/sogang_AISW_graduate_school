@@ -8,12 +8,14 @@ import NotificationBootstrap from "../components/NotificationBootstrap";
 import { useUserStore } from "../stores/userStore";
 import { APP_FONTS, patchDefaultFontFamily } from "../utils/fonts";
 import { isAdminUser } from "../utils/permissions";
+import { MINIMUM_SPLASH_DURATION_MS, shouldShowSplash } from "../utils/splash";
 
 // Route every <Text>/<TextInput> through the matching Pretendard face (design uses Inter + Korean fallback).
 patchDefaultFontFamily();
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
+  const [minimumSplashDurationElapsed, setMinimumSplashDurationElapsed] = useState(false);
   const { width } = useWindowDimensions();
   const [fontsLoaded] = useFonts(APP_FONTS);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
@@ -28,7 +30,21 @@ export default function RootLayout() {
     void hydrateSession();
   }, [hydrateSession]);
 
-  if (!hasHydrated || !fontsLoaded) {
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setMinimumSplashDurationElapsed(true);
+    }, MINIMUM_SPLASH_DURATION_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
+  if (
+    shouldShowSplash({
+      hasHydrated,
+      fontsLoaded,
+      minimumDurationElapsed: minimumSplashDurationElapsed,
+    })
+  ) {
     return (
       <View style={styles.splash}>
         <Image source={require("../assets/splash-logo.png")} resizeMode="contain" style={styles.splashLogo} />

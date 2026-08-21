@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Sogang AI-SW Community API",
-    "description": "\nSogang AI-SW Graduate Community backend.\n\nThis API covers authentication, profile management, board posts, comments,\nattachments, reports, notifications, Expo push tokens, search, events, FAQ,\nand student council suggestion replies.\n",
+    "title": "AI·SW CAMPUS API",
+    "description": "\nAI·SW CAMPUS backend.\n\nThis API covers authentication, profile management, board posts, comments,\nattachments, reports, notifications, Expo push tokens, search, events, FAQ,\nand student council suggestion replies.\n",
     "version": "0.1.0"
   },
   "paths": {

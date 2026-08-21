@@ -26,7 +26,7 @@ from app.response import success_response
 from app.seed import seed_initial_data, seed_reference_data
 
 API_DESCRIPTION = """
-Sogang AI-SW Graduate Community backend.
+AI·SW CAMPUS backend.
 
 This API covers authentication, profile management, board posts, comments,
 attachments, reports, notifications, Expo push tokens, search, events, FAQ,
@@ -142,7 +142,7 @@ def api_docs_landing() -> HTMLResponse:
           <head>
             <meta charset="utf-8" />
             <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>Sogang AI-SW API Docs</title>
+            <title>AI·SW CAMPUS API Docs</title>
             <style>
               body {
                 margin: 0;
@@ -197,7 +197,7 @@ def api_docs_landing() -> HTMLResponse:
           </head>
           <body>
             <main>
-              <h1>Sogang AI-SW API Docs</h1>
+              <h1>AI·SW CAMPUS API Docs</h1>
               <p>
                 Backend documentation hub for the community app. Use Swagger for interactive testing,
                 ReDoc for a clean reference view, and OpenAPI JSON for tooling.

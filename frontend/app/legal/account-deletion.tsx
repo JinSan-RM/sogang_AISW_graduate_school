@@ -256,7 +256,7 @@ export default function PublicAccountDeletionScreen() {
       >
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={styles.introTitle}>
-            AISW Connect 계정과 데이터 삭제
+            AI·SW CAMPUS 계정과 데이터 삭제
           </Text>
           <Text style={styles.introBody}>
             앱에 로그인하지 않아도 학교 이메일 인증으로 계정 삭제를 요청할 수 있습니다.

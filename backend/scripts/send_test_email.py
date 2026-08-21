@@ -40,7 +40,7 @@ def main() -> None:
     plain_body, html_body = smtp_test_email()
     sent = send_email(
         to_email,
-        "[서강 AI-SW 커뮤니티] SMTP 테스트 메일",
+        "[AI·SW CAMPUS] SMTP 테스트 메일",
         plain_body,
         html_body=html_body,
     )

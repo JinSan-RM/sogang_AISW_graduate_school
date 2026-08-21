@@ -1,4 +1,4 @@
-# Sogang AI-SW Community App
+# AI·SW CAMPUS
 
 ## Stack
 - FE: React Native (Expo Router, Zustand, React Query, React Hook Form + Zod)

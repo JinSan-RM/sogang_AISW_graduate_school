@@ -20,7 +20,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const TEXT = {
   title: "게시판",
-  description: "서강 AI-SW의 모든 보드를 한곳에서 확인하세요.",
+  description: "AI·SW CAMPUS의 모든 보드를 한곳에서 확인하세요.",
   loadError: "게시판을 불러오지 못했습니다.",
   empty: "표시할 게시판이 없습니다.",
   totalBoards: (count: number) => `전체 ${count}개 보드`,

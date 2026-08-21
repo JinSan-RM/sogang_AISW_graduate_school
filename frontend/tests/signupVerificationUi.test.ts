@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  registrationVerificationFailure,
   resendAvailableAt,
   resendCountdownLabel,
   signupProgressDotIndex,
@@ -20,4 +21,36 @@ test("재전송 성공은 응답 수신 시각부터 5분을 다시 계산한다
   // 발송 안내 메시지가 함께 뜨는 상태에서는 남은 시간만 보여준다.
   assert.equal(resendCountdownLabel(300, { timerOnly: true }), "05:00");
   assert.equal(resendCountdownLabel(0, { timerOnly: true }), "재전송");
+});
+
+test("응답이 없는 최초 회원가입 인증 요청은 이메일 단계에 오류를 표시한다", () => {
+  assert.deepEqual(registrationVerificationFailure(undefined, false), {
+    placement: "email",
+    message: "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.",
+  });
+});
+
+test("이미 가입된 이메일은 코드 화면으로 이동하지 않고 가입 오류를 표시한다", () => {
+  assert.deepEqual(registrationVerificationFailure("CONFLICT", false), {
+    placement: "email",
+    message: "이미 가입된 이메일이에요.",
+  });
+});
+
+test("인증코드 재전송 실패는 현재 코드 화면에 오류를 표시한다", () => {
+  assert.deepEqual(registrationVerificationFailure(undefined, true), {
+    placement: "verification",
+    message: "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.",
+  });
+});
+
+test("재전송 제한과 요청 과다 오류 문구를 유지한다", () => {
+  assert.deepEqual(registrationVerificationFailure("VERIFICATION_RESEND_COOLDOWN", false), {
+    placement: "email",
+    message: "인증코드는 5분 후 다시 요청할 수 있어요.",
+  });
+  assert.deepEqual(registrationVerificationFailure("RATE_LIMITED", false), {
+    placement: "email",
+    message: "인증 요청이 너무 많아요. 잠시 후 다시 시도해주세요.",
+  });
 });

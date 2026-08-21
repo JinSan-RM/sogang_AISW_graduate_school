@@ -3,7 +3,6 @@ import Constants from "expo-constants";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 
-import { NotificationNoticeIcon } from "./icons";
 import { notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import type { NotificationItem } from "../types";
@@ -177,13 +176,9 @@ export default function NotificationBootstrap() {
 
       latestSeenIdRef.current = newest.id;
       storeLatestId(newest.id);
-      // 인앱 토스트는 공지사항 알림만 띄운다 (Figma Home-NoticeToast)
-      if (newest.notification_type !== "notice") {
-        return;
-      }
       setVisibleNotification(newest);
       if (Platform.OS === "web") {
-        showWebNotification("AI·SW 캠퍼스", newest.message, () => { void openNotification(newest); });
+        showWebNotification("AI·SW CAMPUS", newest.message, () => { void openNotification(newest); });
       }
     };
 
@@ -197,51 +192,41 @@ export default function NotificationBootstrap() {
     };
   }, [isAuthenticated]);
 
-  // 토스트는 잠시 보였다가 자동으로 사라진다
-  useEffect(() => {
-    if (!visibleNotification) return;
-    const timer = setTimeout(() => setVisibleNotification(null), 6000);
-    return () => clearTimeout(timer);
-  }, [visibleNotification]);
-
   if (!visibleNotification) {
     return null;
   }
 
-  // Figma Home-NoticeToast: 흰 카드(radius 14) + 종 뱃지 + 제목/본문 한 줄
   return (
-    <Pressable
-      accessibilityLabel="새 공지 열기"
-      onPress={openVisibleNotification}
+    <View
       style={{
         position: "absolute",
-        top: 8,
+        top: 12,
         left: 12,
         right: 12,
         zIndex: 9999,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        borderRadius: 14,
-        borderWidth: 0.5,
-        borderColor: "#E1E4E9",
-        backgroundColor: "#FFFFFF",
-        paddingVertical: 12,
-        paddingHorizontal: 14,
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 20,
-        elevation: 6,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#bfdbfe",
+        backgroundColor: "#eff6ff",
+        padding: 12,
+        shadowColor: "#000",
+        shadowOpacity: 0.16,
+        shadowRadius: 10,
       }}
     >
-      <NotificationNoticeIcon size={32} />
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text style={{ color: "#15171C", fontSize: 13, fontWeight: "500", lineHeight: 16 }}>AI·SW 캠퍼스</Text>
-        <Text numberOfLines={1} style={{ color: "#6B7280", fontSize: 13, fontWeight: "400", lineHeight: 16 }}>
-          {visibleNotification.message}
-        </Text>
+          <Text style={{ color: "#112d4e", fontSize: 13, fontWeight: "900" }}>새 알림</Text>
+      <Text style={{ color: "#111827", marginTop: 4, fontWeight: "700" }}>{visibleNotification.message}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+        <Pressable
+          onPress={() => setVisibleNotification(null)}
+          style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 8 }}
+        >
+            <Text style={{ color: "#64748b", fontWeight: "900" }}>나중에</Text>
+        </Pressable>
+        <Pressable onPress={openVisibleNotification} style={{ borderRadius: 8, backgroundColor: "#112d4e", paddingHorizontal: 12, paddingVertical: 8 }}>
+            <Text style={{ color: "#ffffff", fontWeight: "900" }}>열기</Text>
+        </Pressable>
       </View>
-    </Pressable>
+    </View>
   );
 }

@@ -1,4 +1,4 @@
-# AISW Community App Phase 2-4 Plan
+# AI·SW CAMPUS Phase 2-4 Plan
 
 Source: Notion `App Development (New)` > `Community App Enhancement Schedule`.
 Source plan checked on: 2026-04-25. Current implementation and release evidence checked on: 2026-07-27.
