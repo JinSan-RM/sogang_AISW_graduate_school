@@ -550,6 +550,29 @@ function sameDate(left: Date | null, right?: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
 }
 
+export type ExternalLinkDraftState = { boardId: number | null; draft: string };
+
+export function externalLinkBoardTransition(
+  current: ExternalLinkDraftState,
+  board?: Board,
+): ExternalLinkDraftState {
+  const boardId = board?.id ?? null;
+  if (current.boardId === boardId) return current;
+  const metadata = board?.metadata ?? {};
+  const key = (["notion_url", "external_url", "url", "link"] as const)
+    .find((candidate) => typeof metadata[candidate] === "string");
+  return { boardId, draft: key ? String(metadata[key]) : "" };
+}
+
+export function externalLinkSaveTransition(
+  current: ExternalLinkDraftState,
+  targetBoardId: number,
+  savedUrl: string,
+): ExternalLinkDraftState {
+  if (current.boardId !== targetBoardId) return current;
+  return { ...current, draft: savedUrl.trim() };
+}
+
 function Panel({ children }: { children: ReactNode }) {
   return (
     <View
@@ -1598,10 +1621,13 @@ export default function AdminScreen() {
   const [pastCouncilsSaving, setPastCouncilsSaving] = useState(false);
   const [editingFAQId, setEditingFAQId] = useState<number | null>(null);
   const [faqForm, setFAQForm] = useState<FAQForm>(emptyFAQ);
-  const [externalLinkDraft, setExternalLinkDraft] = useState("");
+  const [externalLinkDraftState, setExternalLinkDraftState] = useState<ExternalLinkDraftState>({ boardId: null, draft: "" });
+  const externalLinkDraft = externalLinkDraftState.draft;
+  const setExternalLinkDraft = (draft: string) => setExternalLinkDraftState((current) => ({ ...current, draft }));
   const [externalLinkSaving, setExternalLinkSaving] = useState(false);
   const [externalLinkError, setExternalLinkError] = useState<string | null>(null);
   const externalLinkBoardIdRef = useRef<number | null>(null);
+  const externalLinkSelectedBoardRef = useRef<Board | undefined>(undefined);
   const externalLinkSavingRef = useRef(false);
   const [newMajorName, setNewMajorName] = useState("");
   const [newMajorOrder, setNewMajorOrder] = useState("50");
@@ -1641,6 +1667,9 @@ export default function AdminScreen() {
   const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
   const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content";
   const managedContentKind = selectedBoardCapability.kind;
+  const externalLinkSelectedBoard = managedContentKind === "external-link" ? selectedManagedBoard : undefined;
+  const externalLinkSelectedBoardId = externalLinkSelectedBoard?.id ?? null;
+  externalLinkSelectedBoardRef.current = externalLinkSelectedBoard;
   const noticeQueryPolicy = adminBoardContentQueryPolicy({
     section,
     tab: boardManagementTab,
@@ -1812,18 +1841,12 @@ export default function AdminScreen() {
   }, [boardManagementBoardId]);
 
   useEffect(() => {
-    const board = managedContentKind === "external-link" ? selectedManagedBoard : undefined;
-    externalLinkBoardIdRef.current = board?.id ?? null;
+    if (externalLinkBoardIdRef.current === externalLinkSelectedBoardId) return;
+    const board = externalLinkSelectedBoardRef.current;
+    externalLinkBoardIdRef.current = externalLinkSelectedBoardId;
+    setExternalLinkDraftState((current) => externalLinkBoardTransition(current, board));
     setExternalLinkError(null);
-    if (!board) {
-      setExternalLinkDraft("");
-      return;
-    }
-    const metadata = board.metadata ?? {};
-    const key = (["notion_url", "external_url", "url", "link"] as const)
-      .find((candidate) => typeof metadata[candidate] === "string");
-    setExternalLinkDraft(key ? String(metadata[key]) : "");
-  }, [managedContentKind, selectedManagedBoard]);
+  }, [externalLinkSelectedBoardId]);
 
   useEffect(() => {
     if (!optimisticManagedBoard) return;
@@ -2782,7 +2805,7 @@ export default function AdminScreen() {
         queryClient.invalidateQueries({ queryKey: ["boards"] }),
       ]);
       if (externalLinkBoardIdRef.current === targetBoardId) {
-        setExternalLinkDraft(targetDraft);
+        setExternalLinkDraftState((current) => externalLinkSaveTransition(current, targetBoardId, targetDraft));
         Alert.alert("저장 완료", "외부 링크가 저장되었습니다.");
       }
     } catch {

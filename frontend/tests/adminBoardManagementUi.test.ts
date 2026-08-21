@@ -78,6 +78,23 @@ function loadContentPanelModule() {
   return module.exports as Record<string, (...args: unknown[]) => unknown>;
 }
 
+function loadExternalLinkDraftTransitions() {
+  const start = adminSource.indexOf("export type ExternalLinkDraftState");
+  const end = adminSource.indexOf("function Panel", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const transitionSource = adminSource.slice(start, end);
+  const compiled = ts.transpileModule(transitionSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+  }).outputText;
+  const module = { exports: {} as Record<string, unknown> };
+  new Function("module", "exports", compiled)(module, module.exports);
+  return module.exports as Record<string, (...args: unknown[]) => unknown>;
+}
+
 const board = (id: number, category: string): Board => ({
   id,
   name: `게시판 ${id}`,
@@ -422,6 +439,38 @@ test("외부 링크 저장은 대상 게시판과 draft를 보호하고 두 게�
   assert.match(adminSource, /invalidateQueries\(\{ queryKey: \["admin-boards"\] \}\)/);
   assert.match(adminSource, /invalidateQueries\(\{ queryKey: \["boards"\] \}\)/);
   assert.match(adminSource, /외부 링크를 저장하지 못했습니다/);
+});
+
+test("외부 링크 draft 전이는 같은 게시판 refresh를 무시하고 선택과 저장 성공만 동기화한다", () => {
+  const transitions = loadExternalLinkDraftTransitions();
+  const initial = { boardId: null, draft: "" };
+  const accounting = {
+    ...board(40, "gsa"),
+    metadata: { notion_url: "https://notion.example.com/accounting", keep: "yes" },
+  };
+  const selected = transitions.externalLinkBoardTransition(initial, accounting) as { boardId: number | null; draft: string };
+  assert.deepEqual(selected, { boardId: 40, draft: "https://notion.example.com/accounting" });
+
+  const dirty = { ...selected, draft: "https://draft.example.com/unsaved" };
+  const refreshed = transitions.externalLinkBoardTransition(
+    dirty,
+    { ...accounting, metadata: { external_url: "https://server.example.com/refreshed" } },
+  );
+  assert.equal(refreshed, dirty);
+
+  const switched = transitions.externalLinkBoardTransition(
+    dirty,
+    { ...board(41, "gsa"), metadata: { external_url: "https://other.example.com" } },
+  );
+  assert.deepEqual(switched, { boardId: 41, draft: "https://other.example.com" });
+  assert.deepEqual(
+    transitions.externalLinkSaveTransition(switched, 41, "  https://other.example.com/saved  "),
+    { boardId: 41, draft: "https://other.example.com/saved" },
+  );
+  assert.equal(
+    transitions.externalLinkSaveTransition(dirty, 41, "https://stale.example.com"),
+    dirty,
+  );
 });
 
 test("가이드는 읽기 전용 안내만 표시하고 metadata 저장값을 만들지 않는다", () => {
