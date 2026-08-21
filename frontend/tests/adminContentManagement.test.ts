@@ -89,9 +89,43 @@ test("게시판 유형은 기존 전용 편집기 capability로 연결된다", (
   assert.deepEqual(adminBoardCapability(boardBySlug("gsa-roadmap-benefits")), { kind: "guide", contentAvailable: false, canReplaceRepresentativeImage: false, lockedPolicies: [] });
 });
 
+test("모든 지원 게시판 유형은 literal capability를 제공한다", () => {
+  assert.equal(adminBoardCapability().kind, "aggregate-posts");
+  assert.equal(adminBoardCapability(boardBySlug("all-notices")).kind, "notice");
+  assert.equal(adminBoardCapability(boardBySlug("lecture-reviews")).kind, "posts");
+  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "event-album")).kind, "album");
+  assert.equal(adminBoardCapability(boardBySlug("exam-archive")).kind, "resource");
+  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "club-activity")).kind, "activity-certification");
+  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "council-activity")).kind, "activity-history");
+  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "suggestions")).kind, "suggestion");
+  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "mutual-aid")).kind, "mutual-aid");
+});
+
 test("커뮤니티 개인정보 정책은 잠긴 상태로 노출된다", () => {
   assert.deepEqual(adminBoardCapability(boardBySlug("lecture-reviews")).lockedPolicies.map((policy) => policy.key), ["forced-anonymous", "comments-disabled"]);
   assert.deepEqual(adminBoardCapability(boardBySlug("exam-archive")).lockedPolicies.map((policy) => policy.key), ["author-visible", "comments-enabled"]);
+  assert.deepEqual(adminBoardCapability(boards.find((item) => item.slug === "suggestions")).lockedPolicies.map((policy) => policy.key), ["allow-anonymous"]);
+  assert.deepEqual(adminBoardCapability(boards.find((item) => item.slug === "club-promo")).lockedPolicies.map((policy) => policy.key), ["admin-only-write"]);
+  assert.deepEqual(adminBoardCapability(boardBySlug("networking-programs")).lockedPolicies.map((policy) => policy.key), ["admin-only-write"]);
+});
+
+test("대표 이미지 교체 capability는 동아리와 네트워킹에만 활성화된다", () => {
+  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "club-promo")).canReplaceRepresentativeImage, true);
+  assert.equal(adminBoardCapability(boardBySlug("networking-programs")).canReplaceRepresentativeImage, true);
+  for (const item of [
+    undefined,
+    boardBySlug("all-notices"),
+    boardBySlug("academic-calendar"),
+    boardBySlug("accounting"),
+    boardBySlug("gsa-executives"),
+    boardBySlug("gsa-faq"),
+    boardBySlug("gsa-roadmap-benefits"),
+    boardBySlug("lecture-reviews"),
+    boardBySlug("exam-archive"),
+    boards.find((candidate) => candidate.slug === "event-album"),
+  ]) {
+    assert.equal(adminBoardCapability(item).canReplaceRepresentativeImage, false);
+  }
 });
 
 test("category는 모든 화면에서 같은 관리자 scope로 계산한다", () => {
