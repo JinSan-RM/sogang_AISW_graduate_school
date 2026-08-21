@@ -8,6 +8,7 @@ import {
   adminBoardDestinationForLegacySection,
   adminBoardDestinationForSlug,
   adminBoardLegacySectionTransition,
+  adminBoardNavigationTransition,
   adminBoardsForScope,
   adminCalendarQueryEnabled,
   adminFaqQueryEnabled,
@@ -228,6 +229,78 @@ test("raw 레거시 section 전이는 게시판 준비 후 링크별 한 번만 
       tab: "content",
     },
   });
+});
+
+test("명시적 이동은 대기 중인 레거시 링크를 먼저 승인해 늦은 게시판 응답이 목적지를 덮어쓰지 않는다", () => {
+  const rawLinkKey = "notices::";
+  assert.equal(adminBoardNavigationTransition(null, {
+    type: "legacy",
+    rawSection: "notices",
+    rawLinkKey,
+    boards: allFixtureBoards,
+    boardsReady: false,
+  }), null);
+
+  for (const explicitDestination of [
+    { type: "section", section: "banners" },
+    { type: "managed", scope: "council", boardId: boardBySlug("gsa-executives").id, tab: "content" },
+  ] as const) {
+    const acknowledgement = adminBoardNavigationTransition(null, { type: "explicit", rawLinkKey });
+    assert.deepEqual(acknowledgement, { handledSection: rawLinkKey, destination: null });
+    let activeDestination: object = explicitDestination;
+    const lateLegacy = adminBoardNavigationTransition(acknowledgement.handledSection, {
+      type: "legacy",
+      rawSection: "notices",
+      rawLinkKey,
+      boards: allFixtureBoards,
+      boardsReady: true,
+    });
+    if (lateLegacy?.destination) activeDestination = lateLegacy.destination;
+    assert.equal(lateLegacy, null);
+    assert.deepEqual(activeDestination, explicitDestination);
+  }
+});
+
+test("변경되지 않은 레거시 링크는 최초 한 번 변환되고 URL 변경 뒤 재방문하면 다시 변환된다", () => {
+  const eventLink = "events::41";
+  const initial = adminBoardNavigationTransition(null, {
+    type: "legacy",
+    rawSection: "events",
+    rawLinkKey: eventLink,
+    boards: allFixtureBoards,
+    boardsReady: true,
+  });
+  assert.deepEqual(initial, {
+    handledSection: eventLink,
+    destination: {
+      scope: "notices",
+      boardId: boardBySlug("academic-calendar").id,
+      tab: "content",
+    },
+  });
+  assert.equal(adminBoardNavigationTransition(initial.handledSection, {
+    type: "legacy",
+    rawSection: "events",
+    rawLinkKey: eventLink,
+    boards: allFixtureBoards,
+    boardsReady: true,
+  }), null);
+
+  const changed = adminBoardNavigationTransition(initial.handledSection, {
+    type: "legacy",
+    rawSection: "dashboard",
+    rawLinkKey: "dashboard::",
+    boards: allFixtureBoards,
+    boardsReady: true,
+  });
+  assert.deepEqual(changed, { handledSection: "dashboard::", destination: null });
+  assert.deepEqual(adminBoardNavigationTransition(changed.handledSection, {
+    type: "legacy",
+    rawSection: "events",
+    rawLinkKey: eventLink,
+    boards: allFixtureBoards,
+    boardsReady: true,
+  }), initial);
 });
 
 test("대시보드 게시판 바로가기는 실제 slug와 탭을 통합 목적지로 계산한다", () => {

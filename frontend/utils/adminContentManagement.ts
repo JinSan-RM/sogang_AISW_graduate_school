@@ -15,6 +15,19 @@ export type AdminBoardLegacySectionTransition = {
   destination: AdminBoardDestination | null;
 };
 
+export type AdminBoardNavigationEvent =
+  | {
+    type: "legacy";
+    rawSection: string | undefined;
+    boards: Board[];
+    boardsReady: boolean;
+    rawLinkKey?: string;
+  }
+  | {
+    type: "explicit";
+    rawLinkKey: string;
+  };
+
 export type AdminBoardSettingKey = "allow_anonymous" | "write_permission" | "read_permission";
 
 export type AdminBoardLockedPolicy = {
@@ -141,9 +154,28 @@ export function adminBoardLegacySectionTransition(
   boardsReady: boolean,
   rawLinkKey: string = rawSection ?? "",
 ): AdminBoardLegacySectionTransition | null {
-  if (!rawSection || !boardsReady || rawLinkKey === handledSection) return null;
-  const destination = adminBoardDestinationForLegacySection(rawSection, boards);
-  return { handledSection: rawLinkKey, destination };
+  return adminBoardNavigationTransition(handledSection, {
+    type: "legacy",
+    rawSection,
+    boards,
+    boardsReady,
+    rawLinkKey,
+  });
+}
+
+export function adminBoardNavigationTransition(
+  handledSection: string | null,
+  event: AdminBoardNavigationEvent,
+): AdminBoardLegacySectionTransition | null {
+  if (event.type === "explicit") {
+    return { handledSection: event.rawLinkKey, destination: null };
+  }
+  const rawLinkKey = event.rawLinkKey ?? event.rawSection ?? "";
+  if (!event.rawSection || !event.boardsReady || rawLinkKey === handledSection) return null;
+  return {
+    handledSection: rawLinkKey,
+    destination: adminBoardDestinationForLegacySection(event.rawSection, event.boards),
+  };
 }
 
 export function adminFaqQueryEnabled(

@@ -185,12 +185,13 @@ test("통합 전용 화면은 제거된 게시판 목록 편집 상태와 최상
 
 test("레거시 section query는 게시판 조회 완료 후 raw 링크별 한 번씩 통합 선택으로 변환한다", () => {
   assert.match(adminSource, /const handledLegacySection = useRef<string \| null>\(null\)/);
-  assert.match(adminSource, /adminBoardLegacySectionTransition\([\s\S]*?boardsQuery\.isSuccess/);
+  assert.match(adminSource, /adminBoardNavigationTransition\([\s\S]*?type: "legacy"[\s\S]*?boardsReady: boardsQuery\.isSuccess/);
   assert.match(adminSource, /handledLegacySection\.current = transition\.handledSection/);
   assert.match(adminSource, /setSection\("boardManagement"\)/);
   assert.match(adminSource, /setBoardManagementScope\(transition\.destination\.scope\)/);
   assert.match(adminSource, /setBoardManagementBoardId\(transition\.destination\.boardId\)/);
   assert.match(adminSource, /setBoardManagementTab\(transition\.destination\.tab\)/);
+  assert.match(adminSource, /adminBoardNavigationTransition\([\s\S]*?type: "explicit"/);
 });
 
 test("대시보드 게시판 카드는 실제 slug를 통합 선택 함수에 전달한다", () => {
@@ -697,9 +698,9 @@ test("관리자 게시판 대상은 전체/null만 집계하고 loading, error, 
   const boards = [board(1, "notices"), board(2, "community")];
   assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "all", null, "success"), { status: "aggregate" });
   assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", 1, "success"), { status: "board", board: boards[0] });
-  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", null, "success"), { status: "missing" });
-  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", 999, "success"), { status: "missing" });
-  assert.deepEqual(navigatorModule.adminBoardContentTarget([], "notices", null, "success"), { status: "missing" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", null, "success"), { status: "missing", reason: "selection" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", 999, "success"), { status: "missing", reason: "selection" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget([], "notices", null, "success"), { status: "missing", reason: "empty" });
   assert.deepEqual(navigatorModule.adminBoardContentTarget([], "all", null, "pending"), { status: "loading" });
   assert.deepEqual(navigatorModule.adminBoardContentTarget([], "all", null, "error"), { status: "error" });
 });
@@ -729,7 +730,8 @@ test("게시판 조회 상태는 로딩·오류 재시도·선택 없음 안내�
   assert.equal(retries, 1);
   assert.equal(JSON.stringify(errorState).includes("게시판 목록을 불러오지 못했습니다"), true);
   assert.equal(JSON.stringify(contentPanelModule.AdminBoardTargetQueryState({ status: "loading", onRetry: () => undefined })).includes("게시판 목록을 불러오는 중"), true);
-  assert.equal(JSON.stringify(contentPanelModule.AdminBoardTargetQueryState({ status: "missing", onRetry: () => undefined })).includes("선택할 수 있는 게시판이 없습니다"), true);
+  assert.equal(JSON.stringify(contentPanelModule.AdminBoardTargetQueryState({ status: "missing", missingReason: "selection", onRetry: () => undefined })).includes("선택한 게시판을 찾을 수 없습니다"), true);
+  assert.equal(JSON.stringify(contentPanelModule.AdminBoardTargetQueryState({ status: "missing", missingReason: "empty", onRetry: () => undefined })).includes("등록된 게시판이 없습니다"), true);
   assert.equal(contentPanelModule.AdminBoardTargetQueryState({ status: "aggregate", onRetry: () => undefined }), null);
   assert.equal(contentPanelModule.AdminBoardTargetQueryState({ status: "board", onRetry: () => undefined }), null);
 });

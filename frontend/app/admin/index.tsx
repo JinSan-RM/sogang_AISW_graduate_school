@@ -42,7 +42,7 @@ import {
   adminBoardContentControl,
   adminBoardDestinationForLegacySection,
   adminBoardDestinationForSlug,
-  adminBoardLegacySectionTransition,
+  adminBoardNavigationTransition,
   adminCalendarQueryEnabled,
   adminFaqQueryEnabled,
   representativeImageUpdatePayload,
@@ -1527,6 +1527,8 @@ export default function AdminScreen() {
   const params = useLocalSearchParams<{ editEventId?: string; section?: string; scope?: string }>();
   const editEventIdParam = firstParam(params.editEventId);
   const editEventId = editEventIdParam ? Number(editEventIdParam) : null;
+  const rawAdminSection = firstParam(params.section);
+  const rawAdminLinkKey = [rawAdminSection ?? "", firstParam(params.scope) ?? "", editEventIdParam ?? ""].join(":");
   const user = useUserStore((state) => state.user);
   const queryClient = useQueryClient();
   const [section, setSection] = useState<AdminSection>(parseAdminSection(params.section) ?? "dashboard");
@@ -1879,15 +1881,13 @@ export default function AdminScreen() {
   }, [editEventIdParam, params.scope, params.section]);
 
   useEffect(() => {
-    const rawSection = firstParam(params.section);
-    const rawLinkKey = [rawSection ?? "", firstParam(params.scope) ?? "", editEventIdParam ?? ""].join(":");
-    const transition = adminBoardLegacySectionTransition(
-      rawSection,
-      handledLegacySection.current,
+    const transition = adminBoardNavigationTransition(handledLegacySection.current, {
+      type: "legacy",
+      rawSection: rawAdminSection,
       boards,
-      boardsQuery.isSuccess,
-      rawLinkKey,
-    );
+      boardsReady: boardsQuery.isSuccess,
+      rawLinkKey: rawAdminLinkKey,
+    });
     if (!transition) return;
     handledLegacySection.current = transition.handledSection;
     if (!transition.destination) return;
@@ -1900,7 +1900,7 @@ export default function AdminScreen() {
     setBoardManagementBoardId(transition.destination.boardId);
     setBoardManagementTab(transition.destination.tab);
     setCreatingBoard(false);
-  }, [boards, boardsQuery.isSuccess, editEventIdParam, params.scope, params.section]);
+  }, [boards, boardsQuery.isSuccess, rawAdminLinkKey, rawAdminSection]);
 
   useEffect(() => {
     if (!editEventMissing) {
@@ -2030,9 +2030,17 @@ export default function AdminScreen() {
     pendingBoardNavigationIntentRef.current = null;
     setPendingBoardNavigationIntent(null);
   };
+  const beginExplicitAdminNavigation = () => {
+    const acknowledgement = adminBoardNavigationTransition(handledLegacySection.current, {
+      type: "explicit",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    if (acknowledgement) handledLegacySection.current = acknowledgement.handledSection;
+    clearPendingBoardNavigationIntent();
+  };
   const openAdminSection = (nextSection: AdminSection) => {
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
-    clearPendingBoardNavigationIntent();
+    beginExplicitAdminNavigation();
     setSection(nextSection);
   };
   const dispatchEventReminders = async () => {
@@ -2301,7 +2309,7 @@ export default function AdminScreen() {
   const openManagedBoardDestination = (destination: AdminBoardDestination | null) => {
     if (!destination) return;
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
-    clearPendingBoardNavigationIntent();
+    beginExplicitAdminNavigation();
     if (!syncExternalLinkNavigationBoardId(destination.boardId)) return;
     boardManagementBoardIdRef.current = destination.boardId;
     setSection("boardManagement");
@@ -2313,6 +2321,7 @@ export default function AdminScreen() {
 
   const openManagedBoard = (slug: string, tab: AdminBoardManagementTab = "content") => {
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
     const intent = { slug, tab };
     const resolution = adminBoardNavigationIntentResolution(intent, boards, boardsQuery.status);
     if (resolution.status === "pending" || resolution.status === "error") {
@@ -2321,7 +2330,6 @@ export default function AdminScreen() {
       return;
     }
     if (resolution.status === "missing") {
-      clearPendingBoardNavigationIntent();
       Alert.alert("게시판 확인", "요청한 게시판을 찾을 수 없습니다.");
       return;
     }
@@ -2334,7 +2342,7 @@ export default function AdminScreen() {
 
   const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
-    clearPendingBoardNavigationIntent();
+    beginExplicitAdminNavigation();
     const transition = adminBoardScopeTransition(boards, boardManagementBoardId, nextScope);
     if (!syncExternalLinkNavigationBoardId(transition.boardId)) return;
     boardManagementBoardIdRef.current = transition.boardId;
@@ -2346,7 +2354,7 @@ export default function AdminScreen() {
 
   const handleBoardManagementBoardChange = (boardId: number | null) => {
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
-    clearPendingBoardNavigationIntent();
+    beginExplicitAdminNavigation();
     if (managedContentKind === "notice" && boardId !== selectedNoticeBoardIdRef.current) {
       resetNoticeForm();
     }
@@ -2360,7 +2368,7 @@ export default function AdminScreen() {
 
   const handleCreateManagedBoard = () => {
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
-    clearPendingBoardNavigationIntent();
+    beginExplicitAdminNavigation();
     const transition = adminBoardCreateTransition();
     resetBoardForm();
     setCreatingBoard(transition.creatingBoard);
@@ -2369,7 +2377,7 @@ export default function AdminScreen() {
 
   const handleBoardManagementTabChange = (tab: AdminBoardManagementTab) => {
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
-    clearPendingBoardNavigationIntent();
+    beginExplicitAdminNavigation();
     setBoardManagementTab(tab);
   };
 
@@ -2427,6 +2435,7 @@ export default function AdminScreen() {
   };
 
   const handleCancelBoardForm = () => {
+    beginExplicitAdminNavigation();
     const wasCreatingBoard = creatingBoard;
     resetBoardForm();
     if (wasCreatingBoard) {
@@ -3213,6 +3222,7 @@ export default function AdminScreen() {
 
   const handleEditActivityHistoryNotice = (item: PostListItem) => {
     if (noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
     if (!syncExternalLinkNavigationBoardId(item.board_id)) return;
     resetNoticeForm();
     selectedNoticeBoardIdRef.current = item.board_id;
@@ -4234,6 +4244,7 @@ export default function AdminScreen() {
 
             <AdminBoardTargetQueryState
               status={managedContentTarget.status}
+              missingReason={managedContentTarget.status === "missing" ? managedContentTarget.reason : undefined}
               onRetry={() => void boardsQuery.refetch()}
             />
 

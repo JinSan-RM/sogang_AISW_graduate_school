@@ -50,7 +50,8 @@ export type AdminBoardNavigationTransition = {
 
 export type AdminBoardContentTargetStatus = "loading" | "error" | "aggregate" | "board" | "missing";
 export type AdminBoardContentTarget =
-  | { status: "loading" | "error" | "aggregate" | "missing" }
+  | { status: "loading" | "error" | "aggregate" }
+  | { status: "missing"; reason: "selection" | "empty" }
   | { status: "board"; board: Board };
 
 export type AdminBoardNavigationIntent = {
@@ -73,8 +74,10 @@ export function adminBoardContentTarget(
   if (queryStatus === "pending") return { status: "loading" };
   if (queryStatus === "error") return { status: "error" };
   if (scope === "all" && selectedBoardId === null) return { status: "aggregate" };
-  const board = selectedBoardId === null ? undefined : boards.find((item) => item.id === selectedBoardId);
-  return board ? { status: "board", board } : { status: "missing" };
+  const scopedBoards = adminBoardsForScope(boards, scope);
+  const board = selectedBoardId === null ? undefined : scopedBoards.find((item) => item.id === selectedBoardId);
+  if (board) return { status: "board", board };
+  return { status: "missing", reason: scopedBoards.length === 0 ? "empty" : "selection" };
 }
 
 export function adminBoardNavigationIntentResolution(

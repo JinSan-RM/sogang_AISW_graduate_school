@@ -148,9 +148,11 @@ export function AdminBoardContentQueryState({
 
 export function AdminBoardTargetQueryState({
   status,
+  missingReason,
   onRetry,
 }: {
   status: AdminBoardContentTargetStatus;
+  missingReason?: "selection" | "empty";
   onRetry: () => void;
 }) {
   const stateStyle = {
@@ -187,7 +189,11 @@ export function AdminBoardTargetQueryState({
   if (status === "missing") {
     return (
       <View style={stateStyle}>
-        <Text style={{ color: "#6B7280" }}>이 그룹에서 선택할 수 있는 게시판이 없습니다.</Text>
+        <Text style={{ color: "#6B7280" }}>
+          {missingReason === "empty"
+            ? "이 그룹에 등록된 게시판이 없습니다."
+            : "선택한 게시판을 찾을 수 없습니다. 다른 게시판을 선택하거나 목록을 다시 불러와주세요."}
+        </Text>
       </View>
     );
   }
