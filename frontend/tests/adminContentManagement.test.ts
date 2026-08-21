@@ -3,8 +3,12 @@ import test from "node:test";
 
 import type { Board, MediaAsset, PostDetail } from "../types";
 import {
+  adminBoardCapability,
   adminBoardContentControl,
+  adminBoardsForScope,
+  adminScopeForBoard,
   adminContentBoards,
+  nextAdminBoardSelection,
   nextAdminContentSelection,
   replaceRepresentativeImage,
   representativeImageUpdatePayload,
@@ -46,6 +50,61 @@ const boards: Board[] = [
   board({ id: 16, name: "건의사항 피드백", slug: "gsa-feedback", category: "gsa", board_type: "post", write_permission: "admin" }),
   board({ id: 17, name: "FAQ", slug: "gsa-faq", category: "gsa", board_type: "faq", write_permission: "admin" }),
 ];
+
+const registryBoards: Board[] = [
+  board({ id: 1, name: "전체 공지", slug: "all-notices", category: "notices", board_type: "notice" }),
+  board({ id: 2, name: "학사 일정", slug: "academic-calendar", category: "notices", board_type: "calendar" }),
+  board({ id: 3, name: "회계", slug: "accounting", category: "council", board_type: "external_link" }),
+  board({ id: 4, name: "임원진 소개", slug: "gsa-executives", category: "gsa", board_type: "organization_intro" }),
+  board({ id: 5, name: "FAQ", slug: "gsa-faq", category: "gsa", board_type: "faq" }),
+  board({ id: 6, name: "로드맵", slug: "gsa-roadmap-benefits", category: "gsa", board_type: "guide" }),
+  board({ id: 7, name: "알 수 없는 게시판", slug: "future-board", category: "future", board_type: "future" }),
+];
+
+const capabilityBoards: Board[] = [
+  board({ id: 8, name: "강의 후기", slug: "lecture-reviews", category: "community", board_type: "post" }),
+  board({ id: 9, name: "시험 족보", slug: "exam-archive", category: "resources", board_type: "resource" }),
+  board({ id: 10, name: "네트워킹", slug: "networking-programs", category: "alumni", board_type: "post" }),
+];
+
+const boardBySlug = (slug: string) => [...registryBoards, ...capabilityBoards].find((item) => item.slug === slug)!;
+
+test("그룹은 표준 게시글이 없는 게시판까지 모두 포함한다", () => {
+  assert.deepEqual(adminBoardsForScope(registryBoards, "notices").map((item) => item.slug), ["all-notices", "academic-calendar"]);
+  assert.deepEqual(adminBoardsForScope(registryBoards, "council").map((item) => item.slug), ["accounting", "gsa-executives", "gsa-faq", "gsa-roadmap-benefits"]);
+});
+
+test("알 수 없는 category는 전체에만 표시한다", () => {
+  assert.deepEqual(adminBoardsForScope(registryBoards, "all").map((item) => item.slug), [
+    "all-notices", "academic-calendar", "accounting", "gsa-executives", "gsa-faq", "gsa-roadmap-benefits", "future-board",
+  ]);
+  assert.equal(adminBoardsForScope(registryBoards, "community").some((item) => item.slug === "future-board"), false);
+});
+
+test("게시판 유형은 기존 전용 편집기 capability로 연결된다", () => {
+  assert.equal(adminBoardCapability(boardBySlug("academic-calendar")).kind, "calendar");
+  assert.equal(adminBoardCapability(boardBySlug("accounting")).kind, "external-link");
+  assert.equal(adminBoardCapability(boardBySlug("gsa-executives")).kind, "organization-intro");
+  assert.equal(adminBoardCapability(boardBySlug("gsa-faq")).kind, "faq");
+  assert.deepEqual(adminBoardCapability(boardBySlug("gsa-roadmap-benefits")), { kind: "guide", contentAvailable: false, canReplaceRepresentativeImage: false, lockedPolicies: [] });
+});
+
+test("커뮤니티 개인정보 정책은 잠긴 상태로 노출된다", () => {
+  assert.deepEqual(adminBoardCapability(boardBySlug("lecture-reviews")).lockedPolicies.map((policy) => policy.key), ["forced-anonymous", "comments-disabled"]);
+  assert.deepEqual(adminBoardCapability(boardBySlug("exam-archive")).lockedPolicies.map((policy) => policy.key), ["author-visible", "comments-enabled"]);
+});
+
+test("category는 모든 화면에서 같은 관리자 scope로 계산한다", () => {
+  assert.equal(adminScopeForBoard(boardBySlug("exam-archive")), "community");
+  assert.equal(adminScopeForBoard(boardBySlug("networking-programs")), "participation");
+  assert.equal(adminScopeForBoard(boardBySlug("gsa-executives")), "council");
+});
+
+test("전체는 모든 게시판 가상 선택을 유지하고 실제 그룹은 유효한 첫 게시판을 선택한다", () => {
+  assert.equal(nextAdminBoardSelection(registryBoards, 99, "all"), null);
+  assert.equal(nextAdminBoardSelection(registryBoards, null, "notices"), boardBySlug("all-notices").id);
+  assert.equal(nextAdminBoardSelection([...registryBoards, ...capabilityBoards], boardBySlug("lecture-reviews").id, "community"), boardBySlug("lecture-reviews").id);
+});
 
 test("참여활동 탭은 참여·동아리·스터디·동문 게시글 게시판만 정렬해 보여준다", () => {
   assert.deepEqual(

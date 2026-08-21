@@ -2,21 +2,46 @@ import type { Board, MediaAsset, PostDetail } from "../types";
 
 export type AdminContentScope = "all" | "notices" | "participation" | "community" | "council";
 
+export type AdminBoardManagementTab = "content" | "settings";
+
+export type AdminBoardSettingKey = "allow_anonymous" | "write_permission" | "read_permission";
+
+export type AdminBoardLockedPolicy = {
+  key: string;
+  label: string;
+  reason: string;
+  settingKey: AdminBoardSettingKey | null;
+};
+
 export type AdminBoardContentKind =
+  | "aggregate-posts"
+  | "posts"
   | "notice"
-  | "participation-guide"
-  | "suggestion"
-  | "mutual-aid"
   | "album"
   | "activity-certification"
   | "activity-history"
   | "resource"
-  | "standard";
+  | "suggestion"
+  | "mutual-aid"
+  | "calendar"
+  | "external-link"
+  | "organization-intro"
+  | "faq"
+  | "guide";
+
+type AdminBoardLegacyContentKind = AdminBoardContentKind | "participation-guide" | "standard";
+
+export type AdminBoardCapability = {
+  kind: AdminBoardContentKind;
+  contentAvailable: boolean;
+  canReplaceRepresentativeImage: boolean;
+  lockedPolicies: AdminBoardLockedPolicy[];
+};
 
 export type AdminBoardDedicatedSection = "notices" | "suggestions" | "mutualAid";
 
 export type AdminBoardContentControl = {
-  kind: AdminBoardContentKind;
+  kind: AdminBoardLegacyContentKind;
   description: string;
   createLabel: string | null;
   dedicatedSection: AdminBoardDedicatedSection | null;
@@ -41,6 +66,66 @@ const SCOPE_CATEGORIES: Record<Exclude<AdminContentScope, "all">, readonly strin
   community: ["community", "resources"],
   council: ["council", "gsa"],
 };
+
+export function adminBoardsForScope(boards: Board[], scope: AdminContentScope): Board[] {
+  const categories = scope === "all" ? null : SCOPE_CATEGORIES[scope];
+  return boards
+    .filter((board) => categories === null || categories.includes(board.category))
+    .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+}
+
+export function adminScopeForBoard(board: Board): AdminContentScope {
+  for (const [scope, categories] of Object.entries(SCOPE_CATEGORIES) as [Exclude<AdminContentScope, "all">, readonly string[]][]) {
+    if (categories.includes(board.category)) return scope;
+  }
+  return "all";
+}
+
+const lockedPolicy = (key: string, label: string, reason: string, settingKey: AdminBoardSettingKey | null): AdminBoardLockedPolicy => ({ key, label, reason, settingKey });
+
+export function adminBoardCapability(board?: Board): AdminBoardCapability {
+  if (!board) return { kind: "aggregate-posts", contentAvailable: true, canReplaceRepresentativeImage: false, lockedPolicies: [] };
+
+  const kindByType: Record<string, AdminBoardContentKind> = {
+    post: "posts",
+    notice: "notice",
+    album: "album",
+    resource: "resource",
+    activity_certification: "activity-certification",
+    activity_history: "activity-history",
+    suggestion: "suggestion",
+    mutual_aid: "mutual-aid",
+    calendar: "calendar",
+    external_link: "external-link",
+    organization_intro: "organization-intro",
+    faq: "faq",
+    guide: "guide",
+  };
+  const kind = kindByType[board.board_type] ?? "posts";
+  const lockedPolicies: AdminBoardLockedPolicy[] = [];
+  if (board.slug === "lecture-reviews") {
+    lockedPolicies.push(
+      lockedPolicy("forced-anonymous", "강제 익명", "강의 후기는 작성자 익명으로 운영합니다.", "allow_anonymous"),
+      lockedPolicy("comments-disabled", "댓글 비활성화", "강의 후기에는 댓글을 허용하지 않습니다.", null),
+    );
+  } else if (board.slug === "exam-archive") {
+    lockedPolicies.push(
+      lockedPolicy("author-visible", "작성자 표시", "시험 족보는 작성자를 표시합니다.", "allow_anonymous"),
+      lockedPolicy("comments-enabled", "댓글 활성화", "시험 족보에는 댓글을 허용합니다.", null),
+    );
+  } else if (board.slug === "suggestions") {
+    lockedPolicies.push(lockedPolicy("allow-anonymous", "익명 허용", "건의사항은 익명 작성 정책을 사용합니다.", "allow_anonymous"));
+  } else if (board.slug === "club-promo" || board.slug === "networking-programs") {
+    lockedPolicies.push(lockedPolicy("admin-only-write", "관리자 작성", "이 안내 게시판은 관리자만 작성합니다.", "write_permission"));
+  }
+
+  return {
+    kind,
+    contentAvailable: kind !== "guide",
+    canReplaceRepresentativeImage: board.slug === "club-promo" || board.slug === "networking-programs",
+    lockedPolicies,
+  };
+}
 
 export function adminContentBoards(boards: Board[], scope: AdminContentScope): Board[] {
   const categories = scope === "all" ? null : SCOPE_CATEGORIES[scope];
@@ -178,6 +263,17 @@ export function nextAdminContentSelection(
 ): number | null {
   if (nextScope === "all") return null;
   const visibleBoards = adminContentBoards(boards, nextScope);
+  if (visibleBoards.some((board) => board.id === currentBoardId)) return currentBoardId;
+  return visibleBoards[0]?.id ?? null;
+}
+
+export function nextAdminBoardSelection(
+  boards: Board[],
+  currentBoardId: number | null,
+  nextScope: AdminContentScope,
+): number | null {
+  if (nextScope === "all") return null;
+  const visibleBoards = adminBoardsForScope(boards, nextScope);
   if (visibleBoards.some((board) => board.id === currentBoardId)) return currentBoardId;
   return visibleBoards[0]?.id ?? null;
 }
