@@ -256,7 +256,7 @@ test("설정 저장은 대상 게시판 일치 여부를 확인하고 네비게�
   assert.equal((saveHandler.match(/boardSettingsSaveResult\(/g) ?? []).length, 2);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["admin-boards"\] \}\)/);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["boards"\] \}\)/);
-  assert.match(adminSource, /disabled=\{boardSettingsSaving\}/);
+  assert.match(adminSource, /disabled=\{boardSettingsSaving \|\| externalLinkSaving\}/);
   assert.match(adminSource, /setQueryData<AdminBoardsQueryData>/);
   assert.match(adminSource, /setOptimisticManagedBoard\(\{ board: created\.data, insertedGeneration \}\)/);
   assert.match(adminSource, /shouldClearOptimisticCreatedBoard\(/);
@@ -471,6 +471,28 @@ test("외부 링크 draft 전이는 같은 게시판 refresh를 무시하고 선
     transitions.externalLinkSaveTransition(dirty, 41, "https://stale.example.com"),
     dirty,
   );
+});
+
+test("외부 링크 저장 중 탐색은 동기적으로 거절하고 허용된 선택은 즉시 응답 가드를 바꾼다", () => {
+  const transitions = loadExternalLinkDraftTransitions();
+  assert.deepEqual(transitions.externalLinkNavigationTransition(40, 41, true), {
+    accepted: false,
+    boardId: 40,
+  });
+  assert.deepEqual(transitions.externalLinkNavigationTransition(40, 41, false), {
+    accepted: true,
+    boardId: 41,
+  });
+  const boardBAfterAcceptedSelection = { boardId: 41, draft: "https://b.example.com/dirty" };
+  assert.equal(
+    transitions.externalLinkSaveTransition(boardBAfterAcceptedSelection, 40, "https://a.example.com/saved"),
+    boardBAfterAcceptedSelection,
+  );
+
+  assert.match(adminSource, /boardSettingsSavingRef\.current \|\| externalLinkSavingRef\.current/);
+  assert.match(adminSource, /disabled=\{boardSettingsSaving \|\| externalLinkSaving\}/);
+  assert.match(adminSource, /syncExternalLinkNavigationBoardId\(transition\.boardId\)/);
+  assert.match(adminSource, /syncExternalLinkNavigationBoardId\(item\.board_id\)/);
 });
 
 test("가이드는 읽기 전용 안내만 표시하고 metadata 저장값을 만들지 않는다", () => {

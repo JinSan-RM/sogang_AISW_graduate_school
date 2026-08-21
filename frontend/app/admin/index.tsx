@@ -573,6 +573,16 @@ export function externalLinkSaveTransition(
   return { ...current, draft: savedUrl.trim() };
 }
 
+export function externalLinkNavigationTransition(
+  currentBoardId: number | null,
+  nextBoardId: number | null,
+  saving: boolean,
+): { accepted: boolean; boardId: number | null } {
+  return saving
+    ? { accepted: false, boardId: currentBoardId }
+    : { accepted: true, boardId: nextBoardId };
+}
+
 function Panel({ children }: { children: ReactNode }) {
   return (
     <View
@@ -1841,7 +1851,6 @@ export default function AdminScreen() {
   }, [boardManagementBoardId]);
 
   useEffect(() => {
-    if (externalLinkBoardIdRef.current === externalLinkSelectedBoardId) return;
     const board = externalLinkSelectedBoardRef.current;
     externalLinkBoardIdRef.current = externalLinkSelectedBoardId;
     setExternalLinkDraftState((current) => externalLinkBoardTransition(current, board));
@@ -2265,6 +2274,7 @@ export default function AdminScreen() {
           }));
           const insertedGeneration = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"])?.dataUpdateCount ?? 0;
           setOptimisticManagedBoard({ board: created.data, insertedGeneration });
+          syncExternalLinkNavigationBoardId(transition.boardId);
           boardManagementBoardIdRef.current = transition.boardId;
           setBoardManagementScope(transition.scope);
           setBoardManagementBoardId(transition.boardId);
@@ -2281,9 +2291,21 @@ export default function AdminScreen() {
     }
   };
 
+  const syncExternalLinkNavigationBoardId = (nextBoardId: number | null) => {
+    const transition = externalLinkNavigationTransition(
+      externalLinkBoardIdRef.current,
+      nextBoardId,
+      externalLinkSavingRef.current,
+    );
+    if (!transition.accepted) return false;
+    externalLinkBoardIdRef.current = transition.boardId;
+    return true;
+  };
+
   const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
-    if (boardSettingsSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
     const transition = adminBoardScopeTransition(boards, boardManagementBoardId, nextScope);
+    if (!syncExternalLinkNavigationBoardId(transition.boardId)) return;
     boardManagementBoardIdRef.current = transition.boardId;
     setBoardManagementScope(transition.scope);
     setBoardManagementBoardId(transition.boardId);
@@ -2292,11 +2314,12 @@ export default function AdminScreen() {
   };
 
   const handleBoardManagementBoardChange = (boardId: number | null) => {
-    if (boardSettingsSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
     if (managedContentKind === "notice" && boardId !== selectedNoticeBoardIdRef.current) {
       resetNoticeForm();
     }
     const transition = adminBoardSelectionTransition(boardId);
+    if (!syncExternalLinkNavigationBoardId(transition.boardId)) return;
     boardManagementBoardIdRef.current = transition.boardId;
     setBoardManagementBoardId(transition.boardId);
     setBoardManagementTab(transition.tab);
@@ -2304,7 +2327,7 @@ export default function AdminScreen() {
   };
 
   const handleCreateManagedBoard = () => {
-    if (boardSettingsSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
     const transition = adminBoardCreateTransition();
     resetBoardForm();
     setCreatingBoard(transition.creatingBoard);
@@ -2312,7 +2335,7 @@ export default function AdminScreen() {
   };
 
   const handleBoardManagementTabChange = (tab: AdminBoardManagementTab) => {
-    if (boardSettingsSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
     setBoardManagementTab(tab);
   };
 
@@ -3114,6 +3137,7 @@ export default function AdminScreen() {
   };
 
   const handleEditActivityHistoryNotice = (item: PostListItem) => {
+    if (!syncExternalLinkNavigationBoardId(item.board_id)) return;
     resetNoticeForm();
     selectedNoticeBoardIdRef.current = item.board_id;
     setSelectedNoticeBoardId(item.board_id);
@@ -4130,7 +4154,7 @@ export default function AdminScreen() {
                 selectedBoardId={boardManagementBoardId}
                 selectedTab={boardManagementTab}
                 creatingBoard={creatingBoard}
-                disabled={boardSettingsSaving}
+                disabled={boardSettingsSaving || externalLinkSaving}
                 onScopeChange={handleBoardManagementScopeChange}
                 onBoardChange={handleBoardManagementBoardChange}
                 onTabChange={handleBoardManagementTabChange}
