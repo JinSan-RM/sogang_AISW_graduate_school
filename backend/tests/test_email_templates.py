@@ -17,8 +17,8 @@ from app.email_templates import (
         ),
         (
             password_reset_email,
-            "비밀번호 재설정",
-            "안녕하세요. 비밀번호 재설정을 요청하셨어요. 아래 인증번호를 입력해주세요.",
+            "인증번호 안내",
+            "안녕하세요. 아래 인증번호를 입력해주세요.",
         ),
         (
             account_deletion_email,

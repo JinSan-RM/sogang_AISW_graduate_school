@@ -136,8 +136,9 @@ def password_reset_email(
     *,
     contact_email: str | None = None,
 ) -> tuple[str, str]:
-    title = "비밀번호 재설정"
-    intro = "안녕하세요. 비밀번호 재설정을 요청하셨어요. 아래 인증번호를 입력해주세요."
+    # 회원가입 인증 메일과 동일한 "인증번호 안내" 디자인을 쓴다.
+    title = "인증번호 안내"
+    intro = "안녕하세요. 아래 인증번호를 입력해주세요."
     return (
         _plain_email(title, intro, token, expiry_minutes, contact_email),
         _html_email(

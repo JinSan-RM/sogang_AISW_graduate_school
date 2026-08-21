@@ -10,7 +10,7 @@ import ExpandableNaturalAspectMediaImage from "../../../../components/Expandable
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
-import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, CommunityTabIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import {
@@ -864,7 +864,11 @@ export default function PostDetailScreen() {
 
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
-            <Text style={styles.officialReplyTitle}>💬 원우회 답변</Text>
+            {/* 💬 이모지는 일부 윈도우 환경에서 렌더링되지 않아 SVG 아이콘으로 대체 */}
+            <View style={styles.officialReplyTitleRow}>
+              <CommunityTabIcon size={15} color="#2761FF" />
+              <Text style={styles.officialReplyTitle}>원우회 답변</Text>
+            </View>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
             {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{formatBoardDate(post.suggestion.replied_at)}</Text> : null}
           </View>
@@ -1980,6 +1984,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 24,
     gap: 8,
+  },
+  officialReplyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   officialReplyTitle: {
     color: "#2761FF",
