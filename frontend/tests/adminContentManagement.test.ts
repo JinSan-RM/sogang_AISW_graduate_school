@@ -3,11 +3,12 @@ import test from "node:test";
 
 import type { Board, MediaAsset, PostDetail } from "../types";
 import {
+  adminDeferredEventGateInitialState,
+  adminDeferredEventGateTransition,
   adminBoardCapability,
   adminBoardContentControl,
   adminBoardDestinationForLegacySection,
   adminBoardDestinationForSlug,
-  adminBoardLegacySectionTransition,
   adminBoardNavigationTransition,
   adminBoardsForScope,
   adminCalendarQueryEnabled,
@@ -190,8 +191,20 @@ test("레거시 대상 게시판이 없으면 전체 콘텐츠로 안전하게 �
 });
 
 test("raw 레거시 section 전이는 게시판 준비 후 링크별 한 번만 실행한다", () => {
-  assert.equal(adminBoardLegacySectionTransition("events", null, allFixtureBoards, false), null);
-  const events = adminBoardLegacySectionTransition("events", null, allFixtureBoards, true);
+  const transition = (
+    rawSection: string,
+    handledSection: string | null,
+    boardsReady: boolean,
+    rawLinkKey: string = rawSection,
+  ) => adminBoardNavigationTransition(handledSection, {
+    type: "legacy",
+    rawSection,
+    boards: allFixtureBoards,
+    boardsReady,
+    rawLinkKey,
+  });
+  assert.equal(transition("events", null, false), null);
+  const events = transition("events", null, true);
   assert.deepEqual(events, {
     handledSection: "events",
     destination: {
@@ -200,8 +213,8 @@ test("raw 레거시 section 전이는 게시판 준비 후 링크별 한 번만 
       tab: "content",
     },
   });
-  assert.equal(adminBoardLegacySectionTransition("events", "events", allFixtureBoards, true), null);
-  assert.deepEqual(adminBoardLegacySectionTransition("events", "events:1", allFixtureBoards, true, "events:2"), {
+  assert.equal(transition("events", "events", true), null);
+  assert.deepEqual(transition("events", "events:1", true, "events:2"), {
     handledSection: "events:2",
     destination: {
       scope: "notices",
@@ -209,7 +222,7 @@ test("raw 레거시 section 전이는 게시판 준비 후 링크별 한 번만 
       tab: "content",
     },
   });
-  assert.deepEqual(adminBoardLegacySectionTransition("faqs", "events", allFixtureBoards, true), {
+  assert.deepEqual(transition("faqs", "events", true), {
     handledSection: "faqs",
     destination: {
       scope: "council",
@@ -217,11 +230,11 @@ test("raw 레거시 section 전이는 게시판 준비 후 링크별 한 번만 
       tab: "content",
     },
   });
-  assert.deepEqual(adminBoardLegacySectionTransition("dashboard", "events", allFixtureBoards, true), {
+  assert.deepEqual(transition("dashboard", "events", true), {
     handledSection: "dashboard",
     destination: null,
   });
-  assert.deepEqual(adminBoardLegacySectionTransition("events", "dashboard", allFixtureBoards, true), {
+  assert.deepEqual(transition("events", "dashboard", true), {
     handledSection: "events",
     destination: {
       scope: "notices",
@@ -301,6 +314,49 @@ test("변경되지 않은 레거시 링크는 최초 한 번 변환되고 URL �
     boards: allFixtureBoards,
     boardsReady: true,
   }), initial);
+});
+
+test("이벤트 딥링크는 최초 로드되고 명시적 이동 뒤 늦은 로드·누락 결과는 취소된다", () => {
+  const eventLink = "events::41";
+  const legacy = adminBoardNavigationTransition(null, {
+    type: "legacy",
+    rawSection: "events",
+    rawLinkKey: eventLink,
+    boards: allFixtureBoards,
+    boardsReady: true,
+  });
+  assert.equal(legacy?.destination?.boardId, boardBySlug("academic-calendar").id);
+
+  const initialState = adminDeferredEventGateInitialState(eventLink);
+  const initialLoad = adminDeferredEventGateTransition(initialState, { type: "apply", rawLinkKey: eventLink });
+  assert.equal(initialLoad.shouldApply, true);
+
+  const cancelledForBanners = adminDeferredEventGateTransition(initialState, { type: "cancel", rawLinkKey: eventLink });
+  assert.equal(adminDeferredEventGateTransition(cancelledForBanners.state, {
+    type: "apply",
+    rawLinkKey: eventLink,
+  }).shouldApply, false);
+
+  const cancelledForManagedShortcut = adminDeferredEventGateTransition(initialState, { type: "cancel", rawLinkKey: eventLink });
+  assert.equal(adminDeferredEventGateTransition(cancelledForManagedShortcut.state, {
+    type: "apply",
+    rawLinkKey: eventLink,
+  }).shouldApply, false);
+});
+
+test("이벤트 URL 발생 회차는 다른 raw key를 거친 뒤 같은 문자열로 재방문하면 새로 허용된다", () => {
+  const eventLink = "events::41";
+  const cancelled = adminDeferredEventGateTransition(
+    adminDeferredEventGateInitialState(eventLink),
+    { type: "cancel", rawLinkKey: eventLink },
+  );
+  const away = adminDeferredEventGateTransition(cancelled.state, { type: "sync", rawLinkKey: "banners::" });
+  const revisited = adminDeferredEventGateTransition(away.state, { type: "sync", rawLinkKey: eventLink });
+  assert.equal(revisited.state.occurrence, cancelled.state.occurrence + 2);
+  assert.equal(adminDeferredEventGateTransition(revisited.state, {
+    type: "apply",
+    rawLinkKey: eventLink,
+  }).shouldApply, true);
 });
 
 test("대시보드 게시판 바로가기는 실제 slug와 탭을 통합 목적지로 계산한다", () => {

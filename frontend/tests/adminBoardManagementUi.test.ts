@@ -194,6 +194,33 @@ test("레거시 section query는 게시판 조회 완료 후 raw 링크별 한 �
   assert.match(adminSource, /adminBoardNavigationTransition\([\s\S]*?type: "explicit"/);
 });
 
+test("이벤트 로드와 누락 후속 effect는 명시적 이동 취소 게이트를 먼저 통과한다", () => {
+  assert.match(adminSource, /const deferredEventNavigationRef = useRef/);
+  assert.match(adminSource, /type: "sync",\s*rawLinkKey: rawAdminLinkKey/);
+  const explicitNavigation = adminSource.slice(
+    adminSource.indexOf("const beginExplicitAdminNavigation"),
+    adminSource.indexOf("const openAdminSection"),
+  );
+  assert.match(explicitNavigation, /adminDeferredEventGateTransition/);
+  assert.match(explicitNavigation, /type: "cancel"/);
+
+  const missingEventEffect = adminSource.slice(
+    adminSource.indexOf("if (!editEventMissing)"),
+    adminSource.indexOf("const event = editEventQuery.data?.data"),
+  );
+  assert.match(missingEventEffect, /adminDeferredEventGateTransition/);
+  assert.match(missingEventEffect, /type: "apply"/);
+  assert.ok(missingEventEffect.indexOf("shouldApply") < missingEventEffect.indexOf("router.replace"));
+
+  const loadedEventEffect = adminSource.slice(
+    adminSource.indexOf("const event = editEventQuery.data?.data"),
+    adminSource.indexOf("const currentBanners = bannersQuery.data?.data"),
+  );
+  assert.match(loadedEventEffect, /adminDeferredEventGateTransition/);
+  assert.match(loadedEventEffect, /type: "apply"/);
+  assert.ok(loadedEventEffect.indexOf("shouldApply") < loadedEventEffect.indexOf('setSection("boardManagement")'));
+});
+
 test("대시보드 게시판 카드는 실제 slug를 통합 선택 함수에 전달한다", () => {
   for (const slug of [
     "all-notices",

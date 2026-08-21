@@ -28,6 +28,22 @@ export type AdminBoardNavigationEvent =
     rawLinkKey: string;
   };
 
+export type AdminDeferredEventGateState = {
+  rawLinkKey: string;
+  occurrence: number;
+  cancelledOccurrence: number | null;
+};
+
+export type AdminDeferredEventGateEvent = {
+  type: "sync" | "cancel" | "apply";
+  rawLinkKey: string;
+};
+
+export type AdminDeferredEventGateTransition = {
+  state: AdminDeferredEventGateState;
+  shouldApply: boolean;
+};
+
 export type AdminBoardSettingKey = "allow_anonymous" | "write_permission" | "read_permission";
 
 export type AdminBoardLockedPolicy = {
@@ -147,22 +163,6 @@ export function adminBoardDestinationForLegacySection(
   return slug ? adminBoardDestinationForSlug(slug, boards) : null;
 }
 
-export function adminBoardLegacySectionTransition(
-  rawSection: string | undefined,
-  handledSection: string | null,
-  boards: Board[],
-  boardsReady: boolean,
-  rawLinkKey: string = rawSection ?? "",
-): AdminBoardLegacySectionTransition | null {
-  return adminBoardNavigationTransition(handledSection, {
-    type: "legacy",
-    rawSection,
-    boards,
-    boardsReady,
-    rawLinkKey,
-  });
-}
-
 export function adminBoardNavigationTransition(
   handledSection: string | null,
   event: AdminBoardNavigationEvent,
@@ -175,6 +175,33 @@ export function adminBoardNavigationTransition(
   return {
     handledSection: rawLinkKey,
     destination: adminBoardDestinationForLegacySection(event.rawSection, event.boards),
+  };
+}
+
+export function adminDeferredEventGateInitialState(rawLinkKey: string): AdminDeferredEventGateState {
+  return { rawLinkKey, occurrence: 0, cancelledOccurrence: null };
+}
+
+export function adminDeferredEventGateTransition(
+  state: AdminDeferredEventGateState,
+  event: AdminDeferredEventGateEvent,
+): AdminDeferredEventGateTransition {
+  const current = event.rawLinkKey === state.rawLinkKey
+    ? state
+    : {
+      rawLinkKey: event.rawLinkKey,
+      occurrence: state.occurrence + 1,
+      cancelledOccurrence: null,
+    };
+  if (event.type === "cancel") {
+    return {
+      state: { ...current, cancelledOccurrence: current.occurrence },
+      shouldApply: false,
+    };
+  }
+  return {
+    state: current,
+    shouldApply: event.type === "apply" && current.cancelledOccurrence !== current.occurrence,
   };
 }
 

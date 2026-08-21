@@ -43,6 +43,8 @@ import {
   adminBoardDestinationForLegacySection,
   adminBoardDestinationForSlug,
   adminBoardNavigationTransition,
+  adminDeferredEventGateInitialState,
+  adminDeferredEventGateTransition,
   adminCalendarQueryEnabled,
   adminFaqQueryEnabled,
   representativeImageUpdatePayload,
@@ -1544,6 +1546,7 @@ export default function AdminScreen() {
   const boardManagementBoardIdRef = useRef<number | null>(null);
   const boardSettingsSavingRef = useRef(false);
   const handledLegacySection = useRef<string | null>(null);
+  const deferredEventNavigationRef = useRef(adminDeferredEventGateInitialState(rawAdminLinkKey));
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
@@ -1850,6 +1853,14 @@ export default function AdminScreen() {
   }, [boardsQuery.dataUpdatedAt, boardsQuery.fetchStatus, optimisticManagedBoard, queriedManagedBoards, queryClient]);
 
   useEffect(() => {
+    const transition = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "sync",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = transition.state;
+  }, [rawAdminLinkKey]);
+
+  useEffect(() => {
     const intent = pendingBoardNavigationIntent;
     if (!intent || pendingBoardNavigationIntentRef.current !== intent) return;
     const resolution = adminBoardNavigationIntentResolution(intent, boards, boardsQuery.status);
@@ -1906,6 +1917,12 @@ export default function AdminScreen() {
     if (!editEventMissing) {
       return;
     }
+    const gate = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "apply",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = gate.state;
+    if (!gate.shouldApply) return;
     const destination = adminBoardDestinationForSlug("academic-calendar", boards);
     boardManagementBoardIdRef.current = destination.boardId;
     setSection("boardManagement");
@@ -1914,13 +1931,19 @@ export default function AdminScreen() {
     setBoardManagementTab(destination.tab);
     reset(emptyEvent);
     router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
-  }, [boards, editEventMissing, reset]);
+  }, [boards, editEventMissing, rawAdminLinkKey, reset]);
 
   useEffect(() => {
     const event = editEventQuery.data?.data;
     if (!event) {
       return;
     }
+    const gate = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "apply",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = gate.state;
+    if (!gate.shouldApply) return;
     const destination = adminBoardDestinationForSlug("academic-calendar", boards);
     boardManagementBoardIdRef.current = destination.boardId;
     setSection("boardManagement");
@@ -1935,7 +1958,7 @@ export default function AdminScreen() {
       location: event.location ?? "",
       description: event.description ?? "",
     });
-  }, [boards, editEventQuery.data?.data, reset]);
+  }, [boards, editEventQuery.data?.data, rawAdminLinkKey, reset]);
 
   useEffect(() => {
     const currentBanners = bannersQuery.data?.data ?? [];
@@ -2031,6 +2054,11 @@ export default function AdminScreen() {
     setPendingBoardNavigationIntent(null);
   };
   const beginExplicitAdminNavigation = () => {
+    const eventCancellation = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "cancel",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = eventCancellation.state;
     const acknowledgement = adminBoardNavigationTransition(handledLegacySection.current, {
       type: "explicit",
       rawLinkKey: rawAdminLinkKey,
