@@ -23,6 +23,7 @@ import {
   currentCouncilScreenState,
   fixedCouncilMemberProfile,
   pastCouncilFormsFromMetadata,
+  sortCouncilCardsDescending,
   type CouncilMemberFormData,
 } from "../../../utils/councilIntroductions";
 import { toAbsoluteMediaUrl } from "../../../utils/mediaAccess";
@@ -347,7 +348,7 @@ function firstMeaningfulParagraph(content: string) {
 }
 
 function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, unknown> | null) {
-  const configured = cohortLeaderFormsFromMetadata(metadata).map((card, index): CohortLeaderSummary => {
+  const configured = sortCouncilCardsDescending(cohortLeaderFormsFromMetadata(metadata)).map((card, index): CohortLeaderSummary => {
     const cohort = card.cohort.endsWith("기") ? card.cohort : `${card.cohort}기`;
     return {
       id: `configured-${cohort}-${index}`,
@@ -363,8 +364,8 @@ function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, 
     return configured;
   }
 
-  return posts
-    .map((post) => {
+  return sortCouncilCardsDescending(
+    posts.map((post) => {
       const content = post.content_preview || post.title;
       const cohort = extractCohort(post.title, content);
       const captain = extractLeaderName(content, cohort) || cleanPostTitle(post.title).replace(/^안녕하세요[!,.\s]*/, "").slice(0, 4) || "기장";
@@ -378,8 +379,8 @@ function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, 
           ...(extractViceLeaderName(content, cohort) ? [{ name: extractViceLeaderName(content, cohort) as string, cohort, role: "부기장" }] : []),
         ],
       };
-    })
-    .sort((a, b) => Number.parseInt(b.cohort, 10) - Number.parseInt(a.cohort, 10));
+    }),
+  );
 }
 
 function CohortLeaderScreen({
@@ -475,19 +476,21 @@ function CohortLeaderScreen({
 }
 
 function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): PastCouncilSummary[] {
-  return pastCouncilFormsFromMetadata(metadata).map((card, index): PastCouncilSummary => {
-    const cohort = card.cohort.endsWith("대") ? card.cohort : `${card.cohort.replace(/기$/, "")}대`;
-    return {
-      id: `past-${cohort}-${index}`,
-      cohort,
-      greeting: card.greeting || undefined,
-      intro: card.intro || undefined,
-      bannerImageUrl: card.banner_image_url || undefined,
-      photoUrls: [],
-      members: executiveMembersFromForms(card.members),
-      activities: pastCouncilActivitiesFromMetadata(card.activities),
-    };
-  });
+  return sortCouncilCardsDescending(
+    pastCouncilFormsFromMetadata(metadata).map((card, index): PastCouncilSummary => {
+      const cohort = card.cohort.endsWith("대") ? card.cohort : `${card.cohort.replace(/기$/, "")}대`;
+      return {
+        id: `past-${cohort}-${index}`,
+        cohort,
+        greeting: card.greeting || undefined,
+        intro: card.intro || undefined,
+        bannerImageUrl: card.banner_image_url || undefined,
+        photoUrls: [],
+        members: executiveMembersFromForms(card.members),
+        activities: pastCouncilActivitiesFromMetadata(card.activities),
+      };
+    }),
+  );
 }
 
 function PhotoSlider({ photos }: { photos: string[] }) {

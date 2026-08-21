@@ -250,6 +250,35 @@ test("소개 카드와 임원 카드는 위아래 이동 후 저장 순서를 �
   assert.deepEqual(introUtils.moveCouncilIntroductionItem(original, 2, 3), original);
 });
 
+test("사용자용 기장단과 역대 원우회 목록은 숫자 기수·대수를 안정적인 내림차순으로 정렬한다", async () => {
+  const introUtils = await introUtilsPromise;
+  assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");
+
+  const storedOrder = [
+    { cohort: "68기", name: "68기" },
+    { cohort: "67", name: "67기" },
+    { cohort: "미상", name: "첫 번째 비정형" },
+    { cohort: "73기", name: "첫 번째 73기" },
+    { cohort: "69대", name: "69대" },
+    { cohort: "미정", name: "두 번째 비정형" },
+    { cohort: "73대", name: "두 번째 73대" },
+  ];
+
+  assert.deepEqual(
+    introUtils.sortCouncilCardsDescending(storedOrder).map((item) => item.name),
+    ["첫 번째 73기", "두 번째 73대", "69대", "68기", "67기", "첫 번째 비정형", "두 번째 비정형"],
+  );
+  assert.deepEqual(storedOrder.map((item) => item.name), [
+    "68기",
+    "67기",
+    "첫 번째 비정형",
+    "첫 번째 73기",
+    "69대",
+    "두 번째 비정형",
+    "두 번째 73대",
+  ]);
+});
+
 test("기장단은 새 임원 배열을 우선하고 기존 기장·부기장 데이터도 임원 카드로 변환한다", async () => {
   const introUtils = await introUtilsPromise;
   assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");

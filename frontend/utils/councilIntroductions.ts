@@ -131,6 +131,26 @@ export function moveCouncilIntroductionItem<T>(items: readonly T[], fromIndex: n
   return next;
 }
 
+export function sortCouncilCardsDescending<T extends { cohort: string }>(cards: readonly T[]): T[] {
+  return cards
+    .map((card, index) => ({
+      card,
+      index,
+      cohortNumber: Number.parseInt(card.cohort.match(/\d+/)?.[0] ?? "", 10),
+    }))
+    .sort((left, right) => {
+      const leftIsNumeric = Number.isFinite(left.cohortNumber);
+      const rightIsNumeric = Number.isFinite(right.cohortNumber);
+      if (leftIsNumeric && rightIsNumeric) {
+        return right.cohortNumber - left.cohortNumber || left.index - right.index;
+      }
+      if (leftIsNumeric) return -1;
+      if (rightIsNumeric) return 1;
+      return left.index - right.index;
+    })
+    .map(({ card }) => card);
+}
+
 type Metadata = Record<string, unknown> | null | undefined;
 
 function recordValue(value: unknown): Record<string, unknown> | null {
