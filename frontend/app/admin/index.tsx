@@ -36,6 +36,8 @@ import {
   adminBoardDestinationForLegacySection,
   adminBoardDestinationForSlug,
   adminBoardLegacySectionTransition,
+  adminCalendarQueryEnabled,
+  adminFaqQueryEnabled,
   representativeImageUpdatePayload,
   type AdminBoardContentKind,
   type AdminBoardDestination,
@@ -1632,7 +1634,12 @@ export default function AdminScreen() {
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
-    enabled: isAdmin && (Boolean(editEventId) || (isManagedContentActive && managedContentKind === "calendar")),
+    enabled: isAdmin && adminCalendarQueryEnabled(
+      section,
+      Boolean(editEventId),
+      isManagedContentActive,
+      managedContentKind,
+    ),
   });
   const adminEventList = eventsQuery.data?.data ?? [];
   const editEventExists = Boolean(editEventId) && adminEventList.some((event) => event.id === editEventId);
@@ -1656,7 +1663,7 @@ export default function AdminScreen() {
   const faqsQuery = useQuery({
     queryKey: ["admin-faqs"],
     queryFn: () => faqApi.getFAQs({ include_inactive: true }),
-    enabled: isAdmin && isManagedContentActive && managedContentKind === "faq",
+    enabled: isAdmin && adminFaqQueryEnabled(section, isManagedContentActive, managedContentKind),
   });
   const adminMajorsQuery = useQuery({
     queryKey: ["admin-registration-majors"],

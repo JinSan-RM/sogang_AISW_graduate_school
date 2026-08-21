@@ -143,6 +143,18 @@ test("게시판 관련 사이드 메뉴는 게시판 관리 하나만 남는다"
   for (const label of ["공지사항", "게시판", "원우회 소개", "기장단", "역대 원우회", "게시글", "건의사항", "상조회", "FAQ", "일정"]) {
     assert.doesNotMatch(sectionsSource, new RegExp(`label: "${label}"`));
   }
+  for (const [key, label] of [
+    ["dashboard", "콘솔"],
+    ["banners", "배너"],
+    ["boardManagement", "게시판 관리"],
+    ["accounts", "계정"],
+    ["duesPayers", "원우회비"],
+    ["reports", "신고"],
+    ["registration", "가입 설정"],
+  ]) {
+    assert.match(sectionsSource, new RegExp(`key: "${key}", label: "${label}"`));
+  }
+  assert.equal((sectionsSource.match(/key: "boardManagement"/g) ?? []).length, 1);
 });
 
 test("통합 전용 화면은 제거된 게시판 목록 편집 상태와 최상위 렌더 조건을 남기지 않는다", () => {
@@ -474,9 +486,9 @@ test("원우회 소개는 선택 게시판 slug로 기존 전용 편집기를 �
   assert.match(adminSource, /default:\s*return <UnsupportedBoardContent board=\{selectedManagedBoard\}/);
 });
 
-test("일정과 FAQ는 통합 콘텐츠에서만 조회하고 직접 일정 수정 링크는 유지한다", () => {
-  assert.match(adminSource, /enabled: isAdmin && \(Boolean\(editEventId\) \|\| \(isManagedContentActive && managedContentKind === "calendar"\)\)/);
-  assert.match(adminSource, /enabled: isAdmin && isManagedContentActive && managedContentKind === "faq"/);
+test("일정과 FAQ는 대시보드 집계와 통합 콘텐츠에서 조회하고 직접 일정 수정 링크를 유지한다", () => {
+  assert.match(adminSource, /enabled: isAdmin && adminCalendarQueryEnabled\(/);
+  assert.match(adminSource, /enabled: isAdmin && adminFaqQueryEnabled\(/);
   assert.match(adminSource, /eventsQuery\.refetch/);
   assert.match(adminSource, /faqsQuery\.refetch/);
 });

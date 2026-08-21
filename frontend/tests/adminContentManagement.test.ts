@@ -9,6 +9,8 @@ import {
   adminBoardDestinationForSlug,
   adminBoardLegacySectionTransition,
   adminBoardsForScope,
+  adminCalendarQueryEnabled,
+  adminFaqQueryEnabled,
   adminScopeForBoard,
   adminContentBoards,
   nextAdminBoardSelection,
@@ -244,6 +246,19 @@ test("대시보드 게시판 바로가기는 실제 slug와 탭을 통합 목적
     boardId: null,
     tab: "content",
   });
+});
+
+test("FAQ와 일정 쿼리는 대시보드 집계와 해당 통합 콘텐츠에서만 활성화된다", () => {
+  assert.equal(adminFaqQueryEnabled("dashboard", false, "aggregate-posts"), true);
+  assert.equal(adminFaqQueryEnabled("accounts", false, "faq"), false);
+  assert.equal(adminFaqQueryEnabled("boardManagement", true, "faq"), true);
+  assert.equal(adminFaqQueryEnabled("boardManagement", true, "calendar"), false);
+
+  assert.equal(adminCalendarQueryEnabled("dashboard", false, false, "aggregate-posts"), true);
+  assert.equal(adminCalendarQueryEnabled("accounts", false, false, "calendar"), false);
+  assert.equal(adminCalendarQueryEnabled("boardManagement", false, true, "calendar"), true);
+  assert.equal(adminCalendarQueryEnabled("boardManagement", false, true, "faq"), false);
+  assert.equal(adminCalendarQueryEnabled("accounts", true, false, "posts"), true);
 });
 
 test("참여활동 탭은 참여·동아리·스터디·동문 게시글 게시판만 정렬해 보여준다", () => {

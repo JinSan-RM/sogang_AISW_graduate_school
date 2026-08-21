@@ -146,6 +146,25 @@ export function adminBoardLegacySectionTransition(
   return { handledSection: rawLinkKey, destination };
 }
 
+export function adminFaqQueryEnabled(
+  section: string,
+  isManagedContentActive: boolean,
+  kind: AdminBoardContentKind,
+): boolean {
+  return section === "dashboard" || (isManagedContentActive && kind === "faq");
+}
+
+export function adminCalendarQueryEnabled(
+  section: string,
+  hasEditEventId: boolean,
+  isManagedContentActive: boolean,
+  kind: AdminBoardContentKind,
+): boolean {
+  return section === "dashboard"
+    || hasEditEventId
+    || (isManagedContentActive && kind === "calendar");
+}
+
 const lockedPolicy = (key: string, label: string, reason: string, settingKey: AdminBoardSettingKey | null): AdminBoardLockedPolicy => ({ key, label, reason, settingKey });
 
 export function adminBoardCapability(board?: Board): AdminBoardCapability {
