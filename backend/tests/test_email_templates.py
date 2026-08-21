@@ -39,15 +39,14 @@ def test_auth_code_email_uses_concise_copy_and_a_monitored_contact(
     )
 
     for body in (plain_body, html_body):
-        assert "AI·SW CAMPUS" in body
+        assert "AI·SW 캠퍼스" in body
         assert title in body
         assert intro in body
         assert "123456" in body
+        assert "인증번호는 5분간 유효해요." in body
         assert "본인이 요청하지 않으셨다면 이 이메일을 무시해주세요." in body
-        assert "AI·SW대학원 30대 원우회 · 문의: A72040@sogang.ac.kr" in body
+        assert "AI·SW대학원 원우회 · 문의: A72040@sogang.ac.kr" in body
 
-    assert "인증번호는 5분간 유효해요." in plain_body
-    assert "인증번호는 <strong>5분</strong>간 유효해요." in html_body
     assert ">확인 코드<" not in html_body
 
 
@@ -83,3 +82,5 @@ def test_auth_code_email_uses_the_shared_simple_card_design(builder) -> None:
     assert "background-color:#e6f1fb" in normalized_html
     assert "color:#0c447c" in normalized_html
     assert "linear-gradient" not in normalized_html
+    # 시안 기준: 구분선은 푸터 위 하나만 둔다.
+    assert normalized_html.count("border-top") == 1

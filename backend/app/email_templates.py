@@ -4,8 +4,8 @@ from html import escape
 
 
 BRAND_NAME = "AI·SW CAMPUS"
-DISPLAY_BRAND_NAME = "AI·SW CAMPUS"
-FOOTER_ORGANIZATION = "AI·SW대학원 30대 원우회"
+DISPLAY_BRAND_NAME = "AI·SW 캠퍼스"
+FOOTER_ORGANIZATION = "AI·SW대학원 원우회"
 
 
 def _code_box(value: str, compact: bool = False) -> str:
@@ -87,9 +87,9 @@ def _html_email(
               </td>
             </tr>
             <tr>
-              <td style="padding:14px 40px;border-top:0.5px solid #E1E4E9;">
+              <td style="padding:0 40px 32px;">
                 <p style="margin:0;font-size:13px;line-height:1.6;color:#8A919C;">
-                  인증번호는 <strong>{expiry_minutes}분</strong>간 유효해요.<br>
+                  인증번호는 {expiry_minutes}분간 유효해요.<br>
                   본인이 요청하지 않으셨다면 이 이메일을 무시해주세요.
                 </p>
               </td>
