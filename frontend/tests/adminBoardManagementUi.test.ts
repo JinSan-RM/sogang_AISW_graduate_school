@@ -69,11 +69,13 @@ function loadContentPanelModule() {
   }).outputText;
   const module = { exports: {} as Record<string, unknown> };
   const mockRequire = (id: string) => {
-    if (id === "react-native") return { Text: "Text" };
+    if (id === "react-native") {
+      return { ActivityIndicator: "ActivityIndicator", Pressable: "Pressable", Text: "Text", View: "View" };
+    }
     return nodeRequire(id);
   };
   new Function("module", "exports", "require", compiled)(module, module.exports, mockRequire);
-  return module.exports as { default: (props: Record<string, unknown>) => unknown };
+  return module.exports as Record<string, (...args: unknown[]) => unknown>;
 }
 
 const board = (id: number, category: string): Board => ({
@@ -89,7 +91,10 @@ const board = (id: number, category: string): Board => ({
   is_active: true,
 });
 
-type RenderedElement = { type?: unknown; props?: { children?: unknown; disabled?: boolean } };
+type RenderedElement = {
+  type?: unknown;
+  props?: { children?: unknown; disabled?: boolean; onPress?: () => void };
+};
 
 function renderedElements(node: unknown): RenderedElement[] {
   if (Array.isArray(node)) return node.flatMap(renderedElements);
@@ -280,6 +285,103 @@ test("콘텐츠 패널은 capability kind에 맞는 renderer 하나만 실행한
   assert.equal(rendered.props?.children, "공지");
 });
 
+test("비활성 공지도 통합 화면에서는 admin endpoint 정책을 사용한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  const inactiveNotice = {
+    ...board(77, "notices"),
+    board_type: "notice",
+    is_active: false,
+  };
+  const unifiedPolicy = contentPanelModule.adminBoardContentQueryPolicy({
+    section: "boardManagement",
+    tab: "content",
+    kind: "notice",
+    board: inactiveNotice,
+  });
+  assert.deepEqual(unifiedPolicy, {
+    isManagedContentActive: true,
+    showsStandardPosts: false,
+    noticeSource: "admin",
+    noticeBoardId: 77,
+    showsSuggestions: false,
+    showsMutualAid: false,
+    showsActivityHistory: false,
+  });
+
+  const legacyPolicy = contentPanelModule.adminBoardContentQueryPolicy({
+    section: "notices",
+    tab: "content",
+    kind: "notice",
+    board: inactiveNotice,
+  }) as { noticeSource: string; noticeBoardId?: number };
+  assert.equal(legacyPolicy.noticeSource, "public");
+  assert.equal(legacyPolicy.noticeBoardId, undefined);
+});
+
+test("public 공지 소비자는 비활성 선택을 첫 활성 공지로 보정한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  const inactiveNotice = { ...board(77, "notices"), board_type: "notice", is_active: false };
+  const activeNotice = { ...board(88, "notices"), board_type: "notice", is_active: true };
+  assert.equal(contentPanelModule.publicNoticeBoardSelection([inactiveNotice, activeNotice], 77), 88);
+  assert.equal(contentPanelModule.publicNoticeBoardSelection([inactiveNotice, activeNotice], 88), 88);
+  assert.equal(contentPanelModule.publicNoticeBoardSelection([inactiveNotice], 77), null);
+});
+
+test("공지 게시판 전환은 다른 게시판의 편집 상태만 초기화한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  assert.deepEqual(contentPanelModule.noticeEditorBoardTransition(1, 2, 1), {
+    selectedBoardId: 2,
+    shouldResetEditor: true,
+  });
+  assert.deepEqual(contentPanelModule.noticeEditorBoardTransition(1, 2, 2), {
+    selectedBoardId: 2,
+    shouldResetEditor: false,
+  });
+  assert.deepEqual(contentPanelModule.noticeEditorBoardTransition(2, 2, 2), {
+    selectedBoardId: 2,
+    shouldResetEditor: false,
+  });
+});
+
+test("콘텐츠 쿼리 상태는 오류를 빈 상태보다 우선하고 재시도를 실행한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  let retries = 0;
+  const errorState = contentPanelModule.AdminBoardContentQueryState({
+    isLoading: false,
+    isError: true,
+    isEmpty: true,
+    emptyMessage: "비어 있음",
+    onRetry: () => {
+      retries += 1;
+    },
+  });
+  const errorElements = renderedElements(errorState);
+  const retryButton = errorElements.find((element) => element.type === "Pressable");
+  assert.ok(retryButton?.props?.onPress);
+  retryButton.props.onPress();
+  assert.equal(retries, 1);
+  assert.equal(JSON.stringify(errorState).includes("불러오지 못했습니다"), true);
+  assert.equal(JSON.stringify(errorState).includes("비어 있음"), false);
+
+  const loadingState = contentPanelModule.AdminBoardContentQueryState({
+    isLoading: true,
+    isError: false,
+    isEmpty: true,
+    emptyMessage: "비어 있음",
+    onRetry: () => undefined,
+  });
+  assert.equal(renderedElements(loadingState).some((element) => element.type === "ActivityIndicator"), true);
+
+  const emptyState = contentPanelModule.AdminBoardContentQueryState({
+    isLoading: false,
+    isError: false,
+    isEmpty: true,
+    emptyMessage: "비어 있음",
+    onRetry: () => undefined,
+  });
+  assert.equal(JSON.stringify(emptyState).includes("비어 있음"), true);
+});
+
 test("공지 건의 상조회는 통합 콘텐츠 renderer map으로 연결한다", () => {
   assert.match(adminSource, /"notice": renderNoticeContent/);
   assert.match(adminSource, /"suggestion": renderSuggestionContent/);
@@ -293,6 +395,8 @@ test("숨겨진 게시판 콘텐츠 쿼리는 실행하지 않고 대시보드 �
   assert.match(adminSource, /enabled: isAdmin && \(section === "dashboard" \|\| showsStandardPosts\)/);
   assert.match(adminSource, /section === "dashboard" \? undefined : appliedPostSearch\.trim\(\) \|\| undefined/);
   assert.match(adminSource, /section === "dashboard" \? undefined : managedStandardPostsBoardId/);
+  assert.match(adminSource, /unifiedNoticePostsQuery[\s\S]*?postApi\.getAdminPosts/);
+  assert.match(adminSource, /noticeQueryPolicy\.noticeSource === "admin"/);
 });
 
 test("활동내역 공지 편집은 통합 게시판 선택을 실제 공지 게시판으로 전환한다", () => {

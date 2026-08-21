@@ -9,7 +9,12 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextIn
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
-import AdminBoardContentPanel from "../../components/admin/AdminBoardContentPanel";
+import AdminBoardContentPanel, {
+  AdminBoardContentQueryState,
+  adminBoardContentQueryPolicy,
+  noticeEditorBoardTransition,
+  publicNoticeBoardSelection,
+} from "../../components/admin/AdminBoardContentPanel";
 import AdminBoardManagementNavigator, {
   adminBoardCreateCancelTransition,
   adminBoardCreationResult,
@@ -1561,7 +1566,10 @@ export default function AdminScreen() {
   const [editingBoardId, setEditingBoardId] = useState<number | null>(null);
   const [boardForm, setBoardForm] = useState<BoardForm>(emptyBoard);
   const [selectedNoticeBoardId, setSelectedNoticeBoardId] = useState<number | null>(null);
+  const selectedNoticeBoardIdRef = useRef<number | null>(null);
   const [editingNoticeId, setEditingNoticeId] = useState<number | null>(null);
+  const [editingNoticeBoardId, setEditingNoticeBoardId] = useState<number | null>(null);
+  const noticeEditRequestRef = useRef(0);
   const [noticeForm, setNoticeForm] = useState<NoticeForm>(emptyNotice);
   const [noticeAttachments, setNoticeAttachments] = useState<MediaAsset[]>([]);
   const [noticeMetadata, setNoticeMetadata] = useState<Record<string, unknown>>({});
@@ -1616,22 +1624,18 @@ export default function AdminScreen() {
   const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
   const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content";
   const managedContentKind = selectedBoardCapability.kind;
+  const noticeQueryPolicy = adminBoardContentQueryPolicy({
+    section,
+    tab: boardManagementTab,
+    kind: managedContentKind,
+    board: selectedManagedBoard,
+  });
   const managedStandardPostsBoardId = isManagedContentActive ? selectedManagedBoard?.id : postBoardId ?? undefined;
-  const showsStandardPosts = section === "posts" || (isManagedContentActive && [
-    "aggregate-posts",
-    "posts",
-    "resource",
-    "album",
-    "activity-certification",
-  ].includes(managedContentKind));
-  const showsNoticeContent = section === "notices"
-    || section === "banners"
-    || (isManagedContentActive && managedContentKind === "notice");
-  const showsSuggestionContent = section === "suggestions"
-    || (isManagedContentActive && managedContentKind === "suggestion");
-  const showsMutualAidContent = section === "mutualAid"
-    || (isManagedContentActive && managedContentKind === "mutual-aid");
-  const showsActivityHistoryContent = isManagedContentActive && managedContentKind === "activity-history";
+  const showsStandardPosts = noticeQueryPolicy.showsStandardPosts;
+  const showsSuggestionContent = noticeQueryPolicy.showsSuggestions;
+  const showsMutualAidContent = noticeQueryPolicy.showsMutualAid;
+  const showsActivityHistoryContent = noticeQueryPolicy.showsActivityHistory;
+  const publicNoticeBoardId = publicNoticeBoardSelection(managedBoards, selectedNoticeBoardId);
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
@@ -1672,9 +1676,20 @@ export default function AdminScreen() {
     enabled: isAdmin && section === "registration",
   });
   const noticePostsQuery = useQuery({
-    queryKey: ["admin-notices", selectedNoticeBoardId],
-    queryFn: () => postApi.getPosts(selectedNoticeBoardId ?? 0, 1, 50, { sort: "latest" }),
-    enabled: isAdmin && showsNoticeContent && Boolean(selectedNoticeBoardId),
+    queryKey: ["admin-notices", publicNoticeBoardId],
+    queryFn: () => postApi.getPosts(publicNoticeBoardId ?? 0, 1, 50, { sort: "latest" }),
+    enabled: isAdmin && noticeQueryPolicy.noticeSource === "public" && Boolean(publicNoticeBoardId),
+  });
+  const unifiedNoticePostsQuery = useQuery({
+    queryKey: ["admin-notices", "managed", noticeQueryPolicy.noticeBoardId],
+    queryFn: () => postApi.getAdminPosts({
+      page: 1,
+      size: 50,
+      board_id: noticeQueryPolicy.noticeBoardId,
+    }),
+    enabled: isAdmin
+      && noticeQueryPolicy.noticeSource === "admin"
+      && Boolean(noticeQueryPolicy.noticeBoardId),
   });
   const adminPostsQuery = useQuery({
     queryKey: [
@@ -1733,16 +1748,43 @@ export default function AdminScreen() {
   });
 
   useEffect(() => {
-    if (!selectedNoticeBoardId && noticeBoards[0]) {
-      setSelectedNoticeBoardId(noticeBoards[0].id);
-    }
-  }, [noticeBoards, selectedNoticeBoardId]);
+    const nextPublicBoardId = publicNoticeBoardSelection(noticeBoards, selectedNoticeBoardId);
+    const shouldInitialize = selectedNoticeBoardId === null && nextPublicBoardId !== null;
+    const shouldCorrectPublicSelection = noticeQueryPolicy.noticeSource === "public"
+      && selectedNoticeBoardId !== nextPublicBoardId;
+    if (!shouldInitialize && !shouldCorrectPublicSelection) return;
+    noticeEditRequestRef.current += 1;
+    selectedNoticeBoardIdRef.current = nextPublicBoardId;
+    setSelectedNoticeBoardId(nextPublicBoardId);
+    setEditingNoticeId(null);
+    setEditingNoticeBoardId(null);
+    setNoticeForm(emptyNotice);
+    setNoticeAttachments([]);
+    setNoticeMetadata({});
+    setNoticeUploadProgress(0);
+  }, [noticeBoards, noticeQueryPolicy.noticeSource, selectedNoticeBoardId]);
 
   useEffect(() => {
     if (isManagedContentActive && managedContentKind === "notice" && selectedManagedBoard) {
-      setSelectedNoticeBoardId(selectedManagedBoard.id);
+      const transition = noticeEditorBoardTransition(
+        selectedNoticeBoardIdRef.current,
+        selectedManagedBoard.id,
+        editingNoticeBoardId,
+      );
+      if (selectedNoticeBoardIdRef.current === transition.selectedBoardId) return;
+      noticeEditRequestRef.current += 1;
+      selectedNoticeBoardIdRef.current = transition.selectedBoardId;
+      setSelectedNoticeBoardId(transition.selectedBoardId);
+      if (transition.shouldResetEditor) {
+        setEditingNoticeId(null);
+        setEditingNoticeBoardId(null);
+        setNoticeForm(emptyNotice);
+        setNoticeAttachments([]);
+        setNoticeMetadata({});
+        setNoticeUploadProgress(0);
+      }
     }
-  }, [isManagedContentActive, managedContentKind, selectedManagedBoard]);
+  }, [editingNoticeBoardId, isManagedContentActive, managedContentKind, selectedManagedBoard]);
 
   useEffect(() => {
     setBoardSettingsDraft(selectedManagedBoard ? adminBoardSettingsDraft(selectedManagedBoard) : null);
@@ -1862,7 +1904,10 @@ export default function AdminScreen() {
   const adminMajors: MajorOption[] = adminMajorsQuery.data?.data ?? [];
   const adminPrivacyPolicy: PrivacyPolicyVersion | undefined = adminPrivacyPolicyQuery.data?.data;
   const events = adminEventList;
-  const noticePosts = noticePostsQuery.data?.data ?? [];
+  const activeNoticePostsQuery = noticeQueryPolicy.noticeSource === "admin"
+    ? unifiedNoticePostsQuery
+    : noticePostsQuery;
+  const noticePosts = activeNoticePostsQuery.data?.data ?? [];
   const adminPosts = adminPostsQuery.data?.data ?? [];
   const activityHistoryPosts = (activityHistoryPostsQuery.data?.data ?? [])
     .filter((item) => item.metadata?.show_in_council_activity === true);
@@ -1879,7 +1924,8 @@ export default function AdminScreen() {
   const adminPostTotal = adminPostsQuery.data?.pagination?.total ?? adminPosts.length;
   const stats = statsQuery.data?.data;
   const auditLogs: AdminAuditLog[] = auditLogsQuery.data?.data ?? [];
-  const selectedNoticeBoard = noticeBoards.find((board) => board.id === selectedNoticeBoardId);
+  const selectedNoticeBoard = noticeBoards.find((board) => board.id === selectedNoticeBoardId)
+    ?? (managedContentKind === "notice" ? selectedManagedBoard : undefined);
   const boardScopeFilter = BOARD_SCOPE_FILTERS.find((item) => item.key === boardScope) ?? BOARD_SCOPE_FILTERS[0];
   const visibleBoards =
     boardScopeFilter.key === "all" ? boards : boards.filter((board) => boardScopeFilter.categories.includes(board.category));
@@ -2193,6 +2239,9 @@ export default function AdminScreen() {
 
   const handleBoardManagementBoardChange = (boardId: number | null) => {
     if (boardSettingsSavingRef.current) return;
+    if (managedContentKind === "notice" && boardId !== selectedNoticeBoardIdRef.current) {
+      resetNoticeForm();
+    }
     const transition = adminBoardSelectionTransition(boardId);
     boardManagementBoardIdRef.current = transition.boardId;
     setBoardManagementBoardId(transition.boardId);
@@ -2350,17 +2399,37 @@ export default function AdminScreen() {
   );
 
   const resetNoticeForm = () => {
+    noticeEditRequestRef.current += 1;
     setEditingNoticeId(null);
+    setEditingNoticeBoardId(null);
     setNoticeForm(emptyNotice);
     setNoticeAttachments([]);
     setNoticeMetadata({});
     setNoticeUploadProgress(0);
   };
 
+  const handleSelectNoticeBoard = (nextBoardId: number) => {
+    const transition = noticeEditorBoardTransition(
+      selectedNoticeBoardIdRef.current,
+      nextBoardId,
+      editingNoticeBoardId,
+    );
+    if (transition.shouldResetEditor) resetNoticeForm();
+    selectedNoticeBoardIdRef.current = transition.selectedBoardId;
+    setSelectedNoticeBoardId(transition.selectedBoardId);
+  };
+
   const handleEditNotice = async (item: PostListItem) => {
+    const targetBoardId = item.board_id;
+    const requestId = ++noticeEditRequestRef.current;
     try {
       const detail = await postApi.getPostDetail(item.id);
+      if (
+        noticeEditRequestRef.current !== requestId
+        || selectedNoticeBoardIdRef.current !== targetBoardId
+      ) return;
       setEditingNoticeId(item.id);
+      setEditingNoticeBoardId(targetBoardId);
       setNoticeForm({
         title: detail.data.title,
         content: detail.data.content,
@@ -2372,6 +2441,7 @@ export default function AdminScreen() {
       setNoticeAttachments(detail.data.attachments ?? []);
       setNoticeMetadata(detail.data.metadata ?? {});
     } catch {
+      if (noticeEditRequestRef.current !== requestId) return;
       Alert.alert("불러오기 실패", "공지 상세를 불러올 수 없습니다.");
     }
   };
@@ -2397,6 +2467,10 @@ export default function AdminScreen() {
   const handleSaveNotice = async () => {
     if (!selectedNoticeBoardId) {
       Alert.alert("공지 확인", "공지 게시판을 선택하세요.");
+      return;
+    }
+    if (editingNoticeId && editingNoticeBoardId !== selectedNoticeBoardId) {
+      Alert.alert("공지 확인", "다른 공지 게시판의 수정 내용입니다. 공지를 다시 선택해주세요.");
       return;
     }
     if (!noticeForm.title.trim() || !noticeForm.content.trim()) {
@@ -2946,6 +3020,8 @@ export default function AdminScreen() {
   };
 
   const handleEditActivityHistoryNotice = (item: PostListItem) => {
+    resetNoticeForm();
+    selectedNoticeBoardIdRef.current = item.board_id;
     setSelectedNoticeBoardId(item.board_id);
     boardManagementBoardIdRef.current = item.board_id;
     setBoardManagementScope("notices");
@@ -2969,7 +3045,7 @@ export default function AdminScreen() {
                   key={board.id}
                   active={selectedNoticeBoardId === board.id}
                   label={board.name}
-                  onPress={() => setSelectedNoticeBoardId(board.id)}
+                  onPress={() => handleSelectNoticeBoard(board.id)}
                 />
               ))}
             </ScrollView>
@@ -3089,12 +3165,13 @@ export default function AdminScreen() {
       <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
         {selectedNoticeBoard?.name ?? "공지 게시판"} 목록
       </Text>
-      {noticePostsQuery.isLoading ? <ActivityIndicator /> : null}
-      {!noticePostsQuery.isLoading && noticePosts.length === 0 ? (
-        <Panel>
-          <Text style={{ color: COLORS.muted }}>표시할 공지사항이 없습니다.</Text>
-        </Panel>
-      ) : null}
+      <AdminBoardContentQueryState
+        isLoading={activeNoticePostsQuery.isLoading}
+        isError={activeNoticePostsQuery.isError}
+        isEmpty={noticePosts.length === 0}
+        emptyMessage="표시할 공지사항이 없습니다."
+        onRetry={() => void activeNoticePostsQuery.refetch()}
+      />
       {noticePosts.map((item) => (
         <NoticeCard key={item.id} item={item} onEdit={handleEditNotice} onPinToggle={handlePinNotice} onDelete={handleDeleteNotice} />
       ))}
@@ -3189,8 +3266,13 @@ export default function AdminScreen() {
             <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>총 {adminPostTotal}개 게시글</Text>
           </View>
         </Panel>
-        {adminPostsQuery.isLoading ? <ActivityIndicator /> : null}
-        {!adminPostsQuery.isLoading && adminPosts.length === 0 ? <Panel><Text style={{ color: COLORS.muted }}>표시할 게시글이 없습니다.</Text></Panel> : null}
+        <AdminBoardContentQueryState
+          isLoading={adminPostsQuery.isLoading}
+          isError={adminPostsQuery.isError}
+          isEmpty={adminPosts.length === 0}
+          emptyMessage="표시할 게시글이 없습니다."
+          onRetry={() => void adminPostsQuery.refetch()}
+        />
         {adminPosts.map((item) => (
           <AdminPostCard
             key={item.id}
@@ -3224,10 +3306,13 @@ export default function AdminScreen() {
           </Text>
         </View>
       </Panel>
-      {mutualAidPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-      {!mutualAidPostsQuery.isLoading && visibleMutualAidPosts.length === 0 ? (
-        <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 상조회 신청이 없습니다.</Text></Panel>
-      ) : null}
+      <AdminBoardContentQueryState
+        isLoading={mutualAidPostsQuery.isLoading}
+        isError={mutualAidPostsQuery.isError}
+        isEmpty={visibleMutualAidPosts.length === 0}
+        emptyMessage="해당 상태의 상조회 신청이 없습니다."
+        onRetry={() => void mutualAidPostsQuery.refetch()}
+      />
       {visibleMutualAidPosts.map((item) => <MutualAidAdminCard key={item.id} item={item} />)}
     </View>
   );
@@ -3250,10 +3335,13 @@ export default function AdminScreen() {
           </Text>
         </View>
       </Panel>
-      {suggestionPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-      {!suggestionPostsQuery.isLoading && visibleSuggestionPosts.length === 0 ? (
-        <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 건의사항이 없습니다.</Text></Panel>
-      ) : null}
+      <AdminBoardContentQueryState
+        isLoading={suggestionPostsQuery.isLoading}
+        isError={suggestionPostsQuery.isError}
+        isEmpty={visibleSuggestionPosts.length === 0}
+        emptyMessage="해당 상태의 건의사항이 없습니다."
+        onRetry={() => void suggestionPostsQuery.refetch()}
+      />
       {visibleSuggestionPosts.map((item) => <SuggestionAdminCard key={item.id} item={item} />)}
     </View>
   );
@@ -3268,10 +3356,13 @@ export default function AdminScreen() {
           </Text>
         </View>
       </Panel>
-      {activityHistoryPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-      {!activityHistoryPostsQuery.isLoading && activityHistoryPosts.length === 0 ? (
-        <Panel><Text style={{ color: COLORS.muted }}>연동된 공지사항이 없습니다.</Text></Panel>
-      ) : null}
+      <AdminBoardContentQueryState
+        isLoading={activityHistoryPostsQuery.isLoading}
+        isError={activityHistoryPostsQuery.isError}
+        isEmpty={activityHistoryPosts.length === 0}
+        emptyMessage="연동된 공지사항이 없습니다."
+        onRetry={() => void activityHistoryPostsQuery.refetch()}
+      />
       {activityHistoryPosts.map((item) => (
         <NoticeCard
           key={item.id}
@@ -3606,7 +3697,7 @@ export default function AdminScreen() {
                         key={board.id}
                         active={selectedNoticeBoardId === board.id}
                         label={board.name}
-                        onPress={() => setSelectedNoticeBoardId(board.id)}
+                        onPress={() => handleSelectNoticeBoard(board.id)}
                       />
                     ))}
                   </ScrollView>
