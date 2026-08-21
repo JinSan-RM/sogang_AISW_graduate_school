@@ -13,6 +13,13 @@ import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
+import {
+  adminBoardContentControl,
+  adminContentBoards,
+  nextAdminContentSelection,
+  representativeImageUpdatePayload,
+  type AdminContentScope,
+} from "../../utils/adminContentManagement";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
@@ -268,6 +275,14 @@ const BOARD_SCOPE_FILTERS: { key: BoardScope; label: string; categories: string[
   { key: "council", label: "원우회", categories: ["council", "gsa"] },
   { key: "participation", label: "참여활동", categories: ["participation", "club", "study", "alumni"] },
   { key: "community", label: "커뮤니티/자료", categories: ["community", "resources"] },
+];
+
+const CONTENT_SCOPE_FILTERS: { key: AdminContentScope; label: string }[] = [
+  { key: "all", label: "전체" },
+  { key: "notices", label: "공지사항" },
+  { key: "participation", label: "참여활동" },
+  { key: "community", label: "커뮤니티·자료" },
+  { key: "council", label: "원우회" },
 ];
 
 const ADMIN_POST_MODE_FILTERS: { key: AdminPostMode; label: string }[] = [
@@ -1163,13 +1178,22 @@ function MetricCard({ label, value, hint }: { label: string; value: number | str
 
 function AdminPostCard({
   item,
+  board,
   onPinToggle,
   onDelete,
+  onRepresentativeImageChange,
+  isReplacingRepresentativeImage = false,
 }: {
   item: PostListItem;
+  board?: Board;
   onPinToggle: (item: PostListItem) => void;
   onDelete: (item: PostListItem) => void;
+  onRepresentativeImageChange?: (item: PostListItem) => void;
+  isReplacingRepresentativeImage?: boolean;
 }) {
+  const contentControl = adminBoardContentControl(board);
+  const canManageRepresentativeImage = contentControl.canReplaceRepresentativeImage && Boolean(onRepresentativeImageChange);
+  const hasThumbnail = Boolean(item.thumbnail_media_id || item.thumbnail_url);
   return (
     <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, padding: 14, gap: 10 }}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
@@ -1190,9 +1214,39 @@ function AdminPostCard({
       <Text style={{ color: COLORS.muted, fontSize: 12 }}>
         작성자 {item.author_nickname} · 댓글 {item.comment_count} · 추천 {item.like_count} · 첨부 {item.attachment_count ?? 0}
       </Text>
+      {canManageRepresentativeImage ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12, borderRadius: RADIUS.button, backgroundColor: COLORS.surfaceAlt, padding: 10 }}>
+          {hasThumbnail ? (
+            <MediaImage
+              media={{ id: item.thumbnail_media_id, url: item.thumbnail_url }}
+              resizeMode="cover"
+              style={{ width: 92, height: 58, borderRadius: RADIUS.button, backgroundColor: COLORS.border }}
+            />
+          ) : (
+            <View style={{ width: 92, height: 58, borderRadius: RADIUS.button, backgroundColor: COLORS.primary50, alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="image-outline" size={24} color={COLORS.primary} />
+            </View>
+          )}
+          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+            <Text style={{ color: COLORS.text, fontWeight: "900" }}>현재 대표 이미지</Text>
+            <Text style={{ color: COLORS.muted, fontSize: 12 }} numberOfLines={2}>
+              첫 번째 이미지가 목록과 상세 상단에 표시됩니다.
+            </Text>
+          </View>
+        </View>
+      ) : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <ActionButton icon="open-outline" label="열기" onPress={() => router.push(`/board/post/${item.id}` as never)} tone="outline" />
         <ActionButton icon="create-outline" label="수정" onPress={() => router.push(`/board/post/edit/${item.id}` as never)} tone="outline" />
+        {canManageRepresentativeImage ? (
+          <ActionButton
+            icon="image-outline"
+            label={isReplacingRepresentativeImage ? "이미지 변경 중" : "대표 이미지 변경"}
+            onPress={() => onRepresentativeImageChange?.(item)}
+            disabled={isReplacingRepresentativeImage}
+            tone="outline"
+          />
+        ) : null}
         <ActionButton icon={item.is_pinned ? "remove-circle-outline" : "pin-outline"} label={item.is_pinned ? "고정 해제" : "고정"} onPress={() => onPinToggle(item)} tone="outline" />
         <ActionButton icon="trash-outline" label="삭제" onPress={() => onDelete(item)} tone="danger" />
       </View>
@@ -1455,10 +1509,12 @@ export default function AdminScreen() {
   const queryClient = useQueryClient();
   const [section, setSection] = useState<AdminSection>(parseAdminSection(params.section) ?? "dashboard");
   const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
+  const [postContentScope, setPostContentScope] = useState<AdminContentScope>("all");
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
   const [postBoardId, setPostBoardId] = useState<number | null>(null);
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
+  const [replacingRepresentativeImagePostId, setReplacingRepresentativeImagePostId] = useState<number | null>(null);
   const [mutualAidFilter, setMutualAidFilter] = useState<MutualAidStatus | "all">("processing");
   const [suggestionFilter, setSuggestionFilter] = useState<SuggestionAdminFilter>("received");
   const [reportStatus, setReportStatus] = useState<ReportStatus | "all">("open");
@@ -1699,6 +1755,10 @@ export default function AdminScreen() {
   const banners = bannersQuery.data?.data ?? [];
   const sortedBanners = [...banners].sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0) || left.id - right.id);
   const boards = boardsQuery.data?.data ?? [];
+  const postContentBoards = adminContentBoards(boards, "all");
+  const visiblePostBoards = adminContentBoards(boards, postContentScope);
+  const selectedPostBoard = postContentBoards.find((board) => board.id === postBoardId);
+  const selectedPostContentControl = adminBoardContentControl(selectedPostBoard);
   const reports = reportsQuery.data?.data ?? [];
   const users = usersQuery.data?.data ?? [];
   const faqs = faqsQuery.data?.data ?? [];
@@ -2296,6 +2356,40 @@ export default function AdminScreen() {
       Alert.alert("저장 실패", "역대 원우회 정보를 저장할 수 없습니다.");
     } finally {
       setPastCouncilsSaving(false);
+    }
+  };
+
+  const handlePostContentScopeChange = (nextScope: AdminContentScope) => {
+    setPostContentScope(nextScope);
+    setPostBoardId(nextAdminContentSelection(boards, postBoardId, nextScope));
+  };
+
+  const handleReplacePostRepresentativeImage = async (item: PostListItem) => {
+    const itemBoard = boards.find((board) => board.id === item.board_id);
+    if (!adminBoardContentControl(itemBoard).canReplaceRepresentativeImage) {
+      Alert.alert("대표 이미지 변경", "동아리 또는 네트워킹 안내 게시글에서만 변경할 수 있습니다.");
+      return;
+    }
+    if (replacingRepresentativeImagePostId !== null) return;
+
+    try {
+      setReplacingRepresentativeImagePostId(item.id);
+      const detailResponse = await postApi.getPostDetail(item.id);
+      const replacement = await pickAndUploadContentImage();
+      if (!replacement) return;
+
+      await postApi.updatePost(item.id, representativeImageUpdatePayload(detailResponse.data, replacement));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["posts", item.board_id] }),
+        queryClient.invalidateQueries({ queryKey: ["multi-board-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["post", item.id] }),
+      ]);
+      Alert.alert("변경 완료", "대표 이미지가 변경되었습니다.");
+    } catch {
+      Alert.alert("변경 실패", "대표 이미지를 변경할 수 없습니다. 이미지 파일과 게시글 상태를 확인해주세요.");
+    } finally {
+      setReplacingRepresentativeImagePostId(null);
     }
   };
 
@@ -3388,42 +3482,100 @@ export default function AdminScreen() {
               <View style={{ gap: 10 }}>
                 <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>전체 게시글 관리</Text>
                 <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  게시판 전체 글을 검색하고, 관리자 권한으로 열기, 수정, 고정, 삭제를 처리합니다.
+                  콘텐츠 그룹과 게시판을 선택해 공통 운영 기능과 게시판별 전용 기능을 함께 관리합니다.
                 </Text>
-                <ActionButton
-                  icon="add-circle-outline"
-                  label="동아리 게시글 등록"
-                  disabled={!clubPromoBoard}
-                  onPress={() => {
-                    if (clubPromoBoard) {
-                      router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
-                    }
-                  }}
-                />
-                <ActionButton
-                  icon="git-network-outline"
-                  label="네트워킹 게시글 등록"
-                  disabled={!networkingProgramsBoard}
-                  onPress={() => {
-                    if (networkingProgramsBoard) {
-                      router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
-                    }
-                  }}
-                />
-                <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
-                <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판</Text>
+                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>콘텐츠 그룹</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  <Chip active={postBoardId === null} label="전체 게시판" onPress={() => setPostBoardId(null)} />
-                  {boards.map((board) => (
+                  {CONTENT_SCOPE_FILTERS.map((item) => (
                     <Chip
-                      key={board.id}
-                      active={postBoardId === board.id}
-                      label={board.name}
-                      onPress={() => setPostBoardId(board.id)}
+                      key={item.key}
+                      active={postContentScope === item.key}
+                      label={item.label}
+                      onPress={() => handlePostContentScopeChange(item.key)}
                     />
                   ))}
                 </ScrollView>
+                {postContentScope === "all" ? (
+                  <View style={{ gap: 8 }}>
+                    <Text style={{ color: COLORS.subtle, fontSize: 12, lineHeight: 18 }}>
+                      전체 검색에서는 기존 빠른 등록과 공통 관리 기능을 그대로 사용할 수 있습니다.
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      <ActionButton
+                        icon="add-circle-outline"
+                        label="동아리 안내 등록"
+                        disabled={!clubPromoBoard}
+                        onPress={() => {
+                          if (clubPromoBoard) {
+                            router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
+                          }
+                        }}
+                        tone="outline"
+                      />
+                      <ActionButton
+                        icon="git-network-outline"
+                        label="네트워킹 안내 등록"
+                        disabled={!networkingProgramsBoard}
+                        onPress={() => {
+                          if (networkingProgramsBoard) {
+                            router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
+                          }
+                        }}
+                        tone="outline"
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                      {visiblePostBoards.map((board) => (
+                        <Chip
+                          key={board.id}
+                          active={postBoardId === board.id}
+                          label={board.name}
+                          onPress={() => setPostBoardId(board.id)}
+                        />
+                      ))}
+                    </ScrollView>
+                    {selectedPostBoard ? (
+                      <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary100, backgroundColor: COLORS.primary50, padding: 12, gap: 9 }}>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                          <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{selectedPostBoard.name} 관리</Text>
+                          <Chip active label={BOARD_TYPE_LABELS[selectedPostBoard.board_type] ?? selectedPostBoard.board_type} />
+                        </View>
+                        <Text style={{ color: COLORS.muted, lineHeight: 19 }}>{selectedPostContentControl.description}</Text>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                          {selectedPostContentControl.createLabel ? (
+                            <ActionButton
+                              icon="add-circle-outline"
+                              label={selectedPostContentControl.createLabel}
+                              onPress={() => router.push({ pathname: "/board/post/create", params: { boardId: String(selectedPostBoard.id) } } as never)}
+                            />
+                          ) : null}
+                          {selectedPostContentControl.dedicatedSection && selectedPostContentControl.dedicatedLabel ? (
+                            <ActionButton
+                              icon="options-outline"
+                              label={selectedPostContentControl.dedicatedLabel}
+                              onPress={() => openAdminSection(selectedPostContentControl.dedicatedSection!)}
+                              tone="outline"
+                            />
+                          ) : null}
+                          <ActionButton
+                            icon="settings-outline"
+                            label="게시판 설정"
+                            onPress={() => openAdminSection("boards", postContentScope)}
+                            tone="outline"
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={{ color: COLORS.muted }}>이 그룹에서 관리할 게시판이 없습니다.</Text>
+                    )}
+                  </View>
+                )}
+                <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
+                <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
                 <Text style={{ color: COLORS.muted, fontWeight: "800" }}>상태 필터</Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {ADMIN_POST_MODE_FILTERS.map((item) => (
@@ -3442,7 +3594,15 @@ export default function AdminScreen() {
               </Panel>
             ) : null}
             {adminPosts.map((item) => (
-              <AdminPostCard key={item.id} item={item} onPinToggle={handlePinAdminPost} onDelete={handleDeleteAdminPost} />
+              <AdminPostCard
+                key={item.id}
+                item={item}
+                board={boards.find((board) => board.id === item.board_id)}
+                onPinToggle={handlePinAdminPost}
+                onDelete={handleDeleteAdminPost}
+                onRepresentativeImageChange={(post) => void handleReplacePostRepresentativeImage(post)}
+                isReplacingRepresentativeImage={replacingRepresentativeImagePostId === item.id}
+              />
             ))}
           </View>
         ) : null}
