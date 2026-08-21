@@ -1,4 +1,4 @@
-import { useFonts } from "@expo-google-fonts/inter";
+import { useFonts } from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
@@ -6,16 +6,16 @@ import { Image, Platform, StyleSheet, useWindowDimensions, View } from "react-na
 
 import NotificationBootstrap from "../components/NotificationBootstrap";
 import { useUserStore } from "../stores/userStore";
-import { INTER_FONTS, patchDefaultFontFamily } from "../utils/fonts";
+import { APP_FONTS, patchDefaultFontFamily } from "../utils/fonts";
 import { isAdminUser } from "../utils/permissions";
 
-// Route every <Text>/<TextInput> through the matching Inter face (design uses Inter).
+// Route every <Text>/<TextInput> through the matching Pretendard face (design uses Inter + Korean fallback).
 patchDefaultFontFamily();
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
   const { width } = useWindowDimensions();
-  const [fontsLoaded] = useFonts(INTER_FONTS);
+  const [fontsLoaded] = useFonts(APP_FONTS);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const hasHydrated = useUserStore((state) => state.hasHydrated);
   const hydrateSession = useUserStore((state) => state.hydrateSession);

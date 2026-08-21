@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { naturalImagePreviewLayout } from "../utils/naturalImagePreview";
 
-test("계산 높이가 500px이면 이미지를 자르지 않는다", () => {
+test("계산 높이가 600px 이하면 이미지를 자르지 않는다", () => {
   assert.deepEqual(
     naturalImagePreviewLayout({
       containerWidth: 300,
@@ -19,17 +19,17 @@ test("계산 높이가 500px이면 이미지를 자르지 않는다", () => {
   );
 });
 
-test("계산 높이가 500px을 넘으면 500px 미리보기로 제한한다", () => {
+test("계산 높이가 600px을 넘으면 600px 미리보기로 제한한다", () => {
   const layout = naturalImagePreviewLayout({
     containerWidth: 390,
     imageWidth: 1500,
-    imageHeight: 2121,
+    imageHeight: 3000,
   });
 
   assert.ok(layout);
-  assert.equal(layout.aspectRatio, 1500 / 2121);
-  assert.ok(Math.abs(layout.naturalHeight - (390 * 2121 / 1500)) < Number.EPSILON * 1000);
-  assert.equal(layout.previewHeight, 500);
+  assert.equal(layout.aspectRatio, 1500 / 3000);
+  assert.ok(Math.abs(layout.naturalHeight - (390 * 3000 / 1500)) < Number.EPSILON * 1000);
+  assert.equal(layout.previewHeight, 600);
   assert.equal(layout.isExpandable, true);
 });
 

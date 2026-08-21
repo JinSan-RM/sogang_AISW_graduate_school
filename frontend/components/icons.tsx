@@ -507,3 +507,25 @@ export function SearchBackIcon({ size = 16, color = "#15171C" }: IconProps) {
     </Svg>
   );
 }
+
+// 일정 세부사항 날짜행 달력 아이콘 — 디자인 원본 15x15, stroke 1.21875.
+export function EventCalendarIcon({ size = 15, color = "#6B7280" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 15 15" fill="none">
+      <Path d="M11.7188 2.8125H3.28125C2.5046 2.8125 1.875 3.4421 1.875 4.21875V11.7188C1.875 12.4954 2.5046 13.125 3.28125 13.125H11.7188C12.4954 13.125 13.125 12.4954 13.125 11.7188V4.21875C13.125 3.4421 12.4954 2.8125 11.7188 2.8125Z" stroke={color} strokeWidth={1.21875} />
+      <Path d="M1.875 6.09375H13.125" stroke={color} strokeWidth={1.21875} />
+      <Path d="M4.6875 1.875V4.125M10.3125 1.875V4.125" stroke={color} strokeWidth={1.21875} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 알림 목록 공지 아이콘 — 디자인 원본 36x36, 배경 원 포함.
+export function NotificationNoticeIcon({ size = 36 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect width={36} height={36} rx={18} fill="#E6F1FB" />
+      <Path d="M18 11.5C15.8 11.5 14.3 13.3 14.3 15.5V17.8C14.3 18.8 13.9 19.6 13 20.4H23C22.1 19.6 21.7 18.8 21.7 17.8V15.5C21.7 13.3 20.2 11.5 18 11.5Z" stroke="#0C447C" strokeWidth={1.5} strokeLinejoin="round" />
+      <Path d="M16.2 22.2002C16.2 22.6776 16.3896 23.1354 16.7272 23.473C17.0647 23.8106 17.5226 24.0002 18 24.0002C18.4773 24.0002 18.9352 23.8106 19.2727 23.473C19.6103 23.1354 19.8 22.6776 19.8 22.2002" stroke="#0C447C" strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}

@@ -10,7 +10,7 @@ import type { EventItem } from "../../../../types";
 import { eventDayBackDecision } from "../../../../utils/appRoutes";
 import { formatBoardDate, formatTime24 } from "../../../../utils/dateFormat";
 
-import { BackIcon } from "../../../../components/icons";
+import { BackIcon, EmptyCalendarIcon } from "../../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -26,7 +26,7 @@ const EVENT_CATEGORY_LABELS: Record<string, string> = {
   event: "행사일정",
   exam: "시험일정",
   external: "외부일정",
-  other: "일정",
+  other: "기타일정",
 };
 
 const EVENT_CATEGORY_COLORS: Record<string, { backgroundColor: string; color: string }> = {
@@ -35,7 +35,7 @@ const EVENT_CATEGORY_COLORS: Record<string, { backgroundColor: string; color: st
   event: { backgroundColor: "#FBEAF0", color: "#993556" },
   exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
   external: { backgroundColor: "#EAF8F4", color: "#20856D" },
-  other: { backgroundColor: "#F1F3F6", color: "#667085" },
+  other: { backgroundColor: "#EDE8F6", color: "#4A2B7A" },
 };
 
 function parseDateKey(value: string | string[] | undefined) {
@@ -115,7 +115,7 @@ export default function EventDayScreen() {
           ListHeaderComponent={events.length ? <Text style={styles.dateLabel}>{formatBoardDate(selectedDate.dateKey)}</Text> : null}
           ListEmptyComponent={
             <View style={styles.emptyBox}>
-              <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
+              <EmptyCalendarIcon size={32} />
               <Text style={styles.emptyTitle}>이 날은 등록된 일정이 없어요</Text>
               <Text style={styles.emptyDescription}>다른 날짜를 선택해보세요</Text>
             </View>

@@ -20,10 +20,10 @@ def _dday_suffix(days_before: int) -> str:
 
 
 # Message wording lives here so routers and scripts/send_test_notifications.py cannot drift apart.
-ADMIN_REPLY_MESSAGE = "원우회에서 건의사항에 답변을 등록했어요"
+ADMIN_REPLY_MESSAGE = "건의사항에 답변이 등록되었어요"
 MUTUAL_AID_MESSAGES = {
     "processing": "상조회 신청이 처리중이에요",
-    "completed": "상조회 신청이 처리 완료되었어요",
+    "completed": "상조회 신청이 승인되었어요",
     "rejected": "상조회 신청이 반려되었어요",
 }
 
@@ -45,7 +45,7 @@ def report_message(nickname: str, target_type: str) -> str:
 
 
 def event_message(title: str, days_before: int) -> str:
-    return f"{title} 일정이 {_dday_suffix(days_before)}"
+    return f"{title}이 {_dday_suffix(days_before)}"
 
 
 def deadline_message(title: str, days_before: int) -> str:

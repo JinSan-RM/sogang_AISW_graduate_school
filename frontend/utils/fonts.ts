@@ -1,44 +1,37 @@
 import React from "react";
 import { StyleSheet, Text, TextInput, type StyleProp, type TextStyle } from "react-native";
 
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-  Inter_900Black,
-} from "@expo-google-fonts/inter";
-
+// Pretendard: 라틴은 Inter 기반, 한글은 Apple SD Gothic Neo와 같은 메트릭이라
+// 피그마 시안(Inter + Mac 한글 폴백)과 같은 모습을 모든 플랫폼에서 재현한다.
 // Font assets passed to expo-font's useFonts() in the root layout.
-export const INTER_FONTS = {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_800ExtraBold,
-  Inter_900Black,
+export const APP_FONTS = {
+  Pretendard_400Regular: require("../assets/fonts/Pretendard-Regular.otf"),
+  Pretendard_500Medium: require("../assets/fonts/Pretendard-Medium.otf"),
+  Pretendard_600SemiBold: require("../assets/fonts/Pretendard-SemiBold.otf"),
+  Pretendard_700Bold: require("../assets/fonts/Pretendard-Bold.otf"),
+  Pretendard_800ExtraBold: require("../assets/fonts/Pretendard-ExtraBold.otf"),
+  Pretendard_900Black: require("../assets/fonts/Pretendard-Black.otf"),
 };
 
 // The app styles text with numeric fontWeight everywhere (400~900). Each static
-// Inter face embeds a single weight, so we map fontWeight -> the matching family.
+// Pretendard face embeds a single weight, so we map fontWeight -> the matching family.
 const WEIGHT_TO_FAMILY: Record<string, string> = {
-  "100": "Inter_400Regular",
-  "200": "Inter_400Regular",
-  "300": "Inter_400Regular",
-  "400": "Inter_400Regular",
-  normal: "Inter_400Regular",
-  "500": "Inter_500Medium",
-  "600": "Inter_600SemiBold",
-  "700": "Inter_700Bold",
-  bold: "Inter_700Bold",
-  "800": "Inter_800ExtraBold",
-  "900": "Inter_900Black",
+  "100": "Pretendard_400Regular",
+  "200": "Pretendard_400Regular",
+  "300": "Pretendard_400Regular",
+  "400": "Pretendard_400Regular",
+  normal: "Pretendard_400Regular",
+  "500": "Pretendard_500Medium",
+  "600": "Pretendard_600SemiBold",
+  "700": "Pretendard_700Bold",
+  bold: "Pretendard_700Bold",
+  "800": "Pretendard_800ExtraBold",
+  "900": "Pretendard_900Black",
 };
 
 function familyForWeight(weight: unknown): string {
-  if (weight == null) return "Inter_400Regular";
-  return WEIGHT_TO_FAMILY[String(weight)] ?? "Inter_400Regular";
+  if (weight == null) return "Pretendard_400Regular";
+  return WEIGHT_TO_FAMILY[String(weight)] ?? "Pretendard_400Regular";
 }
 
 // Patches the default <Text> / <TextInput> render so every instance renders with

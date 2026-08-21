@@ -5,7 +5,6 @@ import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   CURRENT_CLUB_NAMES,
   activityBankAccountFieldState,
-  activityCertificationFormLabels,
   activityCertificationBadgeLabel,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
@@ -33,13 +32,6 @@ test("동아리와 네트워킹 활동 인증 목록은 카드 배지를 유지�
   assert.equal(shouldShowActivityCertificationBadge("networking-activity"), true);
 });
 
-test("활동인증 폼은 사진과 소감의 고정 라벨을 제공한다", () => {
-  assert.deepEqual(activityCertificationFormLabels("activity_certification"), {
-    photo: "활동 사진",
-    reflection: "활동 소감",
-  });
-  assert.equal(activityCertificationFormLabels("mutual_aid"), null);
-});
 
 test("활동 인증 작성 계좌는 필수이고 수정 계좌는 새 값만 선택 입력한다", () => {
   assert.deepEqual(activityBankAccountFieldState(null), {

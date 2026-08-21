@@ -6,15 +6,22 @@ from html import escape
 BRAND_NAME = "서강 AI-SW 대학원 커뮤니티"
 
 
-def _code_box(value: str, compact: bool = False) -> str:
+def _contact_email() -> str:
+    from app.config import settings
+
+    return settings.support_email or settings.smtp_from_email or ""
+
+
+def _code_box(value: str) -> str:
     escaped = escape(value)
-    letter_spacing = "8px" if compact else "0"
-    font_size = "32px" if compact else "18px"
     return f"""
-      <div style="margin:24px 0 20px;padding:18px 16px;border-radius:14px;background:#F3F6FF;border:1px solid #D5E0FE;text-align:center;">
-        <div style="font-size:12px;font-weight:700;color:#6B7280;margin-bottom:8px;">확인 코드</div>
-        <div style="font-size:{font_size};font-weight:900;letter-spacing:{letter_spacing};color:#0B1F56;line-height:1.3;word-break:break-all;">{escaped}</div>
-      </div>
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td style="background-color:#E6F1FB; border-radius:8px; padding:20px;" align="center">
+                    <p style="margin:0; font-size:32px; font-weight:700; letter-spacing:8px; color:#0C447C;">{escaped}</p>
+                  </td>
+                </tr>
+              </table>
     """
 
 
@@ -44,57 +51,67 @@ def _html_email(
     compact_code: bool,
     safe_outcome: str,
 ) -> str:
+    del compact_code  # 디자인 코드 박스는 단일 형태다.
     escaped_title = escape(title)
     escaped_intro = escape(intro)
     escaped_safe_outcome = escape(safe_outcome)
-    return f"""<!doctype html>
+    escaped_contact = escape(_contact_email())
+    return f"""<!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{escaped_title}</title>
-  </head>
-  <body style="margin:0;padding:0;background:#F4F6FB;font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#111827;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F4F6FB;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#FFFFFF;border:1px solid #E1E4E9;border-radius:18px;overflow:hidden;">
-            <tr>
-              <td style="background:linear-gradient(135deg,#07144A 0%,#1437AE 52%,#2761FF 100%);padding:28px 28px 26px;">
-                <div style="font-size:13px;font-weight:800;letter-spacing:.02em;color:#D5E0FE;">SOGANG AI-SW</div>
-                <div style="font-size:24px;font-weight:900;line-height:1.35;color:#FFFFFF;margin-top:10px;">{escaped_title}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:30px 28px 28px;">
-                <p style="margin:0;font-size:16px;line-height:1.75;color:#111827;">{escaped_intro}</p>
-                {_code_box(code, compact=compact_code)}
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-radius:12px;background:#F8FAFC;border:1px solid #E6EAF0;">
-                  <tr>
-                    <td style="padding:15px 16px;font-size:14px;line-height:1.6;color:#4B5563;">
-                      <strong style="color:#0B1F56;">유효 시간</strong><br>
-                      확인 코드는 발급 후 <strong>{expiry_minutes}분</strong>간 유효합니다.
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:20px 0 0;font-size:13px;line-height:1.7;color:#6B7280;">
-                  직접 요청한 경우에만 앱에 입력해 주세요.<br>
-                  요청하지 않았다면 이 메일을 삭제해 주세요. {escaped_safe_outcome}
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:18px 28px;background:#F8FAFC;border-top:1px solid #E1E4E9;">
-                <div style="font-size:12px;line-height:1.6;color:#8A919C;">
-                  이 메일은 {BRAND_NAME} 계정 보안을 위해 발송되었습니다.
-                </div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{escaped_title}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f4f5; font-family: -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5; padding:40px 16px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:12px; overflow:hidden;">
+
+        <tr>
+          <td style="padding:32px 40px 0 40px;">
+            <p style="margin:0; font-size:16px; font-weight:700; color:#2761FF;">AI·SW 캠퍼스</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 40px 8px 40px;">
+            <p style="margin:0; font-size:20px; font-weight:600; color:#15171C;">{escaped_title}</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 24px 40px;">
+            <p style="margin:0; font-size:15px; line-height:1.6; color:#4B5160;">{escaped_intro}<br>아래 인증번호를 입력해주세요.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 24px 40px;" align="center">{_code_box(code)}</td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 40px 32px 40px;">
+            <p style="margin:0; font-size:13px; line-height:1.6; color:#8A919C;">
+              인증번호는 {expiry_minutes}분간 유효해요.<br>
+              직접 요청한 경우에만 앱에 입력해 주세요.<br>
+              요청하지 않았다면 이 메일을 삭제해 주세요. {escaped_safe_outcome}
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 40px; border-top:0.5px solid #E1E4E9;">
+            <p style="margin:0; font-size:12px; color:#8A919C;">AI·SW대학원 원우회 · 문의: {escaped_contact}</p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
 </html>"""
 
 

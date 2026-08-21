@@ -9,7 +9,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { AttachFileIcon, AttachImageIcon, BackIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
+import { AttachFileIcon, AttachImageIcon, BackIcon, CalendarSmallIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
@@ -21,7 +21,6 @@ import type { MediaAsset, PostListItem } from "../../../../types";
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   activityBankAccountFieldState,
-  activityCertificationFormLabels,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
@@ -360,7 +359,6 @@ export default function PostCreateScreen() {
   const boardType = board?.board_type ?? fallbackBoardType;
   const isSuggestion = boardType === "suggestion";
   const isActivity = boardType === "activity_certification";
-  const activityFormLabels = activityCertificationFormLabels(boardType);
   const isMutualAid = boardType === "mutual_aid";
   const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
@@ -867,7 +865,6 @@ export default function PostCreateScreen() {
             />
 
             <View style={styles.activityFieldGroup}>
-              <Text style={styles.activityFieldTitle}>{activityFormLabels?.photo}</Text>
               <Pressable disabled={isUploading} onPress={selectFile} style={[styles.activityPhotoBox, isUploading ? styles.attachButtonDisabled : null]}>
                 {imageAttachments.length > 0 ? (
                   <View style={styles.activityPhotoGrid}>
@@ -901,7 +898,6 @@ export default function PostCreateScreen() {
             </View>
 
             <View style={styles.activityFieldGroup}>
-              <Text style={styles.activityFieldTitle}>{activityFormLabels?.reflection}</Text>
               <Controller
                 control={control}
                 name="content"
@@ -932,7 +928,7 @@ export default function PostCreateScreen() {
                     style={styles.activityInputWithIcon}
                   >
                     <Text style={styles.activityDateValue}>{field.value ? formatBoardDate(field.value) : "활동일을 선택하세요"}</Text>
-                    <Ionicons name="calendar-outline" size={15} color="#6B7280" />
+                    <CalendarSmallIcon size={15} color="#6B7280" />
                   </Pressable>
                   {datePickerOpen ? (
                     <InlineCalendar
@@ -2165,7 +2161,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   activityFieldTitle: {
-    color: COLORS.muted,
+    color: COLORS.text, // Figma: 참가자/계좌 소제목 #15171C
     fontSize: 13,
     fontWeight: "500",
     lineHeight: 16,

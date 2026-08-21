@@ -1,7 +1,10 @@
+import { BottomTabBar, type BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Tabs, usePathname } from "expo-router";
+import { useRef } from "react";
 
 import { CommunityTabIcon, CouncilTabIcon, HomeTabIcon, NoticeTabIcon, ParticipationTabIcon } from "../../components/icons";
 import { MyPageDrawerProvider } from "../../components/MyPageDrawer";
+import { useTabHighlightStore } from "../../stores/tabHighlightStore";
 import { requestTabRootReset, shouldRequestTabRootReset } from "../../stores/tabRootResetStore";
 import { shouldHideTabBar } from "../../utils/tabBarVisibility";
 
@@ -13,6 +16,29 @@ const TAB_BAR_STYLE = {
   backgroundColor: "#FFFFFF",
 };
 
+const VISIBLE_TAB_NAMES = new Set(["home", "notices", "community", "participation", "council"]);
+
+// 숨김 탭(board/events 등)이 포커스되면 기본 탭바는 아무 탭도 하이라이트하지 않는다.
+// 게시판 화면이 기록한 소속 카테고리(board), 그 외에는 마지막 방문 탭을 하이라이트한다.
+function CategoryHighlightTabBar(props: BottomTabBarProps) {
+  const highlightTab = useTabHighlightStore((state) => state.tab);
+  const lastVisibleTabRef = useRef("home");
+  const { state } = props;
+  const focusedName = state.routes[state.index]?.name;
+
+  if (focusedName && VISIBLE_TAB_NAMES.has(focusedName)) {
+    lastVisibleTabRef.current = focusedName;
+    return <BottomTabBar {...props} />;
+  }
+
+  const targetName = focusedName === "board" ? highlightTab : lastVisibleTabRef.current;
+  const targetIndex = state.routes.findIndex((route) => route.name === targetName);
+  if (targetIndex < 0) {
+    return <BottomTabBar {...props} />;
+  }
+  return <BottomTabBar {...props} state={{ ...state, index: targetIndex }} />;
+}
+
 export default function TabsLayout() {
   const pathname = usePathname();
   const hideTabBar = shouldHideTabBar(pathname);
@@ -20,12 +46,13 @@ export default function TabsLayout() {
   return (
     <MyPageDrawerProvider>
       <Tabs
+        tabBar={(props) => <CategoryHighlightTabBar {...props} />}
         screenOptions={{
           tabBarActiveTintColor: "#2761FF",
           tabBarInactiveTintColor: "#8A919C",
           tabBarIconStyle: { marginTop: 0 },
           // Figma: 라벨 11/13 Regular (react-navigation 기본 fontWeight 500 오버라이드)
-          tabBarLabelStyle: { fontSize: 11, fontFamily: "Inter_400Regular", fontWeight: "400", lineHeight: 13, marginTop: 3, marginBottom: 0 },
+          tabBarLabelStyle: { fontSize: 11, fontFamily: "Pretendard_400Regular", fontWeight: "400", lineHeight: 13, marginTop: 3, marginBottom: 0 },
           tabBarItemStyle: { paddingVertical: 0 },
           tabBarStyle: TAB_BAR_STYLE,
           headerShown: false,

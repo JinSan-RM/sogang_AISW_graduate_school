@@ -26,7 +26,7 @@ const EVENT_CATEGORY_LABELS: Record<string, string> = {
   event: "행사",
   exam: "시험",
   external: "외부",
-  other: "일정",
+  other: "기타일정",
 };
 
 function EventRow({ item }: { item: EventItem }) {

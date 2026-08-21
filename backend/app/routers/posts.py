@@ -1341,7 +1341,8 @@ def update_mutual_aid(
     mutual_aid.reviewed_by = current_user.id
     mutual_aid.reviewed_at = utc_now()
 
-    if previous_status != payload.status:
+    # 처리중 전환은 알리지 않는다 — 승인/반려 같은 결과 상태만 알림.
+    if previous_status != payload.status and payload.status != "processing":
         create_notification(
             db,
             user_id=post.author_id,

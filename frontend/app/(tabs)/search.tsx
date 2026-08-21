@@ -13,7 +13,7 @@ import { formatBoardDate } from "../../utils/dateFormat";
 import { formatCohortName } from "../../utils/userLabel";
 import { postDetailRoute } from "../../utils/appRoutes";
 
-import { BackIcon } from "../../components/icons";
+import { BackIcon, EmptyCalendarIcon } from "../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -48,7 +48,7 @@ function noticeCategoryLabel(item: SearchResult) {
 function NoticeEmptyState() {
   return (
     <View style={styles.noticeEmptyState}>
-      <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
+      <EmptyCalendarIcon size={32} />
       <Text style={styles.noticeEmptyTitle}>검색 결과가 없어요</Text>
       <Text style={styles.noticeEmptyDescription}>다른 검색어로 다시 시도해보세요</Text>
     </View>
@@ -127,7 +127,7 @@ export default function SearchScreen() {
         placeholder={isNoticeSearch ? "검색어를 입력하세요" : "게시글, 작성자 검색"}
         placeholderTextColor={COLORS.subtle}
         returnKeyType="search"
-        style={styles.input}
+        style={[styles.input, { outlineStyle: "none" } as never]}
         value={query}
       />
       {query ? (

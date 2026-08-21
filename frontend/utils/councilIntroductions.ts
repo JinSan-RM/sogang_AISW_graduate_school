@@ -59,6 +59,7 @@ export type CurrentCouncilFormData = {
   greeting: string;
   intro: string;
   banner_image_url: string;
+  photo_urls?: string[];
   members: CouncilMemberFormData[];
 };
 
@@ -71,6 +72,7 @@ export type CohortLeaderFormData = {
   greeting: string;
   intro: string;
   banner_image_url: string;
+  photo_urls?: string[];
   members: CouncilMemberFormData[];
 };
 
@@ -79,9 +81,16 @@ export type PastCouncilFormData = {
   greeting: string;
   intro: string;
   banner_image_url: string;
+  photo_urls?: string[];
   activities: unknown[];
   members: CouncilMemberFormData[];
 };
+
+
+function photoUrlsFromValue(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((url): url is string => typeof url === "string" && url.trim().length > 0);
+}
 
 function hasCompleteCouncilMembers(members: CouncilMemberFormData[]): boolean {
   return members.length > 0 && members.every((member) => (
@@ -225,6 +234,7 @@ export function currentCouncilFormsFromMetadata(metadata: Metadata): CurrentCoun
         greeting: stringValue(record, "greeting"),
         intro: stringValue(record, "intro"),
         banner_image_url: stringValue(record, "banner_image_url"),
+      photo_urls: photoUrlsFromValue(record.photo_urls),
         members,
       }];
     });
@@ -236,6 +246,7 @@ export function currentCouncilFormsFromMetadata(metadata: Metadata): CurrentCoun
     greeting: "",
     intro: "",
     banner_image_url: "",
+    photo_urls: [],
     members: legacyMembers,
   }] : [];
 }
@@ -265,6 +276,7 @@ export function cohortLeaderFormsFromMetadata(metadata: Metadata): CohortLeaderF
       greeting: stringValue(record, "greeting"),
       intro: stringValue(record, "intro"),
       banner_image_url: stringValue(record, "banner_image_url"),
+      photo_urls: photoUrlsFromValue(record.photo_urls),
       members,
     }];
   });
@@ -290,6 +302,7 @@ export function pastCouncilFormsFromMetadata(metadata: Metadata): PastCouncilFor
       greeting: stringValue(record, "greeting"),
       intro: stringValue(record, "intro"),
       banner_image_url: stringValue(record, "banner_image_url"),
+      photo_urls: photoUrlsFromValue(record.photo_urls),
       activities: Array.isArray(record.activities) ? record.activities : [],
       members,
     }];
@@ -316,6 +329,7 @@ export function withCohortLeaderMetadata(metadata: Metadata, cards: CohortLeader
         greeting: card.greeting,
         intro: card.intro,
         banner_image_url: card.banner_image_url,
+        photo_urls: card.photo_urls ?? [],
         members: card.members,
         captain_name: captain?.name ?? "",
         vice_captain_name: viceCaptain?.name ?? "",
@@ -337,6 +351,7 @@ export function withPastCouncilMetadata(metadata: Metadata, cards: PastCouncilFo
         greeting: card.greeting,
         intro: card.intro,
         banner_image_url: card.banner_image_url,
+        photo_urls: card.photo_urls ?? [],
         activities: card.activities,
         members: card.members,
         president_name: president?.name ?? "",
