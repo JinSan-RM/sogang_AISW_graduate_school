@@ -416,7 +416,7 @@ def test_public_deletion_flow_is_non_enumerating_and_repeat_safe(
     assert known_request.json() == unknown_request.json()
     assert known_request.json()["data"]["accepted"] is True
     assert "code" not in known_request.json()["data"]
-    assert delivered_subjects == ["[서강 AI-SW] 요청하신 계정 삭제 확인 코드"]
+    assert delivered_subjects == ["[AI·SW CAMPUS] 요청하신 계정 삭제 확인 코드"]
     assert "A72040@sogang.ac.kr" in delivered_html_bodies[0]
 
     generic_error = {

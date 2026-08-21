@@ -178,7 +178,7 @@ export default function NotificationBootstrap() {
       storeLatestId(newest.id);
       setVisibleNotification(newest);
       if (Platform.OS === "web") {
-        showWebNotification("Sogang AI-SW", newest.message, () => { void openNotification(newest); });
+        showWebNotification("AI·SW CAMPUS", newest.message, () => { void openNotification(newest); });
       }
     };
 

@@ -53,6 +53,19 @@ def test_self_notification_created_when_enabled(db: Session, monkeypatch: pytest
     assert stored[0].message == '내 게시글에 새 댓글이 달렸어요: "저도 참여하고 싶어요!"'
 
 
+def test_push_notification_uses_public_app_display_name(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    delivered_titles: list[str] = []
+
+    def capture_push(_db, _user_id, title, *_args, **_kwargs) -> None:
+        delivered_titles.append(title)
+
+    monkeypatch.setattr(notifications_module, "send_push_to_user", capture_push)
+    monkeypatch.setattr(notifications_module.settings, "notify_self", True)
+
+    assert _notify(db) is not None
+    assert delivered_titles == ["AI·SW CAMPUS"]
+
+
 @pytest.mark.parametrize(
     ("content", "expected"),
     [

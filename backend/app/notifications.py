@@ -94,7 +94,7 @@ def create_notification(
     send_push_to_user(
         db,
         user_id,
-        "Sogang AI-SW",
+        "AI·SW CAMPUS",
         message,
         {
             "notification_id": notification.id,

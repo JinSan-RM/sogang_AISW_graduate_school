@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     app_environment: str = "development"
     seed_demo_data: bool | None = None
     database_url: str = "postgresql+psycopg://postgres:postgres@db:5432/sogang_app"
-    app_name: str = "Sogang AI-SW Community API"
+    app_name: str = "AI·SW CAMPUS API"
     app_version: str = "0.1.0"
     auth_secret_key: str = "change-me-in-production"
     access_token_expire_minutes: int = 15
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_from_email: str = ""
-    smtp_from_name: str = "서강 AI-SW 대학원 커뮤니티"
+    smtp_from_name: str = "AI·SW CAMPUS"
     smtp_reply_to: str | None = None
     smtp_auth: Literal["password", "none"] = "password"
     smtp_security: Literal["starttls", "ssl", "plain"] | None = None

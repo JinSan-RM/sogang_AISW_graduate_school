@@ -44,7 +44,7 @@ def test_auth_code_email_uses_concise_copy_and_a_monitored_contact(
         assert intro in body
         assert "123456" in body
         assert "본인이 요청하지 않으셨다면 이 이메일을 무시해주세요." in body
-        assert "AI·SW대학원 원우회 · 문의: A72040@sogang.ac.kr" in body
+        assert "AI·SW대학원 30대 원우회 · 문의: A72040@sogang.ac.kr" in body
 
     assert "인증번호는 5분간 유효해요." in plain_body
     assert "인증번호는 <strong>5분</strong>간 유효해요." in html_body

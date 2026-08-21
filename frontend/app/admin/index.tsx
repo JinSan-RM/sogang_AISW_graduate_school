@@ -2661,7 +2661,7 @@ export default function AdminScreen() {
         <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary700, backgroundColor: COLORS.primary900, padding: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Ionicons name="shield-checkmark-outline" size={16} color={COLORS.primary100} />
-            <Text style={{ color: COLORS.primary100, fontSize: 12, fontWeight: "800", letterSpacing: 0 }}>AI·SW APP</Text>
+            <Text style={{ color: COLORS.primary100, fontSize: 12, fontWeight: "800", letterSpacing: 0 }}>AI·SW CAMPUS</Text>
           </View>
           <Text style={{ color: "#ffffff", fontSize: 24, fontWeight: "900", marginTop: 8 }}>관리자 페이지</Text>
           <Text style={{ color: "#D5E0FE", lineHeight: 20, marginTop: 6 }}>

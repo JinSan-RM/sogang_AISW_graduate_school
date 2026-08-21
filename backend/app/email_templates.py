@@ -3,9 +3,9 @@ from __future__ import annotations
 from html import escape
 
 
-BRAND_NAME = "서강 AI-SW 대학원 커뮤니티"
+BRAND_NAME = "AI·SW CAMPUS"
 DISPLAY_BRAND_NAME = "AI·SW CAMPUS"
-FOOTER_ORGANIZATION = "AI·SW대학원 원우회"
+FOOTER_ORGANIZATION = "AI·SW대학원 30대 원우회"
 
 
 def _code_box(value: str, compact: bool = False) -> str:
@@ -191,7 +191,7 @@ def smtp_test_email() -> tuple[str, str]:
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#FFFFFF;border:1px solid #E1E4E9;border-radius:18px;overflow:hidden;">
             <tr>
               <td style="background:linear-gradient(135deg,#07144A 0%,#1437AE 52%,#2761FF 100%);padding:28px;">
-                <div style="font-size:13px;font-weight:800;color:#D5E0FE;">SOGANG AI-SW</div>
+                <div style="font-size:13px;font-weight:800;color:#D5E0FE;">AI·SW CAMPUS</div>
                 <div style="font-size:24px;font-weight:900;color:#FFFFFF;margin-top:10px;">{title}</div>
               </td>
             </tr>

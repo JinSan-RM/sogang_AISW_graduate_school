@@ -203,7 +203,7 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
     try:
         email_sent = send_email(
             email,
-            "[서강 AI-SW] 요청하신 이메일 확인 코드",
+            "[AI·SW CAMPUS] 요청하신 이메일 확인 코드",
             plain_body,
             html_body=html_body,
         )
@@ -446,7 +446,7 @@ def request_account_deletion(
         try:
             delivered = send_email(
                 email,
-                "[서강 AI-SW] 요청하신 계정 삭제 확인 코드",
+                "[AI·SW CAMPUS] 요청하신 계정 삭제 확인 코드",
                 plain_body,
                 html_body=html_body,
             )
@@ -593,7 +593,7 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, db: 
         try:
             email_sent = send_email(
                 user.email,
-                "[서강 AI-SW 커뮤니티] 비밀번호 재설정 인증 코드",
+                "[AI·SW CAMPUS] 비밀번호 재설정 인증 코드",
                 plain_body,
                 html_body=html_body,
             )
