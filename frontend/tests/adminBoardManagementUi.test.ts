@@ -172,9 +172,21 @@ test("설정 저장은 대상 게시판 일치 여부를 확인하고 네비게�
   assert.equal(navigatorModule.isBoardSettingsTargetCurrent(1, 2), false);
   const originalDraft = { name: "기존 draft" };
   const savedDraft = { name: "서버 응답" };
-  assert.equal(navigatorModule.boardSettingsDraftAfterResult(1, 2, originalDraft, savedDraft, "success"), originalDraft);
-  assert.equal(navigatorModule.boardSettingsDraftAfterResult(1, 1, originalDraft, savedDraft, "success"), savedDraft);
-  assert.equal(navigatorModule.boardSettingsDraftAfterResult(1, 1, originalDraft, savedDraft, "failure"), originalDraft);
+  assert.deepEqual(navigatorModule.boardSettingsSaveResult(1, 1, originalDraft, savedDraft, "success"), {
+    nextDraft: savedDraft,
+    applyDraft: true,
+    notification: "success",
+  });
+  assert.deepEqual(navigatorModule.boardSettingsSaveResult(1, 2, originalDraft, savedDraft, "success"), {
+    nextDraft: originalDraft,
+    applyDraft: false,
+    notification: null,
+  });
+  assert.deepEqual(navigatorModule.boardSettingsSaveResult(1, 1, originalDraft, savedDraft, "failure"), {
+    nextDraft: originalDraft,
+    applyDraft: false,
+    notification: "failure",
+  });
   const rendered = navigatorModule.default({
     boards: [board(1, "notices")],
     scope: "notices",
@@ -196,15 +208,23 @@ test("설정 저장은 대상 게시판 일치 여부를 확인하고 네비게�
     adminSource.indexOf("const handleCancelBoardForm"),
   );
   assert.match(saveHandler, /const targetBoardId = selectedManagedBoard\.id/);
-  assert.match(saveHandler, /isBoardSettingsTargetCurrent\(targetBoardId, boardManagementBoardIdRef\.current\)/);
-  assert.match(saveHandler, /boardSettingsDraftAfterResult\(/);
+  assert.equal((saveHandler.match(/boardSettingsSaveResult\(/g) ?? []).length, 2);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["admin-boards"\] \}\)/);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["boards"\] \}\)/);
   assert.match(adminSource, /disabled=\{boardSettingsSaving\}/);
   assert.match(adminSource, /setQueryData<AdminBoardsQueryData>/);
-  assert.match(adminSource, /setOptimisticManagedBoard\(created\.data\)/);
-  assert.match(adminSource, /board !== optimisticManagedBoard/);
+  assert.match(adminSource, /setOptimisticManagedBoard\(\{ board: created\.data, insertedGeneration \}\)/);
+  assert.match(adminSource, /shouldClearOptimisticCreatedBoard\(/);
   assert.match(settingsSource, /editable=\{!saving\}/);
   const catchClause = saveHandler.slice(saveHandler.lastIndexOf("} catch {"), saveHandler.indexOf("} finally"));
   assert.doesNotMatch(catchClause, /setBoardSettingsDraft/);
+});
+
+test("생성 게시판 overlay는 생성 이후 성공한 서버 refresh에서만 해제한다", () => {
+  const navigatorModule = loadNavigatorModule();
+  const createdBoard = board(3, "community");
+  assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 10, "success", [createdBoard]), false);
+  assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 11, "error", [createdBoard]), false);
+  assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 11, "success", [board(1, "notices")]), false);
+  assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 11, "success", [createdBoard]), true);
 });

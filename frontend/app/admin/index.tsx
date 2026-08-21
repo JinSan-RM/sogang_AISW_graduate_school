@@ -16,8 +16,8 @@ import AdminBoardManagementNavigator, {
   adminBoardScopeTransition,
   adminBoardSelectionTransition,
   adminBoardsWithCreatedBoard,
-  boardSettingsDraftAfterResult,
-  isBoardSettingsTargetCurrent,
+  boardSettingsSaveResult,
+  shouldClearOptimisticCreatedBoard,
 } from "../../components/admin/AdminBoardManagementNavigator";
 import AdminBoardSettingsPanel from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
@@ -121,6 +121,7 @@ const eventSchema = z.object({
 
 type EventForm = z.infer<typeof eventSchema>;
 type AdminBoardsQueryData = ApiSuccess<Board[]>;
+type OptimisticManagedBoard = { board: Board; insertedGeneration: number };
 type AdminSection = "dashboard" | "banners" | "boardManagement" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
 type BoardScope = "all" | "notices" | "council" | "participation" | "community";
 type AdminPostMode = "all" | "notice" | "pinned";
@@ -1535,7 +1536,7 @@ export default function AdminScreen() {
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [boardSettingsDraft, setBoardSettingsDraft] = useState<AdminBoardSettingsDraft | null>(null);
   const [boardSettingsSaving, setBoardSettingsSaving] = useState(false);
-  const [optimisticManagedBoard, setOptimisticManagedBoard] = useState<Board | null>(null);
+  const [optimisticManagedBoard, setOptimisticManagedBoard] = useState<OptimisticManagedBoard | null>(null);
   const boardManagementBoardIdRef = useRef<number | null>(null);
   const boardSettingsSavingRef = useRef(false);
   const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
@@ -1605,7 +1606,7 @@ export default function AdminScreen() {
   const queriedManagedBoards = useMemo(() => boardsQuery.data?.data ?? [], [boardsQuery.data?.data]);
   const managedBoards = useMemo(
     () => optimisticManagedBoard
-      ? adminBoardsWithCreatedBoard(queriedManagedBoards, optimisticManagedBoard)
+      ? adminBoardsWithCreatedBoard(queriedManagedBoards, optimisticManagedBoard.board)
       : queriedManagedBoards,
     [optimisticManagedBoard, queriedManagedBoards],
   );
@@ -1716,12 +1717,18 @@ export default function AdminScreen() {
   }, [boardManagementBoardId]);
 
   useEffect(() => {
-    if (optimisticManagedBoard && queriedManagedBoards.some(
-      (board) => board.id === optimisticManagedBoard.id && board !== optimisticManagedBoard,
+    if (!optimisticManagedBoard) return;
+    const queryState = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"]);
+    if (shouldClearOptimisticCreatedBoard(
+      optimisticManagedBoard.board.id,
+      optimisticManagedBoard.insertedGeneration,
+      queryState?.dataUpdateCount ?? 0,
+      queryState?.status ?? "pending",
+      queriedManagedBoards,
     )) {
       setOptimisticManagedBoard(null);
     }
-  }, [optimisticManagedBoard, queriedManagedBoards]);
+  }, [boardsQuery.dataUpdatedAt, boardsQuery.fetchStatus, optimisticManagedBoard, queriedManagedBoards, queryClient]);
 
   useEffect(() => {
     const nextSection = parseAdminSection(params.section);
@@ -2119,7 +2126,8 @@ export default function AdminScreen() {
             ...(current ?? { status: "success" as const }),
             data: adminBoardsWithCreatedBoard(current?.data ?? creationResult.boards, created.data),
           }));
-          setOptimisticManagedBoard(created.data);
+          const insertedGeneration = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"])?.dataUpdateCount ?? 0;
+          setOptimisticManagedBoard({ board: created.data, insertedGeneration });
           boardManagementBoardIdRef.current = transition.boardId;
           setBoardManagementScope(transition.scope);
           setBoardManagementBoardId(transition.boardId);
@@ -2190,19 +2198,29 @@ export default function AdminScreen() {
         queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
         queryClient.invalidateQueries({ queryKey: ["boards"] }),
       ]);
-      if (isBoardSettingsTargetCurrent(targetBoardId, boardManagementBoardIdRef.current)) {
-        const savedDraft = adminBoardSettingsDraft(response.data);
-        setBoardSettingsDraft((currentDraft) => boardSettingsDraftAfterResult(
-          targetBoardId,
-          boardManagementBoardIdRef.current,
-          currentDraft,
-          savedDraft,
-          "success",
-        ));
+      const savedDraft = adminBoardSettingsDraft(response.data);
+      const result = boardSettingsSaveResult(
+        targetBoardId,
+        boardManagementBoardIdRef.current,
+        boardSettingsDraft,
+        savedDraft,
+        "success",
+      );
+      if (result.applyDraft) {
+        setBoardSettingsDraft(result.nextDraft);
+      }
+      if (result.notification === "success") {
         Alert.alert("저장 완료", "게시판 운영 설정이 저장되었습니다.");
       }
     } catch {
-      if (isBoardSettingsTargetCurrent(targetBoardId, boardManagementBoardIdRef.current)) {
+      const result = boardSettingsSaveResult(
+        targetBoardId,
+        boardManagementBoardIdRef.current,
+        boardSettingsDraft,
+        boardSettingsDraft,
+        "failure",
+      );
+      if (result.notification === "failure") {
         Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
       }
     } finally {

@@ -118,16 +118,40 @@ export function isBoardSettingsTargetCurrent(targetBoardId: number, currentBoard
   return targetBoardId === currentBoardId;
 }
 
-export function boardSettingsDraftAfterResult<Draft>(
+export type BoardSettingsSaveResult<Draft> = {
+  nextDraft: Draft;
+  applyDraft: boolean;
+  notification: "success" | "failure" | null;
+};
+
+export function boardSettingsSaveResult<Draft>(
   targetBoardId: number,
   currentBoardId: number | null,
   currentDraft: Draft,
   savedDraft: Draft,
   outcome: "success" | "failure",
-): Draft {
-  return outcome === "success" && isBoardSettingsTargetCurrent(targetBoardId, currentBoardId)
-    ? savedDraft
-    : currentDraft;
+): BoardSettingsSaveResult<Draft> {
+  const targetIsCurrent = isBoardSettingsTargetCurrent(targetBoardId, currentBoardId);
+  if (outcome === "success" && targetIsCurrent) {
+    return { nextDraft: savedDraft, applyDraft: true, notification: "success" };
+  }
+  return {
+    nextDraft: currentDraft,
+    applyDraft: false,
+    notification: outcome === "failure" && targetIsCurrent ? "failure" : null,
+  };
+}
+
+export function shouldClearOptimisticCreatedBoard(
+  createdBoardId: number,
+  insertedGeneration: number,
+  currentGeneration: number,
+  queryStatus: "pending" | "error" | "success",
+  serverBoards: Board[],
+): boolean {
+  return queryStatus === "success"
+    && currentGeneration > insertedGeneration
+    && serverBoards.some((board) => board.id === createdBoardId);
 }
 
 function TabButton({
