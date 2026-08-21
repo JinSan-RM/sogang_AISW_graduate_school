@@ -134,6 +134,53 @@ test("관리자 화면은 통합 선택 상태를 하나만 소유한다", () =>
   assert.match(adminSource, /boardManagementTab/);
 });
 
+test("게시판 관련 사이드 메뉴는 게시판 관리 하나만 남는다", () => {
+  const sectionsSource = adminSource.slice(
+    adminSource.indexOf("const SECTIONS"),
+    adminSource.indexOf("const ADMIN_SECTION_KEYS"),
+  );
+  assert.match(sectionsSource, /key: "boardManagement", label: "게시판 관리"/);
+  for (const label of ["공지사항", "게시판", "원우회 소개", "기장단", "역대 원우회", "게시글", "건의사항", "상조회", "FAQ", "일정"]) {
+    assert.doesNotMatch(sectionsSource, new RegExp(`label: "${label}"`));
+  }
+});
+
+test("통합 전용 화면은 제거된 게시판 목록 편집 상태와 최상위 렌더 조건을 남기지 않는다", () => {
+  assert.doesNotMatch(adminSource, /const \[editingBoardId, setEditingBoardId\]/);
+  assert.doesNotMatch(adminSource, /function BoardCard/);
+  for (const legacySection of ["notices", "boards", "executives", "cohortLeaders", "pastCouncils", "posts", "suggestions", "mutualAid", "faqs", "events"]) {
+    assert.doesNotMatch(adminSource, new RegExp(`section === "${legacySection}"`));
+  }
+});
+
+test("레거시 section query는 게시판 조회 완료 후 raw 링크별 한 번씩 통합 선택으로 변환한다", () => {
+  assert.match(adminSource, /const handledLegacySection = useRef<string \| null>\(null\)/);
+  assert.match(adminSource, /adminBoardLegacySectionTransition\([\s\S]*?boardsQuery\.isSuccess/);
+  assert.match(adminSource, /handledLegacySection\.current = transition\.handledSection/);
+  assert.match(adminSource, /setSection\("boardManagement"\)/);
+  assert.match(adminSource, /setBoardManagementScope\(transition\.destination\.scope\)/);
+  assert.match(adminSource, /setBoardManagementBoardId\(transition\.destination\.boardId\)/);
+  assert.match(adminSource, /setBoardManagementTab\(transition\.destination\.tab\)/);
+});
+
+test("대시보드 게시판 카드는 실제 slug를 통합 선택 함수에 전달한다", () => {
+  for (const slug of [
+    "all-notices",
+    "gsa-executives",
+    "gsa-cohort-leaders",
+    "gsa-past-councils",
+    "suggestions",
+    "mutual-aid",
+    "club-promo",
+    "networking-programs",
+    "gsa-faq",
+    "academic-calendar",
+  ]) {
+    assert.match(adminSource, new RegExp(`openManagedBoard\\("${slug}"`));
+  }
+  assert.match(adminSource, /const openManagedBoard = \(slug: string, tab: AdminBoardManagementTab = "content"\)/);
+});
+
 test("운영 설정은 구조 식별자와 잠긴 정책을 읽기 전용으로 표시한다", () => {
   assert.match(settingsSource, /구조 식별자 · 변경 불가/);
   assert.match(settingsSource, /settingKey/);
@@ -150,7 +197,12 @@ test("통합 탐색기와 설정 패널은 부모가 소유한 선택과 draft�
 });
 
 test("기존 게시판 저장은 구조 식별자를 제외하는 공통 payload 경계를 사용한다", () => {
-  assert.match(adminSource, /updateAdminBoard\([\s\S]*?adminBoardSettingsPayload\(/);
+  const saveSettingsHandler = adminSource.slice(
+    adminSource.indexOf("const handleSaveBoardSettings"),
+    adminSource.indexOf("const handleCancelBoardForm"),
+  );
+  assert.match(saveSettingsHandler, /adminBoardSettingsPayload\(/);
+  assert.match(saveSettingsHandler, /updateAdminBoard\(\s*targetBoardId,\s*payload/);
   assert.match(settingsSource, /allow_anonymous: "allowAnonymous"/);
   assert.match(settingsSource, /write_permission: "writePermission"/);
   assert.match(settingsSource, /read_permission: "readPermission"/);
@@ -422,9 +474,9 @@ test("원우회 소개는 선택 게시판 slug로 기존 전용 편집기를 �
   assert.match(adminSource, /default:\s*return <UnsupportedBoardContent board=\{selectedManagedBoard\}/);
 });
 
-test("일정과 FAQ는 통합 콘텐츠와 기존 메뉴에서만 조회하고 오류를 재시도할 수 있다", () => {
-  assert.match(adminSource, /enabled: isAdmin && \(Boolean\(editEventId\) \|\| section === "events" \|\| \(isManagedContentActive && managedContentKind === "calendar"\)\)/);
-  assert.match(adminSource, /enabled: isAdmin && \(section === "faqs" \|\| \(isManagedContentActive && managedContentKind === "faq"\)\)/);
+test("일정과 FAQ는 통합 콘텐츠에서만 조회하고 직접 일정 수정 링크는 유지한다", () => {
+  assert.match(adminSource, /enabled: isAdmin && \(Boolean\(editEventId\) \|\| \(isManagedContentActive && managedContentKind === "calendar"\)\)/);
+  assert.match(adminSource, /enabled: isAdmin && isManagedContentActive && managedContentKind === "faq"/);
   assert.match(adminSource, /eventsQuery\.refetch/);
   assert.match(adminSource, /faqsQuery\.refetch/);
 });

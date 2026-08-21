@@ -5,6 +5,9 @@ import type { Board, MediaAsset, PostDetail } from "../types";
 import {
   adminBoardCapability,
   adminBoardContentControl,
+  adminBoardDestinationForLegacySection,
+  adminBoardDestinationForSlug,
+  adminBoardLegacySectionTransition,
   adminBoardsForScope,
   adminScopeForBoard,
   adminContentBoards,
@@ -36,6 +39,8 @@ function media(id: number, contentType: string, filename = `media-${id}`): Media
 
 const boards: Board[] = [
   board({ id: 20, name: "임원진 소개", slug: "gsa-executives", category: "gsa", board_type: "organization_intro" }),
+  board({ id: 21, name: "기장단 소개", slug: "gsa-cohort-leaders", category: "gsa", board_type: "organization_intro" }),
+  board({ id: 22, name: "역대 원우회", slug: "gsa-past-councils", category: "gsa", board_type: "organization_intro" }),
   board({ id: 12, name: "네트워킹 안내", slug: "networking-programs", category: "alumni", board_type: "post", sort_order: 40, write_permission: "admin" }),
   board({ id: 2, name: "학사 일정", slug: "academic-calendar", category: "notices", board_type: "calendar" }),
   board({ id: 8, name: "스터디 모집", slug: "study-recruit", category: "study", board_type: "post", sort_order: 30 }),
@@ -136,6 +141,111 @@ test("전체는 모든 게시판 가상 선택을 유지하고 실제 그룹은 
   assert.equal(nextAdminBoardSelection([...registryBoards, ...capabilityBoards], boardBySlug("lecture-reviews").id, "community"), boardBySlug("lecture-reviews").id);
 });
 
+test("기존 관리자 section 링크는 모든 통합 게시판 목적지로 변환한다", () => {
+  const cases = [
+    ["notices", "all-notices"],
+    ["executives", "gsa-executives"],
+    ["cohortLeaders", "gsa-cohort-leaders"],
+    ["pastCouncils", "gsa-past-councils"],
+    ["suggestions", "suggestions"],
+    ["mutualAid", "mutual-aid"],
+    ["faqs", "gsa-faq"],
+    ["events", "academic-calendar"],
+  ] as const;
+
+  for (const [section, slug] of cases) {
+    const target = boardBySlug(slug);
+    assert.deepEqual(adminBoardDestinationForLegacySection(section, allFixtureBoards), {
+      scope: adminScopeForBoard(target),
+      boardId: target.id,
+      tab: "content",
+    });
+  }
+});
+
+test("전체 게시글과 기존 게시판 설정 링크는 통합 가상 선택과 정렬된 첫 게시판을 사용한다", () => {
+  assert.deepEqual(adminBoardDestinationForLegacySection("posts", allFixtureBoards), {
+    scope: "all",
+    boardId: null,
+    tab: "content",
+  });
+  assert.deepEqual(adminBoardDestinationForLegacySection("boards", registryBoards), {
+    scope: "all",
+    boardId: boardBySlug("all-notices").id,
+    tab: "settings",
+  });
+});
+
+test("레거시 대상 게시판이 없으면 전체 콘텐츠로 안전하게 대체하고 알 수 없는 section은 무시한다", () => {
+  assert.deepEqual(adminBoardDestinationForLegacySection("events", []), {
+    scope: "all",
+    boardId: null,
+    tab: "content",
+  });
+  assert.equal(adminBoardDestinationForLegacySection("dashboard", allFixtureBoards), null);
+  assert.equal(adminBoardDestinationForLegacySection("unknown", allFixtureBoards), null);
+});
+
+test("raw 레거시 section 전이는 게시판 준비 후 링크별 한 번만 실행한다", () => {
+  assert.equal(adminBoardLegacySectionTransition("events", null, allFixtureBoards, false), null);
+  const events = adminBoardLegacySectionTransition("events", null, allFixtureBoards, true);
+  assert.deepEqual(events, {
+    handledSection: "events",
+    destination: {
+      scope: "notices",
+      boardId: boardBySlug("academic-calendar").id,
+      tab: "content",
+    },
+  });
+  assert.equal(adminBoardLegacySectionTransition("events", "events", allFixtureBoards, true), null);
+  assert.deepEqual(adminBoardLegacySectionTransition("events", "events:1", allFixtureBoards, true, "events:2"), {
+    handledSection: "events:2",
+    destination: {
+      scope: "notices",
+      boardId: boardBySlug("academic-calendar").id,
+      tab: "content",
+    },
+  });
+  assert.deepEqual(adminBoardLegacySectionTransition("faqs", "events", allFixtureBoards, true), {
+    handledSection: "faqs",
+    destination: {
+      scope: "council",
+      boardId: boardBySlug("gsa-faq").id,
+      tab: "content",
+    },
+  });
+  assert.deepEqual(adminBoardLegacySectionTransition("dashboard", "events", allFixtureBoards, true), {
+    handledSection: "dashboard",
+    destination: null,
+  });
+  assert.deepEqual(adminBoardLegacySectionTransition("events", "dashboard", allFixtureBoards, true), {
+    handledSection: "events",
+    destination: {
+      scope: "notices",
+      boardId: boardBySlug("academic-calendar").id,
+      tab: "content",
+    },
+  });
+});
+
+test("대시보드 게시판 바로가기는 실제 slug와 탭을 통합 목적지로 계산한다", () => {
+  assert.deepEqual(adminBoardDestinationForSlug("club-promo", allFixtureBoards), {
+    scope: "participation",
+    boardId: boardBySlug("club-promo").id,
+    tab: "content",
+  });
+  assert.deepEqual(adminBoardDestinationForSlug("gsa-executives", allFixtureBoards, "settings"), {
+    scope: "council",
+    boardId: boardBySlug("gsa-executives").id,
+    tab: "settings",
+  });
+  assert.deepEqual(adminBoardDestinationForSlug("missing", allFixtureBoards, "settings"), {
+    scope: "all",
+    boardId: null,
+    tab: "content",
+  });
+});
+
 test("참여활동 탭은 참여·동아리·스터디·동문 게시글 게시판만 정렬해 보여준다", () => {
   assert.deepEqual(
     adminContentBoards(boards, "participation").map((item) => item.slug),
@@ -158,28 +268,27 @@ test("게시판 종류에 맞는 관리자 전용 제어를 선택한다", () =>
     kind: "notice",
     description: "공지 분류, 이미지, 상단 고정과 원우회 활동 연동을 공지사항 관리에서 설정합니다.",
     createLabel: null,
-    dedicatedSection: "notices",
-    dedicatedLabel: "공지사항 관리",
     canReplaceRepresentativeImage: false,
   });
   assert.deepEqual(adminBoardContentControl(boards.find((item) => item.slug === "club-promo")), {
     kind: "participation-guide",
     description: "대표 이미지, 동아리 소개와 가입 신청 링크를 관리합니다.",
     createLabel: "동아리 안내 등록",
-    dedicatedSection: null,
-    dedicatedLabel: null,
     canReplaceRepresentativeImage: true,
   });
   assert.deepEqual(adminBoardContentControl(boards.find((item) => item.slug === "networking-programs")), {
     kind: "participation-guide",
     description: "대표 이미지, 네트워킹 소개와 참가 신청 링크를 관리합니다.",
     createLabel: "네트워킹 안내 등록",
-    dedicatedSection: null,
-    dedicatedLabel: null,
     canReplaceRepresentativeImage: true,
   });
-  assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "suggestions")).dedicatedSection, "suggestions");
-  assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "mutual-aid")).dedicatedSection, "mutualAid");
+  assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "suggestions")).kind, "suggestion");
+  assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "mutual-aid")).kind, "mutual-aid");
+  for (const item of boards) {
+    const control = adminBoardContentControl(item);
+    assert.equal("dedicatedSection" in control, false);
+    assert.equal("dedicatedLabel" in control, false);
+  }
   assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "exam-archive")).kind, "resource");
   assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "event-album")).kind, "album");
 });

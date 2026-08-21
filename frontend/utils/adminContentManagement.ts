@@ -4,6 +4,17 @@ export type AdminContentScope = "all" | "notices" | "participation" | "community
 
 export type AdminBoardManagementTab = "content" | "settings";
 
+export type AdminBoardDestination = {
+  scope: AdminContentScope;
+  boardId: number | null;
+  tab: AdminBoardManagementTab;
+};
+
+export type AdminBoardLegacySectionTransition = {
+  handledSection: string;
+  destination: AdminBoardDestination | null;
+};
+
 export type AdminBoardSettingKey = "allow_anonymous" | "write_permission" | "read_permission";
 
 export type AdminBoardLockedPolicy = {
@@ -38,14 +49,10 @@ export type AdminBoardCapability = {
   lockedPolicies: AdminBoardLockedPolicy[];
 };
 
-export type AdminBoardDedicatedSection = "notices" | "suggestions" | "mutualAid";
-
 export type AdminBoardContentControl = {
   kind: AdminBoardLegacyContentKind;
   description: string;
   createLabel: string | null;
-  dedicatedSection: AdminBoardDedicatedSection | null;
-  dedicatedLabel: string | null;
   canReplaceRepresentativeImage: boolean;
 };
 
@@ -67,6 +74,23 @@ const SCOPE_CATEGORIES: Record<Exclude<AdminContentScope, "all">, readonly strin
   council: ["council", "gsa"],
 };
 
+const LEGACY_SECTION_SLUGS = {
+  notices: "all-notices",
+  executives: "gsa-executives",
+  cohortLeaders: "gsa-cohort-leaders",
+  pastCouncils: "gsa-past-councils",
+  suggestions: "suggestions",
+  mutualAid: "mutual-aid",
+  faqs: "gsa-faq",
+  events: "academic-calendar",
+} as const;
+
+const fallbackAdminBoardDestination = (): AdminBoardDestination => ({
+  scope: "all",
+  boardId: null,
+  tab: "content",
+});
+
 export function adminBoardsForScope(boards: Board[], scope: AdminContentScope): Board[] {
   const categories = scope === "all" ? null : SCOPE_CATEGORIES[scope];
   return boards
@@ -79,6 +103,47 @@ export function adminScopeForBoard(board: Board): AdminContentScope {
     if (categories.includes(board.category)) return scope;
   }
   return "all";
+}
+
+export function adminBoardDestinationForSlug(
+  slug: string,
+  boards: Board[],
+  tab: AdminBoardManagementTab = "content",
+): AdminBoardDestination {
+  const board = boards.find((item) => item.slug === slug);
+  if (!board) return fallbackAdminBoardDestination();
+  return {
+    scope: adminScopeForBoard(board),
+    boardId: board.id,
+    tab,
+  };
+}
+
+export function adminBoardDestinationForLegacySection(
+  section: string,
+  boards: Board[],
+): AdminBoardDestination | null {
+  if (section === "posts") return fallbackAdminBoardDestination();
+  if (section === "boards") {
+    const firstBoard = adminBoardsForScope(boards, "all")[0];
+    return firstBoard
+      ? { scope: "all", boardId: firstBoard.id, tab: "settings" }
+      : fallbackAdminBoardDestination();
+  }
+  const slug = LEGACY_SECTION_SLUGS[section as keyof typeof LEGACY_SECTION_SLUGS];
+  return slug ? adminBoardDestinationForSlug(slug, boards) : null;
+}
+
+export function adminBoardLegacySectionTransition(
+  rawSection: string | undefined,
+  handledSection: string | null,
+  boards: Board[],
+  boardsReady: boolean,
+  rawLinkKey: string = rawSection ?? "",
+): AdminBoardLegacySectionTransition | null {
+  if (!rawSection || !boardsReady || rawLinkKey === handledSection) return null;
+  const destination = adminBoardDestinationForLegacySection(rawSection, boards);
+  return { handledSection: rawLinkKey, destination };
 }
 
 const lockedPolicy = (key: string, label: string, reason: string, settingKey: AdminBoardSettingKey | null): AdminBoardLockedPolicy => ({ key, label, reason, settingKey });
@@ -141,8 +206,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "standard",
       description: "게시글을 검색하고 열기, 수정, 고정과 삭제를 관리합니다.",
       createLabel: null,
-      dedicatedSection: null,
-      dedicatedLabel: null,
       canReplaceRepresentativeImage: false,
     };
   }
@@ -152,8 +215,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "notice",
       description: "공지 분류, 이미지, 상단 고정과 원우회 활동 연동을 공지사항 관리에서 설정합니다.",
       createLabel: null,
-      dedicatedSection: "notices",
-      dedicatedLabel: "공지사항 관리",
       canReplaceRepresentativeImage: false,
     };
   }
@@ -163,8 +224,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "participation-guide",
       description: "대표 이미지, 동아리 소개와 가입 신청 링크를 관리합니다.",
       createLabel: "동아리 안내 등록",
-      dedicatedSection: null,
-      dedicatedLabel: null,
       canReplaceRepresentativeImage: true,
     };
   }
@@ -174,8 +233,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "participation-guide",
       description: "대표 이미지, 네트워킹 소개와 참가 신청 링크를 관리합니다.",
       createLabel: "네트워킹 안내 등록",
-      dedicatedSection: null,
-      dedicatedLabel: null,
       canReplaceRepresentativeImage: true,
     };
   }
@@ -185,8 +242,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "suggestion",
       description: "접수 상태와 공식 답변은 건의사항 답변 관리에서 처리합니다.",
       createLabel: null,
-      dedicatedSection: "suggestions",
-      dedicatedLabel: "건의사항 답변 관리",
       canReplaceRepresentativeImage: false,
     };
   }
@@ -196,8 +251,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "mutual-aid",
       description: "비공개 증빙 확인, 처리 완료와 반려는 상조회 신청 관리에서 처리합니다.",
       createLabel: null,
-      dedicatedSection: "mutualAid",
-      dedicatedLabel: "상조회 신청 관리",
       canReplaceRepresentativeImage: false,
     };
   }
@@ -207,8 +260,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "album",
       description: "행사 사진을 이미지 중심 게시글로 관리합니다.",
       createLabel: board.write_permission === "admin" ? `${board.name} 등록` : null,
-      dedicatedSection: null,
-      dedicatedLabel: null,
       canReplaceRepresentativeImage: false,
     };
   }
@@ -218,8 +269,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "activity-certification",
       description: "활동일, 참여자와 활동 사진을 확인하고 게시글 상태를 관리합니다.",
       createLabel: null,
-      dedicatedSection: null,
-      dedicatedLabel: null,
       canReplaceRepresentativeImage: false,
     };
   }
@@ -229,8 +278,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "activity-history",
       description: "원우회 활동내역은 공지사항의 활동내역 연동 옵션으로 관리합니다.",
       createLabel: null,
-      dedicatedSection: "notices",
-      dedicatedLabel: "연동 공지 관리",
       canReplaceRepresentativeImage: false,
     };
   }
@@ -240,8 +287,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
       kind: "resource",
       description: "자료 파일, 게시판 분류와 작성자 표시 정책을 유지하며 게시글을 관리합니다.",
       createLabel: board.write_permission === "admin" ? `${board.name} 등록` : null,
-      dedicatedSection: null,
-      dedicatedLabel: null,
       canReplaceRepresentativeImage: false,
     };
   }
@@ -250,8 +295,6 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
     kind: "standard",
     description: "게시글을 검색하고 열기, 수정, 고정과 삭제를 관리합니다.",
     createLabel: board.write_permission === "admin" ? `${board.name} 등록` : null,
-    dedicatedSection: null,
-    dedicatedLabel: null,
     canReplaceRepresentativeImage: false,
   };
 }

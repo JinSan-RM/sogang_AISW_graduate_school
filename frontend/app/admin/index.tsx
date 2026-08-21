@@ -33,10 +33,12 @@ import { useUserStore } from "../../stores/userStore";
 import {
   adminBoardCapability,
   adminBoardContentControl,
-  adminContentBoards,
-  nextAdminContentSelection,
+  adminBoardDestinationForLegacySection,
+  adminBoardDestinationForSlug,
+  adminBoardLegacySectionTransition,
   representativeImageUpdatePayload,
   type AdminBoardContentKind,
+  type AdminBoardDestination,
   type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
@@ -131,8 +133,7 @@ const eventSchema = z.object({
 type EventForm = z.infer<typeof eventSchema>;
 type AdminBoardsQueryData = ApiSuccess<Board[]>;
 type OptimisticManagedBoard = { board: Board; insertedGeneration: number };
-type AdminSection = "dashboard" | "banners" | "boardManagement" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
-type BoardScope = "all" | "notices" | "council" | "participation" | "community";
+type AdminSection = "dashboard" | "banners" | "boardManagement" | "accounts" | "duesPayers" | "reports" | "registration";
 type AdminPostMode = "all" | "notice" | "pinned";
 type SuggestionAdminFilter = "received" | "answered" | "all";
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -282,39 +283,13 @@ const SECTIONS: { key: AdminSection; label: string; icon: IconName }[] = [
   { key: "dashboard", label: "콘솔", icon: "speedometer-outline" },
   { key: "banners", label: "배너", icon: "albums-outline" },
   { key: "boardManagement", label: "게시판 관리", icon: "grid-outline" },
-  { key: "notices", label: "공지사항", icon: "megaphone-outline" },
-  { key: "boards", label: "게시판", icon: "grid-outline" },
-  { key: "executives", label: "원우회 소개", icon: "people-circle-outline" },
-  { key: "cohortLeaders", label: "기장단", icon: "ribbon-outline" },
-  { key: "pastCouncils", label: "역대 원우회", icon: "time-outline" },
-  { key: "posts", label: "게시글", icon: "document-text-outline" },
-  { key: "suggestions", label: "건의사항", icon: "chatbox-ellipses-outline" },
-  { key: "mutualAid", label: "상조회", icon: "flower-outline" },
   { key: "accounts", label: "계정", icon: "people-outline" },
   { key: "duesPayers", label: "원우회비", icon: "receipt-outline" },
   { key: "reports", label: "신고", icon: "flag-outline" },
-  { key: "faqs", label: "FAQ", icon: "help-circle-outline" },
-  { key: "events", label: "일정", icon: "calendar-outline" },
   { key: "registration", label: "가입 설정", icon: "person-add-outline" },
 ];
 
 const ADMIN_SECTION_KEYS = SECTIONS.map((item) => item.key);
-
-const BOARD_SCOPE_FILTERS: { key: BoardScope; label: string; categories: string[] }[] = [
-  { key: "all", label: "전체", categories: [] },
-  { key: "notices", label: "공지사항", categories: ["notices"] },
-  { key: "council", label: "원우회", categories: ["council", "gsa"] },
-  { key: "participation", label: "참여활동", categories: ["participation", "club", "study", "alumni"] },
-  { key: "community", label: "커뮤니티/자료", categories: ["community", "resources"] },
-];
-
-const CONTENT_SCOPE_FILTERS: { key: AdminContentScope; label: string }[] = [
-  { key: "all", label: "전체" },
-  { key: "notices", label: "공지사항" },
-  { key: "participation", label: "참여활동" },
-  { key: "community", label: "커뮤니티·자료" },
-  { key: "council", label: "원우회" },
-];
 
 const ADMIN_POST_MODE_FILTERS: { key: AdminPostMode; label: string }[] = [
   { key: "all", label: "전체" },
@@ -353,18 +328,6 @@ const BOARD_TYPE_LABELS: Record<string, string> = {
   mutual_aid: "상조회",
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  notices: "공지",
-  community: "커뮤니티",
-  resources: "자료",
-  participation: "참여",
-  council: "원우회",
-  club: "동아리",
-  study: "스터디",
-  alumni: "동문",
-  gsa: "원우회",
-};
-
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
   academic: "학사",
   council: "원우회",
@@ -381,11 +344,6 @@ function firstParam(value?: string | string[]) {
 function parseAdminSection(value?: string | string[]) {
   const raw = firstParam(value);
   return ADMIN_SECTION_KEYS.includes(raw as AdminSection) ? (raw as AdminSection) : null;
-}
-
-function parseBoardScope(value?: string | string[]) {
-  const raw = firstParam(value);
-  return BOARD_SCOPE_FILTERS.some((item) => item.key === raw) ? (raw as BoardScope) : null;
 }
 
 const REPORT_STATUS_LABELS: Record<ReportStatus | "all", string> = {
@@ -1389,25 +1347,6 @@ function SuggestionAdminCard({ item }: { item: PostListItem }) {
   );
 }
 
-function BoardCard({ item, onEdit }: { item: Board; onEdit: (item: Board) => void }) {
-  return (
-    <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, padding: 14, gap: 8 }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-        <StatusText active={Boolean(item.is_active)} />
-        <Chip active label={BOARD_TYPE_LABELS[item.board_type] ?? item.board_type} />
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>{CATEGORY_LABELS[item.category] ?? item.category}</Text>
-      </View>
-      <Text style={{ color: COLORS.text, fontSize: 17, fontWeight: "900" }}>{item.name}</Text>
-      <Text style={{ color: COLORS.muted }}>{item.slug}</Text>
-      {item.description ? <Text style={{ color: COLORS.muted, lineHeight: 20 }}>{item.description}</Text> : null}
-      <Text style={{ color: COLORS.muted, fontSize: 12 }}>
-        읽기 {item.read_permission} / 쓰기 {item.write_permission} / 순서 {item.sort_order}
-      </Text>
-      <ActionButton icon="settings-outline" label="게시판 수정" onPress={() => onEdit(item)} tone="outline" />
-    </View>
-  );
-}
-
 function UserCard({
   item,
   onRoleToggle,
@@ -1591,11 +1530,9 @@ export default function AdminScreen() {
   const [optimisticManagedBoard, setOptimisticManagedBoard] = useState<OptimisticManagedBoard | null>(null);
   const boardManagementBoardIdRef = useRef<number | null>(null);
   const boardSettingsSavingRef = useRef(false);
-  const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
-  const [postContentScope, setPostContentScope] = useState<AdminContentScope>("all");
+  const handledLegacySection = useRef<string | null>(null);
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
-  const [postBoardId, setPostBoardId] = useState<number | null>(null);
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
   const [replacingRepresentativeImagePostId, setReplacingRepresentativeImagePostId] = useState<number | null>(null);
   const [mutualAidFilter, setMutualAidFilter] = useState<MutualAidStatus | "all">("processing");
@@ -1608,7 +1545,6 @@ export default function AdminScreen() {
   const [bannerUploadSlot, setBannerUploadSlot] = useState<BannerImageSlot | null>(null);
   const [bannerSaving, setBannerSaving] = useState(false);
   const [bannerSaveMessage, setBannerSaveMessage] = useState<BannerSaveMessage>(null);
-  const [editingBoardId, setEditingBoardId] = useState<number | null>(null);
   const [boardForm, setBoardForm] = useState<BoardForm>(emptyBoard);
   const [selectedNoticeBoardId, setSelectedNoticeBoardId] = useState<number | null>(null);
   const selectedNoticeBoardIdRef = useRef<number | null>(null);
@@ -1673,6 +1609,7 @@ export default function AdminScreen() {
       : queriedManagedBoards,
     [optimisticManagedBoard, queriedManagedBoards],
   );
+  const boards = managedBoards;
   const selectedManagedBoard = managedBoards.find((board) => board.id === boardManagementBoardId);
   const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
   const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content";
@@ -1686,7 +1623,7 @@ export default function AdminScreen() {
     kind: managedContentKind,
     board: selectedManagedBoard,
   });
-  const managedStandardPostsBoardId = isManagedContentActive ? selectedManagedBoard?.id : postBoardId ?? undefined;
+  const managedStandardPostsBoardId = isManagedContentActive ? selectedManagedBoard?.id : undefined;
   const showsStandardPosts = noticeQueryPolicy.showsStandardPosts;
   const showsSuggestionContent = noticeQueryPolicy.showsSuggestions;
   const showsMutualAidContent = noticeQueryPolicy.showsMutualAid;
@@ -1695,7 +1632,7 @@ export default function AdminScreen() {
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
-    enabled: isAdmin && (Boolean(editEventId) || section === "events" || (isManagedContentActive && managedContentKind === "calendar")),
+    enabled: isAdmin && (Boolean(editEventId) || (isManagedContentActive && managedContentKind === "calendar")),
   });
   const adminEventList = eventsQuery.data?.data ?? [];
   const editEventExists = Boolean(editEventId) && adminEventList.some((event) => event.id === editEventId);
@@ -1719,7 +1656,7 @@ export default function AdminScreen() {
   const faqsQuery = useQuery({
     queryKey: ["admin-faqs"],
     queryFn: () => faqApi.getFAQs({ include_inactive: true }),
-    enabled: isAdmin && (section === "faqs" || (isManagedContentActive && managedContentKind === "faq")),
+    enabled: isAdmin && isManagedContentActive && managedContentKind === "faq",
   });
   const adminMajorsQuery = useQuery({
     queryKey: ["admin-registration-majors"],
@@ -1876,27 +1813,55 @@ export default function AdminScreen() {
     if (nextSection) {
       setSection(nextSection);
     }
-    const nextScope = parseBoardScope(params.scope);
-    if (nextScope) {
-      setBoardScope(nextScope);
-    }
-  }, [params.scope, params.section]);
+  }, [params.section]);
+
+  useEffect(() => {
+    const rawSection = firstParam(params.section);
+    const rawLinkKey = [rawSection ?? "", firstParam(params.scope) ?? "", editEventIdParam ?? ""].join(":");
+    const transition = adminBoardLegacySectionTransition(
+      rawSection,
+      handledLegacySection.current,
+      boards,
+      boardsQuery.isSuccess,
+      rawLinkKey,
+    );
+    if (!transition) return;
+    handledLegacySection.current = transition.handledSection;
+    if (!transition.destination) return;
+    boardManagementBoardIdRef.current = transition.destination.boardId;
+    externalLinkBoardIdRef.current = transition.destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(transition.destination.scope);
+    setBoardManagementBoardId(transition.destination.boardId);
+    setBoardManagementTab(transition.destination.tab);
+    setCreatingBoard(false);
+  }, [boards, boardsQuery.isSuccess, editEventIdParam, params.scope, params.section]);
 
   useEffect(() => {
     if (!editEventMissing) {
       return;
     }
-    setSection("events");
+    const destination = adminBoardDestinationForSlug("academic-calendar", boards);
+    boardManagementBoardIdRef.current = destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(destination.scope);
+    setBoardManagementBoardId(destination.boardId);
+    setBoardManagementTab(destination.tab);
     reset(emptyEvent);
-    router.replace({ pathname: "/admin", params: { section: "events" } } as never);
-  }, [editEventMissing, reset]);
+    router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
+  }, [boards, editEventMissing, reset]);
 
   useEffect(() => {
     const event = editEventQuery.data?.data;
     if (!event) {
       return;
     }
-    setSection("events");
+    const destination = adminBoardDestinationForSlug("academic-calendar", boards);
+    boardManagementBoardIdRef.current = destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(destination.scope);
+    setBoardManagementBoardId(destination.boardId);
+    setBoardManagementTab(destination.tab);
     reset({
       title: event.title,
       category: event.category,
@@ -1905,7 +1870,7 @@ export default function AdminScreen() {
       location: event.location ?? "",
       description: event.description ?? "",
     });
-  }, [editEventQuery.data?.data, reset]);
+  }, [boards, editEventQuery.data?.data, reset]);
 
   useEffect(() => {
     const currentBanners = bannersQuery.data?.data ?? [];
@@ -1957,10 +1922,6 @@ export default function AdminScreen() {
 
   const banners = bannersQuery.data?.data ?? [];
   const sortedBanners = [...banners].sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0) || left.id - right.id);
-  const boards = managedBoards;
-  const postContentBoards = adminContentBoards(boards, "all");
-  const visiblePostBoards = adminContentBoards(boards, postContentScope);
-  const selectedPostBoard = postContentBoards.find((board) => board.id === postBoardId);
   const reports = reportsQuery.data?.data ?? [];
   const users = usersQuery.data?.data ?? [];
   const faqs = faqsQuery.data?.data ?? [];
@@ -1989,9 +1950,6 @@ export default function AdminScreen() {
   const auditLogs: AdminAuditLog[] = auditLogsQuery.data?.data ?? [];
   const selectedNoticeBoard = noticeBoards.find((board) => board.id === selectedNoticeBoardId)
     ?? (managedContentKind === "notice" ? selectedManagedBoard : undefined);
-  const boardScopeFilter = BOARD_SCOPE_FILTERS.find((item) => item.key === boardScope) ?? BOARD_SCOPE_FILTERS[0];
-  const visibleBoards =
-    boardScopeFilter.key === "all" ? boards : boards.filter((board) => boardScopeFilter.categories.includes(board.category));
   const activeBannerCount = banners.filter((item) => item.is_active).length;
   const councilBoardCount = boards.filter((board) => ["council", "gsa"].includes(board.category)).length;
   const clubPromoBoard = boards.find((board) => board.slug === "club-promo");
@@ -2001,11 +1959,8 @@ export default function AdminScreen() {
   const suggestedBannerOrder = nextBannerOrder(sortedBanners);
   const previewBannerPosition = editingBannerId ? selectedBannerPosition ?? 1 : nextBannerPosition;
   const previewBannerTotal = editingBannerId ? Math.max(sortedBanners.length, 1) : nextBannerPosition;
-  const openAdminSection = (nextSection: AdminSection, nextScope?: BoardScope) => {
+  const openAdminSection = (nextSection: AdminSection) => {
     setSection(nextSection);
-    if (nextScope) {
-      setBoardScope(nextScope);
-    }
   };
   const dispatchEventReminders = async () => {
     try {
@@ -2211,26 +2166,8 @@ export default function AdminScreen() {
   };
 
   const resetBoardForm = () => {
-    setEditingBoardId(null);
     setBoardForm(emptyBoard);
     setCreatingBoard(false);
-  };
-
-  const handleEditBoard = (item: Board) => {
-    setCreatingBoard(false);
-    setEditingBoardId(item.id);
-    setBoardForm({
-      name: item.name,
-      slug: item.slug,
-      category: item.category,
-      board_type: item.board_type,
-      description: item.description ?? "",
-      sort_order: String(item.sort_order ?? 0),
-      allow_anonymous: item.allow_anonymous,
-      read_permission: item.read_permission,
-      write_permission: item.write_permission,
-      is_active: item.is_active !== false,
-    });
   };
 
   const handleSaveBoard = async () => {
@@ -2253,35 +2190,21 @@ export default function AdminScreen() {
     };
 
     try {
-      if (editingBoardId) {
-        await boardApi.updateAdminBoard(editingBoardId, adminBoardSettingsPayload({
-          name: boardForm.name,
-          description: boardForm.description,
-          sortOrder: boardForm.sort_order,
-          allowAnonymous: boardForm.allow_anonymous,
-          readPermission: boardForm.read_permission,
-          writePermission: boardForm.write_permission,
-          isActive: boardForm.is_active,
-        }));
-      } else {
-        const created = await boardApi.createAdminBoard(payload);
-        if (creatingBoard) {
-          const creationResult = adminBoardCreationResult(managedBoards, created.data);
-          const transition = creationResult.transition;
-          queryClient.setQueryData<AdminBoardsQueryData>(["admin-boards"], (current) => ({
-            ...(current ?? { status: "success" as const }),
-            data: adminBoardsWithCreatedBoard(current?.data ?? creationResult.boards, created.data),
-          }));
-          const insertedGeneration = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"])?.dataUpdateCount ?? 0;
-          setOptimisticManagedBoard({ board: created.data, insertedGeneration });
-          syncExternalLinkNavigationBoardId(transition.boardId);
-          boardManagementBoardIdRef.current = transition.boardId;
-          setBoardManagementScope(transition.scope);
-          setBoardManagementBoardId(transition.boardId);
-          setBoardManagementTab(transition.tab);
-          setCreatingBoard(transition.creatingBoard);
-        }
-      }
+      const created = await boardApi.createAdminBoard(payload);
+      const creationResult = adminBoardCreationResult(managedBoards, created.data);
+      const transition = creationResult.transition;
+      queryClient.setQueryData<AdminBoardsQueryData>(["admin-boards"], (current) => ({
+        ...(current ?? { status: "success" as const }),
+        data: adminBoardsWithCreatedBoard(current?.data ?? creationResult.boards, created.data),
+      }));
+      const insertedGeneration = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"])?.dataUpdateCount ?? 0;
+      setOptimisticManagedBoard({ board: created.data, insertedGeneration });
+      syncExternalLinkNavigationBoardId(transition.boardId);
+      boardManagementBoardIdRef.current = transition.boardId;
+      setBoardManagementScope(transition.scope);
+      setBoardManagementBoardId(transition.boardId);
+      setBoardManagementTab(transition.tab);
+      setCreatingBoard(transition.creatingBoard);
       resetBoardForm();
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
       queryClient.invalidateQueries({ queryKey: ["boards"] });
@@ -2300,6 +2223,26 @@ export default function AdminScreen() {
     if (!transition.accepted) return false;
     externalLinkBoardIdRef.current = transition.boardId;
     return true;
+  };
+
+  const openManagedBoardDestination = (destination: AdminBoardDestination | null) => {
+    if (!destination) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
+    if (!syncExternalLinkNavigationBoardId(destination.boardId)) return;
+    boardManagementBoardIdRef.current = destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(destination.scope);
+    setBoardManagementBoardId(destination.boardId);
+    setBoardManagementTab(destination.tab);
+    setCreatingBoard(false);
+  };
+
+  const openManagedBoard = (slug: string, tab: AdminBoardManagementTab = "content") => {
+    openManagedBoardDestination(adminBoardDestinationForSlug(slug, boards, tab));
+  };
+
+  const openAllManagedPosts = () => {
+    openManagedBoardDestination(adminBoardDestinationForLegacySection("posts", boards));
   };
 
   const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
@@ -2406,19 +2349,19 @@ export default function AdminScreen() {
     <Panel>
       <View style={{ gap: 10 }}>
         <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-          {editingBoardId ? "게시판 수정" : "게시판 등록"}
+          게시판 등록
         </Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Field value={boardForm.name} onChangeText={(value) => setBoardForm((current) => ({ ...current, name: value }))} placeholder="게시판 이름" />
           </View>
           <View style={{ flex: 1 }}>
-            <Field value={boardForm.slug} onChangeText={(value) => setBoardForm((current) => ({ ...current, slug: value }))} placeholder="slug" editable={!editingBoardId} />
+            <Field value={boardForm.slug} onChangeText={(value) => setBoardForm((current) => ({ ...current, slug: value }))} placeholder="slug" />
           </View>
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
-            <Field value={boardForm.category} onChangeText={(value) => setBoardForm((current) => ({ ...current, category: value }))} placeholder="카테고리" editable={!editingBoardId} />
+            <Field value={boardForm.category} onChangeText={(value) => setBoardForm((current) => ({ ...current, category: value }))} placeholder="카테고리" />
           </View>
           <View style={{ flex: 1 }}>
             <Field value={boardForm.sort_order} onChangeText={(value) => setBoardForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
@@ -2432,7 +2375,7 @@ export default function AdminScreen() {
               key={value}
               active={boardForm.board_type === value}
               label={label}
-              onPress={editingBoardId ? undefined : () => setBoardForm((current) => ({ ...current, board_type: value }))}
+              onPress={() => setBoardForm((current) => ({ ...current, board_type: value }))}
             />
           ))}
         </View>
@@ -2463,9 +2406,9 @@ export default function AdminScreen() {
         </View>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
-            <ActionButton icon="save-outline" label={editingBoardId ? "게시판 저장" : "게시판 등록"} onPress={handleSaveBoard} />
+            <ActionButton icon="save-outline" label="게시판 등록" onPress={handleSaveBoard} />
           </View>
-          {editingBoardId || creatingBoard ? (
+          {creatingBoard ? (
             <View style={{ flex: 1 }}>
               <ActionButton label="취소" onPress={handleCancelBoardForm} tone="outline" />
             </View>
@@ -2841,11 +2784,6 @@ export default function AdminScreen() {
     }
   };
 
-  const handlePostContentScopeChange = (nextScope: AdminContentScope) => {
-    setPostContentScope(nextScope);
-    setPostBoardId(nextAdminContentSelection(boards, postBoardId, nextScope));
-  };
-
   const handleReplacePostRepresentativeImage = async (item: PostListItem) => {
     const itemBoard = boards.find((board) => board.id === item.board_id);
     if (!adminBoardContentControl(itemBoard).canReplaceRepresentativeImage) {
@@ -3059,9 +2997,9 @@ export default function AdminScreen() {
     const eventUpdateId = editEventQuery.data?.data?.id ?? null;
     if (editEventId && !eventUpdateId) {
       Alert.alert("일정 확인", "이미 삭제되었거나 없는 일정입니다. 목록에서 다시 선택해주세요.");
-      setSection("events");
+      openManagedBoard("academic-calendar");
       reset(emptyEvent);
-      router.replace({ pathname: "/admin", params: { section: "events" } } as never);
+      router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       return;
     }
 
@@ -3084,7 +3022,7 @@ export default function AdminScreen() {
     try {
       if (eventUpdateId) {
         await eventApi.updateEvent(eventUpdateId, payload);
-        router.replace({ pathname: "/admin", params: { section: "events" } } as never);
+        router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       } else {
         await eventApi.createEvent(payload);
       }
@@ -3098,8 +3036,8 @@ export default function AdminScreen() {
   };
 
   const handleEditEvent = (event: EventItem) => {
-    setSection("events");
-    router.push({ pathname: "/admin", params: { editEventId: String(event.id) } } as never);
+    openManagedBoard("academic-calendar");
+    router.push({ pathname: "/admin", params: { section: "boardManagement", editEventId: String(event.id) } } as never);
   };
 
   const deleteEventFromList = async (event: EventItem) => {
@@ -3107,7 +3045,7 @@ export default function AdminScreen() {
       await eventApi.deleteEvent(event.id);
       if (editEventId === event.id) {
         reset(emptyEvent);
-        router.replace({ pathname: "/admin", params: { section: "events" } } as never);
+        router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       }
       queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -3297,7 +3235,7 @@ export default function AdminScreen() {
   );
 
   const renderStandardPostContent = () => {
-    const contentBoard = isManagedContentActive ? selectedManagedBoard : selectedPostBoard;
+    const contentBoard = selectedManagedBoard;
     const contentControl = adminBoardContentControl(contentBoard);
     return (
       <View style={{ gap: 12 }}>
@@ -3309,23 +3247,6 @@ export default function AdminScreen() {
             <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
               게시글을 검색하고 열기, 수정, 고정, 삭제와 지원 게시판의 대표 이미지를 관리합니다.
             </Text>
-            {!isManagedContentActive ? (
-              <>
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>콘텐츠 그룹</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {CONTENT_SCOPE_FILTERS.map((item) => (
-                    <Chip key={item.key} active={postContentScope === item.key} label={item.label} onPress={() => handlePostContentScopeChange(item.key)} />
-                  ))}
-                </ScrollView>
-                {postContentScope !== "all" ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                    {visiblePostBoards.map((board) => (
-                      <Chip key={board.id} active={postBoardId === board.id} label={board.name} onPress={() => setPostBoardId(board.id)} />
-                    ))}
-                  </ScrollView>
-                ) : null}
-              </>
-            ) : null}
             {contentBoard ? (
               <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary100, backgroundColor: COLORS.primary50, padding: 12, gap: 9 }}>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
@@ -3339,14 +3260,6 @@ export default function AdminScreen() {
                       icon="add-circle-outline"
                       label={contentControl.createLabel}
                       onPress={() => router.push({ pathname: "/board/post/create", params: { boardId: String(contentBoard.id) } } as never)}
-                    />
-                  ) : null}
-                  {!isManagedContentActive ? (
-                    <ActionButton
-                      icon="settings-outline"
-                      label="게시판 설정"
-                      onPress={() => openAdminSection("boards", postContentScope)}
-                      tone="outline"
                     />
                   ) : null}
                 </View>
@@ -3787,78 +3700,84 @@ export default function AdminScreen() {
               title="공지사항 등록"
               description="학사공지, 행사공지 등 관리자 전용 공지 게시판에 새 공지를 작성합니다."
               meta={`${noticeBoards.length}개 공지 게시판 관리`}
-              onPress={() => openAdminSection("notices")}
+              onPress={() => openManagedBoard("all-notices")}
             />
             <ShortcutCard
               icon="people-circle-outline"
               title="원우회 게시판 설정"
               description="활동내역, 회계장부, 상조회 같은 원우회 메뉴 게시판의 권한과 노출을 관리합니다."
               meta={`${councilBoardCount}개 원우회 게시판 설정`}
-              onPress={() => openAdminSection("boards", "council")}
+              onPress={() => openManagedBoard("council-activity", "settings")}
             />
             <ShortcutCard
               icon="people-circle-outline"
               title="원우회 소개 등록"
               description="현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록합니다."
               meta={currentCouncils[0]?.members.length ? `${currentCouncils[0].members.length}개 임원 카드 등록` : "등록 필요"}
-              onPress={() => openAdminSection("executives")}
+              onPress={() => openManagedBoard("gsa-executives")}
             />
             <ShortcutCard
               icon="ribbon-outline"
               title="기수별 기장단 등록"
               description="기장·부기장 이름, 소개글과 대표·프로필 이미지를 관리자 전용으로 등록합니다."
               meta={`${cohortLeaders.length}개 기수 등록`}
-              onPress={() => openAdminSection("cohortLeaders")}
+              onPress={() => openManagedBoard("gsa-cohort-leaders")}
             />
             <ShortcutCard
               icon="time-outline"
               title="역대 원우회 관리"
               description="역대 원우회 임원진, 소개와 활동내역을 별도 관리합니다."
               meta={`${pastCouncils.length}개 원우회 등록`}
-              onPress={() => openAdminSection("pastCouncils")}
+              onPress={() => openManagedBoard("gsa-past-councils")}
             />
             <ShortcutCard
               icon="document-text-outline"
               title="전체 게시글 관리"
               description="전체 게시글을 검색하고 고정, 수정, 삭제 같은 운영 작업을 처리합니다."
               meta={`${adminPostTotal}개 게시글 조회`}
-              onPress={() => openAdminSection("posts")}
+              onPress={openAllManagedPosts}
             />
             <ShortcutCard
               icon="flower-outline"
               title="상조회 신청 처리"
               description="신청 내용과 비공개 증빙서류를 확인하고 처리 완료 또는 반려로 변경합니다."
               meta={`처리 대기 ${processingMutualAidCount}건`}
-              onPress={() => openAdminSection("mutualAid")}
+              onPress={() => openManagedBoard("mutual-aid")}
             />
             <ShortcutCard
               icon="chatbox-ellipses-outline"
               title="건의사항 답변"
               description="익명 건의사항을 확인하고 원우회 공식 답변을 등록합니다."
               meta={`답변 대기 ${pendingSuggestionCount}건`}
-              onPress={() => openAdminSection("suggestions")}
+              onPress={() => openManagedBoard("suggestions")}
             />
             <ShortcutCard
               icon="people-outline"
               title="동아리 게시글 등록"
               description="대표 사진과 가입 신청 링크를 포함한 동아리 소개 글을 등록합니다."
               meta={clubPromoBoard ? "관리자 전용 게시판" : "동아리 게시판 확인 필요"}
-              onPress={() => {
-                if (clubPromoBoard) {
-                  router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
-                }
-              }}
+              onPress={() => openManagedBoard("club-promo")}
             />
             <ShortcutCard
               icon="git-network-outline"
               title="네트워킹 게시글 등록"
               description="대표 사진과 참가 신청 링크를 포함한 네트워킹 안내 글을 등록합니다."
               meta={networkingProgramsBoard ? "관리자 전용 게시판" : "네트워킹 게시판 확인 필요"}
-              onPress={() => {
-                if (networkingProgramsBoard) {
-                  router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
-                }
-              }}
+              onPress={() => openManagedBoard("networking-programs")}
+            />
+            <ShortcutCard
+              icon="help-circle-outline"
+              title="FAQ 관리"
+              description="FAQ 목록, 정렬 순서와 노출 상태를 관리합니다."
+              meta={`${faqs.length}개 FAQ`}
+              onPress={() => openManagedBoard("gsa-faq")}
+            />
+            <ShortcutCard
+              icon="calendar-outline"
+              title="일정 관리"
+              description="학사 일정과 원우회 일정을 등록하고 수정합니다."
+              meta={`${events.length}개 일정`}
+              onPress={() => openManagedBoard("academic-calendar")}
             />
             <ShortcutCard
               icon="notifications-outline"
@@ -4187,53 +4106,6 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "notices" ? renderNoticeContent() : null}
-
-        {section === "boards" ? (
-          <View style={{ gap: 12 }}>
-            {renderBoardFormPanel()}
-            {boardsQuery.isLoading ? <ActivityIndicator /> : null}
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>게시판 설정 범위</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  공지사항, 원우회, 참여활동, 커뮤니티/자료 게시판을 묶음별로 확인하고 권한과 노출 상태를 조정합니다.
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {BOARD_SCOPE_FILTERS.map((item) => (
-                    <Chip
-                      key={item.key}
-                      active={boardScope === item.key}
-                      label={item.label}
-                      onPress={() => setBoardScope(item.key)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            </Panel>
-            {!boardsQuery.isLoading && visibleBoards.length === 0 ? (
-              <Panel>
-                <Text style={{ color: COLORS.muted }}>표시할 게시판이 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {visibleBoards.map((item) => (
-              <BoardCard key={item.id} item={item} onEdit={handleEditBoard} />
-            ))}
-          </View>
-        ) : null}
-
-        {section === "executives" ? renderExecutivesContent() : null}
-
-        {section === "cohortLeaders" ? renderCohortLeadersContent() : null}
-
-        {section === "pastCouncils" ? renderPastCouncilsContent() : null}
-
-        {section === "posts" ? renderStandardPostContent() : null}
-
-        {section === "mutualAid" ? renderMutualAidContent() : null}
-
-        {section === "suggestions" ? renderSuggestionContent() : null}
-
         {section === "accounts" ? (
           <View style={{ gap: 12 }}>
             <Panel>
@@ -4290,8 +4162,6 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "faqs" ? renderFaqContent() : null}
-
         {section === "registration" ? (
           <View style={{ gap: 12 }}>
             <Panel>
@@ -4333,7 +4203,6 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "events" ? renderCalendarContent() : null}
       </View>
     </ScrollView>
   );
