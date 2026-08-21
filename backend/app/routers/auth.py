@@ -195,7 +195,11 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
         data["dev_mode"] = False
         return success_response(data)
 
-    plain_body, html_body = verification_email(code, settings.email_verification_expire_minutes)
+    plain_body, html_body = verification_email(
+        code,
+        settings.email_verification_expire_minutes,
+        contact_email=settings.support_email,
+    )
     try:
         email_sent = send_email(
             email,
@@ -434,7 +438,11 @@ def request_account_deletion(
     if not is_email_configured():
         logger.warning("Account deletion verification email was not sent because SMTP is not configured")
     else:
-        plain_body, html_body = account_deletion_email(code, settings.email_verification_expire_minutes)
+        plain_body, html_body = account_deletion_email(
+            code,
+            settings.email_verification_expire_minutes,
+            contact_email=settings.support_email,
+        )
         try:
             delivered = send_email(
                 email,
@@ -577,7 +585,11 @@ def request_password_reset(payload: PasswordResetRequest, request: Request, db: 
             data["dev_mode"] = False
             return success_response(data)
 
-        plain_body, html_body = password_reset_email(reset_token, settings.password_reset_expire_minutes)
+        plain_body, html_body = password_reset_email(
+            reset_token,
+            settings.password_reset_expire_minutes,
+            contact_email=settings.support_email,
+        )
         try:
             email_sent = send_email(
                 user.email,

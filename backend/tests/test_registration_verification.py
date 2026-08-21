@@ -296,6 +296,7 @@ def test_full_email_verification_and_registration_flow_uses_one_time_token(
 
     monkeypatch.setattr(auth_router, "is_email_configured", lambda: True)
     monkeypatch.setattr(auth_router, "send_email", capture_email)
+    monkeypatch.setattr(settings, "support_email", "A72040@sogang.ac.kr")
 
     with api.session() as db:
         db.add_all(
@@ -332,6 +333,7 @@ def test_full_email_verification_and_registration_flow_uses_one_time_token(
     assert "dev_code" not in request_data
     assert captured_email["html_body"] is not None
     assert emailed_code in captured_email["html_body"]
+    assert "A72040@sogang.ac.kr" in captured_email["html_body"]
 
     verify_response = api.client.post(
         "/api/auth/register/verify-email",
