@@ -19,6 +19,12 @@ type ResourceCategoryResolver = (
   board?: ResourceBoardIdentity | null,
   storedCategory?: string | null,
 ) => string | null;
+type ResourceDetailMetaFormatter = (input: {
+  boardSlug?: string | null;
+  authorCohort?: string | null;
+  authorNickname?: string | null;
+  createdAt: string;
+}) => string;
 
 const resourceLabel = (
   boardItem?: ResourceBoardIdentity | null,
@@ -35,6 +41,16 @@ const resourceLabel = (
   }
 
   return resolver(boardItem, storedCategory);
+};
+
+const resourceDetailMeta = (input: Parameters<ResourceDetailMetaFormatter>[0]) => {
+  const formatter = (
+    resourceBoards as typeof resourceBoards & {
+      resourceDetailMeta?: ResourceDetailMetaFormatter;
+    }
+  ).resourceDetailMeta;
+
+  return formatter?.(input);
 };
 
 const board = (overrides: Partial<Board>): Board => ({
@@ -116,4 +132,28 @@ test("새 자료공유 게시판은 게시판 이름을 사용하고 일반 게�
     "새 자료실",
   );
   assert.equal(resourceLabel({ name: "일반 게시판" }, "자유주제"), "자유주제");
+});
+
+test("시험족보 상세 메타는 작성자 기수와 이름을 표시한다", () => {
+  assert.equal(
+    resourceDetailMeta({
+      boardSlug: "exam-archive",
+      authorCohort: "72",
+      authorNickname: "한다현",
+      createdAt: "2026-08-20T00:00:00Z",
+    }),
+    "72기 한다현 · 26.08.20(목)",
+  );
+});
+
+test("강의후기 상세 메타는 익명 작성자를 노출하지 않는다", () => {
+  assert.equal(
+    resourceDetailMeta({
+      boardSlug: "lecture-reviews",
+      authorCohort: null,
+      authorNickname: "Anonymous",
+      createdAt: "2026-08-20T00:00:00Z",
+    }),
+    "26.08.20(목)",
+  );
 });

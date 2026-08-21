@@ -1,4 +1,6 @@
 import type { Board } from "../types";
+import { formatBoardDate } from "./dateFormat";
+import { formatCohortName } from "./userLabel";
 
 export const RESOURCE_FILTERS = ["전체", "강의후기", "시험족보", "종합시험", "졸업논문"] as const;
 export type ResourceFilter = (typeof RESOURCE_FILTERS)[number];
@@ -39,6 +41,24 @@ export function resourceCategoryLabel(
   }
 
   return storedCategory?.trim() || null;
+}
+
+export function resourceDetailMeta({
+  boardSlug,
+  authorCohort,
+  authorNickname,
+  createdAt,
+}: {
+  boardSlug?: string | null;
+  authorCohort?: string | null;
+  authorNickname?: string | null;
+  createdAt: string;
+}): string {
+  const date = formatBoardDate(createdAt);
+  if (boardSlug === "lecture-reviews") {
+    return date;
+  }
+  return [formatCohortName(authorCohort, authorNickname), date].filter(Boolean).join(" · ");
 }
 
 export function resourceFilterAfterNavigation(

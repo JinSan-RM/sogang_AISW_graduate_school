@@ -39,10 +39,11 @@ import { activityCertificationBadgeLabel } from "../../../../utils/activityCerti
 import { activityCertificationDetailHeading } from "../../../../utils/activityDetailPresentation";
 import { COMMENT_DELETE_COPY } from "../../../../utils/commentPresentation";
 import { postDetailImagePresentation } from "../../../../utils/postDetailImagePresentation";
+import { postDetailFocusDecision } from "../../../../utils/postDetailCache";
 import { shouldShowPostAuthorBlock } from "../../../../utils/postMenu";
 import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../../utils/reportForm";
 import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../../utils/replyComposer";
-import { resourceCategoryLabel } from "../../../../utils/resourceBoards";
+import { resourceCategoryLabel, resourceDetailMeta } from "../../../../utils/resourceBoards";
 
 const COLORS = {
   primary: "#2761FF",
@@ -148,6 +149,7 @@ export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; fromBoardId?: string; returnTo?: string }>();
   const insets = useSafeAreaInsets();
   const postId = Number(params.postId);
+  const lastFocusedPostIdRef = useRef<number | null>(null);
   const userId = useUserStore((state) => state.userId);
   const currentUser = useUserStore((state) => state.user);
 
@@ -217,6 +219,16 @@ export default function PostDetailScreen() {
   useEffect(() => {
     setGalleryIndex(0);
   }, [postId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const decision = postDetailFocusDecision(lastFocusedPostIdRef.current, postId);
+      lastFocusedPostIdRef.current = decision.nextFocusedPostId;
+      if (decision.shouldRefetch) {
+        void refetch();
+      }
+    }, [postId, refetch])
+  );
 
   const handlePostBack = useCallback(() => {
     if (!post) return;
@@ -673,9 +685,16 @@ export default function PostDetailScreen() {
                   ? `${formatBoardDate(post.created_at)} · 조회 ${post.view_count}`
                   : isMutualAidRequest
                     ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(post.created_at)}`
-                  : commentsDisabled || board?.slug === "exam-archive"
+                  : isResource
+                    ? resourceDetailMeta({
+                        boardSlug: board?.slug,
+                        authorCohort: post.author_cohort,
+                        authorNickname: post.author_nickname,
+                        createdAt: post.created_at,
+                      })
+                  : commentsDisabled
                     ? formatBoardDate(post.created_at)
-                  : isResource || isStudyRecruit
+                  : isStudyRecruit
                     ? `${formatCohortName(post.author_cohort, post.author_nickname)} · ${formatBoardDate(post.created_at)}`
                   : `${post.author_nickname} · ${formatBoardDate(post.created_at)}`}
               </Text>
