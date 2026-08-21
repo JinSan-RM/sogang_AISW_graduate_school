@@ -6,6 +6,7 @@ import test from "node:test";
 import ts from "typescript";
 
 import type { Board } from "../types";
+import type { AdminBoardCapability } from "../utils/adminContentManagement";
 
 const navigatorSource = readFileSync(
   join(process.cwd(), "components", "admin", "AdminBoardManagementNavigator.tsx"),
@@ -16,6 +17,10 @@ const settingsSource = readFileSync(
   "utf8",
 );
 const adminSource = readFileSync(join(process.cwd(), "app", "admin", "index.tsx"), "utf8");
+const contentPanelSource = readFileSync(
+  join(process.cwd(), "components", "admin", "AdminBoardContentPanel.tsx"),
+  "utf8",
+);
 const nodeRequire = createRequire(import.meta.url);
 
 function loadNavigatorModule() {
@@ -51,6 +56,24 @@ function loadNavigatorModule() {
   };
   new Function("module", "exports", "require", compiled)(module, module.exports, mockRequire);
   return module.exports as Record<string, (...args: unknown[]) => unknown>;
+}
+
+function loadContentPanelModule() {
+  const compiled = ts.transpileModule(contentPanelSource, {
+    compilerOptions: {
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const module = { exports: {} as Record<string, unknown> };
+  const mockRequire = (id: string) => {
+    if (id === "react-native") return { Text: "Text" };
+    return nodeRequire(id);
+  };
+  new Function("module", "exports", "require", compiled)(module, module.exports, mockRequire);
+  return module.exports as { default: (props: Record<string, unknown>) => unknown };
 }
 
 const board = (id: number, category: string): Board => ({
@@ -227,4 +250,56 @@ test("생성 게시판 overlay는 생성 이후 성공한 서버 refresh에서�
   assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 11, "error", [createdBoard]), false);
   assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 11, "success", [board(1, "notices")]), false);
   assert.equal(navigatorModule.shouldClearOptimisticCreatedBoard(3, 10, 11, "success", [createdBoard]), true);
+});
+
+test("콘텐츠 패널은 capability kind에 맞는 renderer 하나만 실행한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  const calls: string[] = [];
+  const capability: AdminBoardCapability = {
+    kind: "notice",
+    contentAvailable: true,
+    canReplaceRepresentativeImage: false,
+    lockedPolicies: [],
+  };
+  const rendered = contentPanelModule.default({
+    board: board(1, "notices"),
+    capability,
+    renderers: {
+      posts: () => {
+        calls.push("posts");
+        return "게시글";
+      },
+      notice: () => {
+        calls.push("notice");
+        return "공지";
+      },
+    },
+  }) as { props?: { children?: unknown } };
+
+  assert.deepEqual(calls, ["notice"]);
+  assert.equal(rendered.props?.children, "공지");
+});
+
+test("공지 건의 상조회는 통합 콘텐츠 renderer map으로 연결한다", () => {
+  assert.match(adminSource, /"notice": renderNoticeContent/);
+  assert.match(adminSource, /"suggestion": renderSuggestionContent/);
+  assert.match(adminSource, /"mutual-aid": renderMutualAidContent/);
+  assert.doesNotMatch(adminSource, /\.dedicatedSection/);
+  assert.match(contentPanelSource, /renderers\[capability\.kind\]/);
+});
+
+test("숨겨진 게시판 콘텐츠 쿼리는 실행하지 않고 대시보드 집계는 유지한다", () => {
+  assert.match(adminSource, /const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content"/);
+  assert.match(adminSource, /enabled: isAdmin && \(section === "dashboard" \|\| showsStandardPosts\)/);
+  assert.match(adminSource, /section === "dashboard" \? undefined : appliedPostSearch\.trim\(\) \|\| undefined/);
+  assert.match(adminSource, /section === "dashboard" \? undefined : managedStandardPostsBoardId/);
+});
+
+test("활동내역 공지 편집은 통합 게시판 선택을 실제 공지 게시판으로 전환한다", () => {
+  assert.match(adminSource, /board_type: "notice"/);
+  assert.match(adminSource, /show_in_council_activity === true/);
+  assert.match(adminSource, /setSelectedNoticeBoardId\(item\.board_id\)/);
+  assert.match(adminSource, /setBoardManagementScope\("notices"\)/);
+  assert.match(adminSource, /setBoardManagementBoardId\(item\.board_id\)/);
+  assert.match(adminSource, /setBoardManagementTab\("content"\)/);
 });

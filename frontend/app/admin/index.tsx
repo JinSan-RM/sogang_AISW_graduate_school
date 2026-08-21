@@ -9,6 +9,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextIn
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
+import AdminBoardContentPanel from "../../components/admin/AdminBoardContentPanel";
 import AdminBoardManagementNavigator, {
   adminBoardCreateCancelTransition,
   adminBoardCreationResult,
@@ -30,6 +31,7 @@ import {
   adminContentBoards,
   nextAdminContentSelection,
   representativeImageUpdatePayload,
+  type AdminBoardContentKind,
   type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
@@ -1612,6 +1614,24 @@ export default function AdminScreen() {
   );
   const selectedManagedBoard = managedBoards.find((board) => board.id === boardManagementBoardId);
   const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
+  const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content";
+  const managedContentKind = selectedBoardCapability.kind;
+  const managedStandardPostsBoardId = isManagedContentActive ? selectedManagedBoard?.id : postBoardId ?? undefined;
+  const showsStandardPosts = section === "posts" || (isManagedContentActive && [
+    "aggregate-posts",
+    "posts",
+    "resource",
+    "album",
+    "activity-certification",
+  ].includes(managedContentKind));
+  const showsNoticeContent = section === "notices"
+    || section === "banners"
+    || (isManagedContentActive && managedContentKind === "notice");
+  const showsSuggestionContent = section === "suggestions"
+    || (isManagedContentActive && managedContentKind === "suggestion");
+  const showsMutualAidContent = section === "mutualAid"
+    || (isManagedContentActive && managedContentKind === "mutual-aid");
+  const showsActivityHistoryContent = isManagedContentActive && managedContentKind === "activity-history";
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
@@ -1654,30 +1674,40 @@ export default function AdminScreen() {
   const noticePostsQuery = useQuery({
     queryKey: ["admin-notices", selectedNoticeBoardId],
     queryFn: () => postApi.getPosts(selectedNoticeBoardId ?? 0, 1, 50, { sort: "latest" }),
-    enabled: isAdmin && Boolean(selectedNoticeBoardId),
+    enabled: isAdmin && showsNoticeContent && Boolean(selectedNoticeBoardId),
   });
   const adminPostsQuery = useQuery({
-    queryKey: ["admin-posts", appliedPostSearch, postBoardId, postMode],
+    queryKey: [
+      "admin-posts",
+      section === "dashboard" ? "dashboard" : appliedPostSearch,
+      section === "dashboard" ? undefined : managedStandardPostsBoardId,
+      section === "dashboard" ? "all" : postMode,
+    ],
     queryFn: () =>
       postApi.getAdminPosts({
         page: 1,
         size: 50,
-        q: appliedPostSearch.trim() || undefined,
-        board_id: postBoardId ?? undefined,
-        is_notice: postMode === "notice" ? true : undefined,
-        is_pinned: postMode === "pinned" ? true : undefined,
+        q: section === "dashboard" ? undefined : appliedPostSearch.trim() || undefined,
+        board_id: section === "dashboard" ? undefined : managedStandardPostsBoardId,
+        is_notice: section === "dashboard" ? undefined : postMode === "notice" ? true : undefined,
+        is_pinned: section === "dashboard" ? undefined : postMode === "pinned" ? true : undefined,
       }),
-    enabled: isAdmin && (section === "dashboard" || section === "posts"),
+    enabled: isAdmin && (section === "dashboard" || showsStandardPosts),
   });
   const mutualAidPostsQuery = useQuery({
     queryKey: ["admin-mutual-aid"],
     queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "mutual_aid" }),
-    enabled: isAdmin && (section === "dashboard" || section === "mutualAid"),
+    enabled: isAdmin && (section === "dashboard" || showsMutualAidContent),
   });
   const suggestionPostsQuery = useQuery({
     queryKey: ["admin-suggestions"],
     queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "suggestion" }),
-    enabled: isAdmin && (section === "dashboard" || section === "suggestions"),
+    enabled: isAdmin && (section === "dashboard" || showsSuggestionContent),
+  });
+  const activityHistoryPostsQuery = useQuery({
+    queryKey: ["admin-notices", "activity-history"],
+    queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "notice" }),
+    enabled: isAdmin && showsActivityHistoryContent,
   });
 
   const noticeBoards = useMemo(
@@ -1707,6 +1737,12 @@ export default function AdminScreen() {
       setSelectedNoticeBoardId(noticeBoards[0].id);
     }
   }, [noticeBoards, selectedNoticeBoardId]);
+
+  useEffect(() => {
+    if (isManagedContentActive && managedContentKind === "notice" && selectedManagedBoard) {
+      setSelectedNoticeBoardId(selectedManagedBoard.id);
+    }
+  }, [isManagedContentActive, managedContentKind, selectedManagedBoard]);
 
   useEffect(() => {
     setBoardSettingsDraft(selectedManagedBoard ? adminBoardSettingsDraft(selectedManagedBoard) : null);
@@ -1820,7 +1856,6 @@ export default function AdminScreen() {
   const postContentBoards = adminContentBoards(boards, "all");
   const visiblePostBoards = adminContentBoards(boards, postContentScope);
   const selectedPostBoard = postContentBoards.find((board) => board.id === postBoardId);
-  const selectedPostContentControl = adminBoardContentControl(selectedPostBoard);
   const reports = reportsQuery.data?.data ?? [];
   const users = usersQuery.data?.data ?? [];
   const faqs = faqsQuery.data?.data ?? [];
@@ -1829,6 +1864,8 @@ export default function AdminScreen() {
   const events = adminEventList;
   const noticePosts = noticePostsQuery.data?.data ?? [];
   const adminPosts = adminPostsQuery.data?.data ?? [];
+  const activityHistoryPosts = (activityHistoryPostsQuery.data?.data ?? [])
+    .filter((item) => item.metadata?.show_in_council_activity === true);
   const mutualAidPosts = mutualAidPostsQuery.data?.data ?? [];
   const visibleMutualAidPosts = mutualAidFilter === "all"
     ? mutualAidPosts
@@ -2908,6 +2945,357 @@ export default function AdminScreen() {
     ]);
   };
 
+  const handleEditActivityHistoryNotice = (item: PostListItem) => {
+    setSelectedNoticeBoardId(item.board_id);
+    boardManagementBoardIdRef.current = item.board_id;
+    setBoardManagementScope("notices");
+    setBoardManagementBoardId(item.board_id);
+    setBoardManagementTab("content");
+    setCreatingBoard(false);
+    void handleEditNotice(item);
+  };
+
+  const renderNoticeContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+            {editingNoticeId ? "공지사항 수정" : "공지사항 등록"}
+          </Text>
+          {!isManagedContentActive ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {noticeBoards.map((board) => (
+                <Chip
+                  key={board.id}
+                  active={selectedNoticeBoardId === board.id}
+                  label={board.name}
+                  onPress={() => setSelectedNoticeBoardId(board.id)}
+                />
+              ))}
+            </ScrollView>
+          ) : null}
+          <Field value={noticeForm.title} onChangeText={(value) => setNoticeForm((current) => ({ ...current, title: value }))} placeholder="공지 제목" />
+          <Field value={noticeForm.content} onChangeText={(value) => setNoticeForm((current) => ({ ...current, content: value }))} placeholder="공지 내용" multiline />
+          <View style={{ gap: 6 }}>
+            <Text style={{ color: COLORS.text, fontWeight: "900" }}>신청·접수 마감</Text>
+            <Field value={noticeForm.deadline_at} onChangeText={(value) => setNoticeForm((current) => ({ ...current, deadline_at: value }))} placeholder="2026-07-31T18:00 (선택)" />
+          </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: COLORS.text, fontWeight: "900" }}>분류</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {NOTICE_CATEGORY_OPTIONS.map((option) => (
+                <Chip
+                  key={option.value}
+                  active={noticeForm.category === option.value}
+                  label={option.label}
+                  onPress={() => setNoticeForm((current) => ({ ...current, category: option.value }))}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12, gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: COLORS.text, fontWeight: "900" }}>공지 이미지</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 3 }}>
+                  본문에 함께 표시할 이미지를 첨부합니다.
+                </Text>
+              </View>
+              <ActionButton
+                icon="image-outline"
+                label={noticeUploading ? `업로드 ${noticeUploadProgress || 0}%` : "이미지 첨부"}
+                onPress={handleUploadNoticeImage}
+                tone={noticeAttachments.length > 0 ? "outline" : "primary"}
+                disabled={noticeUploading}
+              />
+            </View>
+            {noticeAttachments.length === 0 ? (
+              <Text style={{ color: COLORS.muted, fontSize: 13 }}>아직 첨부된 이미지가 없습니다.</Text>
+            ) : null}
+            {noticeAttachments.map((attachment) => {
+              const url = mediaUrl(attachment.url);
+              const isImage = attachment.content_type?.startsWith("image/");
+              return (
+                <View
+                  key={attachment.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    borderRadius: RADIUS.button,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    backgroundColor: COLORS.surface,
+                    padding: 10,
+                  }}
+                >
+                  {isImage && url ? (
+                    <MediaImage media={attachment} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
+                  ) : (
+                    <View style={{ width: 56, height: 56, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
+                      <Ionicons name="document-attach-outline" size={22} color={COLORS.primary} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: COLORS.text, fontWeight: "900" }} numberOfLines={1}>
+                      {attachment.original_filename}
+                    </Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
+                      {Math.ceil((attachment.file_size ?? 0) / 1024)} KB
+                    </Text>
+                  </View>
+                  <Pressable hitSlop={8} onPress={() => setNoticeAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                    <Ionicons name="close-circle" size={22} color={COLORS.subtle} />
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+          <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: noticeForm.show_in_council_activity ? COLORS.primary : COLORS.border, backgroundColor: noticeForm.show_in_council_activity ? COLORS.primary50 : COLORS.surfaceAlt, padding: 12, gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: COLORS.text, fontWeight: "900" }}>원우회 활동내역 연동</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 3 }}>
+                  이 공지의 사진과 본문을 원우회 활동내역 목록·상세에도 표시합니다.
+                </Text>
+              </View>
+              <ActionButton
+                icon={noticeForm.show_in_council_activity ? "checkmark-circle" : "ellipse-outline"}
+                label={noticeForm.show_in_council_activity ? "연동함" : "연동 안 함"}
+                onPress={() => setNoticeForm((current) => ({ ...current, show_in_council_activity: !current.show_in_council_activity }))}
+                tone={noticeForm.show_in_council_activity ? "primary" : "outline"}
+              />
+            </View>
+            {noticeForm.show_in_council_activity && noticeAttachments.length === 0 ? (
+              <Text style={{ color: "#B45309", fontSize: 12, fontWeight: "800" }}>연동하려면 공지 이미지를 1장 이상 첨부해야 합니다.</Text>
+            ) : null}
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <ActionButton
+                label={noticeForm.is_pinned ? "상단 고정" : "일반 공지"}
+                icon="pin-outline"
+                onPress={() => setNoticeForm((current) => ({ ...current, is_pinned: !current.is_pinned }))}
+                tone={noticeForm.is_pinned ? "primary" : "outline"}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ActionButton icon="save-outline" label={editingNoticeId ? "공지 저장" : "공지 등록"} onPress={handleSaveNotice} />
+            </View>
+          </View>
+          {editingNoticeId ? <ActionButton label="수정 취소" onPress={resetNoticeForm} tone="outline" /> : null}
+        </View>
+      </Panel>
+      <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+        {selectedNoticeBoard?.name ?? "공지 게시판"} 목록
+      </Text>
+      {noticePostsQuery.isLoading ? <ActivityIndicator /> : null}
+      {!noticePostsQuery.isLoading && noticePosts.length === 0 ? (
+        <Panel>
+          <Text style={{ color: COLORS.muted }}>표시할 공지사항이 없습니다.</Text>
+        </Panel>
+      ) : null}
+      {noticePosts.map((item) => (
+        <NoticeCard key={item.id} item={item} onEdit={handleEditNotice} onPinToggle={handlePinNotice} onDelete={handleDeleteNotice} />
+      ))}
+    </View>
+  );
+
+  const renderStandardPostContent = () => {
+    const contentBoard = isManagedContentActive ? selectedManagedBoard : selectedPostBoard;
+    const contentControl = adminBoardContentControl(contentBoard);
+    return (
+      <View style={{ gap: 12 }}>
+        <Panel>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+              {contentBoard ? `${contentBoard.name} 콘텐츠 관리` : "전체 게시글 관리"}
+            </Text>
+            <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+              게시글을 검색하고 열기, 수정, 고정, 삭제와 지원 게시판의 대표 이미지를 관리합니다.
+            </Text>
+            {!isManagedContentActive ? (
+              <>
+                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>콘텐츠 그룹</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                  {CONTENT_SCOPE_FILTERS.map((item) => (
+                    <Chip key={item.key} active={postContentScope === item.key} label={item.label} onPress={() => handlePostContentScopeChange(item.key)} />
+                  ))}
+                </ScrollView>
+                {postContentScope !== "all" ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
+                    {visiblePostBoards.map((board) => (
+                      <Chip key={board.id} active={postBoardId === board.id} label={board.name} onPress={() => setPostBoardId(board.id)} />
+                    ))}
+                  </ScrollView>
+                ) : null}
+              </>
+            ) : null}
+            {contentBoard ? (
+              <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary100, backgroundColor: COLORS.primary50, padding: 12, gap: 9 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{contentBoard.name} 관리</Text>
+                  <Chip active label={BOARD_TYPE_LABELS[contentBoard.board_type] ?? contentBoard.board_type} />
+                </View>
+                <Text style={{ color: COLORS.muted, lineHeight: 19 }}>{contentControl.description}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {contentControl.createLabel ? (
+                    <ActionButton
+                      icon="add-circle-outline"
+                      label={contentControl.createLabel}
+                      onPress={() => router.push({ pathname: "/board/post/create", params: { boardId: String(contentBoard.id) } } as never)}
+                    />
+                  ) : null}
+                  {!isManagedContentActive ? (
+                    <ActionButton
+                      icon="settings-outline"
+                      label="게시판 설정"
+                      onPress={() => openAdminSection("boards", postContentScope)}
+                      tone="outline"
+                    />
+                  ) : null}
+                </View>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <ActionButton
+                  icon="add-circle-outline"
+                  label="동아리 안내 등록"
+                  disabled={!clubPromoBoard}
+                  onPress={() => {
+                    if (clubPromoBoard) router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
+                  }}
+                  tone="outline"
+                />
+                <ActionButton
+                  icon="git-network-outline"
+                  label="네트워킹 안내 등록"
+                  disabled={!networkingProgramsBoard}
+                  onPress={() => {
+                    if (networkingProgramsBoard) router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
+                  }}
+                  tone="outline"
+                />
+              </View>
+            )}
+            <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
+            <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
+            <Text style={{ color: COLORS.muted, fontWeight: "800" }}>상태 필터</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {ADMIN_POST_MODE_FILTERS.map((item) => (
+                <Chip key={item.key} active={postMode === item.key} label={item.label} onPress={() => setPostMode(item.key)} />
+              ))}
+            </View>
+            <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>총 {adminPostTotal}개 게시글</Text>
+          </View>
+        </Panel>
+        {adminPostsQuery.isLoading ? <ActivityIndicator /> : null}
+        {!adminPostsQuery.isLoading && adminPosts.length === 0 ? <Panel><Text style={{ color: COLORS.muted }}>표시할 게시글이 없습니다.</Text></Panel> : null}
+        {adminPosts.map((item) => (
+          <AdminPostCard
+            key={item.id}
+            item={item}
+            board={boards.find((board) => board.id === item.board_id)}
+            onPinToggle={handlePinAdminPost}
+            onDelete={handleDeleteAdminPost}
+            onRepresentativeImageChange={(post) => void handleReplacePostRepresentativeImage(post)}
+            isReplacingRepresentativeImage={replacingRepresentativeImagePostId === item.id}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const renderMutualAidContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>상조회 신청 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            신청 상세에서 증빙서류를 확인한 후 처리 완료 또는 반려를 선택합니다. 반려 시 사유 입력이 필수입니다.
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {([['processing', '처리중'], ['completed', '처리 완료'], ['rejected', '반려'], ['all', '전체']] as const).map(([value, label]) => (
+              <Chip key={value} active={mutualAidFilter === value} label={label} onPress={() => setMutualAidFilter(value)} />
+            ))}
+          </View>
+          <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
+            처리 대기 {processingMutualAidCount}건 · 전체 {mutualAidPosts.length}건
+          </Text>
+        </View>
+      </Panel>
+      {mutualAidPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
+      {!mutualAidPostsQuery.isLoading && visibleMutualAidPosts.length === 0 ? (
+        <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 상조회 신청이 없습니다.</Text></Panel>
+      ) : null}
+      {visibleMutualAidPosts.map((item) => <MutualAidAdminCard key={item.id} item={item} />)}
+    </View>
+  );
+
+  const renderSuggestionContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>건의사항 답변 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            작성자는 익명으로 유지됩니다. 상세 화면에서 공식 답변을 입력하면 답변완료로 처리되고 작성자에게 알림이 전송됩니다.
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {([['received', '대기중'], ['answered', '답변완료'], ['all', '전체']] as const).map(([value, label]) => (
+              <Chip key={value} active={suggestionFilter === value} label={label} onPress={() => setSuggestionFilter(value)} />
+            ))}
+          </View>
+          <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
+            답변 대기 {pendingSuggestionCount}건 · 전체 {suggestionPosts.length}건
+          </Text>
+        </View>
+      </Panel>
+      {suggestionPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
+      {!suggestionPostsQuery.isLoading && visibleSuggestionPosts.length === 0 ? (
+        <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 건의사항이 없습니다.</Text></Panel>
+      ) : null}
+      {visibleSuggestionPosts.map((item) => <SuggestionAdminCard key={item.id} item={item} />)}
+    </View>
+  );
+
+  const renderActivityHistoryContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 활동내역 연동 공지</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            원우회 활동내역 연동이 켜진 공지만 표시합니다. 수정하면 같은 게시판 관리 화면에서 실제 공지 게시판으로 전환됩니다.
+          </Text>
+        </View>
+      </Panel>
+      {activityHistoryPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
+      {!activityHistoryPostsQuery.isLoading && activityHistoryPosts.length === 0 ? (
+        <Panel><Text style={{ color: COLORS.muted }}>연동된 공지사항이 없습니다.</Text></Panel>
+      ) : null}
+      {activityHistoryPosts.map((item) => (
+        <NoticeCard
+          key={item.id}
+          item={item}
+          onEdit={handleEditActivityHistoryNotice}
+          onPinToggle={handlePinNotice}
+          onDelete={handleDeleteNotice}
+        />
+      ))}
+    </View>
+  );
+
+  const managedContentRenderers: Partial<Record<AdminBoardContentKind, () => ReactNode>> = {
+    "aggregate-posts": renderStandardPostContent,
+    "posts": renderStandardPostContent,
+    "resource": renderStandardPostContent,
+    "album": renderStandardPostContent,
+    "activity-certification": renderStandardPostContent,
+    "notice": renderNoticeContent,
+    "suggestion": renderSuggestionContent,
+    "mutual-aid": renderMutualAidContent,
+    "activity-history": renderActivityHistoryContent,
+  };
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <View style={{ gap: 14 }}>
@@ -3354,161 +3742,16 @@ export default function AdminScreen() {
             ) : null}
 
             {!creatingBoard && boardManagementTab === "content" ? (
-              <Panel>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {selectedManagedBoard ? `${selectedManagedBoard.name} 콘텐츠` : "모든 게시판 콘텐츠"}
-                </Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20, marginTop: 6 }}>
-                  콘텐츠 편집기는 다음 통합 단계에서 이 선택에 연결됩니다. 기존 관리자 메뉴와 기능은 그대로 사용할 수 있습니다.
-                </Text>
-              </Panel>
+              <AdminBoardContentPanel
+                board={selectedManagedBoard}
+                capability={selectedBoardCapability}
+                renderers={managedContentRenderers}
+              />
             ) : null}
           </View>
         ) : null}
 
-        {section === "notices" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editingNoticeId ? "공지사항 수정" : "공지사항 등록"}
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                  {noticeBoards.map((board) => (
-                    <Chip
-                      key={board.id}
-                      active={selectedNoticeBoardId === board.id}
-                      label={board.name}
-                      onPress={() => setSelectedNoticeBoardId(board.id)}
-                    />
-                  ))}
-                </ScrollView>
-                <Field value={noticeForm.title} onChangeText={(value) => setNoticeForm((current) => ({ ...current, title: value }))} placeholder="공지 제목" />
-                <Field value={noticeForm.content} onChangeText={(value) => setNoticeForm((current) => ({ ...current, content: value }))} placeholder="공지 내용" multiline />
-                <View style={{ gap: 6 }}>
-                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>신청·접수 마감</Text>
-                  <Field value={noticeForm.deadline_at} onChangeText={(value) => setNoticeForm((current) => ({ ...current, deadline_at: value }))} placeholder="2026-07-31T18:00 (선택)" />
-                </View>
-                <View style={{ gap: 8 }}>
-                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>분류</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {NOTICE_CATEGORY_OPTIONS.map((option) => (
-                      <Chip
-                        key={option.value}
-                        active={noticeForm.category === option.value}
-                        label={option.label}
-                        onPress={() => setNoticeForm((current) => ({ ...current, category: option.value }))}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12, gap: 10 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "900" }}>공지 이미지</Text>
-                      <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 3 }}>
-                        본문에 함께 표시할 이미지를 첨부합니다.
-                      </Text>
-                    </View>
-                    <ActionButton
-                      icon="image-outline"
-                      label={noticeUploading ? `업로드 ${noticeUploadProgress || 0}%` : "이미지 첨부"}
-                      onPress={handleUploadNoticeImage}
-                      tone={noticeAttachments.length > 0 ? "outline" : "primary"}
-                      disabled={noticeUploading}
-                    />
-                  </View>
-                  {noticeAttachments.length === 0 ? (
-                    <Text style={{ color: COLORS.muted, fontSize: 13 }}>아직 첨부된 이미지가 없습니다.</Text>
-                  ) : null}
-                  {noticeAttachments.map((attachment) => {
-                    const url = mediaUrl(attachment.url);
-                    const isImage = attachment.content_type?.startsWith("image/");
-                    return (
-                      <View
-                        key={attachment.id}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 10,
-                          borderRadius: RADIUS.button,
-                          borderWidth: 1,
-                          borderColor: COLORS.border,
-                          backgroundColor: COLORS.surface,
-                          padding: 10,
-                        }}
-                      >
-                        {isImage && url ? (
-                          <MediaImage media={attachment} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
-                        ) : (
-                          <View style={{ width: 56, height: 56, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
-                            <Ionicons name="document-attach-outline" size={22} color={COLORS.primary} />
-                          </View>
-                        )}
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={{ color: COLORS.text, fontWeight: "900" }} numberOfLines={1}>
-                            {attachment.original_filename}
-                          </Text>
-                          <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
-                            {Math.ceil((attachment.file_size ?? 0) / 1024)} KB
-                          </Text>
-                        </View>
-                        <Pressable hitSlop={8} onPress={() => setNoticeAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                          <Ionicons name="close-circle" size={22} color={COLORS.subtle} />
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </View>
-                <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: noticeForm.show_in_council_activity ? COLORS.primary : COLORS.border, backgroundColor: noticeForm.show_in_council_activity ? COLORS.primary50 : COLORS.surfaceAlt, padding: 12, gap: 10 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "900" }}>원우회 활동내역 연동</Text>
-                      <Text style={{ color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 3 }}>
-                        이 공지의 사진과 본문을 원우회 활동내역 목록·상세에도 표시합니다.
-                      </Text>
-                    </View>
-                    <ActionButton
-                      icon={noticeForm.show_in_council_activity ? "checkmark-circle" : "ellipse-outline"}
-                      label={noticeForm.show_in_council_activity ? "연동함" : "연동 안 함"}
-                      onPress={() => setNoticeForm((current) => ({ ...current, show_in_council_activity: !current.show_in_council_activity }))}
-                      tone={noticeForm.show_in_council_activity ? "primary" : "outline"}
-                    />
-                  </View>
-                  {noticeForm.show_in_council_activity && noticeAttachments.length === 0 ? (
-                    <Text style={{ color: "#B45309", fontSize: 12, fontWeight: "800" }}>연동하려면 공지 이미지를 1장 이상 첨부해야 합니다.</Text>
-                  ) : null}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton
-                      label={noticeForm.is_pinned ? "상단 고정" : "일반 공지"}
-                      icon="pin-outline"
-                      onPress={() => setNoticeForm((current) => ({ ...current, is_pinned: !current.is_pinned }))}
-                      tone={noticeForm.is_pinned ? "primary" : "outline"}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton icon="save-outline" label={editingNoticeId ? "공지 저장" : "공지 등록"} onPress={handleSaveNotice} />
-                  </View>
-                </View>
-                {editingNoticeId ? <ActionButton label="수정 취소" onPress={resetNoticeForm} tone="outline" /> : null}
-              </View>
-            </Panel>
-            <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-              {selectedNoticeBoard?.name ?? "공지 게시판"} 목록
-            </Text>
-            {noticePostsQuery.isLoading ? <ActivityIndicator /> : null}
-            {!noticePostsQuery.isLoading && noticePosts.length === 0 ? (
-              <Panel>
-                <Text style={{ color: COLORS.muted }}>표시할 공지사항이 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {noticePosts.map((item) => (
-              <NoticeCard key={item.id} item={item} onEdit={handleEditNotice} onPinToggle={handlePinNotice} onDelete={handleDeleteNotice} />
-            ))}
-          </View>
-        ) : null}
+        {section === "notices" ? renderNoticeContent() : null}
 
         {section === "boards" ? (
           <View style={{ gap: 12 }}>
@@ -3711,193 +3954,11 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "posts" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>전체 게시글 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  콘텐츠 그룹과 게시판을 선택해 공통 운영 기능과 게시판별 전용 기능을 함께 관리합니다.
-                </Text>
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>콘텐츠 그룹</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {CONTENT_SCOPE_FILTERS.map((item) => (
-                    <Chip
-                      key={item.key}
-                      active={postContentScope === item.key}
-                      label={item.label}
-                      onPress={() => handlePostContentScopeChange(item.key)}
-                    />
-                  ))}
-                </ScrollView>
-                {postContentScope === "all" ? (
-                  <View style={{ gap: 8 }}>
-                    <Text style={{ color: COLORS.subtle, fontSize: 12, lineHeight: 18 }}>
-                      전체 검색에서는 기존 빠른 등록과 공통 관리 기능을 그대로 사용할 수 있습니다.
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      <ActionButton
-                        icon="add-circle-outline"
-                        label="동아리 안내 등록"
-                        disabled={!clubPromoBoard}
-                        onPress={() => {
-                          if (clubPromoBoard) {
-                            router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
-                          }
-                        }}
-                        tone="outline"
-                      />
-                      <ActionButton
-                        icon="git-network-outline"
-                        label="네트워킹 안내 등록"
-                        disabled={!networkingProgramsBoard}
-                        onPress={() => {
-                          if (networkingProgramsBoard) {
-                            router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
-                          }
-                        }}
-                        tone="outline"
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  <View style={{ gap: 10 }}>
-                    <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                      {visiblePostBoards.map((board) => (
-                        <Chip
-                          key={board.id}
-                          active={postBoardId === board.id}
-                          label={board.name}
-                          onPress={() => setPostBoardId(board.id)}
-                        />
-                      ))}
-                    </ScrollView>
-                    {selectedPostBoard ? (
-                      <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary100, backgroundColor: COLORS.primary50, padding: 12, gap: 9 }}>
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                          <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{selectedPostBoard.name} 관리</Text>
-                          <Chip active label={BOARD_TYPE_LABELS[selectedPostBoard.board_type] ?? selectedPostBoard.board_type} />
-                        </View>
-                        <Text style={{ color: COLORS.muted, lineHeight: 19 }}>{selectedPostContentControl.description}</Text>
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                          {selectedPostContentControl.createLabel ? (
-                            <ActionButton
-                              icon="add-circle-outline"
-                              label={selectedPostContentControl.createLabel}
-                              onPress={() => router.push({ pathname: "/board/post/create", params: { boardId: String(selectedPostBoard.id) } } as never)}
-                            />
-                          ) : null}
-                          {selectedPostContentControl.dedicatedSection && selectedPostContentControl.dedicatedLabel ? (
-                            <ActionButton
-                              icon="options-outline"
-                              label={selectedPostContentControl.dedicatedLabel}
-                              onPress={() => openAdminSection(selectedPostContentControl.dedicatedSection!)}
-                              tone="outline"
-                            />
-                          ) : null}
-                          <ActionButton
-                            icon="settings-outline"
-                            label="게시판 설정"
-                            onPress={() => openAdminSection("boards", postContentScope)}
-                            tone="outline"
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={{ color: COLORS.muted }}>이 그룹에서 관리할 게시판이 없습니다.</Text>
-                    )}
-                  </View>
-                )}
-                <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
-                <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>상태 필터</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {ADMIN_POST_MODE_FILTERS.map((item) => (
-                    <Chip key={item.key} active={postMode === item.key} label={item.label} onPress={() => setPostMode(item.key)} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
-                  총 {adminPostTotal}개 게시글
-                </Text>
-              </View>
-            </Panel>
-            {adminPostsQuery.isLoading ? <ActivityIndicator /> : null}
-            {!adminPostsQuery.isLoading && adminPosts.length === 0 ? (
-              <Panel>
-                <Text style={{ color: COLORS.muted }}>표시할 게시글이 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {adminPosts.map((item) => (
-              <AdminPostCard
-                key={item.id}
-                item={item}
-                board={boards.find((board) => board.id === item.board_id)}
-                onPinToggle={handlePinAdminPost}
-                onDelete={handleDeleteAdminPost}
-                onRepresentativeImageChange={(post) => void handleReplacePostRepresentativeImage(post)}
-                isReplacingRepresentativeImage={replacingRepresentativeImagePostId === item.id}
-              />
-            ))}
-          </View>
-        ) : null}
+        {section === "posts" ? renderStandardPostContent() : null}
 
-        {section === "mutualAid" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>상조회 신청 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  신청 상세에서 증빙서류를 확인한 후 처리 완료 또는 반려를 선택합니다. 반려 시 사유 입력이 필수입니다.
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {([
-                    ["processing", "처리중"],
-                    ["completed", "처리 완료"],
-                    ["rejected", "반려"],
-                    ["all", "전체"],
-                  ] as const).map(([value, label]) => (
-                    <Chip key={value} active={mutualAidFilter === value} label={label} onPress={() => setMutualAidFilter(value)} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
-                  처리 대기 {processingMutualAidCount}건 · 전체 {mutualAidPosts.length}건
-                </Text>
-              </View>
-            </Panel>
-            {mutualAidPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-            {!mutualAidPostsQuery.isLoading && visibleMutualAidPosts.length === 0 ? (
-              <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 상조회 신청이 없습니다.</Text></Panel>
-            ) : null}
-            {visibleMutualAidPosts.map((item) => <MutualAidAdminCard key={item.id} item={item} />)}
-          </View>
-        ) : null}
+        {section === "mutualAid" ? renderMutualAidContent() : null}
 
-        {section === "suggestions" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>건의사항 답변 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  작성자는 익명으로 유지됩니다. 상세 화면에서 공식 답변을 입력하면 답변완료로 처리되고 작성자에게 알림이 전송됩니다.
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {([['received', '대기중'], ['answered', '답변완료'], ['all', '전체']] as const).map(([value, label]) => (
-                    <Chip key={value} active={suggestionFilter === value} label={label} onPress={() => setSuggestionFilter(value)} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
-                  답변 대기 {pendingSuggestionCount}건 · 전체 {suggestionPosts.length}건
-                </Text>
-              </View>
-            </Panel>
-            {suggestionPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-            {!suggestionPostsQuery.isLoading && visibleSuggestionPosts.length === 0 ? (
-              <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 건의사항이 없습니다.</Text></Panel>
-            ) : null}
-            {visibleSuggestionPosts.map((item) => <SuggestionAdminCard key={item.id} item={item} />)}
-          </View>
-        ) : null}
+        {section === "suggestions" ? renderSuggestionContent() : null}
 
         {section === "accounts" ? (
           <View style={{ gap: 12 }}>
