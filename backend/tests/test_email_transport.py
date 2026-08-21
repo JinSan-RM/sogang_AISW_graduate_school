@@ -67,9 +67,9 @@ def smtp_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "smtp_username", "mailer")
     monkeypatch.setattr(settings, "smtp_password", "secret")
     monkeypatch.setattr(settings, "smtp_auth", "password")
-    monkeypatch.setattr(settings, "smtp_from_email", "no-reply@aisw.sogang.ac.kr")
+    monkeypatch.setattr(settings, "smtp_from_email", "no-reply@sogang.ac.kr")
     monkeypatch.setattr(settings, "smtp_from_name", "서강 AI-SW 대학원 커뮤니티")
-    monkeypatch.setattr(settings, "smtp_reply_to", "support@aisw.sogang.ac.kr")
+    monkeypatch.setattr(settings, "smtp_reply_to", "A72040@sogang.ac.kr")
     monkeypatch.setattr(settings, "smtp_required", True)
     monkeypatch.setattr(settings, "smtp_timeout_seconds", 12)
 
@@ -109,15 +109,15 @@ def test_starttls_delivery_uses_verified_tls_and_configured_timeout(
     assert connection.ehlo_count == 2
     assert connection.login_credentials == ("mailer", "secret")
     message = connection.sent_messages[0]
-    assert message["From"] == "서강 AI-SW 대학원 커뮤니티 <no-reply@aisw.sogang.ac.kr>"
+    assert message["From"] == "서강 AI-SW 대학원 커뮤니티 <no-reply@sogang.ac.kr>"
     assert message["To"] == "member@sogang.ac.kr"
-    assert message["Reply-To"] == "support@aisw.sogang.ac.kr"
+    assert message["Reply-To"] == "A72040@sogang.ac.kr"
     assert parsedate_to_datetime(message["Date"]).tzinfo is not None
-    assert message["Message-ID"].endswith("@aisw.sogang.ac.kr>")
+    assert message["Message-ID"].endswith("@sogang.ac.kr>")
     assert message["Auto-Submitted"] == "auto-generated"
     assert message.get_content_type() == "multipart/alternative"
     assert connection.sent_envelopes == [
-        ("no-reply@aisw.sogang.ac.kr", ["member@sogang.ac.kr"])
+        ("no-reply@sogang.ac.kr", ["member@sogang.ac.kr"])
     ]
     assert connection.closed is True
 
