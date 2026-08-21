@@ -12,26 +12,41 @@ def _code_box(value: str, compact: bool = False) -> str:
     font_size = "32px" if compact else "18px"
     return f"""
       <div style="margin:24px 0 20px;padding:18px 16px;border-radius:14px;background:#F3F6FF;border:1px solid #D5E0FE;text-align:center;">
-        <div style="font-size:12px;font-weight:700;color:#6B7280;margin-bottom:8px;">인증 코드</div>
+        <div style="font-size:12px;font-weight:700;color:#6B7280;margin-bottom:8px;">확인 코드</div>
         <div style="font-size:{font_size};font-weight:900;letter-spacing:{letter_spacing};color:#0B1F56;line-height:1.3;word-break:break-all;">{escaped}</div>
       </div>
     """
 
 
-def _plain_email(title: str, intro: str, code_label: str, code: str, expiry_minutes: int) -> str:
+def _plain_email(
+    title: str,
+    intro: str,
+    code: str,
+    expiry_minutes: int,
+    safe_outcome: str,
+) -> str:
     return (
         f"{BRAND_NAME}\n\n"
         f"{title}\n\n"
         f"{intro}\n\n"
-        f"{code_label}: {code}\n\n"
-        f"이 코드는 {expiry_minutes}분 후 만료됩니다.\n"
-        "본인이 요청하지 않았다면 이 메일을 무시해 주세요."
+        f"확인 코드: {code}\n\n"
+        f"확인 코드는 발급 후 {expiry_minutes}분간 유효합니다.\n\n"
+        "직접 요청한 경우에만 앱에 입력해 주세요.\n"
+        f"요청하지 않았다면 이 메일을 삭제해 주세요. {safe_outcome}"
     )
 
 
-def _html_email(title: str, intro: str, code: str, expiry_minutes: int, compact_code: bool) -> str:
+def _html_email(
+    title: str,
+    intro: str,
+    code: str,
+    expiry_minutes: int,
+    compact_code: bool,
+    safe_outcome: str,
+) -> str:
     escaped_title = escape(title)
     escaped_intro = escape(intro)
+    escaped_safe_outcome = escape(safe_outcome)
     return f"""<!doctype html>
 <html lang="ko">
   <head>
@@ -40,7 +55,6 @@ def _html_email(title: str, intro: str, code: str, expiry_minutes: int, compact_
     <title>{escaped_title}</title>
   </head>
   <body style="margin:0;padding:0;background:#F4F6FB;font-family:Arial,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;color:#111827;">
-    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">{escaped_intro}</div>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F4F6FB;padding:28px 12px;">
       <tr>
         <td align="center">
@@ -59,12 +73,13 @@ def _html_email(title: str, intro: str, code: str, expiry_minutes: int, compact_
                   <tr>
                     <td style="padding:15px 16px;font-size:14px;line-height:1.6;color:#4B5563;">
                       <strong style="color:#0B1F56;">유효 시간</strong><br>
-                      이 코드는 발급 시점부터 <strong>{expiry_minutes}분</strong> 동안만 사용할 수 있습니다.
+                      확인 코드는 발급 후 <strong>{expiry_minutes}분</strong>간 유효합니다.
                     </td>
                   </tr>
                 </table>
                 <p style="margin:20px 0 0;font-size:13px;line-height:1.7;color:#6B7280;">
-                  본인이 요청하지 않았다면 이 메일을 무시해 주세요. 다른 사람에게 인증 코드를 공유하지 마세요.
+                  직접 요청한 경우에만 앱에 입력해 주세요.<br>
+                  요청하지 않았다면 이 메일을 삭제해 주세요. {escaped_safe_outcome}
                 </p>
               </td>
             </tr>
@@ -84,32 +99,53 @@ def _html_email(title: str, intro: str, code: str, expiry_minutes: int, compact_
 
 
 def verification_email(code: str, expiry_minutes: int) -> tuple[str, str]:
-    title = "이메일 인증 코드"
-    intro = "회원가입을 계속하려면 아래 인증 코드를 입력해 주세요."
+    title = "이메일 주소 확인"
+    intro = f"{BRAND_NAME} 회원가입 과정에서 요청하신 이메일 확인 코드입니다."
+    safe_outcome = "확인 코드를 입력하지 않으면 계정은 생성되지 않습니다."
     return (
-        _plain_email(title, intro, "인증 코드", code, expiry_minutes),
-        _html_email(title, intro, code, expiry_minutes, compact_code=True),
+        _plain_email(title, intro, code, expiry_minutes, safe_outcome),
+        _html_email(
+            title,
+            intro,
+            code,
+            expiry_minutes,
+            compact_code=True,
+            safe_outcome=safe_outcome,
+        ),
     )
 
 
 def password_reset_email(token: str, expiry_minutes: int) -> tuple[str, str]:
-    title = "비밀번호 재설정 인증"
-    intro = "비밀번호를 재설정하려면 아래 인증 코드를 입력해 주세요."
+    title = "비밀번호 재설정 확인"
+    intro = f"{BRAND_NAME} 비밀번호 재설정 과정에서 요청하신 확인 코드입니다."
+    safe_outcome = "확인 코드를 입력하지 않으면 비밀번호는 변경되지 않습니다."
     return (
-        _plain_email(title, intro, "인증 코드", token, expiry_minutes),
-        _html_email(title, intro, token, expiry_minutes, compact_code=True),
+        _plain_email(title, intro, token, expiry_minutes, safe_outcome),
+        _html_email(
+            title,
+            intro,
+            token,
+            expiry_minutes,
+            compact_code=True,
+            safe_outcome=safe_outcome,
+        ),
     )
 
 
 def account_deletion_email(code: str, expiry_minutes: int) -> tuple[str, str]:
-    title = "Account deletion verification"
-    intro = (
-        "Enter the verification code below only if you requested permanent "
-        "deletion of your Sogang AI-SW Community account."
-    )
+    title = "계정 삭제 확인"
+    intro = f"{BRAND_NAME} 계정 삭제 과정에서 요청하신 확인 코드입니다."
+    safe_outcome = "확인 코드를 입력하지 않으면 계정은 삭제되지 않습니다."
     return (
-        _plain_email(title, intro, "Verification code", code, expiry_minutes),
-        _html_email(title, intro, code, expiry_minutes, compact_code=True),
+        _plain_email(title, intro, code, expiry_minutes, safe_outcome),
+        _html_email(
+            title,
+            intro,
+            code,
+            expiry_minutes,
+            compact_code=True,
+            safe_outcome=safe_outcome,
+        ),
     )
 
 

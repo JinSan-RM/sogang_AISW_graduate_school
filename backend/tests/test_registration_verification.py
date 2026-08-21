@@ -320,6 +320,7 @@ def test_full_email_verification_and_registration_flow_uses_one_time_token(
     request_data = request_response.json()["data"]
     assert request_data["email_sent"] is True
     assert captured_email["recipient"] == email
+    assert captured_email["subject"] == "[서강 AI-SW] 요청하신 이메일 확인 코드"
 
     plain_body = captured_email["plain_body"]
     assert plain_body is not None

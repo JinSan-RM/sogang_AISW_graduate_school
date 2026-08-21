@@ -391,9 +391,15 @@ def test_public_deletion_flow_is_non_enumerating_and_repeat_safe(
     api,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    delivered_subjects: list[str] = []
+
+    def capture_email(_recipient, subject, _plain_body, **_kwargs) -> bool:
+        delivered_subjects.append(subject)
+        return True
+
     monkeypatch.setattr(auth_router, "generate_verification_code", lambda: "123456")
     monkeypatch.setattr(auth_router, "is_email_configured", lambda: True)
-    monkeypatch.setattr(auth_router, "send_email", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(auth_router, "send_email", capture_email)
 
     known_request = api.client.post(
         "/api/auth/account-deletion/request",
@@ -407,6 +413,7 @@ def test_public_deletion_flow_is_non_enumerating_and_repeat_safe(
     assert known_request.json() == unknown_request.json()
     assert known_request.json()["data"]["accepted"] is True
     assert "code" not in known_request.json()["data"]
+    assert delivered_subjects == ["[서강 AI-SW] 요청하신 계정 삭제 확인 코드"]
 
     generic_error = {
         "status": "error",

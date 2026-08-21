@@ -199,7 +199,7 @@ def request_register_verification(payload: EmailVerificationRequest, request: Re
     try:
         email_sent = send_email(
             email,
-            "[서강 AI-SW 커뮤니티] 이메일 인증 코드",
+            "[서강 AI-SW] 요청하신 이메일 확인 코드",
             plain_body,
             html_body=html_body,
         )
@@ -438,7 +438,7 @@ def request_account_deletion(
         try:
             delivered = send_email(
                 email,
-                "[Sogang AI-SW Community] Account deletion verification",
+                "[서강 AI-SW] 요청하신 계정 삭제 확인 코드",
                 plain_body,
                 html_body=html_body,
             )
