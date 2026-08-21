@@ -9,17 +9,28 @@ import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextIn
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
+import AdminBoardManagementNavigator from "../../components/admin/AdminBoardManagementNavigator";
+import AdminBoardSettingsPanel from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import {
+  adminBoardCapability,
   adminBoardContentControl,
   adminContentBoards,
+  adminScopeForBoard,
+  nextAdminBoardSelection,
   nextAdminContentSelection,
   representativeImageUpdatePayload,
+  type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
+import {
+  adminBoardSettingsDraft,
+  adminBoardSettingsPayload,
+  type AdminBoardSettingsDraft,
+} from "../../utils/adminBoardSettings";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
@@ -101,7 +112,7 @@ const eventSchema = z.object({
 });
 
 type EventForm = z.infer<typeof eventSchema>;
-type AdminSection = "dashboard" | "banners" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
+type AdminSection = "dashboard" | "banners" | "boardManagement" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
 type BoardScope = "all" | "notices" | "council" | "participation" | "community";
 type AdminPostMode = "all" | "notice" | "pinned";
 type SuggestionAdminFilter = "received" | "answered" | "all";
@@ -251,6 +262,7 @@ const emptyFAQ: FAQForm = {
 const SECTIONS: { key: AdminSection; label: string; icon: IconName }[] = [
   { key: "dashboard", label: "콘솔", icon: "speedometer-outline" },
   { key: "banners", label: "배너", icon: "albums-outline" },
+  { key: "boardManagement", label: "게시판 관리", icon: "grid-outline" },
   { key: "notices", label: "공지사항", icon: "megaphone-outline" },
   { key: "boards", label: "게시판", icon: "grid-outline" },
   { key: "executives", label: "원우회 소개", icon: "people-circle-outline" },
@@ -1508,6 +1520,12 @@ export default function AdminScreen() {
   const user = useUserStore((state) => state.user);
   const queryClient = useQueryClient();
   const [section, setSection] = useState<AdminSection>(parseAdminSection(params.section) ?? "dashboard");
+  const [boardManagementScope, setBoardManagementScope] = useState<AdminContentScope>("all");
+  const [boardManagementBoardId, setBoardManagementBoardId] = useState<number | null>(null);
+  const [boardManagementTab, setBoardManagementTab] = useState<AdminBoardManagementTab>("content");
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const [boardSettingsDraft, setBoardSettingsDraft] = useState<AdminBoardSettingsDraft | null>(null);
+  const [boardSettingsSaving, setBoardSettingsSaving] = useState(false);
   const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
   const [postContentScope, setPostContentScope] = useState<AdminContentScope>("all");
   const [postSearch, setPostSearch] = useState("");
@@ -1572,6 +1590,9 @@ export default function AdminScreen() {
     queryFn: () => boardApi.getAdminBoards(),
     enabled: isAdmin,
   });
+  const managedBoards = boardsQuery.data?.data ?? [];
+  const selectedManagedBoard = managedBoards.find((board) => board.id === boardManagementBoardId);
+  const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
@@ -1667,6 +1688,10 @@ export default function AdminScreen() {
       setSelectedNoticeBoardId(noticeBoards[0].id);
     }
   }, [noticeBoards, selectedNoticeBoardId]);
+
+  useEffect(() => {
+    setBoardSettingsDraft(selectedManagedBoard ? adminBoardSettingsDraft(selectedManagedBoard) : null);
+  }, [selectedManagedBoard]);
 
   useEffect(() => {
     const nextSection = parseAdminSection(params.section);
@@ -2005,9 +2030,11 @@ export default function AdminScreen() {
   const resetBoardForm = () => {
     setEditingBoardId(null);
     setBoardForm(emptyBoard);
+    setCreatingBoard(false);
   };
 
   const handleEditBoard = (item: Board) => {
+    setCreatingBoard(false);
     setEditingBoardId(item.id);
     setBoardForm({
       name: item.name,
@@ -2044,10 +2071,22 @@ export default function AdminScreen() {
 
     try {
       if (editingBoardId) {
-        const { slug: _slug, ...updatePayload } = payload;
-        await boardApi.updateAdminBoard(editingBoardId, updatePayload);
+        await boardApi.updateAdminBoard(editingBoardId, adminBoardSettingsPayload({
+          name: boardForm.name,
+          description: boardForm.description,
+          sortOrder: boardForm.sort_order,
+          allowAnonymous: boardForm.allow_anonymous,
+          readPermission: boardForm.read_permission,
+          writePermission: boardForm.write_permission,
+          isActive: boardForm.is_active,
+        }));
       } else {
-        await boardApi.createAdminBoard(payload);
+        const created = await boardApi.createAdminBoard(payload);
+        if (creatingBoard) {
+          setBoardManagementScope(adminScopeForBoard(created.data));
+          setBoardManagementBoardId(created.data.id);
+          setBoardManagementTab("settings");
+        }
       }
       resetBoardForm();
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
@@ -2057,6 +2096,125 @@ export default function AdminScreen() {
       Alert.alert("저장 실패", "슬러그 중복 또는 입력값을 확인하세요.");
     }
   };
+
+  const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
+    setBoardManagementScope(nextScope);
+    setBoardManagementBoardId(nextAdminBoardSelection(boards, boardManagementBoardId, nextScope));
+    setBoardManagementTab("content");
+    setCreatingBoard(false);
+  };
+
+  const handleBoardManagementBoardChange = (boardId: number | null) => {
+    setBoardManagementBoardId(boardId);
+    setBoardManagementTab("content");
+    setCreatingBoard(false);
+  };
+
+  const handleCreateManagedBoard = () => {
+    resetBoardForm();
+    setCreatingBoard(true);
+    setBoardManagementTab("settings");
+  };
+
+  const handleSaveBoardSettings = async () => {
+    if (!selectedManagedBoard || !boardSettingsDraft || boardSettingsSaving) return;
+    try {
+      setBoardSettingsSaving(true);
+      const response = await boardApi.updateAdminBoard(
+        selectedManagedBoard.id,
+        adminBoardSettingsPayload(boardSettingsDraft),
+      );
+      setBoardSettingsDraft(adminBoardSettingsDraft(response.data));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
+        queryClient.invalidateQueries({ queryKey: ["boards"] }),
+      ]);
+      Alert.alert("저장 완료", "게시판 운영 설정이 저장되었습니다.");
+    } catch {
+      Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
+    } finally {
+      setBoardSettingsSaving(false);
+    }
+  };
+
+  const handleCancelBoardForm = () => {
+    const wasCreatingBoard = creatingBoard;
+    resetBoardForm();
+    if (wasCreatingBoard) setBoardManagementTab("content");
+  };
+
+  const renderBoardFormPanel = () => (
+    <Panel>
+      <View style={{ gap: 10 }}>
+        <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+          {editingBoardId ? "게시판 수정" : "게시판 등록"}
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.name} onChangeText={(value) => setBoardForm((current) => ({ ...current, name: value }))} placeholder="게시판 이름" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.slug} onChangeText={(value) => setBoardForm((current) => ({ ...current, slug: value }))} placeholder="slug" editable={!editingBoardId} />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.category} onChangeText={(value) => setBoardForm((current) => ({ ...current, category: value }))} placeholder="카테고리" editable={!editingBoardId} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.sort_order} onChangeText={(value) => setBoardForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
+          </View>
+        </View>
+        <Field value={boardForm.description} onChangeText={(value) => setBoardForm((current) => ({ ...current, description: value }))} placeholder="설명" multiline />
+        <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판 유형</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {Object.entries(BOARD_TYPE_LABELS).map(([value, label]) => (
+            <Chip
+              key={value}
+              active={boardForm.board_type === value}
+              label={label}
+              onPress={editingBoardId ? undefined : () => setBoardForm((current) => ({ ...current, board_type: value }))}
+            />
+          ))}
+        </View>
+        <Text style={{ color: COLORS.muted, fontWeight: "800" }}>권한</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {(["user", "admin"] as const).map((permission) => (
+            <Chip key={`read-${permission}`} active={boardForm.read_permission === permission} label={`읽기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, read_permission: permission }))} />
+          ))}
+          {(["user", "admin"] as const).map((permission) => (
+            <Chip key={`write-${permission}`} active={boardForm.write_permission === permission} label={`쓰기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, write_permission: permission }))} />
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton
+              label={boardForm.allow_anonymous ? "익명 허용" : "실명 게시"}
+              onPress={() => setBoardForm((current) => ({ ...current, allow_anonymous: !current.allow_anonymous }))}
+              tone={boardForm.allow_anonymous ? "primary" : "outline"}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ActionButton
+              label={boardForm.is_active ? "활성" : "숨김"}
+              onPress={() => setBoardForm((current) => ({ ...current, is_active: !current.is_active }))}
+              tone={boardForm.is_active ? "primary" : "muted"}
+            />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton icon="save-outline" label={editingBoardId ? "게시판 저장" : "게시판 등록"} onPress={handleSaveBoard} />
+          </View>
+          {editingBoardId || creatingBoard ? (
+            <View style={{ flex: 1 }}>
+              <ActionButton label="취소" onPress={handleCancelBoardForm} tone="outline" />
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </Panel>
+  );
 
   const resetNoticeForm = () => {
     setEditingNoticeId(null);
@@ -3067,6 +3225,50 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
+        {section === "boardManagement" ? (
+          <View style={{ gap: 12 }}>
+            <Panel>
+              <AdminBoardManagementNavigator
+                boards={boards}
+                scope={boardManagementScope}
+                selectedBoardId={boardManagementBoardId}
+                selectedTab={boardManagementTab}
+                creatingBoard={creatingBoard}
+                onScopeChange={handleBoardManagementScopeChange}
+                onBoardChange={handleBoardManagementBoardChange}
+                onTabChange={setBoardManagementTab}
+                onCreateBoard={handleCreateManagedBoard}
+              />
+            </Panel>
+
+            {creatingBoard && boardManagementTab === "settings" ? renderBoardFormPanel() : null}
+
+            {!creatingBoard && boardManagementTab === "settings" && selectedManagedBoard && boardSettingsDraft ? (
+              <Panel>
+                <AdminBoardSettingsPanel
+                  board={selectedManagedBoard}
+                  draft={boardSettingsDraft}
+                  lockedPolicies={selectedBoardCapability.lockedPolicies}
+                  saving={boardSettingsSaving}
+                  onChange={setBoardSettingsDraft}
+                  onSave={() => void handleSaveBoardSettings()}
+                />
+              </Panel>
+            ) : null}
+
+            {!creatingBoard && boardManagementTab === "content" ? (
+              <Panel>
+                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+                  {selectedManagedBoard ? `${selectedManagedBoard.name} 콘텐츠` : "모든 게시판 콘텐츠"}
+                </Text>
+                <Text style={{ color: COLORS.muted, lineHeight: 20, marginTop: 6 }}>
+                  콘텐츠 편집기는 다음 통합 단계에서 이 선택에 연결됩니다. 기존 관리자 메뉴와 기능은 그대로 사용할 수 있습니다.
+                </Text>
+              </Panel>
+            ) : null}
+          </View>
+        ) : null}
+
         {section === "notices" ? (
           <View style={{ gap: 12 }}>
             <Panel>
@@ -3213,71 +3415,7 @@ export default function AdminScreen() {
 
         {section === "boards" ? (
           <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editingBoardId ? "게시판 수정" : "게시판 등록"}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.name} onChangeText={(value) => setBoardForm((current) => ({ ...current, name: value }))} placeholder="게시판 이름" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.slug} onChangeText={(value) => setBoardForm((current) => ({ ...current, slug: value }))} placeholder="slug" editable={!editingBoardId} />
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.category} onChangeText={(value) => setBoardForm((current) => ({ ...current, category: value }))} placeholder="카테고리" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.sort_order} onChangeText={(value) => setBoardForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
-                  </View>
-                </View>
-                <Field value={boardForm.description} onChangeText={(value) => setBoardForm((current) => ({ ...current, description: value }))} placeholder="설명" multiline />
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판 유형</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {Object.entries(BOARD_TYPE_LABELS).map(([value, label]) => (
-                    <Chip key={value} active={boardForm.board_type === value} label={label} onPress={() => setBoardForm((current) => ({ ...current, board_type: value }))} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>권한</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {(["user", "admin"] as const).map((permission) => (
-                    <Chip key={`read-${permission}`} active={boardForm.read_permission === permission} label={`읽기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, read_permission: permission }))} />
-                  ))}
-                  {(["user", "admin"] as const).map((permission) => (
-                    <Chip key={`write-${permission}`} active={boardForm.write_permission === permission} label={`쓰기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, write_permission: permission }))} />
-                  ))}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton
-                      label={boardForm.allow_anonymous ? "익명 허용" : "실명 게시"}
-                      onPress={() => setBoardForm((current) => ({ ...current, allow_anonymous: !current.allow_anonymous }))}
-                      tone={boardForm.allow_anonymous ? "primary" : "outline"}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton
-                      label={boardForm.is_active ? "활성" : "숨김"}
-                      onPress={() => setBoardForm((current) => ({ ...current, is_active: !current.is_active }))}
-                      tone={boardForm.is_active ? "primary" : "muted"}
-                    />
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton icon="save-outline" label={editingBoardId ? "게시판 저장" : "게시판 등록"} onPress={handleSaveBoard} />
-                  </View>
-                  {editingBoardId ? (
-                    <View style={{ flex: 1 }}>
-                      <ActionButton label="취소" onPress={resetBoardForm} tone="outline" />
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            </Panel>
+            {renderBoardFormPanel()}
             {boardsQuery.isLoading ? <ActivityIndicator /> : null}
             <Panel>
               <View style={{ gap: 10 }}>
