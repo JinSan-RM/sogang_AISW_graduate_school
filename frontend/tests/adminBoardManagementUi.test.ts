@@ -390,6 +390,49 @@ test("공지 건의 상조회는 통합 콘텐츠 renderer map으로 연결한�
   assert.match(contentPanelSource, /renderers\[capability\.kind\]/);
 });
 
+test("비게시글 게시판도 통합 콘텐츠 패널에서 관리한다", () => {
+  assert.match(adminSource, /"organization-intro": renderOrganizationIntroContent/);
+  assert.match(adminSource, /calendar: renderCalendarContent/);
+  assert.match(adminSource, /faq: renderFaqContent/);
+  assert.match(adminSource, /"external-link": renderExternalLinkContent/);
+  assert.match(adminSource, /guide: renderGuideContent/);
+});
+
+test("원우회 소개는 선택 게시판 slug로 기존 전용 편집기를 고른다", () => {
+  assert.match(adminSource, /case "gsa-executives":\s*return renderExecutivesContent\(\)/);
+  assert.match(adminSource, /case "gsa-cohort-leaders":\s*return renderCohortLeadersContent\(\)/);
+  assert.match(adminSource, /case "gsa-past-councils":\s*return renderPastCouncilsContent\(\)/);
+  assert.match(adminSource, /default:\s*return <UnsupportedBoardContent board=\{selectedManagedBoard\}/);
+});
+
+test("일정과 FAQ는 통합 콘텐츠와 기존 메뉴에서만 조회하고 오류를 재시도할 수 있다", () => {
+  assert.match(adminSource, /enabled: isAdmin && \(Boolean\(editEventId\) \|\| section === "events" \|\| \(isManagedContentActive && managedContentKind === "calendar"\)\)/);
+  assert.match(adminSource, /enabled: isAdmin && \(section === "faqs" \|\| \(isManagedContentActive && managedContentKind === "faq"\)\)/);
+  assert.match(adminSource, /eventsQuery\.refetch/);
+  assert.match(adminSource, /faqsQuery\.refetch/);
+});
+
+test("외부 링크 저장은 대상 게시판과 draft를 보호하고 두 게시판 캐시를 갱신한다", () => {
+  assert.match(adminSource, /externalLinkMetadata/);
+  assert.match(adminSource, /validateExternalHttpUrl/);
+  assert.match(adminSource, /externalLinkBoardIdRef/);
+  assert.match(adminSource, /const targetBoardId = selectedManagedBoard\.id/);
+  assert.match(adminSource, /const targetDraft = externalLinkDraft\.trim\(\)/);
+  assert.match(adminSource, /boardApi\.updateAdminBoard\(targetBoardId, \{[\s\S]*?metadata: externalLinkMetadata\(selectedManagedBoard, targetDraft\)/);
+  assert.match(adminSource, /invalidateQueries\(\{ queryKey: \["admin-boards"\] \}\)/);
+  assert.match(adminSource, /invalidateQueries\(\{ queryKey: \["boards"\] \}\)/);
+  assert.match(adminSource, /외부 링크를 저장하지 못했습니다/);
+});
+
+test("가이드는 읽기 전용 안내만 표시하고 metadata 저장값을 만들지 않는다", () => {
+  assert.match(adminSource, /이 가이드는 별도 콘텐츠 저장 형식을 사용하지 않습니다\. 이름, 설명, 노출과 권한은 운영 설정에서 관리할 수 있습니다\./);
+  const guideRenderer = adminSource.slice(
+    adminSource.indexOf("const renderGuideContent"),
+    adminSource.indexOf("const managedContentRenderers"),
+  );
+  assert.doesNotMatch(guideRenderer, /updateAdminBoard|metadata:/);
+});
+
 test("숨겨진 게시판 콘텐츠 쿼리는 실행하지 않고 대시보드 집계는 유지한다", () => {
   assert.match(adminSource, /const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content"/);
   assert.match(adminSource, /enabled: isAdmin && \(section === "dashboard" \|\| showsStandardPosts\)/);

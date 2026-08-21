@@ -43,6 +43,8 @@ import {
 import {
   adminBoardSettingsDraft,
   adminBoardSettingsPayload,
+  externalLinkMetadata,
+  validateExternalHttpUrl,
   type AdminBoardSettingsDraft,
 } from "../../utils/adminBoardSettings";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
@@ -562,6 +564,16 @@ function Panel({ children }: { children: ReactNode }) {
     >
       {children}
     </View>
+  );
+}
+
+function UnsupportedBoardContent({ board }: { board?: Board }) {
+  return (
+    <Panel>
+      <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+        {board ? `${board.name}의 전용 콘텐츠 편집기를 지원하지 않습니다.` : "게시판을 선택해주세요."}
+      </Text>
+    </Panel>
   );
 }
 
@@ -1586,6 +1598,11 @@ export default function AdminScreen() {
   const [pastCouncilsSaving, setPastCouncilsSaving] = useState(false);
   const [editingFAQId, setEditingFAQId] = useState<number | null>(null);
   const [faqForm, setFAQForm] = useState<FAQForm>(emptyFAQ);
+  const [externalLinkDraft, setExternalLinkDraft] = useState("");
+  const [externalLinkSaving, setExternalLinkSaving] = useState(false);
+  const [externalLinkError, setExternalLinkError] = useState<string | null>(null);
+  const externalLinkBoardIdRef = useRef<number | null>(null);
+  const externalLinkSavingRef = useRef(false);
   const [newMajorName, setNewMajorName] = useState("");
   const [newMajorOrder, setNewMajorOrder] = useState("50");
   const [policyVersion, setPolicyVersion] = useState("");
@@ -1639,7 +1656,7 @@ export default function AdminScreen() {
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
-    enabled: isAdmin,
+    enabled: isAdmin && (Boolean(editEventId) || section === "events" || (isManagedContentActive && managedContentKind === "calendar")),
   });
   const adminEventList = eventsQuery.data?.data ?? [];
   const editEventExists = Boolean(editEventId) && adminEventList.some((event) => event.id === editEventId);
@@ -1663,7 +1680,7 @@ export default function AdminScreen() {
   const faqsQuery = useQuery({
     queryKey: ["admin-faqs"],
     queryFn: () => faqApi.getFAQs({ include_inactive: true }),
-    enabled: isAdmin,
+    enabled: isAdmin && (section === "faqs" || (isManagedContentActive && managedContentKind === "faq")),
   });
   const adminMajorsQuery = useQuery({
     queryKey: ["admin-registration-majors"],
@@ -1793,6 +1810,20 @@ export default function AdminScreen() {
   useEffect(() => {
     boardManagementBoardIdRef.current = boardManagementBoardId;
   }, [boardManagementBoardId]);
+
+  useEffect(() => {
+    const board = managedContentKind === "external-link" ? selectedManagedBoard : undefined;
+    externalLinkBoardIdRef.current = board?.id ?? null;
+    setExternalLinkError(null);
+    if (!board) {
+      setExternalLinkDraft("");
+      return;
+    }
+    const metadata = board.metadata ?? {};
+    const key = (["notion_url", "external_url", "url", "link"] as const)
+      .find((candidate) => typeof metadata[candidate] === "string");
+    setExternalLinkDraft(key ? String(metadata[key]) : "");
+  }, [managedContentKind, selectedManagedBoard]);
 
   useEffect(() => {
     if (!optimisticManagedBoard) return;
@@ -2724,6 +2755,46 @@ export default function AdminScreen() {
     }
   };
 
+  const handleSaveExternalLink = async () => {
+    if (
+      !selectedManagedBoard
+      || managedContentKind !== "external-link"
+      || externalLinkSavingRef.current
+    ) return;
+
+    const validationError = validateExternalHttpUrl(externalLinkDraft);
+    if (validationError) {
+      setExternalLinkError(validationError);
+      return;
+    }
+
+    const targetBoardId = selectedManagedBoard.id;
+    const targetDraft = externalLinkDraft.trim();
+    try {
+      externalLinkSavingRef.current = true;
+      setExternalLinkSaving(true);
+      setExternalLinkError(null);
+      await boardApi.updateAdminBoard(targetBoardId, {
+        metadata: externalLinkMetadata(selectedManagedBoard, targetDraft),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
+        queryClient.invalidateQueries({ queryKey: ["boards"] }),
+      ]);
+      if (externalLinkBoardIdRef.current === targetBoardId) {
+        setExternalLinkDraft(targetDraft);
+        Alert.alert("저장 완료", "외부 링크가 저장되었습니다.");
+      }
+    } catch {
+      if (externalLinkBoardIdRef.current === targetBoardId) {
+        setExternalLinkError("외부 링크를 저장하지 못했습니다. 입력값을 유지했으니 다시 저장해주세요.");
+      }
+    } finally {
+      externalLinkSavingRef.current = false;
+      setExternalLinkSaving(false);
+    }
+  };
+
   const handlePostContentScopeChange = (nextScope: AdminContentScope) => {
     setPostContentScope(nextScope);
     setPostBoardId(nextAdminContentSelection(boards, postBoardId, nextScope));
@@ -3375,6 +3446,228 @@ export default function AdminScreen() {
     </View>
   );
 
+  const renderExecutivesContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 소개 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
+          </Text>
+        </View>
+      </Panel>
+      {!executivesBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-executives 게시판을 찾을 수 없습니다.</Text></Panel> : null}
+      {currentCouncils.map((council, cardIndex) => (
+        <Panel key={`current-council-${cardIndex}`}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.title || "현재 원우회"}</Text>
+            <Field value={council.title} onChangeText={(value) => updateCurrentCouncil(cardIndex, { title: value })} placeholder="원우회 이름 예: 제30대 원우회" />
+            <Field value={council.greeting} onChangeText={(value) => updateCurrentCouncil(cardIndex, { greeting: value })} placeholder="인사말" multiline />
+            <Field value={council.intro} onChangeText={(value) => updateCurrentCouncil(cardIndex, { intro: value })} placeholder="원우회 소개글" multiline />
+            <IntroBannerEditor
+              value={council.banner_image_url}
+              uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === undefined}
+              onUpload={() => void handleUploadCurrentCouncilImage(cardIndex)}
+              onRemove={() => updateCurrentCouncil(cardIndex, { banner_image_url: "" })}
+            />
+            {council.members.map((member, memberIndex) => (
+              <IntroMemberEditor
+                key={`current-council-${cardIndex}-member-${memberIndex}`}
+                member={member}
+                index={memberIndex}
+                uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === memberIndex}
+                uploadDisabled={Boolean(currentCouncilUploading)}
+                canMoveUp={memberIndex > 0}
+                canMoveDown={memberIndex < council.members.length - 1}
+                onChange={(patch) => updateCurrentCouncilMember(cardIndex, memberIndex, patch)}
+                onUpload={() => void handleUploadCurrentCouncilImage(cardIndex, memberIndex)}
+                onMoveUp={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
+                onMoveDown={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
+                onRemove={() => updateCurrentCouncil(cardIndex, { members: council.members.filter((_, index) => index !== memberIndex) })}
+              />
+            ))}
+            <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCurrentCouncil(cardIndex, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(currentCouncilUploading)} tone="outline" />
+          </View>
+        </Panel>
+      ))}
+      <Panel><ActionButton icon="save-outline" label={executivesSaving ? "저장 중" : "원우회 소개 저장"} onPress={() => void handleSaveExecutives()} disabled={executivesSaving || Boolean(currentCouncilUploading) || !executivesBoard} /></Panel>
+    </View>
+  );
+
+  const renderCohortLeadersContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>기수별 기장단 소개 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>기수별 대표 이미지, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.</Text>
+        </View>
+      </Panel>
+      {!cohortLeadersBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-cohort-leaders 게시판을 찾을 수 없습니다.</Text></Panel> : null}
+      {cohortLeaders.map((leader, index) => (
+        <Panel key={`cohort-leader-${index}`}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{leader.cohort || "새 기수"} 기장단</Text>
+            <Field value={leader.cohort} onChangeText={(value) => updateCohortLeader(index, { cohort: value })} placeholder="기수 예: 75" />
+            <Field value={leader.greeting} onChangeText={(value) => updateCohortLeader(index, { greeting: value })} placeholder="인사말 예: 안녕하세요, 75기 기장 홍길동입니다!" />
+            <Field value={leader.intro} onChangeText={(value) => updateCohortLeader(index, { intro: value })} placeholder="기장단 소개글" multiline />
+            <IntroBannerEditor
+              value={leader.banner_image_url}
+              uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === undefined}
+              onUpload={() => void handleUploadCohortLeaderImage(index)}
+              onRemove={() => updateCohortLeader(index, { banner_image_url: "" })}
+            />
+            {leader.members.map((member, memberIndex) => (
+              <IntroMemberEditor
+                key={`cohort-leader-${index}-member-${memberIndex}`}
+                member={member}
+                index={memberIndex}
+                uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === memberIndex}
+                uploadDisabled={Boolean(cohortLeaderUploading)}
+                canMoveUp={memberIndex > 0}
+                canMoveDown={memberIndex < leader.members.length - 1}
+                onChange={(patch) => updateCohortLeaderMember(index, memberIndex, patch)}
+                onUpload={() => void handleUploadCohortLeaderImage(index, memberIndex)}
+                onMoveUp={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex - 1) })}
+                onMoveDown={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex + 1) })}
+                onRemove={() => updateCohortLeader(index, { members: leader.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
+              />
+            ))}
+            <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCohortLeader(index, { members: [...leader.members, { ...emptyExecutiveMember }] })} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="기수 위로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(cohortLeaderUploading) || index === 0} tone="outline" /></View>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="기수 아래로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(cohortLeaderUploading) || index === cohortLeaders.length - 1} tone="outline" /></View>
+            </View>
+            <ActionButton icon="trash-outline" label="이 기수 삭제" onPress={() => setCohortLeaders((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(cohortLeaderUploading)} tone="danger" />
+          </View>
+        </Panel>
+      ))}
+      <Panel><View style={{ gap: 8 }}><ActionButton icon="person-add-outline" label="기수 추가" onPress={() => setCohortLeaders((current) => [...current, { ...emptyCohortLeader, members: [] }])} disabled={Boolean(cohortLeaderUploading)} tone="outline" /><ActionButton icon="save-outline" label={cohortLeadersSaving ? "저장 중" : "기장단 소개 저장"} onPress={() => void handleSaveCohortLeaders()} disabled={cohortLeadersSaving || Boolean(cohortLeaderUploading) || !cohortLeadersBoard} /></View></Panel>
+    </View>
+  );
+
+  const renderPastCouncilsContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
+      {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>DB 마이그레이션 후 gsa-past-councils 게시판을 사용할 수 있습니다.</Text></Panel> : null}
+      {pastCouncils.map((council, index) => (
+        <Panel key={`past-council-${index}`}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.cohort || "새 역대 원우회"} 원우회</Text>
+            <Field value={council.cohort} onChangeText={(value) => updatePastCouncil(index, { cohort: value })} placeholder="원우회 대수 예: 29" />
+            <Field value={council.greeting} onChangeText={(value) => updatePastCouncil(index, { greeting: value })} placeholder="인사말" multiline />
+            <Field value={council.intro} onChangeText={(value) => updatePastCouncil(index, { intro: value })} placeholder="원우회 소개글" multiline />
+            <Field value={council.activities_text} onChangeText={(value) => updatePastCouncil(index, { activities_text: value })} placeholder={'활동내역을 한 줄에 하나씩 입력\n예: 25.05.05 기말 세미나 개최'} multiline />
+            <IntroBannerEditor value={council.banner_image_url} uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined} onUpload={() => void handleUploadPastCouncilImage(index)} onRemove={() => updatePastCouncil(index, { banner_image_url: "" })} />
+            {council.members.map((member, memberIndex) => (
+              <IntroMemberEditor
+                key={`past-council-${index}-member-${memberIndex}`}
+                member={member}
+                index={memberIndex}
+                uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === memberIndex}
+                uploadDisabled={Boolean(pastCouncilUploading)}
+                canMoveUp={memberIndex > 0}
+                canMoveDown={memberIndex < council.members.length - 1}
+                onChange={(patch) => updatePastCouncilMember(index, memberIndex, patch)}
+                onUpload={() => void handleUploadPastCouncilImage(index, memberIndex)}
+                onMoveUp={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
+                onMoveDown={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
+                onRemove={() => updatePastCouncil(index, { members: council.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
+              />
+            ))}
+            <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updatePastCouncil(index, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(pastCouncilUploading)} tone="outline" />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="원우회 위로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(pastCouncilUploading) || index === 0} tone="outline" /></View>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="원우회 아래로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(pastCouncilUploading) || index === pastCouncils.length - 1} tone="outline" /></View>
+            </View>
+            <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(pastCouncilUploading)} tone="danger" />
+          </View>
+        </Panel>
+      ))}
+      <Panel><View style={{ gap: 8 }}><ActionButton icon="add-circle-outline" label="역대 원우회 추가" onPress={() => setPastCouncils((current) => [...current, { ...emptyPastCouncil, members: [] }])} disabled={Boolean(pastCouncilUploading)} tone="outline" /><ActionButton icon="save-outline" label={pastCouncilsSaving ? "저장 중" : "역대 원우회 저장"} onPress={() => void handleSavePastCouncils()} disabled={pastCouncilsSaving || Boolean(pastCouncilUploading) || !pastCouncilsBoard} /></View></Panel>
+    </View>
+  );
+
+  const renderOrganizationIntroContent = () => {
+    switch (selectedManagedBoard?.slug) {
+      case "gsa-executives":
+        return renderExecutivesContent();
+      case "gsa-cohort-leaders":
+        return renderCohortLeadersContent();
+      case "gsa-past-councils":
+        return renderPastCouncilsContent();
+      default:
+        return <UnsupportedBoardContent board={selectedManagedBoard} />;
+    }
+  };
+
+  const renderFaqContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>{editingFAQId ? "FAQ 수정" : "FAQ 등록"}</Text>
+          <Field value={faqForm.question} onChangeText={(value) => setFAQForm((current) => ({ ...current, question: value }))} placeholder="질문" />
+          <Field value={faqForm.answer} onChangeText={(value) => setFAQForm((current) => ({ ...current, answer: value }))} placeholder="답변" multiline />
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><Field value={faqForm.category} onChangeText={(value) => setFAQForm((current) => ({ ...current, category: value }))} placeholder="분류" /></View>
+            <View style={{ width: 92 }}><Field value={faqForm.sort_order} onChangeText={(value) => setFAQForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" /></View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><ActionButton icon="save-outline" label={editingFAQId ? "FAQ 저장" : "FAQ 등록"} onPress={handleSaveFAQ} /></View>
+            {editingFAQId ? <View style={{ flex: 1 }}><ActionButton label="취소" onPress={resetFAQForm} tone="outline" /></View> : null}
+          </View>
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState isLoading={faqsQuery.isLoading} isError={faqsQuery.isError} isEmpty={faqs.length === 0} emptyMessage="등록된 FAQ가 없습니다." onRetry={() => void faqsQuery.refetch()} />
+      {faqs.map((item) => <FAQCard key={item.id} item={item} onEdit={handleEditFAQ} onDelete={handleDeleteFAQ} />)}
+    </View>
+  );
+
+  const renderCalendarContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>{editEventId ? "일정 수정" : "일정 등록"}</Text>
+          <Controller control={control} name="title" render={({ field }) => <Field onChangeText={field.onChange} placeholder="일정 제목" value={field.value ?? ""} />} />
+          <Controller control={control} name="category" render={({ field }) => (
+            <View style={{ gap: 7 }}>
+              <Text style={{ color: COLORS.text, fontWeight: "900" }}>일정 분류</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => <Chip key={value} active={field.value === value} label={label} onPress={() => field.onChange(value)} />)}</View>
+            </View>
+          )} />
+          <Controller control={control} name="start_at" render={({ field }) => <EventDateTimePicker label="시작일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />} />
+          <Controller control={control} name="end_at" render={({ field }) => <EventDateTimePicker label="종료일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="11:00" />} />
+          <Controller control={control} name="location" render={({ field }) => <Field onChangeText={field.onChange} placeholder="장소" value={field.value ?? ""} />} />
+          <Controller control={control} name="description" render={({ field }) => <Field multiline onChangeText={field.onChange} placeholder="상세 설명" value={field.value ?? ""} />} />
+          <ActionButton icon="save-outline" label={editEventId ? "일정 저장" : "일정 등록"} onPress={handleSubmit(onSubmitEvent)} />
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState isLoading={eventsQuery.isLoading} isError={eventsQuery.isError} isEmpty={events.length === 0} emptyMessage="등록된 일정이 없습니다." onRetry={() => void eventsQuery.refetch()} />
+      {events.map((event) => <View key={event.id} style={{ gap: 8 }}><EventCard event={event} onEdit={handleEditEvent} /><ActionButton icon="trash-outline" label="일정 삭제" onPress={() => handleDeleteEventFromList(event)} tone="danger" /></View>)}
+    </View>
+  );
+
+  const renderExternalLinkContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>외부 링크 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>사용자 화면에서 열 외부 HTTP(S) 주소를 입력하세요.</Text>
+          <Field value={externalLinkDraft} onChangeText={(value) => { setExternalLinkDraft(value); setExternalLinkError(null); }} placeholder="https://example.com" editable={!externalLinkSaving} />
+          {externalLinkError ? <Text style={{ color: COLORS.error, fontWeight: "800" }}>{externalLinkError}</Text> : null}
+          <ActionButton icon="save-outline" label={externalLinkSaving ? "저장 중" : "외부 링크 저장"} onPress={() => void handleSaveExternalLink()} disabled={externalLinkSaving} />
+        </View>
+      </Panel>
+    </View>
+  );
+
+  const renderGuideContent = () => (
+    <Panel>
+      <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+        이 가이드는 별도 콘텐츠 저장 형식을 사용하지 않습니다. 이름, 설명, 노출과 권한은 운영 설정에서 관리할 수 있습니다.
+      </Text>
+    </Panel>
+  );
+
   const managedContentRenderers: Partial<Record<AdminBoardContentKind, () => ReactNode>> = {
     "aggregate-posts": renderStandardPostContent,
     "posts": renderStandardPostContent,
@@ -3385,6 +3678,11 @@ export default function AdminScreen() {
     "suggestion": renderSuggestionContent,
     "mutual-aid": renderMutualAidContent,
     "activity-history": renderActivityHistoryContent,
+    "organization-intro": renderOrganizationIntroContent,
+    calendar: renderCalendarContent,
+    faq: renderFaqContent,
+    "external-link": renderExternalLinkContent,
+    guide: renderGuideContent,
   };
 
   return (
@@ -3877,173 +4175,11 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "executives" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 소개 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
-                </Text>
-              </View>
-            </Panel>
-            {!executivesBoard ? (
-              <Panel>
-                <Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-executives 게시판을 찾을 수 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {currentCouncils.map((council, cardIndex) => (
-              <Panel key={`current-council-${cardIndex}`}>
-                <View style={{ gap: 10 }}>
-                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.title || "현재 원우회"}</Text>
-                  <Field value={council.title} onChangeText={(value) => updateCurrentCouncil(cardIndex, { title: value })} placeholder="원우회 이름 예: 제30대 원우회" />
-                  <Field value={council.greeting} onChangeText={(value) => updateCurrentCouncil(cardIndex, { greeting: value })} placeholder="인사말" multiline />
-                  <Field value={council.intro} onChangeText={(value) => updateCurrentCouncil(cardIndex, { intro: value })} placeholder="원우회 소개글" multiline />
-                  <IntroBannerEditor
-                    value={council.banner_image_url}
-                    uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === undefined}
-                    onUpload={() => void handleUploadCurrentCouncilImage(cardIndex)}
-                    onRemove={() => updateCurrentCouncil(cardIndex, { banner_image_url: "" })}
-                  />
-                  {council.members.map((member, memberIndex) => (
-                    <IntroMemberEditor
-                      key={`current-council-${cardIndex}-member-${memberIndex}`}
-                      member={member}
-                      index={memberIndex}
-                      uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === memberIndex}
-                      uploadDisabled={Boolean(currentCouncilUploading)}
-                      canMoveUp={memberIndex > 0}
-                      canMoveDown={memberIndex < council.members.length - 1}
-                      onChange={(patch) => updateCurrentCouncilMember(cardIndex, memberIndex, patch)}
-                      onUpload={() => void handleUploadCurrentCouncilImage(cardIndex, memberIndex)}
-                      onMoveUp={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
-                      onMoveDown={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
-                      onRemove={() => updateCurrentCouncil(cardIndex, { members: council.members.filter((_, index) => index !== memberIndex) })}
-                    />
-                  ))}
-                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCurrentCouncil(cardIndex, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(currentCouncilUploading)} tone="outline" />
-                </View>
-              </Panel>
-            ))}
-            <Panel>
-              <View style={{ gap: 8 }}>
-                <ActionButton
-                  icon="save-outline"
-                  label={executivesSaving ? "저장 중" : "원우회 소개 저장"}
-                  onPress={() => void handleSaveExecutives()}
-                  disabled={executivesSaving || Boolean(currentCouncilUploading) || !executivesBoard}
-                />
-              </View>
-            </Panel>
-          </View>
-        ) : null}
+        {section === "executives" ? renderExecutivesContent() : null}
 
-        {section === "cohortLeaders" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>기수별 기장단 소개 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  기수별 대표 이미지, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.
-                </Text>
-              </View>
-            </Panel>
-            {!cohortLeadersBoard ? (
-              <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-cohort-leaders 게시판을 찾을 수 없습니다.</Text></Panel>
-            ) : null}
-            {cohortLeaders.map((leader, index) => (
-              <Panel key={`cohort-leader-${index}`}>
-                <View style={{ gap: 10 }}>
-                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{leader.cohort || "새 기수"} 기장단</Text>
-                  <Field value={leader.cohort} onChangeText={(value) => updateCohortLeader(index, { cohort: value })} placeholder="기수 예: 75" />
-                  <Field value={leader.greeting} onChangeText={(value) => updateCohortLeader(index, { greeting: value })} placeholder="인사말 예: 안녕하세요, 75기 기장 홍길동입니다!" />
-                  <Field value={leader.intro} onChangeText={(value) => updateCohortLeader(index, { intro: value })} placeholder="기장단 소개글" multiline />
-                  <IntroBannerEditor
-                    value={leader.banner_image_url}
-                    uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === undefined}
-                    onUpload={() => void handleUploadCohortLeaderImage(index)}
-                    onRemove={() => updateCohortLeader(index, { banner_image_url: "" })}
-                  />
-                  {leader.members.map((member, memberIndex) => (
-                    <IntroMemberEditor
-                      key={`cohort-leader-${index}-member-${memberIndex}`}
-                      member={member}
-                      index={memberIndex}
-                      uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === memberIndex}
-                      uploadDisabled={Boolean(cohortLeaderUploading)}
-                      canMoveUp={memberIndex > 0}
-                      canMoveDown={memberIndex < leader.members.length - 1}
-                      onChange={(patch) => updateCohortLeaderMember(index, memberIndex, patch)}
-                      onUpload={() => void handleUploadCohortLeaderImage(index, memberIndex)}
-                      onMoveUp={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex - 1) })}
-                      onMoveDown={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex + 1) })}
-                      onRemove={() => updateCohortLeader(index, { members: leader.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
-                    />
-                  ))}
-                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCohortLeader(index, { members: [...leader.members, { ...emptyExecutiveMember }] })} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="기수 위로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(cohortLeaderUploading) || index === 0} tone="outline" /></View>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="기수 아래로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(cohortLeaderUploading) || index === cohortLeaders.length - 1} tone="outline" /></View>
-                  </View>
-                  <ActionButton icon="trash-outline" label="이 기수 삭제" onPress={() => setCohortLeaders((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(cohortLeaderUploading)} tone="danger" />
-                </View>
-              </Panel>
-            ))}
-            <Panel>
-              <View style={{ gap: 8 }}>
-                <ActionButton icon="person-add-outline" label="기수 추가" onPress={() => setCohortLeaders((current) => [...current, { ...emptyCohortLeader, members: [] }])} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
-                <ActionButton icon="save-outline" label={cohortLeadersSaving ? "저장 중" : "기장단 소개 저장"} onPress={() => void handleSaveCohortLeaders()} disabled={cohortLeadersSaving || Boolean(cohortLeaderUploading) || !cohortLeadersBoard} />
-              </View>
-            </Panel>
-          </View>
-        ) : null}
+        {section === "cohortLeaders" ? renderCohortLeadersContent() : null}
 
-        {section === "pastCouncils" ? (
-          <View style={{ gap: 12 }}>
-            <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
-            {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>DB 마이그레이션 후 gsa-past-councils 게시판을 사용할 수 있습니다.</Text></Panel> : null}
-            {pastCouncils.map((council, index) => (
-              <Panel key={`past-council-${index}`}>
-                <View style={{ gap: 10 }}>
-                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.cohort || "새 역대 원우회"} 원우회</Text>
-                  <Field value={council.cohort} onChangeText={(value) => updatePastCouncil(index, { cohort: value })} placeholder="원우회 대수 예: 29" />
-                  <Field value={council.greeting} onChangeText={(value) => updatePastCouncil(index, { greeting: value })} placeholder="인사말" multiline />
-                  <Field value={council.intro} onChangeText={(value) => updatePastCouncil(index, { intro: value })} placeholder="원우회 소개글" multiline />
-                  <Field value={council.activities_text} onChangeText={(value) => updatePastCouncil(index, { activities_text: value })} placeholder={'활동내역을 한 줄에 하나씩 입력\n예: 25.05.05 기말 세미나 개최'} multiline />
-                  <IntroBannerEditor
-                    value={council.banner_image_url}
-                    uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined}
-                    onUpload={() => void handleUploadPastCouncilImage(index)}
-                    onRemove={() => updatePastCouncil(index, { banner_image_url: "" })}
-                  />
-                  {council.members.map((member, memberIndex) => (
-                    <IntroMemberEditor
-                      key={`past-council-${index}-member-${memberIndex}`}
-                      member={member}
-                      index={memberIndex}
-                      uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === memberIndex}
-                      uploadDisabled={Boolean(pastCouncilUploading)}
-                      canMoveUp={memberIndex > 0}
-                      canMoveDown={memberIndex < council.members.length - 1}
-                      onChange={(patch) => updatePastCouncilMember(index, memberIndex, patch)}
-                      onUpload={() => void handleUploadPastCouncilImage(index, memberIndex)}
-                      onMoveUp={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
-                      onMoveDown={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
-                      onRemove={() => updatePastCouncil(index, { members: council.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
-                    />
-                  ))}
-                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updatePastCouncil(index, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(pastCouncilUploading)} tone="outline" />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="원우회 위로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(pastCouncilUploading) || index === 0} tone="outline" /></View>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="원우회 아래로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(pastCouncilUploading) || index === pastCouncils.length - 1} tone="outline" /></View>
-                  </View>
-                  <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(pastCouncilUploading)} tone="danger" />
-                </View>
-              </Panel>
-            ))}
-            <Panel><View style={{ gap: 8 }}><ActionButton icon="add-circle-outline" label="역대 원우회 추가" onPress={() => setPastCouncils((current) => [...current, { ...emptyPastCouncil, members: [] }])} disabled={Boolean(pastCouncilUploading)} tone="outline" /><ActionButton icon="save-outline" label={pastCouncilsSaving ? "저장 중" : "역대 원우회 저장"} onPress={() => void handleSavePastCouncils()} disabled={pastCouncilsSaving || Boolean(pastCouncilUploading) || !pastCouncilsBoard} /></View></Panel>
-          </View>
-        ) : null}
+        {section === "pastCouncils" ? renderPastCouncilsContent() : null}
 
         {section === "posts" ? renderStandardPostContent() : null}
 
@@ -4107,41 +4243,7 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "faqs" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editingFAQId ? "FAQ 수정" : "FAQ 등록"}
-                </Text>
-                <Field value={faqForm.question} onChangeText={(value) => setFAQForm((current) => ({ ...current, question: value }))} placeholder="질문" />
-                <Field value={faqForm.answer} onChangeText={(value) => setFAQForm((current) => ({ ...current, answer: value }))} placeholder="답변" multiline />
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={faqForm.category} onChangeText={(value) => setFAQForm((current) => ({ ...current, category: value }))} placeholder="분류" />
-                  </View>
-                  <View style={{ width: 92 }}>
-                    <Field value={faqForm.sort_order} onChangeText={(value) => setFAQForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton icon="save-outline" label={editingFAQId ? "FAQ 저장" : "FAQ 등록"} onPress={handleSaveFAQ} />
-                  </View>
-                  {editingFAQId ? (
-                    <View style={{ flex: 1 }}>
-                      <ActionButton label="취소" onPress={resetFAQForm} tone="outline" />
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            </Panel>
-            {faqsQuery.isLoading ? <ActivityIndicator /> : null}
-            {faqs.map((item) => (
-              <FAQCard key={item.id} item={item} onEdit={handleEditFAQ} onDelete={handleDeleteFAQ} />
-            ))}
-          </View>
-        ) : null}
+        {section === "faqs" ? renderFaqContent() : null}
 
         {section === "registration" ? (
           <View style={{ gap: 12 }}>
@@ -4184,68 +4286,7 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "events" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editEventId ? "일정 수정" : "일정 등록"}
-                </Text>
-                <Controller
-                  control={control}
-                  name="title"
-                  render={({ field }) => <Field onChangeText={field.onChange} placeholder="일정 제목" value={field.value ?? ""} />}
-                />
-                <Controller
-                  control={control}
-                  name="category"
-                  render={({ field }) => (
-                    <View style={{ gap: 7 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "900" }}>일정 분류</Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                        {Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => (
-                          <Chip key={value} active={field.value === value} label={label} onPress={() => field.onChange(value)} />
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="start_at"
-                  render={({ field }) => (
-                    <EventDateTimePicker label="시작일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="end_at"
-                  render={({ field }) => (
-                    <EventDateTimePicker label="종료일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="11:00" />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="location"
-                  render={({ field }) => <Field onChangeText={field.onChange} placeholder="장소" value={field.value ?? ""} />}
-                />
-                <Controller
-                  control={control}
-                  name="description"
-                  render={({ field }) => <Field multiline onChangeText={field.onChange} placeholder="상세 설명" value={field.value ?? ""} />}
-                />
-                <ActionButton icon="save-outline" label={editEventId ? "일정 저장" : "일정 등록"} onPress={handleSubmit(onSubmitEvent)} />
-              </View>
-            </Panel>
-            {eventsQuery.isLoading ? <ActivityIndicator /> : null}
-            {events.map((event) => (
-              <View key={event.id} style={{ gap: 8 }}>
-                <EventCard event={event} onEdit={handleEditEvent} />
-                <ActionButton icon="trash-outline" label="일정 삭제" onPress={() => handleDeleteEventFromList(event)} tone="danger" />
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {section === "events" ? renderCalendarContent() : null}
       </View>
     </ScrollView>
   );

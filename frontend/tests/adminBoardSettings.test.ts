@@ -117,6 +117,7 @@ test("외부 링크 metadata가 없으면 external_url을 추가한다", () => {
 
 test("외부 링크는 http 또는 https만 허용한다", () => {
   assert.equal(validateExternalHttpUrl("javascript:alert(1)"), "http 또는 https 주소를 입력하세요.");
+  assert.equal(validateExternalHttpUrl("   "), "http 또는 https 주소를 입력하세요.");
   assert.equal(validateExternalHttpUrl("https://example.com/path"), null);
   assert.equal(validateExternalHttpUrl("http://example.com/path"), null);
 });
