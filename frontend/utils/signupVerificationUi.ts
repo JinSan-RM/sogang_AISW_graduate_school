@@ -1,5 +1,32 @@
 import { formatCountdown } from "./authValidation";
 
+type RegistrationVerificationFailurePlacement = "email" | "verification";
+
+type RegistrationVerificationFailure = {
+  placement: RegistrationVerificationFailurePlacement;
+  message: string;
+};
+
+
+export function registrationVerificationFailure(
+  errorCode: string | undefined,
+  resend: boolean,
+): RegistrationVerificationFailure {
+  const message =
+    errorCode === "CONFLICT"
+      ? "이미 가입된 이메일이에요."
+      : errorCode === "VERIFICATION_RESEND_COOLDOWN"
+        ? "인증코드는 5분 후 다시 요청할 수 있어요."
+        : errorCode === "RATE_LIMITED"
+          ? "인증 요청이 너무 많아요. 잠시 후 다시 시도해주세요."
+          : "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
+
+  return {
+    placement: resend ? "verification" : "email",
+    message,
+  };
+}
+
 
 export function signupProgressDotIndex(step: number): number {
   return Math.max(0, step - 1);

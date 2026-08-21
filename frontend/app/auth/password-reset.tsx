@@ -12,6 +12,11 @@ import {
   emailIdError,
   passwordError,
 } from "../../utils/authValidation";
+import {
+  VERIFICATION_ATTEMPTS_EXCEEDED_MESSAGE,
+  verificationFailureStateFromErrorCode,
+  verificationHasExpired,
+} from "../../utils/authVerificationUi";
 import { passwordResetResendControl } from "../../utils/passwordResetUi";
 
 import { BackIcon } from "../../components/icons";
@@ -172,20 +177,20 @@ export default function PasswordResetScreen() {
       setMode("reset");
     } catch (error) {
       const errorCode = apiErrorCode(error);
+      const failureState = verificationFailureStateFromErrorCode(errorCode);
       const message =
         errorCode === "VERIFICATION_EXPIRED"
           ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요."
           : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
-            ? "인증 시도 횟수를 초과했어요. 잠시 후 새 코드를 요청해주세요."
+            ? VERIFICATION_ATTEMPTS_EXCEEDED_MESSAGE
             : "인증코드가 일치하지 않아요.";
       setErrors({ code: message });
-      setVerificationFailureState(
-        errorCode === "VERIFICATION_EXPIRED"
-          ? "expired"
-          : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
-            ? "attempts"
-            : null
-      );
+      setVerificationFailureState(failureState);
+      if (failureState) setCode("");
+      if (failureState === "expired") {
+        resendAvailableAtRef.current = 0;
+        setResendCooldown(0);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -216,7 +221,7 @@ export default function PasswordResetScreen() {
     }
   };
 
-  const verificationExpired = mode === "code" && countdown <= 0;
+  const verificationExpired = mode === "code" && verificationHasExpired(countdown, verificationFailureState);
   const verificationAttemptsLocked = verificationFailureState === "attempts";
   const codeError = errors.code ?? (verificationExpired ? "인증 시간이 만료되었어요. 인증코드를 재전송해주세요." : undefined);
   const codeErrorHasBackground = Boolean(codeError) && verificationFailureState !== "expired" && !verificationExpired;
@@ -244,9 +249,9 @@ export default function PasswordResetScreen() {
   return (
     <View style={styles.screen}>
       {mode !== "complete" ? (
-        <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 18) }]}>
           <Pressable accessibilityLabel="뒤로" onPress={goBack} style={styles.iconButton}>
-            <BackIcon size={24} color={COLORS.text} />
+            <BackIcon size={22} color={COLORS.text} />
           </Pressable>
           <Text style={styles.appBarTitle}>{title}</Text>
           <View style={styles.iconButton} />
@@ -437,15 +442,15 @@ export default function PasswordResetScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
   appBar: {
-    minHeight: 62,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 18,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" }, // Figma: Inter Medium
+  iconButton: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
+  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500", lineHeight: 26 }, // Figma: Inter Medium 18/26
   content: { gap: 20, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 }, // Figma body
   heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
   helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 13, gray/500
@@ -453,6 +458,7 @@ const styles = StyleSheet.create({
   label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
   input: {
     minHeight: 48,
+    outlineStyle: "none" as never,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
@@ -474,6 +480,7 @@ const styles = StyleSheet.create({
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
   primaryButton: {
     height: 48,
+    outlineStyle: "none" as never,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
@@ -482,7 +489,7 @@ const styles = StyleSheet.create({
   submittingButton: { opacity: 0.55 },
   disabledButton: { backgroundColor: "#D1D5DB" },
   validationDisabledButton: { backgroundColor: COLORS.disabled },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "500", lineHeight: 24 }, // Figma: Inter Medium 14/24
+  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500", lineHeight: 24 }, // Figma: Inter Medium 16/24
   completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
   completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
   completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280

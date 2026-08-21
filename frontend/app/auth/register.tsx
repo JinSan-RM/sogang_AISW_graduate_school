@@ -14,14 +14,19 @@ import {
   apiRetryAfterSeconds,
   composeSchoolEmail,
   emailIdError,
-  isApiResponseUncertain,
   isEmailDeliveryConfirmed,
   passwordConfirmationError,
   passwordError,
   phoneError,
 } from "../../utils/authValidation";
+import {
+  VERIFICATION_ATTEMPTS_EXCEEDED_MESSAGE,
+  verificationFailureStateFromErrorCode,
+  verificationHasExpired,
+} from "../../utils/authVerificationUi";
 import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_SUPPORT_EMAIL } from "../../utils/privacyPolicy";
 import {
+  registrationVerificationFailure,
   resendAvailableAt,
   resendCountdownLabel,
   signupProgressDotIndex,
@@ -42,14 +47,10 @@ const COLORS = {
 };
 
 type FieldErrors = Partial<Record<"email" | "code" | "nickname" | "cohort" | "major" | "phone" | "password" | "passwordConfirm" | "consent" | "form", string>>;
-type VerificationMessage = { type: "success" | "pending" | "error"; text: string } | null;
+type VerificationMessage = { type: "success" | "error"; text: string } | null;
 type VerificationFailureState = "expired" | "attempts" | null;
 
-const EMAIL_DELIVERY_FAILURE_MESSAGE = "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
-const EMAIL_DELIVERY_UNCERTAIN_MESSAGE =
-  "서버 응답이 늦어지고 있어요. 메일이 도착했다면 인증코드를 입력하고, 없으면 잠시 후 재전송해주세요.";
-const UNCERTAIN_VERIFICATION_SECONDS = 5 * 60;
-const UNCERTAIN_RESEND_SECONDS = 5 * 60;
+const DEFAULT_RESEND_COOLDOWN_SECONDS = 5 * 60;
 
 function StepDots({ step }: { step: number }) {
   const activeStep = signupProgressDotIndex(step);
@@ -142,10 +143,11 @@ export default function RegisterScreen() {
       setVerificationMessage(null);
       const response = await authApi.requestRegisterVerification({ email });
       if (!isEmailDeliveryConfirmed(response.data.email_sent)) {
-        if (resend) {
-          setVerificationMessage({ type: "error", text: EMAIL_DELIVERY_FAILURE_MESSAGE });
+        const failure = registrationVerificationFailure(undefined, resend);
+        if (failure.placement === "verification") {
+          setVerificationMessage({ type: "error", text: failure.message });
         } else {
-          setErrors({ email: EMAIL_DELIVERY_FAILURE_MESSAGE });
+          setErrors({ email: failure.message });
         }
         return;
       }
@@ -165,39 +167,17 @@ export default function RegisterScreen() {
       setVerificationFailureState(null);
       setVerificationMessage(resend ? { type: "success", text: "새 인증코드가 발송되었어요." } : null);
     } catch (error) {
-      if (isApiResponseUncertain(error)) {
-        const timeoutObservedAt = Date.now();
-        setCode("");
-        setVerificationToken("");
-        verificationExpiresAtRef.current = requestStartedAt + UNCERTAIN_VERIFICATION_SECONDS * 1000;
-        resendAvailableAtRef.current = timeoutObservedAt + UNCERTAIN_RESEND_SECONDS * 1000;
-        setCountdown(
-          Math.max(0, Math.ceil((verificationExpiresAtRef.current - timeoutObservedAt) / 1000)),
-        );
-        setResendCooldown(UNCERTAIN_RESEND_SECONDS);
-        setStep(1);
-        setVerificationFailureState(null);
-        setVerificationMessage({ type: "pending", text: EMAIL_DELIVERY_UNCERTAIN_MESSAGE });
-        return;
-      }
       const errorCode = apiErrorCode(error);
       if (errorCode === "VERIFICATION_RESEND_COOLDOWN") {
-        const retryAfter = apiRetryAfterSeconds(error) ?? UNCERTAIN_RESEND_SECONDS;
+        const retryAfter = apiRetryAfterSeconds(error) ?? DEFAULT_RESEND_COOLDOWN_SECONDS;
         resendAvailableAtRef.current = Date.now() + retryAfter * 1000;
         setResendCooldown(retryAfter);
       }
-      const message =
-        errorCode === "CONFLICT"
-          ? "이미 가입된 이메일이에요."
-          : errorCode === "VERIFICATION_RESEND_COOLDOWN"
-            ? "인증코드는 5분 후 다시 요청할 수 있어요."
-            : errorCode === "RATE_LIMITED"
-              ? "인증 요청이 너무 많아요. 잠시 후 다시 시도해주세요."
-              : EMAIL_DELIVERY_FAILURE_MESSAGE;
-      if (resend) {
-        setVerificationMessage({ type: "error", text: message });
+      const failure = registrationVerificationFailure(errorCode, resend);
+      if (failure.placement === "verification") {
+        setVerificationMessage({ type: "error", text: failure.message });
       } else {
-        setErrors({ email: message });
+        setErrors({ email: failure.message });
       }
     } finally {
       setIsSubmitting(false);
@@ -224,21 +204,21 @@ export default function RegisterScreen() {
       setStep(2);
     } catch (error) {
       const errorCode = apiErrorCode(error);
+      const failureState = verificationFailureStateFromErrorCode(errorCode);
       const message =
         errorCode === "VERIFICATION_EXPIRED"
           ? "인증 시간이 만료되었어요. 재전송을 눌러주세요."
           : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
-            ? "인증 시도 횟수를 초과했어요. 잠시 후 다시 시도해주세요."
+            ? VERIFICATION_ATTEMPTS_EXCEEDED_MESSAGE
             : "인증코드가 일치하지 않아요.";
       setErrors({ code: message });
       setVerificationMessage(null);
-      setVerificationFailureState(
-        errorCode === "VERIFICATION_EXPIRED"
-          ? "expired"
-          : errorCode === "VERIFICATION_ATTEMPTS_EXCEEDED"
-            ? "attempts"
-            : null
-      );
+      setVerificationFailureState(failureState);
+      if (failureState) setCode("");
+      if (failureState === "expired") {
+        resendAvailableAtRef.current = 0;
+        setResendCooldown(0);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -342,7 +322,7 @@ export default function RegisterScreen() {
     isSubmitting ||
     (profileValidationAttempted && (!isProfileFormValid || Boolean(errors.form) || Boolean(errors.nickname)));
   const verificationExpired =
-    step === 1 && verificationExpiresAtRef.current > 0 && countdown <= 0;
+    step === 1 && verificationExpiresAtRef.current > 0 && verificationHasExpired(countdown, verificationFailureState);
   const verificationAttemptsLocked = verificationFailureState === "attempts" && !verificationExpired;
   const codeError = verificationExpired
     ? "인증 시간이 만료되었어요. 재전송을 눌러주세요."
@@ -353,9 +333,9 @@ export default function RegisterScreen() {
   return (
     <View style={styles.screen}>
       {step !== 3 ? (
-        <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+        <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 18) }]}>
           <Pressable accessibilityLabel="뒤로" onPress={goBack} style={styles.iconButton}>
-            <BackIcon size={24} color={COLORS.text} />
+            <BackIcon size={22} color={COLORS.text} />
           </Pressable>
           <Text style={styles.appBarTitle}>회원가입</Text>
           <View style={styles.iconButton} />
@@ -423,11 +403,11 @@ export default function RegisterScreen() {
                   ) : verificationMessage ? (
                     <View style={verificationMessage.type === "error" ? styles.errorRow : styles.successRow}>
                       <Ionicons
-                        name={verificationMessage.type === "success" ? "checkmark-circle-outline" : verificationMessage.type === "pending" ? "time-outline" : "alert-circle-outline"}
+                        name={verificationMessage.type === "success" ? "checkmark-circle-outline" : "alert-circle-outline"}
                         size={14}
-                        color={verificationMessage.type === "success" ? "#3B6D11" : verificationMessage.type === "pending" ? COLORS.muted : COLORS.danger}
+                        color={verificationMessage.type === "success" ? "#3B6D11" : COLORS.danger}
                       />
-                      <Text style={verificationMessage.type === "success" ? styles.successText : verificationMessage.type === "pending" ? styles.pendingText : styles.errorText}>
+                      <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
                         {verificationMessage.text}
                       </Text>
                     </View>
@@ -613,24 +593,24 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
-  appBar: { minHeight: 62, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.bg, paddingHorizontal: 16, paddingBottom: 12 },
-  iconButton: { width: 42, height: 42, alignItems: "center", justifyContent: "center" },
-  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500" }, // Figma: Inter Medium
+  appBar: { minHeight: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.bg, paddingHorizontal: 16, paddingBottom: 12 },
+  iconButton: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
+  appBarTitle: { color: COLORS.text, fontSize: 18, fontWeight: "500", lineHeight: 26 }, // Figma: Inter Medium 18/26
   scroller: { flex: 1 },
-  content: { gap: 20, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 }, // Figma 본문: 28/20/24, gap 20
-  stepDots: { flexDirection: "row", gap: 8, paddingBottom: 4 }, // Figma dots: 8x8, gap 8, pb 4
-  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#D1D5DB" },
+  content: { gap: 20, paddingHorizontal: 20, paddingTop: 24, paddingBottom: 24 }, // Figma body: px20, py24, gap20
+  stepDots: { flexDirection: "row", gap: 6 }, // Figma dots group: 36w = 8x3 + 6x2
+  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#DDE2EA" },
   stepDotActive: { backgroundColor: COLORS.primary },
-  heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 24 }, // Figma: Medium 20/24
-  helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 16 }, // Figma: Regular 13/16, gray/500
+  heading: { color: COLORS.text, fontSize: 20, fontWeight: "500", lineHeight: 28 }, // Figma: Inter Medium 20/28
+  helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 18 }, // Figma: Inter Regular 13/18
   field: { gap: 6 }, // Figma label→input gap
   label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
-  input: { minHeight: 48, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, border 1, px16, Regular 14
-  codeInput: { height: 44, borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 17, paddingHorizontal: 14, paddingVertical: 12 }, // Figma 코드입력: 44h, border 0.5, padding 12/14, Regular 14/17
+  input: { minHeight: 48, outlineStyle: "none" as never, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, border 1, px16, Regular 14
+  codeInput: { height: 48, outlineStyle: "none" as never, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 22, paddingHorizontal: 16 }, // Figma verification code input: 48h, border 1, px16
   inputError: { borderColor: COLORS.danger },
   profileInputError: { borderColor: COLORS.danger, backgroundColor: "#FFF5F5" },
   verificationLockedInput: { backgroundColor: "#FFF5F5" },
-  errorRow: { flexDirection: "row", alignItems: "center", gap: 6 }, // Figma 에러행: gap 6
+  errorRow: { minHeight: 30, flexDirection: "row", alignItems: "center", gap: 4 }, // Figma status/error row: 30h, gap4
   statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8 }, // 재전송만 있을 때는 본문 gap 20을 그대로 쓴다
   // 에러/안내 문구는 코드영역 안에 들어가므로 입력창과 8px만 띄운다(본문 gap 20 - 12).
   statusRowTight: { marginTop: -12 },
@@ -641,16 +621,15 @@ const styles = StyleSheet.create({
   resendTimer: { fontWeight: "500", lineHeight: 16 }, // Figma "05:00": Medium 13/16
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 15 }, // Figma: error/500 Regular 12/15
   successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 15 }, // Figma: success green Regular 12/15
-  pendingText: { flexShrink: 1, color: COLORS.muted, fontSize: 12, fontWeight: "400", lineHeight: 18 },
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
   selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: border 0.5, px14 py12
   selectText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
   selectPlaceholder: { color: COLORS.tertiary },
-  primaryButton: { height: 48, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary }, // Figma: 48h
+  primaryButton: { height: 48, outlineStyle: "none" as never, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary }, // Figma: 48h
   disabledButton: { opacity: 0.55 },
   validationDisabledButton: { backgroundColor: "#D1D5DB" },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "500", lineHeight: 17 }, // Figma btn: Medium 14/17
+  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500", lineHeight: 24 }, // Figma button: Inter Medium 16/24
   resendButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 8 },
   resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, primary/500
   resendTextDisabled: { color: COLORS.subtle },

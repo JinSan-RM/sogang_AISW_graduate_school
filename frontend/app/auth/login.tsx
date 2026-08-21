@@ -59,7 +59,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 18) }]}>
         <Pressable
           accessibilityLabel="뒤로"
           onPress={() => {
@@ -67,7 +67,7 @@ export default function LoginScreen() {
           }}
           style={styles.iconButton}
         >
-          <BackIcon size={24} color={COLORS.text} />
+          <BackIcon size={22} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>로그인</Text>
         <View style={styles.iconButton} />
@@ -141,23 +141,24 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   appBar: {
-    minHeight: 62,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: COLORS.bg,
-    paddingHorizontal: 18,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   iconButton: {
-    width: 42,
-    height: 42,
+    width: 22,
+    height: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
+    lineHeight: 26,
     fontWeight: "500", // Figma: Inter Medium
   },
   content: {
@@ -193,6 +194,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     height: 48,
+    outlineStyle: "none" as never,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
@@ -215,6 +217,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
+    lineHeight: 24,
     fontWeight: "500", // Figma: Inter Medium
   },
   links: {
