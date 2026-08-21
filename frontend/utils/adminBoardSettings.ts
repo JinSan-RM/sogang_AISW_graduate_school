@@ -12,7 +12,7 @@ export type AdminBoardSettingsDraft = {
 
 export type AdminBoardSettingsPayload = {
   name: string;
-  description?: string;
+  description: string | null;
   sort_order: number;
   allow_anonymous: boolean;
   read_permission: string;
@@ -40,7 +40,7 @@ export function adminBoardSettingsPayload(draft: AdminBoardSettingsDraft): Admin
 
   return {
     name: draft.name.trim(),
-    description: draft.description.trim() || undefined,
+    description: draft.description.trim() || null,
     sort_order: sortOrder,
     allow_anonymous: draft.allowAnonymous,
     read_permission: draft.readPermission,
@@ -67,4 +67,3 @@ export function validateExternalHttpUrl(url: string): string | null {
   }
   return "http 또는 https 주소를 입력하세요.";
 }
-

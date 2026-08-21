@@ -56,6 +56,11 @@ test("게시판 이름과 정렬 순서는 비어 있거나 숫자가 아니면 
   );
 });
 
+test("빈 게시판 설명은 기존 설명을 지울 수 있도록 null로 전송한다", () => {
+  const draft = adminBoardSettingsDraft(board);
+  assert.equal(adminBoardSettingsPayload({ ...draft, description: "   " }).description, null);
+});
+
 test("외부 링크 변경은 알 수 없는 기존 metadata를 보존한다", () => {
   const legacyBoard = { ...board, metadata: { notion_url: "https://old.example.com", analytics_key: "accounting" } };
   assert.deepEqual(externalLinkMetadata(legacyBoard, "https://example.com/new"), {

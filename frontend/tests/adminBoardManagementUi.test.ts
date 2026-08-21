@@ -78,6 +78,24 @@ function loadContentPanelModule() {
   return module.exports as Record<string, (...args: unknown[]) => unknown>;
 }
 
+function loadSettingsPanelModule() {
+  const compiled = ts.transpileModule(settingsSource, {
+    compilerOptions: {
+      jsx: ts.JsxEmit.ReactJSX,
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const module = { exports: {} as Record<string, unknown> };
+  const mockRequire = (id: string) => {
+    if (id === "react-native") return { Pressable: "Pressable", Text: "Text", TextInput: "TextInput", View: "View" };
+    return nodeRequire(id);
+  };
+  new Function("module", "exports", "require", compiled)(module, module.exports, mockRequire);
+  return module.exports as Record<string, (...args: unknown[]) => unknown>;
+}
+
 function loadExternalLinkDraftTransitions() {
   const start = adminSource.indexOf("export type ExternalLinkDraftState");
   const end = adminSource.indexOf("function Panel", start);
@@ -197,6 +215,13 @@ test("운영 설정은 구조 식별자와 잠긴 정책을 읽기 전용으로 
   assert.match(settingsSource, /구조 식별자 · 변경 불가/);
   assert.match(settingsSource, /settingKey/);
   assert.match(navigatorSource, /새 게시판 등록/);
+});
+
+test("읽기 권한은 비회원 guest를 포함하고 쓰기 권한은 기존 선택지를 유지한다", () => {
+  const settingsModule = loadSettingsPanelModule();
+  assert.deepEqual(settingsModule.adminBoardPermissionOptions("read"), ["guest", "user", "admin"]);
+  assert.deepEqual(settingsModule.adminBoardPermissionOptions("write"), ["user", "admin"]);
+  assert.match(adminSource, /adminBoardPermissionOptions\("read"\)\.map/);
 });
 
 test("통합 탐색기와 설정 패널은 부모가 소유한 선택과 draft만 사용한다", () => {
@@ -320,7 +345,7 @@ test("설정 저장은 대상 게시판 일치 여부를 확인하고 네비게�
   assert.equal((saveHandler.match(/boardSettingsSaveResult\(/g) ?? []).length, 2);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["admin-boards"\] \}\)/);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["boards"\] \}\)/);
-  assert.match(adminSource, /disabled=\{boardSettingsSaving \|\| externalLinkSaving\}/);
+  assert.match(adminSource, /disabled=\{managedNavigationLocked \|\| !boardsQuery\.isSuccess\}/);
   assert.match(adminSource, /setQueryData<AdminBoardsQueryData>/);
   assert.match(adminSource, /setOptimisticManagedBoard\(\{ board: created\.data, insertedGeneration \}\)/);
   assert.match(adminSource, /shouldClearOptimisticCreatedBoard\(/);
@@ -378,6 +403,7 @@ test("비활성 공지도 통합 화면에서는 admin endpoint 정책을 사용
     tab: "content",
     kind: "notice",
     board: inactiveNotice,
+    targetStatus: "board",
   });
   assert.deepEqual(unifiedPolicy, {
     isManagedContentActive: true,
@@ -385,7 +411,9 @@ test("비활성 공지도 통합 화면에서는 admin endpoint 정책을 사용
     noticeSource: "admin",
     noticeBoardId: 77,
     showsSuggestions: false,
+    suggestionBoardId: undefined,
     showsMutualAid: false,
+    mutualAidBoardId: undefined,
     showsActivityHistory: false,
   });
 
@@ -394,6 +422,7 @@ test("비활성 공지도 통합 화면에서는 admin endpoint 정책을 사용
     tab: "content",
     kind: "notice",
     board: inactiveNotice,
+    targetStatus: "board",
   }) as { noticeSource: string; noticeBoardId?: number };
   assert.equal(legacyPolicy.noticeSource, "public");
   assert.equal(legacyPolicy.noticeBoardId, undefined);
@@ -554,7 +583,7 @@ test("외부 링크 저장 중 탐색은 동기적으로 거절하고 허용된 
   );
 
   assert.match(adminSource, /boardSettingsSavingRef\.current \|\| externalLinkSavingRef\.current/);
-  assert.match(adminSource, /disabled=\{boardSettingsSaving \|\| externalLinkSaving\}/);
+  assert.match(adminSource, /disabled=\{managedNavigationLocked \|\| !boardsQuery\.isSuccess\}/);
   assert.match(adminSource, /syncExternalLinkNavigationBoardId\(transition\.boardId\)/);
   assert.match(adminSource, /syncExternalLinkNavigationBoardId\(item\.board_id\)/);
 });
@@ -584,4 +613,123 @@ test("활동내역 공지 편집은 통합 게시판 선택을 실제 공지 게
   assert.match(adminSource, /setBoardManagementScope\("notices"\)/);
   assert.match(adminSource, /setBoardManagementBoardId\(item\.board_id\)/);
   assert.match(adminSource, /setBoardManagementTab\("content"\)/);
+});
+
+test("건의와 상조회 통합 쿼리는 선택한 실제 게시판 ID를 사용하고 대시보드는 집계한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  const suggestionPolicy = contentPanelModule.adminBoardContentQueryPolicy({
+    section: "boardManagement",
+    tab: "content",
+    kind: "suggestion",
+    board: { ...board(14, "council"), board_type: "suggestion" },
+    targetStatus: "board",
+  }) as { showsSuggestions: boolean; suggestionBoardId?: number };
+  assert.equal(suggestionPolicy.showsSuggestions, true);
+  assert.equal(suggestionPolicy.suggestionBoardId, 14);
+
+  const mutualAidPolicy = contentPanelModule.adminBoardContentQueryPolicy({
+    section: "boardManagement",
+    tab: "content",
+    kind: "mutual-aid",
+    board: { ...board(15, "council"), board_type: "mutual_aid" },
+    targetStatus: "board",
+  }) as { showsMutualAid: boolean; mutualAidBoardId?: number };
+  assert.equal(mutualAidPolicy.showsMutualAid, true);
+  assert.equal(mutualAidPolicy.mutualAidBoardId, 15);
+
+  const dashboardPolicy = contentPanelModule.adminBoardContentQueryPolicy({
+    section: "dashboard",
+    tab: "content",
+    kind: "aggregate-posts",
+    targetStatus: "loading",
+  }) as { suggestionBoardId?: number; mutualAidBoardId?: number };
+  assert.equal(dashboardPolicy.suggestionBoardId, undefined);
+  assert.equal(dashboardPolicy.mutualAidBoardId, undefined);
+});
+
+test("실제 선택 게시판이 없는 통합 범위는 어떤 콘텐츠 쿼리도 활성화하지 않는다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  assert.deepEqual(contentPanelModule.adminBoardContentQueryPolicy({
+    section: "boardManagement",
+    tab: "content",
+    kind: "aggregate-posts",
+    targetStatus: "missing",
+  }), {
+    isManagedContentActive: false,
+    showsStandardPosts: false,
+    noticeSource: null,
+    noticeBoardId: undefined,
+    showsSuggestions: false,
+    suggestionBoardId: undefined,
+    showsMutualAid: false,
+    mutualAidBoardId: undefined,
+    showsActivityHistory: false,
+  });
+});
+
+test("공지 저장과 업로드 결과는 시작한 게시판·편집·generation이 현재일 때만 반영한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  const operation = { id: 1, kind: "save", boardId: 10, editingNoticeId: 100, generation: 4 };
+  assert.deepEqual(contentPanelModule.beginNoticeEditorOperation(null, operation), { accepted: true, operation });
+  assert.deepEqual(contentPanelModule.beginNoticeEditorOperation(operation, { ...operation, id: 2 }), {
+    accepted: false,
+    operation,
+  });
+  assert.deepEqual(contentPanelModule.noticeEditorOperationResult(operation, {
+    boardId: 10,
+    editingNoticeId: 100,
+    generation: 4,
+  }, "success"), { apply: true, notification: "success" });
+  assert.deepEqual(contentPanelModule.noticeEditorOperationResult(operation, {
+    boardId: 11,
+    editingNoticeId: null,
+    generation: 5,
+  }, "success"), { apply: false, notification: null });
+  assert.deepEqual(contentPanelModule.noticeEditorOperationResult(operation, {
+    boardId: 11,
+    editingNoticeId: null,
+    generation: 5,
+  }, "failure"), { apply: false, notification: null });
+});
+
+test("관리자 게시판 대상은 전체/null만 집계하고 loading, error, orphan, 빈 그룹을 구분한다", () => {
+  const navigatorModule = loadNavigatorModule();
+  const boards = [board(1, "notices"), board(2, "community")];
+  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "all", null, "success"), { status: "aggregate" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", 1, "success"), { status: "board", board: boards[0] });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", null, "success"), { status: "missing" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget(boards, "notices", 999, "success"), { status: "missing" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget([], "notices", null, "success"), { status: "missing" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget([], "all", null, "pending"), { status: "loading" });
+  assert.deepEqual(navigatorModule.adminBoardContentTarget([], "all", null, "error"), { status: "error" });
+});
+
+test("대시보드 바로가기 intent는 게시판 조회 성공 전 대기하고 성공 후 원래 slug로 해석한다", () => {
+  const navigatorModule = loadNavigatorModule();
+  const intent = { slug: "board-2", tab: "settings" };
+  assert.deepEqual(navigatorModule.adminBoardNavigationIntentResolution(intent, [], "pending"), { status: "pending" });
+  assert.deepEqual(navigatorModule.adminBoardNavigationIntentResolution(intent, [], "error"), { status: "error" });
+  assert.deepEqual(navigatorModule.adminBoardNavigationIntentResolution(intent, [board(1, "notices"), board(2, "community")], "success"), {
+    status: "resolved",
+    destination: { scope: "community", boardId: 2, tab: "settings" },
+  });
+  assert.deepEqual(navigatorModule.adminBoardNavigationIntentResolution(intent, [board(1, "notices")], "success"), { status: "missing" });
+});
+
+test("게시판 조회 상태는 로딩·오류 재시도·선택 없음 안내를 접근 가능하게 표시한다", () => {
+  const contentPanelModule = loadContentPanelModule();
+  let retries = 0;
+  const errorState = contentPanelModule.AdminBoardTargetQueryState({
+    status: "error",
+    onRetry: () => { retries += 1; },
+  });
+  const retryButton = renderedElements(errorState).find((element) => element.type === "Pressable");
+  assert.ok(retryButton?.props?.onPress);
+  retryButton.props.onPress();
+  assert.equal(retries, 1);
+  assert.equal(JSON.stringify(errorState).includes("게시판 목록을 불러오지 못했습니다"), true);
+  assert.equal(JSON.stringify(contentPanelModule.AdminBoardTargetQueryState({ status: "loading", onRetry: () => undefined })).includes("게시판 목록을 불러오는 중"), true);
+  assert.equal(JSON.stringify(contentPanelModule.AdminBoardTargetQueryState({ status: "missing", onRetry: () => undefined })).includes("선택할 수 있는 게시판이 없습니다"), true);
+  assert.equal(contentPanelModule.AdminBoardTargetQueryState({ status: "aggregate", onRetry: () => undefined }), null);
+  assert.equal(contentPanelModule.AdminBoardTargetQueryState({ status: "board", onRetry: () => undefined }), null);
 });

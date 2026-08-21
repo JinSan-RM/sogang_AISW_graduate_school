@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import type { Board } from "../../types";
 import type { AdminBoardCapability, AdminBoardContentKind } from "../../utils/adminContentManagement";
+import type { AdminBoardContentTargetStatus } from "./AdminBoardManagementNavigator";
 
 export type AdminBoardContentPanelProps = {
   board?: Board;
@@ -16,7 +17,9 @@ export type AdminBoardContentQueryPolicy = {
   noticeSource: "admin" | "public" | null;
   noticeBoardId?: number;
   showsSuggestions: boolean;
+  suggestionBoardId?: number;
   showsMutualAid: boolean;
+  mutualAidBoardId?: number;
   showsActivityHistory: boolean;
 };
 
@@ -25,13 +28,16 @@ export function adminBoardContentQueryPolicy({
   tab,
   kind,
   board,
+  targetStatus,
 }: {
   section: string;
   tab: "content" | "settings";
   kind: AdminBoardContentKind;
   board?: Board;
+  targetStatus: AdminBoardContentTargetStatus;
 }): AdminBoardContentQueryPolicy {
-  const isManagedContentActive = section === "boardManagement" && tab === "content";
+  const hasManagedTarget = targetStatus === "aggregate" || targetStatus === "board";
+  const isManagedContentActive = section === "boardManagement" && tab === "content" && hasManagedTarget;
   const managedStandardKinds: AdminBoardContentKind[] = [
     "aggregate-posts",
     "posts",
@@ -39,16 +45,45 @@ export function adminBoardContentQueryPolicy({
     "album",
     "activity-certification",
   ];
-  const showsManagedNotice = isManagedContentActive && kind === "notice" && Boolean(board);
+  const showsManagedNotice = isManagedContentActive && targetStatus === "board" && kind === "notice" && Boolean(board);
+  const showsSuggestions = isManagedContentActive && targetStatus === "board" && kind === "suggestion";
+  const showsMutualAid = isManagedContentActive && targetStatus === "board" && kind === "mutual-aid";
   return {
     isManagedContentActive,
     showsStandardPosts: section === "posts" || (isManagedContentActive && managedStandardKinds.includes(kind)),
     noticeSource: showsManagedNotice ? "admin" : ["notices", "banners"].includes(section) ? "public" : null,
     noticeBoardId: showsManagedNotice ? board?.id : undefined,
-    showsSuggestions: section === "suggestions" || (isManagedContentActive && kind === "suggestion"),
-    showsMutualAid: section === "mutualAid" || (isManagedContentActive && kind === "mutual-aid"),
+    showsSuggestions: section === "suggestions" || showsSuggestions,
+    suggestionBoardId: showsSuggestions ? board?.id : undefined,
+    showsMutualAid: section === "mutualAid" || showsMutualAid,
+    mutualAidBoardId: showsMutualAid ? board?.id : undefined,
     showsActivityHistory: isManagedContentActive && kind === "activity-history",
   };
+}
+
+export type NoticeEditorOperation = {
+  id: number;
+  kind: "upload" | "save";
+  boardId: number;
+  editingNoticeId: number | null;
+  generation: number;
+};
+
+export type NoticeEditorTarget = Pick<NoticeEditorOperation, "boardId" | "editingNoticeId" | "generation">;
+
+export function beginNoticeEditorOperation(active: NoticeEditorOperation | null, next: NoticeEditorOperation) {
+  return active ? { accepted: false as const, operation: active } : { accepted: true as const, operation: next };
+}
+
+export function noticeEditorOperationResult(
+  operation: NoticeEditorOperation,
+  current: NoticeEditorTarget,
+  outcome: "success" | "failure",
+) {
+  const apply = operation.boardId === current.boardId
+    && operation.editingNoticeId === current.editingNoticeId
+    && operation.generation === current.generation;
+  return { apply, notification: apply ? outcome : null };
 }
 
 export function noticeEditorBoardTransition(
@@ -108,6 +143,54 @@ export function AdminBoardContentQueryState({
     );
   }
   if (isEmpty) return <View style={stateStyle}><Text style={{ color: "#6B7280" }}>{emptyMessage}</Text></View>;
+  return null;
+}
+
+export function AdminBoardTargetQueryState({
+  status,
+  onRetry,
+}: {
+  status: AdminBoardContentTargetStatus;
+  onRetry: () => void;
+}) {
+  const stateStyle = {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E1E4E9",
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    gap: 8,
+  } as const;
+  if (status === "loading") {
+    return (
+      <View accessibilityRole="progressbar" accessibilityLabel="게시판 목록을 불러오는 중" style={stateStyle}>
+        <ActivityIndicator />
+        <Text style={{ color: "#6B7280" }}>게시판 목록을 불러오는 중입니다.</Text>
+      </View>
+    );
+  }
+  if (status === "error") {
+    return (
+      <View style={stateStyle}>
+        <Text style={{ color: "#D94343", fontWeight: "800" }}>게시판 목록을 불러오지 못했습니다.</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="게시판 목록 다시 시도"
+          onPress={onRetry}
+          style={{ alignSelf: "flex-start", borderRadius: 6, backgroundColor: "#EDF2FE", paddingHorizontal: 12, paddingVertical: 8 }}
+        >
+          <Text style={{ color: "#2761FF", fontWeight: "800" }}>다시 시도</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (status === "missing") {
+    return (
+      <View style={stateStyle}>
+        <Text style={{ color: "#6B7280" }}>이 그룹에서 선택할 수 있는 게시판이 없습니다.</Text>
+      </View>
+    );
+  }
   return null;
 }
 

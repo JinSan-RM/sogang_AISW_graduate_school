@@ -11,21 +11,28 @@ import { z } from "zod";
 import BackButton from "../../components/BackButton";
 import AdminBoardContentPanel, {
   AdminBoardContentQueryState,
+  AdminBoardTargetQueryState,
   adminBoardContentQueryPolicy,
+  beginNoticeEditorOperation,
   noticeEditorBoardTransition,
+  noticeEditorOperationResult,
   publicNoticeBoardSelection,
+  type NoticeEditorOperation,
 } from "../../components/admin/AdminBoardContentPanel";
 import AdminBoardManagementNavigator, {
+  adminBoardContentTarget,
   adminBoardCreateCancelTransition,
   adminBoardCreationResult,
   adminBoardCreateTransition,
+  adminBoardNavigationIntentResolution,
   adminBoardScopeTransition,
   adminBoardSelectionTransition,
   adminBoardsWithCreatedBoard,
   boardSettingsSaveResult,
   shouldClearOptimisticCreatedBoard,
+  type AdminBoardNavigationIntent,
 } from "../../components/admin/AdminBoardManagementNavigator";
-import AdminBoardSettingsPanel from "../../components/admin/AdminBoardSettingsPanel";
+import AdminBoardSettingsPanel, { adminBoardPermissionOptions } from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
@@ -1530,6 +1537,8 @@ export default function AdminScreen() {
   const [boardSettingsDraft, setBoardSettingsDraft] = useState<AdminBoardSettingsDraft | null>(null);
   const [boardSettingsSaving, setBoardSettingsSaving] = useState(false);
   const [optimisticManagedBoard, setOptimisticManagedBoard] = useState<OptimisticManagedBoard | null>(null);
+  const [pendingBoardNavigationIntent, setPendingBoardNavigationIntent] = useState<AdminBoardNavigationIntent | null>(null);
+  const pendingBoardNavigationIntentRef = useRef<AdminBoardNavigationIntent | null>(null);
   const boardManagementBoardIdRef = useRef<number | null>(null);
   const boardSettingsSavingRef = useRef(false);
   const handledLegacySection = useRef<string | null>(null);
@@ -1551,12 +1560,15 @@ export default function AdminScreen() {
   const [selectedNoticeBoardId, setSelectedNoticeBoardId] = useState<number | null>(null);
   const selectedNoticeBoardIdRef = useRef<number | null>(null);
   const [editingNoticeId, setEditingNoticeId] = useState<number | null>(null);
+  const editingNoticeIdRef = useRef<number | null>(null);
   const [editingNoticeBoardId, setEditingNoticeBoardId] = useState<number | null>(null);
   const noticeEditRequestRef = useRef(0);
   const [noticeForm, setNoticeForm] = useState<NoticeForm>(emptyNotice);
   const [noticeAttachments, setNoticeAttachments] = useState<MediaAsset[]>([]);
   const [noticeMetadata, setNoticeMetadata] = useState<Record<string, unknown>>({});
-  const [noticeUploading, setNoticeUploading] = useState(false);
+  const [noticeOperationKind, setNoticeOperationKind] = useState<NoticeEditorOperation["kind"] | null>(null);
+  const noticeOperationRef = useRef<NoticeEditorOperation | null>(null);
+  const noticeOperationIdRef = useRef(0);
   const [noticeUploadProgress, setNoticeUploadProgress] = useState(0);
   const [currentCouncils, setCurrentCouncils] = useState<CurrentCouncilFormData[]>([]);
   const [currentCouncilUploading, setCurrentCouncilUploading] = useState<IntroImageTarget | null>(null);
@@ -1612,9 +1624,16 @@ export default function AdminScreen() {
     [optimisticManagedBoard, queriedManagedBoards],
   );
   const boards = managedBoards;
-  const selectedManagedBoard = managedBoards.find((board) => board.id === boardManagementBoardId);
+  const managedContentTarget = adminBoardContentTarget(
+    managedBoards,
+    boardManagementScope,
+    boardManagementBoardId,
+    boardsQuery.status,
+  );
+  const selectedManagedBoard = managedContentTarget.status === "board" ? managedContentTarget.board : undefined;
   const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
-  const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content";
+  const hasManagedContentTarget = managedContentTarget.status === "aggregate" || managedContentTarget.status === "board";
+  const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content" && hasManagedContentTarget;
   const managedContentKind = selectedBoardCapability.kind;
   const externalLinkSelectedBoard = managedContentKind === "external-link" ? selectedManagedBoard : undefined;
   const externalLinkSelectedBoardId = externalLinkSelectedBoard?.id ?? null;
@@ -1624,6 +1643,7 @@ export default function AdminScreen() {
     tab: boardManagementTab,
     kind: managedContentKind,
     board: selectedManagedBoard,
+    targetStatus: managedContentTarget.status,
   });
   const managedStandardPostsBoardId = isManagedContentActive ? selectedManagedBoard?.id : undefined;
   const showsStandardPosts = noticeQueryPolicy.showsStandardPosts;
@@ -1710,14 +1730,24 @@ export default function AdminScreen() {
     enabled: isAdmin && (section === "dashboard" || showsStandardPosts),
   });
   const mutualAidPostsQuery = useQuery({
-    queryKey: ["admin-mutual-aid"],
-    queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "mutual_aid" }),
-    enabled: isAdmin && (section === "dashboard" || showsMutualAidContent),
+    queryKey: ["admin-mutual-aid", section === "dashboard" ? "dashboard" : noticeQueryPolicy.mutualAidBoardId],
+    queryFn: () => postApi.getAdminPosts({
+      page: 1,
+      size: 100,
+      board_type: "mutual_aid",
+      board_id: section === "dashboard" ? undefined : noticeQueryPolicy.mutualAidBoardId,
+    }),
+    enabled: isAdmin && (section === "dashboard" || (showsMutualAidContent && Boolean(noticeQueryPolicy.mutualAidBoardId))),
   });
   const suggestionPostsQuery = useQuery({
-    queryKey: ["admin-suggestions"],
-    queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "suggestion" }),
-    enabled: isAdmin && (section === "dashboard" || showsSuggestionContent),
+    queryKey: ["admin-suggestions", section === "dashboard" ? "dashboard" : noticeQueryPolicy.suggestionBoardId],
+    queryFn: () => postApi.getAdminPosts({
+      page: 1,
+      size: 100,
+      board_type: "suggestion",
+      board_id: section === "dashboard" ? undefined : noticeQueryPolicy.suggestionBoardId,
+    }),
+    enabled: isAdmin && (section === "dashboard" || (showsSuggestionContent && Boolean(noticeQueryPolicy.suggestionBoardId))),
   });
   const activityHistoryPostsQuery = useQuery({
     queryKey: ["admin-notices", "activity-history"],
@@ -1756,6 +1786,7 @@ export default function AdminScreen() {
     noticeEditRequestRef.current += 1;
     selectedNoticeBoardIdRef.current = nextPublicBoardId;
     setSelectedNoticeBoardId(nextPublicBoardId);
+    editingNoticeIdRef.current = null;
     setEditingNoticeId(null);
     setEditingNoticeBoardId(null);
     setNoticeForm(emptyNotice);
@@ -1776,6 +1807,7 @@ export default function AdminScreen() {
       selectedNoticeBoardIdRef.current = transition.selectedBoardId;
       setSelectedNoticeBoardId(transition.selectedBoardId);
       if (transition.shouldResetEditor) {
+        editingNoticeIdRef.current = null;
         setEditingNoticeId(null);
         setEditingNoticeBoardId(null);
         setNoticeForm(emptyNotice);
@@ -1816,11 +1848,35 @@ export default function AdminScreen() {
   }, [boardsQuery.dataUpdatedAt, boardsQuery.fetchStatus, optimisticManagedBoard, queriedManagedBoards, queryClient]);
 
   useEffect(() => {
+    const intent = pendingBoardNavigationIntent;
+    if (!intent || pendingBoardNavigationIntentRef.current !== intent) return;
+    const resolution = adminBoardNavigationIntentResolution(intent, boards, boardsQuery.status);
+    if (resolution.status === "pending" || resolution.status === "error") return;
+    if (pendingBoardNavigationIntentRef.current !== intent) return;
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+    if (resolution.status === "missing") {
+      Alert.alert("게시판 확인", "요청한 게시판을 찾을 수 없습니다.");
+      return;
+    }
+    externalLinkBoardIdRef.current = resolution.destination.boardId;
+    boardManagementBoardIdRef.current = resolution.destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(resolution.destination.scope);
+    setBoardManagementBoardId(resolution.destination.boardId);
+    setBoardManagementTab(resolution.destination.tab);
+    setCreatingBoard(false);
+  }, [boards, boardsQuery.status, pendingBoardNavigationIntent]);
+
+  useEffect(() => {
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+    if (noticeOperationRef.current) noticeEditRequestRef.current += 1;
     const nextSection = parseAdminSection(params.section);
     if (nextSection) {
       setSection(nextSection);
     }
-  }, [params.section]);
+  }, [editEventIdParam, params.scope, params.section]);
 
   useEffect(() => {
     const rawSection = firstParam(params.section);
@@ -1835,6 +1891,8 @@ export default function AdminScreen() {
     if (!transition) return;
     handledLegacySection.current = transition.handledSection;
     if (!transition.destination) return;
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
     boardManagementBoardIdRef.current = transition.destination.boardId;
     externalLinkBoardIdRef.current = transition.destination.boardId;
     setSection("boardManagement");
@@ -1966,7 +2024,15 @@ export default function AdminScreen() {
   const suggestedBannerOrder = nextBannerOrder(sortedBanners);
   const previewBannerPosition = editingBannerId ? selectedBannerPosition ?? 1 : nextBannerPosition;
   const previewBannerTotal = editingBannerId ? Math.max(sortedBanners.length, 1) : nextBannerPosition;
+  const noticeOperationPending = noticeOperationKind !== null;
+  const managedNavigationLocked = boardSettingsSaving || externalLinkSaving || noticeOperationPending;
+  const clearPendingBoardNavigationIntent = () => {
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+  };
   const openAdminSection = (nextSection: AdminSection) => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    clearPendingBoardNavigationIntent();
     setSection(nextSection);
   };
   const dispatchEventReminders = async () => {
@@ -2234,7 +2300,8 @@ export default function AdminScreen() {
 
   const openManagedBoardDestination = (destination: AdminBoardDestination | null) => {
     if (!destination) return;
-    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    clearPendingBoardNavigationIntent();
     if (!syncExternalLinkNavigationBoardId(destination.boardId)) return;
     boardManagementBoardIdRef.current = destination.boardId;
     setSection("boardManagement");
@@ -2245,7 +2312,20 @@ export default function AdminScreen() {
   };
 
   const openManagedBoard = (slug: string, tab: AdminBoardManagementTab = "content") => {
-    openManagedBoardDestination(adminBoardDestinationForSlug(slug, boards, tab));
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    const intent = { slug, tab };
+    const resolution = adminBoardNavigationIntentResolution(intent, boards, boardsQuery.status);
+    if (resolution.status === "pending" || resolution.status === "error") {
+      pendingBoardNavigationIntentRef.current = intent;
+      setPendingBoardNavigationIntent(intent);
+      return;
+    }
+    if (resolution.status === "missing") {
+      clearPendingBoardNavigationIntent();
+      Alert.alert("게시판 확인", "요청한 게시판을 찾을 수 없습니다.");
+      return;
+    }
+    openManagedBoardDestination(resolution.destination);
   };
 
   const openAllManagedPosts = () => {
@@ -2253,7 +2333,8 @@ export default function AdminScreen() {
   };
 
   const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
-    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    clearPendingBoardNavigationIntent();
     const transition = adminBoardScopeTransition(boards, boardManagementBoardId, nextScope);
     if (!syncExternalLinkNavigationBoardId(transition.boardId)) return;
     boardManagementBoardIdRef.current = transition.boardId;
@@ -2264,7 +2345,8 @@ export default function AdminScreen() {
   };
 
   const handleBoardManagementBoardChange = (boardId: number | null) => {
-    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    clearPendingBoardNavigationIntent();
     if (managedContentKind === "notice" && boardId !== selectedNoticeBoardIdRef.current) {
       resetNoticeForm();
     }
@@ -2277,7 +2359,8 @@ export default function AdminScreen() {
   };
 
   const handleCreateManagedBoard = () => {
-    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    clearPendingBoardNavigationIntent();
     const transition = adminBoardCreateTransition();
     resetBoardForm();
     setCreatingBoard(transition.creatingBoard);
@@ -2285,7 +2368,8 @@ export default function AdminScreen() {
   };
 
   const handleBoardManagementTabChange = (tab: AdminBoardManagementTab) => {
-    if (boardSettingsSavingRef.current || externalLinkSavingRef.current) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    clearPendingBoardNavigationIntent();
     setBoardManagementTab(tab);
   };
 
@@ -2388,7 +2472,7 @@ export default function AdminScreen() {
         </View>
         <Text style={{ color: COLORS.muted, fontWeight: "800" }}>권한</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {(["user", "admin"] as const).map((permission) => (
+          {adminBoardPermissionOptions("read").map((permission) => (
             <Chip key={`read-${permission}`} active={boardForm.read_permission === permission} label={`읽기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, read_permission: permission }))} />
           ))}
           {(["user", "admin"] as const).map((permission) => (
@@ -2425,8 +2509,38 @@ export default function AdminScreen() {
     </Panel>
   );
 
+  const currentNoticeEditorTarget = () => ({
+    boardId: selectedNoticeBoardIdRef.current ?? -1,
+    editingNoticeId: editingNoticeIdRef.current,
+    generation: noticeEditRequestRef.current,
+  });
+
+  const startNoticeEditorOperation = (kind: NoticeEditorOperation["kind"]) => {
+    const boardId = selectedNoticeBoardIdRef.current;
+    if (boardId === null) return null;
+    const nextOperation: NoticeEditorOperation = {
+      id: ++noticeOperationIdRef.current,
+      kind,
+      boardId,
+      editingNoticeId: editingNoticeIdRef.current,
+      generation: noticeEditRequestRef.current,
+    };
+    const transition = beginNoticeEditorOperation(noticeOperationRef.current, nextOperation);
+    if (!transition.accepted) return null;
+    noticeOperationRef.current = transition.operation;
+    setNoticeOperationKind(kind);
+    return transition.operation;
+  };
+
+  const finishNoticeEditorOperation = (operation: NoticeEditorOperation) => {
+    if (noticeOperationRef.current?.id !== operation.id) return;
+    noticeOperationRef.current = null;
+    setNoticeOperationKind(null);
+  };
+
   const resetNoticeForm = () => {
     noticeEditRequestRef.current += 1;
+    editingNoticeIdRef.current = null;
     setEditingNoticeId(null);
     setEditingNoticeBoardId(null);
     setNoticeForm(emptyNotice);
@@ -2436,6 +2550,7 @@ export default function AdminScreen() {
   };
 
   const handleSelectNoticeBoard = (nextBoardId: number) => {
+    if (noticeOperationRef.current) return;
     const transition = noticeEditorBoardTransition(
       selectedNoticeBoardIdRef.current,
       nextBoardId,
@@ -2447,6 +2562,7 @@ export default function AdminScreen() {
   };
 
   const handleEditNotice = async (item: PostListItem) => {
+    if (noticeOperationRef.current) return;
     const targetBoardId = item.board_id;
     const requestId = ++noticeEditRequestRef.current;
     try {
@@ -2455,6 +2571,7 @@ export default function AdminScreen() {
         noticeEditRequestRef.current !== requestId
         || selectedNoticeBoardIdRef.current !== targetBoardId
       ) return;
+      editingNoticeIdRef.current = item.id;
       setEditingNoticeId(item.id);
       setEditingNoticeBoardId(targetBoardId);
       setNoticeForm({
@@ -2474,20 +2591,26 @@ export default function AdminScreen() {
   };
 
   const handleUploadNoticeImage = async () => {
-    if (noticeUploading) {
-      return;
-    }
+    const operation = startNoticeEditorOperation("upload");
+    if (!operation) return;
     try {
-      setNoticeUploading(true);
       setNoticeUploadProgress(0);
-      const uploaded = await pickAndUploadContentImage(setNoticeUploadProgress);
-      if (uploaded) {
+      const uploaded = await pickAndUploadContentImage((progress) => {
+        if (noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success").apply) {
+          setNoticeUploadProgress(progress);
+        }
+      });
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success");
+      if (uploaded && result.apply) {
         setNoticeAttachments((current) => (current.some((item) => item.id === uploaded.id) ? current : [...current, uploaded]));
       }
     } catch {
-      Alert.alert("이미지 업로드 실패", "이미지 파일을 다시 선택해주세요.");
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "failure");
+      if (result.notification === "failure") {
+        Alert.alert("이미지 업로드 실패", "이미지 파일을 다시 선택해주세요.");
+      }
     } finally {
-      setNoticeUploading(false);
+      finishNoticeEditorOperation(operation);
     }
   };
 
@@ -2509,6 +2632,9 @@ export default function AdminScreen() {
       return;
     }
 
+    const operation = startNoticeEditorOperation("save");
+    if (!operation) return;
+
     const payload = {
       title: noticeForm.title.trim(),
       content: noticeForm.content.trim(),
@@ -2523,21 +2649,25 @@ export default function AdminScreen() {
     };
 
     try {
-      if (editingNoticeId) {
-        await postApi.updatePost(editingNoticeId, payload);
-        await postApi.setPin(editingNoticeId, noticeForm.is_pinned);
+      if (operation.editingNoticeId) {
+        await postApi.updatePost(operation.editingNoticeId, payload);
+        await postApi.setPin(operation.editingNoticeId, noticeForm.is_pinned);
       } else {
-        const response = await postApi.createPost(selectedNoticeBoardId, payload);
+        const response = await postApi.createPost(operation.boardId, payload);
         if (noticeForm.is_pinned) {
           await postApi.setPin(response.data.id, true);
         }
       }
-      resetNoticeForm();
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success");
       queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
-      Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
+      if (result.apply) resetNoticeForm();
+      if (result.notification === "success") Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
     } catch {
-      Alert.alert("저장 실패", "공지사항 입력 정보를 확인하세요.");
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "failure");
+      if (result.notification === "failure") Alert.alert("저장 실패", "공지사항 입력 정보를 확인하세요.");
+    } finally {
+      finishNoticeEditorOperation(operation);
     }
   };
 
@@ -3082,6 +3212,7 @@ export default function AdminScreen() {
   };
 
   const handleEditActivityHistoryNotice = (item: PostListItem) => {
+    if (noticeOperationRef.current) return;
     if (!syncExternalLinkNavigationBoardId(item.board_id)) return;
     resetNoticeForm();
     selectedNoticeBoardIdRef.current = item.board_id;
@@ -3108,16 +3239,16 @@ export default function AdminScreen() {
                   key={board.id}
                   active={selectedNoticeBoardId === board.id}
                   label={board.name}
-                  onPress={() => handleSelectNoticeBoard(board.id)}
+                  onPress={noticeOperationPending ? undefined : () => handleSelectNoticeBoard(board.id)}
                 />
               ))}
             </ScrollView>
           ) : null}
-          <Field value={noticeForm.title} onChangeText={(value) => setNoticeForm((current) => ({ ...current, title: value }))} placeholder="공지 제목" />
-          <Field value={noticeForm.content} onChangeText={(value) => setNoticeForm((current) => ({ ...current, content: value }))} placeholder="공지 내용" multiline />
+          <Field value={noticeForm.title} onChangeText={(value) => setNoticeForm((current) => ({ ...current, title: value }))} placeholder="공지 제목" editable={!noticeOperationPending} />
+          <Field value={noticeForm.content} onChangeText={(value) => setNoticeForm((current) => ({ ...current, content: value }))} placeholder="공지 내용" multiline editable={!noticeOperationPending} />
           <View style={{ gap: 6 }}>
             <Text style={{ color: COLORS.text, fontWeight: "900" }}>신청·접수 마감</Text>
-            <Field value={noticeForm.deadline_at} onChangeText={(value) => setNoticeForm((current) => ({ ...current, deadline_at: value }))} placeholder="2026-07-31T18:00 (선택)" />
+            <Field value={noticeForm.deadline_at} onChangeText={(value) => setNoticeForm((current) => ({ ...current, deadline_at: value }))} placeholder="2026-07-31T18:00 (선택)" editable={!noticeOperationPending} />
           </View>
           <View style={{ gap: 8 }}>
             <Text style={{ color: COLORS.text, fontWeight: "900" }}>분류</Text>
@@ -3127,7 +3258,7 @@ export default function AdminScreen() {
                   key={option.value}
                   active={noticeForm.category === option.value}
                   label={option.label}
-                  onPress={() => setNoticeForm((current) => ({ ...current, category: option.value }))}
+                  onPress={noticeOperationPending ? undefined : () => setNoticeForm((current) => ({ ...current, category: option.value }))}
                 />
               ))}
             </View>
@@ -3142,10 +3273,10 @@ export default function AdminScreen() {
               </View>
               <ActionButton
                 icon="image-outline"
-                label={noticeUploading ? `업로드 ${noticeUploadProgress || 0}%` : "이미지 첨부"}
+                label={noticeOperationKind === "upload" ? `업로드 ${noticeUploadProgress || 0}%` : "이미지 첨부"}
                 onPress={handleUploadNoticeImage}
                 tone={noticeAttachments.length > 0 ? "outline" : "primary"}
-                disabled={noticeUploading}
+                disabled={noticeOperationPending}
               />
             </View>
             {noticeAttachments.length === 0 ? (
@@ -3183,7 +3314,7 @@ export default function AdminScreen() {
                       {Math.ceil((attachment.file_size ?? 0) / 1024)} KB
                     </Text>
                   </View>
-                  <Pressable hitSlop={8} onPress={() => setNoticeAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                  <Pressable disabled={noticeOperationPending} hitSlop={8} onPress={() => setNoticeAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
                     <Ionicons name="close-circle" size={22} color={COLORS.subtle} />
                   </Pressable>
                 </View>
@@ -3203,6 +3334,7 @@ export default function AdminScreen() {
                 label={noticeForm.show_in_council_activity ? "연동함" : "연동 안 함"}
                 onPress={() => setNoticeForm((current) => ({ ...current, show_in_council_activity: !current.show_in_council_activity }))}
                 tone={noticeForm.show_in_council_activity ? "primary" : "outline"}
+                disabled={noticeOperationPending}
               />
             </View>
             {noticeForm.show_in_council_activity && noticeAttachments.length === 0 ? (
@@ -3216,13 +3348,14 @@ export default function AdminScreen() {
                 icon="pin-outline"
                 onPress={() => setNoticeForm((current) => ({ ...current, is_pinned: !current.is_pinned }))}
                 tone={noticeForm.is_pinned ? "primary" : "outline"}
+                disabled={noticeOperationPending}
               />
             </View>
             <View style={{ flex: 1 }}>
-              <ActionButton icon="save-outline" label={editingNoticeId ? "공지 저장" : "공지 등록"} onPress={handleSaveNotice} />
+              <ActionButton icon="save-outline" label={noticeOperationKind === "save" ? "저장 중" : editingNoticeId ? "공지 저장" : "공지 등록"} onPress={handleSaveNotice} disabled={noticeOperationPending} />
             </View>
           </View>
-          {editingNoticeId ? <ActionButton label="수정 취소" onPress={resetNoticeForm} tone="outline" /> : null}
+          {editingNoticeId ? <ActionButton label="수정 취소" onPress={resetNoticeForm} tone="outline" disabled={noticeOperationPending} /> : null}
         </View>
       </Panel>
       <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
@@ -3515,7 +3648,7 @@ export default function AdminScreen() {
   const renderPastCouncilsContent = () => (
     <View style={{ gap: 12 }}>
       <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
-      {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>DB 마이그레이션 후 gsa-past-councils 게시판을 사용할 수 있습니다.</Text></Panel> : null}
+      {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-past-councils 게시판을 찾을 수 없습니다. 게시판 목록을 다시 불러와주세요.</Text></Panel> : null}
       {pastCouncils.map((council, index) => (
         <Panel key={`past-council-${index}`}>
           <View style={{ gap: 10 }}>
@@ -3671,7 +3804,9 @@ export default function AdminScreen() {
           {SECTIONS.map((item) => (
             <Pressable
               key={item.key}
-              onPress={() => setSection(item.key)}
+              accessibilityState={{ disabled: managedNavigationLocked }}
+              disabled={managedNavigationLocked}
+              onPress={() => openAdminSection(item.key)}
               style={{
                 minWidth: 92,
                 alignItems: "center",
@@ -3695,6 +3830,15 @@ export default function AdminScreen() {
         {section === "dashboard" ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>운영 바로가기</Text>
+            <AdminBoardTargetQueryState
+              status={boardsQuery.isPending ? "loading" : boardsQuery.isError ? "error" : "aggregate"}
+              onRetry={() => void boardsQuery.refetch()}
+            />
+            {pendingBoardNavigationIntent ? (
+              <Text accessibilityLiveRegion="polite" style={{ color: COLORS.muted, fontSize: 12 }}>
+                게시판 목록을 확인한 뒤 요청한 바로가기로 이동합니다.
+              </Text>
+            ) : null}
             <ShortcutCard
               icon="albums-outline"
               title="배너 등록 · 미리보기"
@@ -4080,7 +4224,7 @@ export default function AdminScreen() {
                 selectedBoardId={boardManagementBoardId}
                 selectedTab={boardManagementTab}
                 creatingBoard={creatingBoard}
-                disabled={boardSettingsSaving || externalLinkSaving}
+                disabled={managedNavigationLocked || !boardsQuery.isSuccess}
                 onScopeChange={handleBoardManagementScopeChange}
                 onBoardChange={handleBoardManagementBoardChange}
                 onTabChange={handleBoardManagementTabChange}
@@ -4088,7 +4232,12 @@ export default function AdminScreen() {
               />
             </Panel>
 
-            {creatingBoard && boardManagementTab === "settings" ? renderBoardFormPanel() : null}
+            <AdminBoardTargetQueryState
+              status={managedContentTarget.status}
+              onRetry={() => void boardsQuery.refetch()}
+            />
+
+            {boardsQuery.isSuccess && creatingBoard && boardManagementTab === "settings" ? renderBoardFormPanel() : null}
 
             {!creatingBoard && boardManagementTab === "settings" && selectedManagedBoard && boardSettingsDraft ? (
               <Panel>
@@ -4103,7 +4252,7 @@ export default function AdminScreen() {
               </Panel>
             ) : null}
 
-            {!creatingBoard && boardManagementTab === "content" ? (
+            {!creatingBoard && boardManagementTab === "content" && hasManagedContentTarget ? (
               <AdminBoardContentPanel
                 board={selectedManagedBoard}
                 capability={selectedBoardCapability}

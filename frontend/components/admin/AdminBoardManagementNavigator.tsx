@@ -48,6 +48,54 @@ export type AdminBoardNavigationTransition = {
   creatingBoard: boolean;
 };
 
+export type AdminBoardContentTargetStatus = "loading" | "error" | "aggregate" | "board" | "missing";
+export type AdminBoardContentTarget =
+  | { status: "loading" | "error" | "aggregate" | "missing" }
+  | { status: "board"; board: Board };
+
+export type AdminBoardNavigationIntent = {
+  slug: string;
+  tab: AdminBoardManagementTab;
+};
+
+export type AdminBoardNavigationIntentResolution =
+  | { status: "pending" }
+  | { status: "error" }
+  | { status: "missing" }
+  | { status: "resolved"; destination: { scope: AdminContentScope; boardId: number; tab: AdminBoardManagementTab } };
+
+export function adminBoardContentTarget(
+  boards: Board[],
+  scope: AdminContentScope,
+  selectedBoardId: number | null,
+  queryStatus: "pending" | "error" | "success",
+): AdminBoardContentTarget {
+  if (queryStatus === "pending") return { status: "loading" };
+  if (queryStatus === "error") return { status: "error" };
+  if (scope === "all" && selectedBoardId === null) return { status: "aggregate" };
+  const board = selectedBoardId === null ? undefined : boards.find((item) => item.id === selectedBoardId);
+  return board ? { status: "board", board } : { status: "missing" };
+}
+
+export function adminBoardNavigationIntentResolution(
+  intent: AdminBoardNavigationIntent,
+  boards: Board[],
+  queryStatus: "pending" | "error" | "success",
+): AdminBoardNavigationIntentResolution {
+  if (queryStatus === "pending") return { status: "pending" };
+  if (queryStatus === "error") return { status: "error" };
+  const board = boards.find((item) => item.slug === intent.slug);
+  if (!board) return { status: "missing" };
+  return {
+    status: "resolved",
+    destination: {
+      scope: adminScopeForBoard(board),
+      boardId: board.id,
+      tab: intent.tab,
+    },
+  };
+}
+
 export function adminBoardNavigatorModel(
   boards: Board[],
   scope: AdminContentScope,

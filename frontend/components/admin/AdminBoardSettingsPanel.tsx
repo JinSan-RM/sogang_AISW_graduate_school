@@ -19,6 +19,13 @@ const settingKey: Record<AdminBoardSettingKey, keyof AdminBoardSettingsDraft> = 
   read_permission: "readPermission",
 };
 
+const READ_PERMISSION_OPTIONS = ["guest", "user", "admin"] as const;
+const WRITE_PERMISSION_OPTIONS = ["user", "admin"] as const;
+
+export function adminBoardPermissionOptions(kind: "read" | "write") {
+  return kind === "read" ? [...READ_PERMISSION_OPTIONS] : [...WRITE_PERMISSION_OPTIONS];
+}
+
 function Input({
   label,
   value,
@@ -118,7 +125,7 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
       <View style={{ gap: 7 }}>
         <Text style={{ color: "#374151", fontSize: 12, fontWeight: "900" }}>읽기 권한</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {(["user", "admin"] as const).map((permission) => (
+          {adminBoardPermissionOptions("read").map((permission) => (
             <Choice key={permission} label={permission} selected={draft.readPermission === permission} disabled={saving || lockedDraftFields.has("readPermission")} onPress={() => update("readPermission", permission)} />
           ))}
         </View>
@@ -127,7 +134,7 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
       <View style={{ gap: 7 }}>
         <Text style={{ color: "#374151", fontSize: 12, fontWeight: "900" }}>쓰기 권한</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {(["user", "admin"] as const).map((permission) => (
+          {adminBoardPermissionOptions("write").map((permission) => (
             <Choice key={permission} label={permission} selected={draft.writePermission === permission} disabled={saving || lockedDraftFields.has("writePermission")} onPress={() => update("writePermission", permission)} />
           ))}
         </View>
@@ -142,6 +149,10 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
         />
         <Choice label={draft.isActive ? "활성" : "숨김"} selected={draft.isActive} disabled={saving} onPress={() => update("isActive", !draft.isActive)} />
       </View>
+
+      <Text style={{ color: "#6B7280", fontSize: 12, lineHeight: 18 }}>
+        게시판을 숨겨도 기존 게시글과 첨부파일은 삭제되지 않습니다.
+      </Text>
 
       <Pressable
         disabled={saving}
