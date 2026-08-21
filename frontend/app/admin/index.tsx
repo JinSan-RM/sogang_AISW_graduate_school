@@ -3,13 +3,20 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
-import AdminBoardManagementNavigator from "../../components/admin/AdminBoardManagementNavigator";
+import AdminBoardManagementNavigator, {
+  adminBoardCreateCancelTransition,
+  adminBoardCreatedTransition,
+  adminBoardCreateTransition,
+  adminBoardScopeTransition,
+  adminBoardSelectionTransition,
+  isBoardSettingsTargetCurrent,
+} from "../../components/admin/AdminBoardManagementNavigator";
 import AdminBoardSettingsPanel from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
@@ -19,8 +26,6 @@ import {
   adminBoardCapability,
   adminBoardContentControl,
   adminContentBoards,
-  adminScopeForBoard,
-  nextAdminBoardSelection,
   nextAdminContentSelection,
   representativeImageUpdatePayload,
   type AdminBoardManagementTab,
@@ -1526,6 +1531,8 @@ export default function AdminScreen() {
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [boardSettingsDraft, setBoardSettingsDraft] = useState<AdminBoardSettingsDraft | null>(null);
   const [boardSettingsSaving, setBoardSettingsSaving] = useState(false);
+  const boardManagementBoardIdRef = useRef<number | null>(null);
+  const boardSettingsSavingRef = useRef(false);
   const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
   const [postContentScope, setPostContentScope] = useState<AdminContentScope>("all");
   const [postSearch, setPostSearch] = useState("");
@@ -1692,6 +1699,10 @@ export default function AdminScreen() {
   useEffect(() => {
     setBoardSettingsDraft(selectedManagedBoard ? adminBoardSettingsDraft(selectedManagedBoard) : null);
   }, [selectedManagedBoard]);
+
+  useEffect(() => {
+    boardManagementBoardIdRef.current = boardManagementBoardId;
+  }, [boardManagementBoardId]);
 
   useEffect(() => {
     const nextSection = parseAdminSection(params.section);
@@ -2083,9 +2094,12 @@ export default function AdminScreen() {
       } else {
         const created = await boardApi.createAdminBoard(payload);
         if (creatingBoard) {
-          setBoardManagementScope(adminScopeForBoard(created.data));
-          setBoardManagementBoardId(created.data.id);
-          setBoardManagementTab("settings");
+          const transition = adminBoardCreatedTransition(created.data);
+          boardManagementBoardIdRef.current = transition.boardId;
+          setBoardManagementScope(transition.scope);
+          setBoardManagementBoardId(transition.boardId);
+          setBoardManagementTab(transition.tab);
+          setCreatingBoard(transition.creatingBoard);
         }
       }
       resetBoardForm();
@@ -2098,41 +2112,69 @@ export default function AdminScreen() {
   };
 
   const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
-    setBoardManagementScope(nextScope);
-    setBoardManagementBoardId(nextAdminBoardSelection(boards, boardManagementBoardId, nextScope));
-    setBoardManagementTab("content");
-    setCreatingBoard(false);
+    if (boardSettingsSavingRef.current) return;
+    const transition = adminBoardScopeTransition(boards, boardManagementBoardId, nextScope);
+    boardManagementBoardIdRef.current = transition.boardId;
+    setBoardManagementScope(transition.scope);
+    setBoardManagementBoardId(transition.boardId);
+    setBoardManagementTab(transition.tab);
+    setCreatingBoard(transition.creatingBoard);
   };
 
   const handleBoardManagementBoardChange = (boardId: number | null) => {
-    setBoardManagementBoardId(boardId);
-    setBoardManagementTab("content");
-    setCreatingBoard(false);
+    if (boardSettingsSavingRef.current) return;
+    const transition = adminBoardSelectionTransition(boardId);
+    boardManagementBoardIdRef.current = transition.boardId;
+    setBoardManagementBoardId(transition.boardId);
+    setBoardManagementTab(transition.tab);
+    setCreatingBoard(transition.creatingBoard);
   };
 
   const handleCreateManagedBoard = () => {
+    if (boardSettingsSavingRef.current) return;
+    const transition = adminBoardCreateTransition();
     resetBoardForm();
-    setCreatingBoard(true);
-    setBoardManagementTab("settings");
+    setCreatingBoard(transition.creatingBoard);
+    setBoardManagementTab(transition.tab);
+  };
+
+  const handleBoardManagementTabChange = (tab: AdminBoardManagementTab) => {
+    if (boardSettingsSavingRef.current) return;
+    setBoardManagementTab(tab);
   };
 
   const handleSaveBoardSettings = async () => {
-    if (!selectedManagedBoard || !boardSettingsDraft || boardSettingsSaving) return;
+    if (!selectedManagedBoard || !boardSettingsDraft || boardSettingsSavingRef.current) return;
+    const targetBoardId = selectedManagedBoard.id;
+    let payload: ReturnType<typeof adminBoardSettingsPayload>;
     try {
-      setBoardSettingsSaving(true);
+      payload = adminBoardSettingsPayload(boardSettingsDraft);
+    } catch {
+      Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
+      return;
+    }
+
+    boardSettingsSavingRef.current = true;
+    setBoardSettingsSaving(true);
+    try {
       const response = await boardApi.updateAdminBoard(
-        selectedManagedBoard.id,
-        adminBoardSettingsPayload(boardSettingsDraft),
+        targetBoardId,
+        payload,
       );
-      setBoardSettingsDraft(adminBoardSettingsDraft(response.data));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
         queryClient.invalidateQueries({ queryKey: ["boards"] }),
       ]);
-      Alert.alert("저장 완료", "게시판 운영 설정이 저장되었습니다.");
+      if (isBoardSettingsTargetCurrent(targetBoardId, boardManagementBoardIdRef.current)) {
+        setBoardSettingsDraft(adminBoardSettingsDraft(response.data));
+        Alert.alert("저장 완료", "게시판 운영 설정이 저장되었습니다.");
+      }
     } catch {
-      Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
+      if (isBoardSettingsTargetCurrent(targetBoardId, boardManagementBoardIdRef.current)) {
+        Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
+      }
     } finally {
+      boardSettingsSavingRef.current = false;
       setBoardSettingsSaving(false);
     }
   };
@@ -2140,7 +2182,11 @@ export default function AdminScreen() {
   const handleCancelBoardForm = () => {
     const wasCreatingBoard = creatingBoard;
     resetBoardForm();
-    if (wasCreatingBoard) setBoardManagementTab("content");
+    if (wasCreatingBoard) {
+      const transition = adminBoardCreateCancelTransition();
+      setCreatingBoard(transition.creatingBoard);
+      setBoardManagementTab(transition.tab);
+    }
   };
 
   const renderBoardFormPanel = () => (
@@ -3234,9 +3280,10 @@ export default function AdminScreen() {
                 selectedBoardId={boardManagementBoardId}
                 selectedTab={boardManagementTab}
                 creatingBoard={creatingBoard}
+                disabled={boardSettingsSaving}
                 onScopeChange={handleBoardManagementScopeChange}
                 onBoardChange={handleBoardManagementBoardChange}
-                onTabChange={setBoardManagementTab}
+                onTabChange={handleBoardManagementTabChange}
                 onCreateBoard={handleCreateManagedBoard}
               />
             </Panel>

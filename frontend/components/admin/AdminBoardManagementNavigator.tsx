@@ -2,6 +2,8 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import {
   adminBoardsForScope,
+  adminScopeForBoard,
+  nextAdminBoardSelection,
   type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
@@ -13,6 +15,7 @@ export type AdminBoardManagementNavigatorProps = {
   selectedBoardId: number | null;
   selectedTab: AdminBoardManagementTab;
   creatingBoard: boolean;
+  disabled?: boolean;
   onScopeChange: (scope: AdminContentScope) => void;
   onBoardChange: (boardId: number | null) => void;
   onTabChange: (tab: AdminBoardManagementTab) => void;
@@ -32,25 +35,100 @@ const TABS: { key: AdminBoardManagementTab; label: string }[] = [
   { key: "settings", label: "운영 설정" },
 ];
 
+export type AdminBoardNavigatorModel = {
+  visibleBoards: Board[];
+  boardOptions: { id: number | null; label: string }[];
+  tabs: { key: AdminBoardManagementTab; label: string }[];
+};
+
+export type AdminBoardNavigationTransition = {
+  scope: AdminContentScope;
+  boardId: number | null;
+  tab: AdminBoardManagementTab;
+  creatingBoard: boolean;
+};
+
+export function adminBoardNavigatorModel(
+  boards: Board[],
+  scope: AdminContentScope,
+  selectedBoardId: number | null,
+  creatingBoard: boolean,
+): AdminBoardNavigatorModel {
+  const visibleBoards = adminBoardsForScope(boards, scope);
+  const hasSelectedBoard = visibleBoards.some((board) => board.id === selectedBoardId);
+  const boardOptions = [
+    ...(scope === "all" ? [{ id: null, label: "모든 게시판" }] : []),
+    ...visibleBoards.map((board) => ({ id: board.id, label: board.name })),
+  ];
+  const tabs = creatingBoard
+    ? TABS.filter((tab) => tab.key === "settings")
+    : hasSelectedBoard
+      ? TABS
+      : TABS.filter((tab) => tab.key === "content");
+  return { visibleBoards, boardOptions, tabs };
+}
+
+export function adminBoardScopeTransition(
+  boards: Board[],
+  currentBoardId: number | null,
+  scope: AdminContentScope,
+): AdminBoardNavigationTransition {
+  return {
+    scope,
+    boardId: nextAdminBoardSelection(boards, currentBoardId, scope),
+    tab: "content",
+    creatingBoard: false,
+  };
+}
+
+export function adminBoardSelectionTransition(boardId: number | null) {
+  return { boardId, tab: "content" as const, creatingBoard: false };
+}
+
+export function adminBoardCreateTransition() {
+  return { tab: "settings" as const, creatingBoard: true };
+}
+
+export function adminBoardCreateCancelTransition() {
+  return { tab: "content" as const, creatingBoard: false };
+}
+
+export function adminBoardCreatedTransition(board: Board): AdminBoardNavigationTransition {
+  return {
+    scope: adminScopeForBoard(board),
+    boardId: board.id,
+    tab: "settings",
+    creatingBoard: false,
+  };
+}
+
+export function isBoardSettingsTargetCurrent(targetBoardId: number, currentBoardId: number | null) {
+  return targetBoardId === currentBoardId;
+}
+
 function TabButton({
   label,
   selected,
+  disabled,
   onPress,
 }: {
   label: string;
   selected: boolean;
+  disabled: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="tab"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={{
         borderRadius: 6,
         borderWidth: 1,
         borderColor: selected ? "#2761FF" : "#E1E4E9",
         backgroundColor: selected ? "#EDF2FE" : "#ffffff",
+        opacity: disabled ? 0.5 : 1,
         paddingHorizontal: 12,
         paddingVertical: 9,
       }}
@@ -66,17 +144,13 @@ export default function AdminBoardManagementNavigator({
   selectedBoardId,
   selectedTab,
   creatingBoard,
+  disabled = false,
   onScopeChange,
   onBoardChange,
   onTabChange,
   onCreateBoard,
 }: AdminBoardManagementNavigatorProps) {
-  const visibleBoards = adminBoardsForScope(boards, scope);
-  const tabs = creatingBoard
-    ? TABS.filter((tab) => tab.key === "settings")
-    : selectedBoardId !== null
-      ? TABS
-      : TABS.filter((tab) => tab.key === "content");
+  const { visibleBoards, boardOptions, tabs } = adminBoardNavigatorModel(boards, scope, selectedBoardId, creatingBoard);
 
   return (
     <View style={{ gap: 12 }}>
@@ -88,6 +162,7 @@ export default function AdminBoardManagementNavigator({
               key={option.key}
               label={option.label}
               selected={scope === option.key}
+              disabled={disabled}
               onPress={() => onScopeChange(option.key)}
             />
           ))}
@@ -97,15 +172,13 @@ export default function AdminBoardManagementNavigator({
       <View style={{ gap: 7 }}>
         <Text style={{ color: "#6B7280", fontSize: 12, fontWeight: "900" }}>게시판</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-          {scope === "all" ? (
-            <TabButton label="모든 게시판" selected={!creatingBoard && selectedBoardId === null} onPress={() => onBoardChange(null)} />
-          ) : null}
-          {visibleBoards.map((board) => (
+          {boardOptions.map((option) => (
             <TabButton
-              key={board.id}
-              label={board.name}
-              selected={!creatingBoard && selectedBoardId === board.id}
-              onPress={() => onBoardChange(board.id)}
+              key={option.id ?? "all-boards"}
+              label={option.label}
+              selected={!creatingBoard && selectedBoardId === option.id}
+              disabled={disabled}
+              onPress={() => onBoardChange(option.id)}
             />
           ))}
           {visibleBoards.length === 0 && scope !== "all" ? (
@@ -121,13 +194,16 @@ export default function AdminBoardManagementNavigator({
               key={tab.key}
               label={tab.label}
               selected={selectedTab === tab.key}
+              disabled={disabled}
               onPress={() => onTabChange(tab.key)}
             />
           ))}
         </View>
         <Pressable
+          accessibilityState={{ disabled }}
+          disabled={disabled}
           onPress={onCreateBoard}
-          style={{ borderRadius: 6, borderWidth: 1, borderColor: "#C7CDD4", paddingHorizontal: 12, paddingVertical: 9 }}
+          style={{ borderRadius: 6, borderWidth: 1, borderColor: "#C7CDD4", opacity: disabled ? 0.5 : 1, paddingHorizontal: 12, paddingVertical: 9 }}
         >
           <Text style={{ color: "#374151", fontSize: 12, fontWeight: "900" }}>고급 설정 · 새 게시판 등록</Text>
         </Pressable>

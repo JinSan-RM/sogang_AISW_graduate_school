@@ -111,15 +111,15 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
         </View>
       ) : null}
 
-      <Input label="이름" value={draft.name} onChangeText={(value) => update("name", value)} />
-      <Input label="설명" value={draft.description} multiline onChangeText={(value) => update("description", value)} />
-      <Input label="정렬 순서" value={draft.sortOrder} onChangeText={(value) => update("sortOrder", value.replace(/[^0-9-]/g, ""))} />
+      <Input label="이름" value={draft.name} editable={!saving} onChangeText={(value) => update("name", value)} />
+      <Input label="설명" value={draft.description} multiline editable={!saving} onChangeText={(value) => update("description", value)} />
+      <Input label="정렬 순서" value={draft.sortOrder} editable={!saving} onChangeText={(value) => update("sortOrder", value.replace(/[^0-9-]/g, ""))} />
 
       <View style={{ gap: 7 }}>
         <Text style={{ color: "#374151", fontSize: 12, fontWeight: "900" }}>읽기 권한</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {(["user", "admin"] as const).map((permission) => (
-            <Choice key={permission} label={permission} selected={draft.readPermission === permission} disabled={lockedDraftFields.has("readPermission")} onPress={() => update("readPermission", permission)} />
+            <Choice key={permission} label={permission} selected={draft.readPermission === permission} disabled={saving || lockedDraftFields.has("readPermission")} onPress={() => update("readPermission", permission)} />
           ))}
         </View>
       </View>
@@ -128,7 +128,7 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
         <Text style={{ color: "#374151", fontSize: 12, fontWeight: "900" }}>쓰기 권한</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {(["user", "admin"] as const).map((permission) => (
-            <Choice key={permission} label={permission} selected={draft.writePermission === permission} disabled={lockedDraftFields.has("writePermission")} onPress={() => update("writePermission", permission)} />
+            <Choice key={permission} label={permission} selected={draft.writePermission === permission} disabled={saving || lockedDraftFields.has("writePermission")} onPress={() => update("writePermission", permission)} />
           ))}
         </View>
       </View>
@@ -137,10 +137,10 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
         <Choice
           label={draft.allowAnonymous ? "익명 허용" : "실명 게시"}
           selected={draft.allowAnonymous}
-          disabled={lockedDraftFields.has("allowAnonymous")}
+          disabled={saving || lockedDraftFields.has("allowAnonymous")}
           onPress={() => update("allowAnonymous", !draft.allowAnonymous)}
         />
-        <Choice label={draft.isActive ? "활성" : "숨김"} selected={draft.isActive} onPress={() => update("isActive", !draft.isActive)} />
+        <Choice label={draft.isActive ? "활성" : "숨김"} selected={draft.isActive} disabled={saving} onPress={() => update("isActive", !draft.isActive)} />
       </View>
 
       <Pressable
