@@ -11,10 +11,12 @@ import { z } from "zod";
 import BackButton from "../../components/BackButton";
 import AdminBoardManagementNavigator, {
   adminBoardCreateCancelTransition,
-  adminBoardCreatedTransition,
+  adminBoardCreationResult,
   adminBoardCreateTransition,
   adminBoardScopeTransition,
   adminBoardSelectionTransition,
+  adminBoardsWithCreatedBoard,
+  boardSettingsDraftAfterResult,
   isBoardSettingsTargetCurrent,
 } from "../../components/admin/AdminBoardManagementNavigator";
 import AdminBoardSettingsPanel from "../../components/admin/AdminBoardSettingsPanel";
@@ -57,6 +59,7 @@ import {
 } from "../../utils/councilIntroductions";
 import { formatCohortName } from "../../utils/userLabel";
 import type {
+  ApiSuccess,
   AdminReportItem,
   AdminAuditLog,
   AdminUserItem,
@@ -117,6 +120,7 @@ const eventSchema = z.object({
 });
 
 type EventForm = z.infer<typeof eventSchema>;
+type AdminBoardsQueryData = ApiSuccess<Board[]>;
 type AdminSection = "dashboard" | "banners" | "boardManagement" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
 type BoardScope = "all" | "notices" | "council" | "participation" | "community";
 type AdminPostMode = "all" | "notice" | "pinned";
@@ -1531,6 +1535,7 @@ export default function AdminScreen() {
   const [creatingBoard, setCreatingBoard] = useState(false);
   const [boardSettingsDraft, setBoardSettingsDraft] = useState<AdminBoardSettingsDraft | null>(null);
   const [boardSettingsSaving, setBoardSettingsSaving] = useState(false);
+  const [optimisticManagedBoard, setOptimisticManagedBoard] = useState<Board | null>(null);
   const boardManagementBoardIdRef = useRef<number | null>(null);
   const boardSettingsSavingRef = useRef(false);
   const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
@@ -1597,7 +1602,13 @@ export default function AdminScreen() {
     queryFn: () => boardApi.getAdminBoards(),
     enabled: isAdmin,
   });
-  const managedBoards = boardsQuery.data?.data ?? [];
+  const queriedManagedBoards = useMemo(() => boardsQuery.data?.data ?? [], [boardsQuery.data?.data]);
+  const managedBoards = useMemo(
+    () => optimisticManagedBoard
+      ? adminBoardsWithCreatedBoard(queriedManagedBoards, optimisticManagedBoard)
+      : queriedManagedBoards,
+    [optimisticManagedBoard, queriedManagedBoards],
+  );
   const selectedManagedBoard = managedBoards.find((board) => board.id === boardManagementBoardId);
   const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
   const eventsQuery = useQuery({
@@ -1705,6 +1716,14 @@ export default function AdminScreen() {
   }, [boardManagementBoardId]);
 
   useEffect(() => {
+    if (optimisticManagedBoard && queriedManagedBoards.some(
+      (board) => board.id === optimisticManagedBoard.id && board !== optimisticManagedBoard,
+    )) {
+      setOptimisticManagedBoard(null);
+    }
+  }, [optimisticManagedBoard, queriedManagedBoards]);
+
+  useEffect(() => {
     const nextSection = parseAdminSection(params.section);
     if (nextSection) {
       setSection(nextSection);
@@ -1790,7 +1809,7 @@ export default function AdminScreen() {
 
   const banners = bannersQuery.data?.data ?? [];
   const sortedBanners = [...banners].sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0) || left.id - right.id);
-  const boards = boardsQuery.data?.data ?? [];
+  const boards = managedBoards;
   const postContentBoards = adminContentBoards(boards, "all");
   const visiblePostBoards = adminContentBoards(boards, postContentScope);
   const selectedPostBoard = postContentBoards.find((board) => board.id === postBoardId);
@@ -2094,7 +2113,13 @@ export default function AdminScreen() {
       } else {
         const created = await boardApi.createAdminBoard(payload);
         if (creatingBoard) {
-          const transition = adminBoardCreatedTransition(created.data);
+          const creationResult = adminBoardCreationResult(managedBoards, created.data);
+          const transition = creationResult.transition;
+          queryClient.setQueryData<AdminBoardsQueryData>(["admin-boards"], (current) => ({
+            ...(current ?? { status: "success" as const }),
+            data: adminBoardsWithCreatedBoard(current?.data ?? creationResult.boards, created.data),
+          }));
+          setOptimisticManagedBoard(created.data);
           boardManagementBoardIdRef.current = transition.boardId;
           setBoardManagementScope(transition.scope);
           setBoardManagementBoardId(transition.boardId);
@@ -2166,7 +2191,14 @@ export default function AdminScreen() {
         queryClient.invalidateQueries({ queryKey: ["boards"] }),
       ]);
       if (isBoardSettingsTargetCurrent(targetBoardId, boardManagementBoardIdRef.current)) {
-        setBoardSettingsDraft(adminBoardSettingsDraft(response.data));
+        const savedDraft = adminBoardSettingsDraft(response.data);
+        setBoardSettingsDraft((currentDraft) => boardSettingsDraftAfterResult(
+          targetBoardId,
+          boardManagementBoardIdRef.current,
+          currentDraft,
+          savedDraft,
+          "success",
+        ));
         Alert.alert("저장 완료", "게시판 운영 설정이 저장되었습니다.");
       }
     } catch {

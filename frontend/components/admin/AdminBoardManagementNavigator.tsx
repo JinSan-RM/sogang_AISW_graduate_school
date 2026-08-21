@@ -102,8 +102,32 @@ export function adminBoardCreatedTransition(board: Board): AdminBoardNavigationT
   };
 }
 
+export function adminBoardsWithCreatedBoard(boards: Board[], createdBoard: Board): Board[] {
+  return [...boards.filter((board) => board.id !== createdBoard.id), createdBoard]
+    .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+}
+
+export function adminBoardCreationResult(boards: Board[], createdBoard: Board) {
+  return {
+    boards: adminBoardsWithCreatedBoard(boards, createdBoard),
+    transition: adminBoardCreatedTransition(createdBoard),
+  };
+}
+
 export function isBoardSettingsTargetCurrent(targetBoardId: number, currentBoardId: number | null) {
   return targetBoardId === currentBoardId;
+}
+
+export function boardSettingsDraftAfterResult<Draft>(
+  targetBoardId: number,
+  currentBoardId: number | null,
+  currentDraft: Draft,
+  savedDraft: Draft,
+  outcome: "success" | "failure",
+): Draft {
+  return outcome === "success" && isBoardSettingsTargetCurrent(targetBoardId, currentBoardId)
+    ? savedDraft
+    : currentDraft;
 }
 
 function TabButton({

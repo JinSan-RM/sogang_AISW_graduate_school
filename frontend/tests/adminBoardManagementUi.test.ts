@@ -143,12 +143,38 @@ test("그룹·게시판 전환과 새 게시판 생성 생명주기는 명시적
   assert.deepEqual(navigatorModule.adminBoardCreatedTransition(board(2, "community")), {
     scope: "community", boardId: 2, tab: "settings", creatingBoard: false,
   });
+
+  const creationResult = navigatorModule.adminBoardCreationResult(
+    [board(1, "notices"), board(2, "community")],
+    { ...board(3, "community"), name: "새 게시판" },
+  ) as { boards: Board[]; transition: { scope: string; boardId: number | null; tab: string; creatingBoard: boolean } };
+  assert.deepEqual(creationResult.boards.map((item) => item.id), [1, 2, 3]);
+  assert.equal(creationResult.boards[2]?.name, "새 게시판");
+  assert.equal(creationResult.transition.boardId, 3);
+  const createdModel = navigatorModule.adminBoardNavigatorModel(
+    creationResult.boards,
+    creationResult.transition.scope,
+    creationResult.transition.boardId,
+    creationResult.transition.creatingBoard,
+  ) as { tabs: { key: string }[] };
+  assert.deepEqual(createdModel.tabs.map((tab) => tab.key), ["content", "settings"]);
+  const deduplicated = navigatorModule.adminBoardsWithCreatedBoard(
+    creationResult.boards,
+    { ...board(3, "community"), name: "갱신된 새 게시판" },
+  ) as Board[];
+  assert.deepEqual(deduplicated.map((item) => item.id), [1, 2, 3]);
+  assert.equal(deduplicated[2]?.name, "갱신된 새 게시판");
 });
 
 test("설정 저장은 대상 게시판 일치 여부를 확인하고 네비게이션과 draft를 보호한다", () => {
   const navigatorModule = loadNavigatorModule();
   assert.equal(navigatorModule.isBoardSettingsTargetCurrent(1, 1), true);
   assert.equal(navigatorModule.isBoardSettingsTargetCurrent(1, 2), false);
+  const originalDraft = { name: "기존 draft" };
+  const savedDraft = { name: "서버 응답" };
+  assert.equal(navigatorModule.boardSettingsDraftAfterResult(1, 2, originalDraft, savedDraft, "success"), originalDraft);
+  assert.equal(navigatorModule.boardSettingsDraftAfterResult(1, 1, originalDraft, savedDraft, "success"), savedDraft);
+  assert.equal(navigatorModule.boardSettingsDraftAfterResult(1, 1, originalDraft, savedDraft, "failure"), originalDraft);
   const rendered = navigatorModule.default({
     boards: [board(1, "notices")],
     scope: "notices",
@@ -171,9 +197,13 @@ test("설정 저장은 대상 게시판 일치 여부를 확인하고 네비게�
   );
   assert.match(saveHandler, /const targetBoardId = selectedManagedBoard\.id/);
   assert.match(saveHandler, /isBoardSettingsTargetCurrent\(targetBoardId, boardManagementBoardIdRef\.current\)/);
+  assert.match(saveHandler, /boardSettingsDraftAfterResult\(/);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["admin-boards"\] \}\)/);
   assert.match(saveHandler, /invalidateQueries\(\{ queryKey: \["boards"\] \}\)/);
   assert.match(adminSource, /disabled=\{boardSettingsSaving\}/);
+  assert.match(adminSource, /setQueryData<AdminBoardsQueryData>/);
+  assert.match(adminSource, /setOptimisticManagedBoard\(created\.data\)/);
+  assert.match(adminSource, /board !== optimisticManagedBoard/);
   assert.match(settingsSource, /editable=\{!saving\}/);
   const catchClause = saveHandler.slice(saveHandler.lastIndexOf("} catch {"), saveHandler.indexOf("} finally"));
   assert.doesNotMatch(catchClause, /setBoardSettingsDraft/);
