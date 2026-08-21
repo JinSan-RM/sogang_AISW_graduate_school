@@ -67,7 +67,12 @@ const capabilityBoards: Board[] = [
   board({ id: 10, name: "네트워킹", slug: "networking-programs", category: "alumni", board_type: "post" }),
 ];
 
-const boardBySlug = (slug: string) => [...registryBoards, ...capabilityBoards].find((item) => item.slug === slug)!;
+const allFixtureBoards = [...boards, ...registryBoards, ...capabilityBoards];
+const boardBySlug = (slug: string): Board => {
+  const found = allFixtureBoards.find((item) => item.slug === slug);
+  assert.ok(found, `missing board fixture: ${slug}`);
+  return found;
+};
 
 test("그룹은 표준 게시글이 없는 게시판까지 모두 포함한다", () => {
   assert.deepEqual(adminBoardsForScope(registryBoards, "notices").map((item) => item.slug), ["all-notices", "academic-calendar"]);
@@ -110,21 +115,12 @@ test("커뮤니티 개인정보 정책은 잠긴 상태로 노출된다", () => 
 });
 
 test("대표 이미지 교체 capability는 동아리와 네트워킹에만 활성화된다", () => {
-  assert.equal(adminBoardCapability(boards.find((item) => item.slug === "club-promo")).canReplaceRepresentativeImage, true);
-  assert.equal(adminBoardCapability(boardBySlug("networking-programs")).canReplaceRepresentativeImage, true);
-  for (const item of [
-    undefined,
-    boardBySlug("all-notices"),
-    boardBySlug("academic-calendar"),
-    boardBySlug("accounting"),
-    boardBySlug("gsa-executives"),
-    boardBySlug("gsa-faq"),
-    boardBySlug("gsa-roadmap-benefits"),
-    boardBySlug("lecture-reviews"),
-    boardBySlug("exam-archive"),
-    boards.find((candidate) => candidate.slug === "event-album"),
-  ]) {
-    assert.equal(adminBoardCapability(item).canReplaceRepresentativeImage, false);
+  for (const item of allFixtureBoards) {
+    assert.equal(
+      adminBoardCapability(item).canReplaceRepresentativeImage,
+      item.slug === "club-promo" || item.slug === "networking-programs",
+      item.slug,
+    );
   }
 });
 
