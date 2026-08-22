@@ -99,7 +99,7 @@ def build_jobs(db, user_id: int) -> list[tuple[str, str, str | None, int | None,
         ),
         (
             "event", "event",
-            event_message(event.title, 1) if event else None,
+            event_message(event.title, 0) if event else None,
             None, event.id if event else None,
             "등록된 일정이 없습니다",
         ),

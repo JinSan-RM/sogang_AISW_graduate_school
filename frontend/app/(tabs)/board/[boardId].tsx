@@ -15,6 +15,7 @@ import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
 import { boardParentRoute, boardRoute, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
+import { tabNameFromRoute, useTabHighlightStore } from "../../../stores/tabHighlightStore";
 import { activityCertificationBadgeLabel, shouldShowActivityCertificationBadge } from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import {
@@ -296,7 +297,7 @@ function currentCouncilFromMetadata(metadata: Record<string, unknown> | null | u
     greeting: card.greeting || undefined,
     intro: card.intro,
     bannerImageUrl: card.banner_image_url || undefined,
-    photoUrls: [],
+    photoUrls: card.photo_urls ?? [],
     members: executiveMembersFromForms(card.members),
   };
 }
@@ -356,7 +357,7 @@ function cohortLeaderSummaries(posts: PostListItem[], metadata?: Record<string, 
       greeting: card.greeting || undefined,
       intro: card.intro,
       bannerImageUrl: card.banner_image_url || undefined,
-      photoUrls: [],
+      photoUrls: card.photo_urls ?? [],
       members: executiveMembersFromForms(card.members),
     };
   });
@@ -485,7 +486,7 @@ function pastCouncilsFromMetadata(metadata?: Record<string, unknown> | null): Pa
         greeting: card.greeting || undefined,
         intro: card.intro || undefined,
         bannerImageUrl: card.banner_image_url || undefined,
-        photoUrls: [],
+        photoUrls: card.photo_urls ?? [],
         members: executiveMembersFromForms(card.members),
         activities: pastCouncilActivitiesFromMetadata(card.activities),
       };
@@ -880,6 +881,10 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const { data: boardsRes } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardsRes?.data), [boardsRes?.data]);
   const board = useMemo(() => boards.find((item) => item.id === boardId), [boardId, boards]);
+  const setHighlightTab = useTabHighlightStore((state) => state.setTab);
+  useEffect(() => {
+    if (board) setHighlightTab(tabNameFromRoute(boardParentRoute(board)));
+  }, [board, setHighlightTab]);
   const detailReturnRoute = isTabRoot ? boardParentRoute(board) : boardRoute(boardId);
   const display = getBoardDisplay(board);
   const filters = filterOptions(board);

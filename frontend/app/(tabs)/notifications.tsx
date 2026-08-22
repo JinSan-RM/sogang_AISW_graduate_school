@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   BackIcon,
   NotificationCommentIcon,
+  NotificationNoticeIcon,
   NotificationCouncilIcon,
   NotificationEventIcon,
   NotificationLikeIcon,
@@ -34,6 +35,7 @@ const COLORS = {
 // 디자인 원본 SVG가 있는 타입은 전용 아이콘(배경 원 포함)을 쓴다.
 const CUSTOM_TYPE_ICONS: Record<string, (props: { size?: number }) => React.JSX.Element> = {
   comment: NotificationCommentIcon,
+  notice: NotificationNoticeIcon,
   event: NotificationEventIcon,
   council: NotificationCouncilIcon,
   like: NotificationLikeIcon,

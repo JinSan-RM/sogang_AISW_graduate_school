@@ -10,7 +10,7 @@ import ExpandableNaturalAspectMediaImage from "../../../../components/Expandable
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
-import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, CommunityTabIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import {
@@ -26,9 +26,10 @@ import {
   useUpdateSuggestion,
 } from "../../../../hooks/usePosts";
 import { reportApi, userApi } from "../../../../services/api";
+import { tabNameFromRoute, useTabHighlightStore } from "../../../../stores/tabHighlightStore";
 import { useUserStore } from "../../../../stores/userStore";
 import type { MutualAidStatus } from "../../../../types";
-import { navigateFromPostDetail } from "../../../../utils/appRoutes";
+import { boardParentRoute, navigateFromPostDetail } from "../../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../../utils/dateFormat";
 import { openMediaUrl } from "../../../../utils/mediaOpener";
@@ -159,6 +160,10 @@ export default function PostDetailScreen() {
   const post = postRes?.data;
   const boards = boardsRes?.data.flatMap((group) => group.boards) ?? [];
   const board = boards.find((item) => item.id === post?.board_id);
+  const setHighlightTab = useTabHighlightStore((state) => state.setTab);
+  useEffect(() => {
+    if (board) setHighlightTab(tabNameFromRoute(boardParentRoute(board)));
+  }, [board, setHighlightTab]);
   const isMutualAidRequest = board?.board_type === "mutual_aid";
   const isSuggestionRequest = board?.board_type === "suggestion";
   const isNotice = board?.board_type === "notice";
@@ -859,7 +864,11 @@ export default function PostDetailScreen() {
 
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
-            <Text style={styles.officialReplyTitle}>💬 원우회 답변</Text>
+            {/* 💬 이모지는 일부 윈도우 환경에서 렌더링되지 않아 SVG 아이콘으로 대체 */}
+            <View style={styles.officialReplyTitleRow}>
+              <CommunityTabIcon size={15} color="#2761FF" />
+              <Text style={styles.officialReplyTitle}>원우회 답변</Text>
+            </View>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
             {post.suggestion.replied_at ? <Text style={styles.officialReplyDate}>{formatBoardDate(post.suggestion.replied_at)}</Text> : null}
           </View>
@@ -1976,6 +1985,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
     gap: 8,
   },
+  officialReplyTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   officialReplyTitle: {
     color: "#2761FF",
     fontSize: 13,
@@ -2220,8 +2234,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: "#F7F7F5",
-    borderTopWidth: 0.5,
-    borderTopColor: "#E1E4E9",
+    // 상단 선은 commentBar의 borderTop이 그려주므로 여기서는 입력창과의 경계선만 긋는다
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E1E4E9",
   },
   replyNoticeText: {
     color: "#6B7280",

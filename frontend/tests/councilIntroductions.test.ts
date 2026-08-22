@@ -69,6 +69,7 @@ test("현재 원우회 소개는 대표 정보와 가변 임원 카드를 그대
           greeting: "안녕하세요, 제30대 원우회입니다.",
           intro: "원우의 연결과 성장을 돕겠습니다.",
           banner_image_url: "/media/council-banner.jpg",
+          photo_urls: [],
           members: [
             { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "함께 만들겠습니다." },
             { name: "이국장", cohort: "74기", role: "기획국장", image_url: "", intro: "" },
@@ -82,6 +83,7 @@ test("현재 원우회 소개는 대표 정보와 가변 임원 카드를 그대
         greeting: "안녕하세요, 제30대 원우회입니다.",
         intro: "원우의 연결과 성장을 돕겠습니다.",
         banner_image_url: "/media/council-banner.jpg",
+        photo_urls: [],
         members: [
           { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "함께 만들겠습니다." },
           { name: "이국장", cohort: "74기", role: "기획국장", image_url: "", intro: "" },
@@ -103,6 +105,7 @@ test("현재 원우회 화면은 목록 선택 없이 첫 소개를 상세로 �
           greeting: "안녕하세요, 제30대 원우회입니다.",
           intro: "원우의 연결과 성장을 돕겠습니다.",
           banner_image_url: "/media/current.jpg",
+          photo_urls: [],
           members: [
             { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "" },
           ],
@@ -112,6 +115,7 @@ test("현재 원우회 화면은 목록 선택 없이 첫 소개를 상세로 �
           greeting: "이전 원우회입니다.",
           intro: "이전 소개입니다.",
           banner_image_url: "/media/previous.jpg",
+          photo_urls: [],
           members: [],
         },
       ],
@@ -123,6 +127,7 @@ test("현재 원우회 화면은 목록 선택 없이 첫 소개를 상세로 �
         greeting: "안녕하세요, 제30대 원우회입니다.",
         intro: "원우의 연결과 성장을 돕겠습니다.",
         banner_image_url: "/media/current.jpg",
+        photo_urls: [],
         members: [
           { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "" },
         ],
@@ -168,6 +173,7 @@ test("현재 원우회 저장은 한 건만 유지하고 해당 임원만 이전
     greeting: "안녕하세요.",
     intro: "현재 원우회입니다.",
     banner_image_url: "/media/current.jpg",
+    photo_urls: [],
     members: [{ name: "김회장", cohort: "75기", role: "회장", image_url: "", intro: "" }],
   };
   const stale = {
@@ -175,6 +181,7 @@ test("현재 원우회 저장은 한 건만 유지하고 해당 임원만 이전
     greeting: "이전 인사말",
     intro: "이전 원우회입니다.",
     banner_image_url: "/media/stale.jpg",
+    photo_urls: [],
     members: [{ name: "박회장", cohort: "74기", role: "회장", image_url: "", intro: "" }],
   };
 
@@ -201,6 +208,7 @@ test("기존 현재 임원진 배열은 한 개의 원우회 소개 카드로 �
         greeting: "",
         intro: "",
         banner_image_url: "",
+        photo_urls: [],
         members: [
           { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "반갑습니다." },
         ],
@@ -220,6 +228,7 @@ test("새 현재 원우회 카드의 임원이 비어 있으면 기존 임원진
         greeting: "안녕하세요.",
         intro: "함께하겠습니다.",
         banner_image_url: "/media/current.jpg",
+        photo_urls: [],
         members: [],
       }],
       executives: [
@@ -231,6 +240,7 @@ test("새 현재 원우회 카드의 임원이 비어 있으면 기존 임원진
       greeting: "안녕하세요.",
       intro: "함께하겠습니다.",
       banner_image_url: "/media/current.jpg",
+      photo_urls: [],
       members: [
         { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "" },
       ],
@@ -291,6 +301,7 @@ test("기장단은 새 임원 배열을 우선하고 기존 기장·부기장 �
           greeting: "75기입니다.",
           intro: "함께해요.",
           banner_image_url: "/media/75.jpg",
+          photo_urls: [],
           members: [
             { name: "정기장", cohort: "75기", role: "기장", image_url: "/media/captain.jpg", intro: "" },
             { name: "김총무", cohort: "75기", role: "총무", image_url: "", intro: "" },
@@ -314,6 +325,7 @@ test("기장단은 새 임원 배열을 우선하고 기존 기장·부기장 �
         greeting: "75기입니다.",
         intro: "함께해요.",
         banner_image_url: "/media/75.jpg",
+        photo_urls: [],
         members: [
           { name: "정기장", cohort: "75기", role: "기장", image_url: "/media/captain.jpg", intro: "" },
           { name: "김총무", cohort: "75기", role: "총무", image_url: "", intro: "" },
@@ -325,6 +337,7 @@ test("기장단은 새 임원 배열을 우선하고 기존 기장·부기장 �
         greeting: "74기입니다.",
         intro: "반갑습니다.",
         banner_image_url: "",
+        photo_urls: [],
         members: [
           { name: "이기장", cohort: "74기", role: "기장", image_url: "/media/legacy-captain.jpg", intro: "" },
           { name: "최부기장", cohort: "74기", role: "부기장", image_url: "/media/legacy-vice.jpg", intro: "" },
@@ -346,6 +359,7 @@ test("역대 원우회는 인사말과 가변 임원을 복원하고 기존 회�
           greeting: "제29대 원우회입니다.",
           intro: "함께한 기록입니다.",
           banner_image_url: "/media/29.jpg",
+          photo_urls: [],
           activities: [{ date: "25.05.05", title: "이임식" }],
           members: [
             { name: "박회장", cohort: "70기", role: "회장", image_url: "/media/past-president.jpg", intro: "" },
@@ -369,6 +383,7 @@ test("역대 원우회는 인사말과 가변 임원을 복원하고 기존 회�
         greeting: "제29대 원우회입니다.",
         intro: "함께한 기록입니다.",
         banner_image_url: "/media/29.jpg",
+        photo_urls: [],
         activities: [{ date: "25.05.05", title: "이임식" }],
         members: [
           { name: "박회장", cohort: "70기", role: "회장", image_url: "/media/past-president.jpg", intro: "" },
@@ -380,6 +395,7 @@ test("역대 원우회는 인사말과 가변 임원을 복원하고 기존 회�
         greeting: "",
         intro: "기존 소개입니다.",
         banner_image_url: "",
+        photo_urls: [],
         activities: [],
         members: [
           { name: "김회장", cohort: "69기", role: "회장", image_url: "/media/legacy-president.jpg", intro: "" },
@@ -400,6 +416,7 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
       greeting: "안녕하세요.",
       intro: "소개입니다.",
       banner_image_url: "/media/current.jpg",
+      photo_urls: [],
       members: [
         { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "" },
         { name: "이국장", cohort: "74기", role: "기획국장", image_url: "", intro: "" },
@@ -412,6 +429,7 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
       greeting: "안녕하세요.",
       intro: "소개입니다.",
       banner_image_url: "/media/75.jpg",
+      photo_urls: [],
       members: [
         { name: "김총무", cohort: "75기", role: "총무", image_url: "", intro: "" },
         { name: "이부기장", cohort: "75기", role: "부기장", image_url: "/media/vice.jpg", intro: "" },
@@ -425,6 +443,7 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
       greeting: "제29대입니다.",
       intro: "소개입니다.",
       banner_image_url: "/media/29.jpg",
+      photo_urls: [],
       activities: [{ date: "25.05.05", title: "이임식" }],
       members: [
         { name: "윤국장", cohort: "69기", role: "사무국장", image_url: "", intro: "" },
@@ -447,6 +466,7 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
         greeting: "안녕하세요.",
         intro: "소개입니다.",
         banner_image_url: "/media/75.jpg",
+        photo_urls: [],
         members: cohortCards[0].members,
         captain_name: "정기장",
         vice_captain_name: "이부기장",
@@ -463,6 +483,7 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
         greeting: "제29대입니다.",
         intro: "소개입니다.",
         banner_image_url: "/media/29.jpg",
+        photo_urls: [],
         activities: [{ date: "25.05.05", title: "이임식" }],
         members: pastCards[0].members,
         president_name: "박회장",
@@ -486,6 +507,7 @@ test("부대표 역할이 없으면 다른 임원을 legacy 부대표로 기록�
       greeting: "",
       intro: "",
       banner_image_url: "",
+      photo_urls: [],
       members: [
         { name: "김총무", cohort: "75기", role: "총무", image_url: "/media/treasurer.jpg", intro: "" },
         { name: "정기장", cohort: "75기", role: "기장", image_url: "/media/captain.jpg", intro: "" },
@@ -498,6 +520,7 @@ test("부대표 역할이 없으면 다른 임원을 legacy 부대표로 기록�
       greeting: "",
       intro: "",
       banner_image_url: "",
+      photo_urls: [],
       activities: [],
       members: [
         { name: "윤국장", cohort: "69기", role: "사무국장", image_url: "/media/director.jpg", intro: "" },

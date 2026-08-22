@@ -10,7 +10,7 @@ from app.errors import AppException
 from app.models.event import Event
 from app.models.post import Post
 from app.models.user import User
-from app.notifications import create_notification, deadline_message, event_message
+from app.notifications import create_notification, event_message
 from app.audit import log_admin_action
 from app.response import success_response
 from app.schemas.event import EventCreate, EventUpdate
@@ -28,54 +28,29 @@ def _korea_date_boundary(value: date) -> datetime:
 
 
 def _dispatch_for_date(db: Session, target_date: date) -> dict:
+    # 일정 알림은 당일(D-day)에만 보낸다. 공지 마감 알림은 보내지 않는다.
     created = 0
     active_user_ids = db.scalars(select(User.id).where(User.is_active.is_(True))).all()
-    for days_before, label in ((0, "D-day"), (1, "D-1")):
-        event_date = target_date + timedelta(days=days_before)
-        window_start = datetime.combine(event_date, time.min)
-        window_end = window_start + timedelta(days=1)
-        events = db.scalars(
-            select(Event).where(Event.start_at >= window_start, Event.start_at < window_end)
-        ).all()
-        for event in events:
-            message = event_message(event.title, days_before)
-            for user_id in active_user_ids:
-                notification = create_notification(
-                    db,
-                    user_id=user_id,
-                    actor_id=None,
-                    notification_type="event",
-                    message=message,
-                    event_id=event.id,
-                    setting_field="notify_event",
-                    dedupe_key=f"event-reminder:{event.id}:{label}:{user_id}",
-                )
-                if notification is not None:
-                    created += 1
-        notices = db.scalars(
-            select(Post).where(
-                Post.is_notice.is_(True),
-                Post.status == "published",
-                Post.deleted_at.is_(None),
-                Post.deadline_at >= window_start,
-                Post.deadline_at < window_end,
+    window_start = datetime.combine(target_date, time.min)
+    window_end = window_start + timedelta(days=1)
+    events = db.scalars(
+        select(Event).where(Event.start_at >= window_start, Event.start_at < window_end)
+    ).all()
+    for event in events:
+        message = event_message(event.title, 0)
+        for user_id in active_user_ids:
+            notification = create_notification(
+                db,
+                user_id=user_id,
+                actor_id=None,
+                notification_type="event",
+                message=message,
+                event_id=event.id,
+                setting_field="notify_event",
+                dedupe_key=f"event-reminder:{event.id}:D-day:{user_id}",
             )
-        ).all()
-        for notice in notices:
-            message = deadline_message(notice.title, days_before)
-            for user_id in active_user_ids:
-                notification = create_notification(
-                    db,
-                    user_id=user_id,
-                    actor_id=None,
-                    notification_type="notice",
-                    message=message,
-                    post_id=notice.id,
-                    setting_field="notify_notice",
-                    dedupe_key=f"notice-deadline:{notice.id}:{label}:{user_id}",
-                )
-                if notification is not None:
-                    created += 1
+            if notification is not None:
+                created += 1
     db.commit()
     return {"target_date": target_date.isoformat(), "created": created}
 

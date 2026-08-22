@@ -1,4 +1,4 @@
-export const POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT = 500;
+export const POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT = 600 // Figma Detail-ImageVertical-Extreme: 대표 이미지 최대 600h;
 
 type NaturalImagePreviewInput = {
   containerWidth: number;

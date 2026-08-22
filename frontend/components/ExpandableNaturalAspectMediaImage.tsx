@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -20,6 +21,7 @@ import {
   POST_DETAIL_IMAGE_PREVIEW_MAX_HEIGHT,
 } from "../utils/naturalImagePreview";
 import MediaImage from "./MediaImage";
+import { useMediaAccessUrl } from "../hooks/useMediaAccessUrl";
 
 type Props = Omit<ComponentProps<typeof MediaImage>, "style" | "onLayout"> & {
   fallbackAspectRatio?: number;
@@ -39,6 +41,23 @@ export default function ExpandableNaturalAspectMediaImage({
   const [containerWidth, setContainerWidth] = useState(0);
   const [dimensions, setDimensions] = useState<ImageDimensions>();
   const [viewerVisible, setViewerVisible] = useState(false);
+  const { uri } = useMediaAccessUrl(media);
+
+  // 웹에서는 onLoad 이벤트에 원본 크기가 안 실리는 경우가 있어 getSize로 확정 측정한다.
+  useEffect(() => {
+    if (!uri) return;
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (!cancelled && width > 0 && height > 0) setDimensions({ width, height });
+      },
+      () => undefined
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
   const layout = dimensions
     ? naturalImagePreviewLayout({
         containerWidth,
