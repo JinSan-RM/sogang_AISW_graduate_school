@@ -8,7 +8,7 @@ import LoadingState from "../../../components/LoadingState";
 import { eventApi } from "../../../services/api";
 import { formatBoardDateTime } from "../../../utils/dateFormat";
 
-import { BackIcon } from "../../../components/icons";
+import { BackIcon, EventCalendarIcon } from "../../../components/icons";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -21,12 +21,12 @@ const COLORS = {
 };
 
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사",
+  academic: "학사일정",
   council: "원우회",
   event: "행사",
   exam: "시험",
   external: "외부",
-  other: "기타",
+  other: "기타일정",
 };
 
 const EVENT_CATEGORY_TONES: Record<string, { backgroundColor: string; color: string }> = {
@@ -35,7 +35,7 @@ const EVENT_CATEGORY_TONES: Record<string, { backgroundColor: string; color: str
   event: { backgroundColor: "#FFF0F4", color: "#D65B7C" },
   exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
   external: { backgroundColor: "#EAF8F4", color: "#20856D" },
-  other: { backgroundColor: "#F1F3F6", color: "#667085" },
+  other: { backgroundColor: "#EDE8F6", color: "#4A2B7A" },
 };
 
 export default function EventDetailScreen() {
@@ -85,17 +85,12 @@ export default function EventDetailScreen() {
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
-        <View style={styles.chipRow}>
-          <View style={[styles.categoryPill, { backgroundColor: categoryTone.backgroundColor }]}>
-            <Text style={[styles.categoryText, { color: categoryTone.color }]}>{EVENT_CATEGORY_LABELS[event.category] ?? event.category}</Text>
-          </View>
-          <View style={styles.schedulePill}>
-            <Text style={styles.scheduleText}>일정</Text>
-          </View>
+        <View style={[styles.categoryPill, { backgroundColor: categoryTone.backgroundColor }]}>
+          <Text style={[styles.categoryText, { color: categoryTone.color }]}>{EVENT_CATEGORY_LABELS[event.category] ?? event.category}</Text>
         </View>
 
         <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={15} color={COLORS.muted} />
+          <EventCalendarIcon size={15} color={COLORS.muted} />
           <Text style={styles.metaText}>{formatBoardDateTime(event.start_at)}</Text>
         </View>
 
@@ -161,16 +156,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 24,
-    paddingTop: 22,
+    paddingHorizontal: 20,
+    paddingTop: 8,
     paddingBottom: 40,
   },
-  chipRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
   categoryPill: {
+    alignSelf: "flex-start",
     borderRadius: 8,
     backgroundColor: COLORS.primary50,
     paddingHorizontal: 8,
@@ -180,17 +171,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 11,
     fontWeight: "400",
-  },
-  schedulePill: {
-    borderRadius: 8,
-    backgroundColor: "#F1F3F6",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  scheduleText: {
-    color: "#667085",
-    fontSize: 11,
-    fontWeight: "400",
+    lineHeight: 13,
   },
   metaRow: {
     flexDirection: "row",
@@ -202,6 +183,7 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 13,
     fontWeight: "400",
+    lineHeight: 16,
   },
   title: {
     color: COLORS.text,

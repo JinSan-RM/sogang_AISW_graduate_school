@@ -20,10 +20,10 @@ def _dday_suffix(days_before: int) -> str:
 
 
 # Message wording lives here so routers and scripts/send_test_notifications.py cannot drift apart.
-ADMIN_REPLY_MESSAGE = "원우회에서 건의사항에 답변을 등록했어요"
+ADMIN_REPLY_MESSAGE = "건의사항에 답변이 등록되었어요"
+# 처리중 전환은 알리지 않는다 — 승인/반려 같은 결과 상태만 알림.
 MUTUAL_AID_MESSAGES = {
-    "processing": "상조회 신청이 처리중이에요",
-    "completed": "상조회 신청이 처리 완료되었어요",
+    "completed": "상조회 신청이 승인되었어요",
     "rejected": "상조회 신청이 반려되었어요",
 }
 

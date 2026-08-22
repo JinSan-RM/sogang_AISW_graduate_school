@@ -9,7 +9,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { AttachFileIcon, AttachImageIcon, BackIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
+import { AttachFileIcon, AttachImageIcon, BackIcon, CalendarSmallIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
@@ -21,7 +21,6 @@ import type { MediaAsset, PostListItem } from "../../../../types";
 import {
   ACTIVITY_PARTICIPANT_GUIDANCE,
   activityBankAccountFieldState,
-  activityCertificationFormLabels,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostIdFromMetadata,
@@ -331,7 +330,6 @@ export default function PostCreateScreen() {
   const { data: boardsRes, isError: isBoardsError, isLoading: isBoardsLoading, refetch: refetchBoards } = useBoardsQuery();
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [participantQuery, setParticipantQuery] = useState("");
   const [participantSearchFocused, setParticipantSearchFocused] = useState(false);
   const [evidenceLinkFocused, setEvidenceLinkFocused] = useState(false);
@@ -360,7 +358,6 @@ export default function PostCreateScreen() {
   const boardType = board?.board_type ?? fallbackBoardType;
   const isSuggestion = boardType === "suggestion";
   const isActivity = boardType === "activity_certification";
-  const activityFormLabels = activityCertificationFormLabels(boardType);
   const isMutualAid = boardType === "mutual_aid";
   const mutualAidMinimumDate = minimumMutualAidEventDate();
   const isAlbum = boardType === "album";
@@ -728,7 +725,6 @@ export default function PostCreateScreen() {
   const uploadAttachments = async (pickAttachments: () => Promise<MediaAsset[]>) => {
     try {
       setIsUploading(true);
-      setUploadProgress(0);
       const uploaded = await pickAttachments();
       if (uploaded.length > 0) {
         setAttachments((current) => [...current, ...uploaded]);
@@ -737,19 +733,18 @@ export default function PostCreateScreen() {
       setFormNotice(createFormNotice("업로드 실패", "파일 업로드를 다시 시도하세요."));
     } finally {
       setIsUploading(false);
-      setUploadProgress(0);
     }
   };
 
   const selectFile = () => uploadAttachments(
     (isAlbum || isActivity || isAdminParticipationPost)
-      ? () => pickAndUploadImages(setUploadProgress)
-      : () => pickAndUploadDocuments(setUploadProgress, isMutualAid)
+      ? () => pickAndUploadImages()
+      : () => pickAndUploadDocuments(undefined, isMutualAid)
   );
 
   const compactAttachmentActions = writeAttachmentActions({
-    images: () => void uploadAttachments(() => pickAndUploadImages(setUploadProgress)),
-    documents: () => void uploadAttachments(() => pickAndUploadDocuments(setUploadProgress)),
+    images: () => void uploadAttachments(() => pickAndUploadImages()),
+    documents: () => void uploadAttachments(() => pickAndUploadDocuments()),
   });
 
   const openAttachment = async (attachment: MediaAsset) => {
@@ -867,7 +862,6 @@ export default function PostCreateScreen() {
             />
 
             <View style={styles.activityFieldGroup}>
-              <Text style={styles.activityFieldTitle}>{activityFormLabels?.photo}</Text>
               <Pressable disabled={isUploading} onPress={selectFile} style={[styles.activityPhotoBox, isUploading ? styles.attachButtonDisabled : null]}>
                 {imageAttachments.length > 0 ? (
                   <View style={styles.activityPhotoGrid}>
@@ -893,7 +887,7 @@ export default function PostCreateScreen() {
                   <>
                     <CameraAddIcon size={26} />
                     <Text style={styles.activityPhotoText}>
-                      {isUploading ? `업로드 ${uploadProgress || 0}%` : "활동 사진을 추가해주세요"}
+                      {isUploading ? "업로드 중" : "활동 사진을 추가해주세요"}
                     </Text>
                   </>
                 )}
@@ -901,7 +895,6 @@ export default function PostCreateScreen() {
             </View>
 
             <View style={styles.activityFieldGroup}>
-              <Text style={styles.activityFieldTitle}>{activityFormLabels?.reflection}</Text>
               <Controller
                 control={control}
                 name="content"
@@ -932,7 +925,7 @@ export default function PostCreateScreen() {
                     style={styles.activityInputWithIcon}
                   >
                     <Text style={styles.activityDateValue}>{field.value ? formatBoardDate(field.value) : "활동일을 선택하세요"}</Text>
-                    <Ionicons name="calendar-outline" size={15} color="#6B7280" />
+                    <CalendarSmallIcon size={15} color="#6B7280" />
                   </Pressable>
                   {datePickerOpen ? (
                     <InlineCalendar
@@ -1335,7 +1328,7 @@ export default function PostCreateScreen() {
               <>
                 <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, styles.evidenceFileButton, isUploading ? styles.attachButtonDisabled : null]}>
                   <Ionicons name="document-outline" size={16} color={COLORS.muted} />
-                  <Text style={[styles.compactAttachText, styles.evidenceFileButtonText]}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "파일 첨부 (청첩장, 부고장 등)"}</Text>
+                  <Text style={[styles.compactAttachText, styles.evidenceFileButtonText]}>{isUploading ? "업로드 중" : "파일 첨부 (청첩장, 부고장 등)"}</Text>
                 </Pressable>
                 {attachments.length > 0 ? (
                   <View style={styles.compactAttachmentList}>
@@ -1489,7 +1482,7 @@ export default function PostCreateScreen() {
                     <AttachFileIcon size={16} color={COLORS.muted} />
                   )}
                   <Text style={styles.compactAttachText}>
-                    {isUploading ? `업로드 ${uploadProgress || 0}%` : action.label}
+                    {isUploading ? "업로드 중" : action.label}
                   </Text>
                 </Pressable>
               ))}
@@ -1497,7 +1490,7 @@ export default function PostCreateScreen() {
           ) : (
             <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
               <Ionicons name="image-outline" size={16} color={COLORS.muted} />
-              <Text style={styles.compactAttachText}>{isUploading ? `업로드 ${uploadProgress || 0}%` : "대표 사진 첨부"}</Text>
+              <Text style={styles.compactAttachText}>{isUploading ? "업로드 중" : "대표 사진 첨부"}</Text>
             </Pressable>
           )}
           {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
@@ -1560,7 +1553,6 @@ export default function PostCreateScreen() {
               <Text style={styles.attachButtonText}>{isUploading ? "업로드 중" : "첨부"}</Text>
             </Pressable>
           </View>
-          {isUploading ? <Text style={styles.uploadText}>업로드 {uploadProgress || 0}%</Text> : null}
           {attachments.length > 0 ? (
             <View style={styles.attachmentList}>
               {attachments.map((attachment) => (
@@ -2165,7 +2157,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   activityFieldTitle: {
-    color: COLORS.muted,
+    color: COLORS.text, // Figma: 참가자/계좌 소제목 #15171C
     fontSize: 13,
     fontWeight: "500",
     lineHeight: 16,
@@ -2540,12 +2532,6 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 13,
     fontWeight: "400",
-  },
-  uploadText: {
-    color: COLORS.primary,
-    fontSize: 12,
-    fontWeight: "900",
-    marginTop: 10,
   },
   attachmentList: {
     gap: 8,

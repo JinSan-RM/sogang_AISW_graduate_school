@@ -474,11 +474,16 @@ def _reject_existing_insert_targets(
     existing = []
     for storage_id in storage_ids:
         media_exists = bool(_media_candidates_for_storage_id(all_media, storage_id))
-        file_exists = any(
-            _matching_media_files(root.expanduser().resolve(), (storage_id,))
+        matching_files = [
+            path
             for root in (public_media_dir, private_media_dir)
-        )
-        if media_exists or file_exists:
+            for path in _matching_media_files(root.expanduser().resolve(), (storage_id,))
+        ]
+        # 심볼릭 링크는 "이미 존재하는 대상"이 아니라 조작 시도로 취급해 별도로 거부한다.
+        for path in matching_files:
+            if path.is_symlink():
+                raise ValueError(f"symlinked selected media file is not allowed: {path.name}")
+        if media_exists or matching_files:
             existing.append(storage_id)
     if existing:
         raise ValueError("insert-only repair targets already exist: " + ", ".join(existing))

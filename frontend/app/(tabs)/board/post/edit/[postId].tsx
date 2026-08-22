@@ -193,7 +193,7 @@ export default function PostEditScreen() {
         <Pressable accessibilityLabel="닫기" onPress={goBack} style={styles.iconButton}>
           <CloseIcon size={20} color={COLORS.text} />
         </Pressable>
-        <Text style={styles.appBarTitle}>글 수정</Text>
+        <Text style={styles.appBarTitle}>{isStudyRecruit ? "스터디 모집" : "글 수정"}</Text>
         <View style={styles.iconButton} />
       </View>
 
@@ -233,7 +233,7 @@ export default function PostEditScreen() {
               </View>
             ) : null}
           </View>
-        ) : (
+        ) : isStudyRecruit ? null : (
           <View style={styles.readOnlyField}>
             <Text numberOfLines={1} style={styles.readOnlyText}>{boardLabel}</Text>
           </View>

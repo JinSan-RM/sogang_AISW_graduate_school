@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { EmptyCalendarIcon } from "../../components/icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -74,7 +75,7 @@ function LoadingRows() {
 function EmptyState({ title, description }: { title: string; description?: string }) {
   return (
     <View style={styles.emptyState}>
-      <Ionicons name="calendar-outline" size={32} color="#AAB2BF" />
+      <EmptyCalendarIcon size={32} />
       <Text style={styles.emptyTitle}>{title}</Text>
       {description ? <Text style={styles.emptyDescription}>{description}</Text> : null}
     </View>
@@ -203,7 +204,7 @@ function NoticesContent() {
         ) : null}
         {!isLoading && visibleRows.length === 0 ? (
           <EmptyState
-            title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지가 없어요"}
+            title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지사항이 없어요"}
             description={isOfflinePreview ? "잠시 후 다시 시도해주세요" : "새로운 공지가 등록되면 알려드릴게요"}
           />
         ) : null}

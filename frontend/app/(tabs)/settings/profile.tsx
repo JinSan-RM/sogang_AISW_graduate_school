@@ -57,7 +57,6 @@ export default function ProfileSettingsScreen() {
   const [profileImageMediaId, setProfileImageMediaId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [fieldError, setFieldError] = useState("");
   const [majorModalVisible, setMajorModalVisible] = useState(false);
   const [photoSheetVisible, setPhotoSheetVisible] = useState(false);
@@ -78,8 +77,7 @@ export default function ProfileSettingsScreen() {
   const selectProfileImage = async () => {
     try {
       setIsUploadingImage(true);
-      setUploadProgress(0);
-      const image = await pickAndUploadImage(setUploadProgress);
+      const image = await pickAndUploadImage();
       if (image) {
         const profileImageReference = image.url?.trim();
         if (!profileImageReference) throw new Error("MEDIA_REFERENCE_MISSING");
@@ -90,7 +88,6 @@ export default function ProfileSettingsScreen() {
       Alert.alert("이미지 업로드 실패", "사진 접근 권한 또는 업로드 상태를 확인해주세요.");
     } finally {
       setIsUploadingImage(false);
-      setUploadProgress(0);
     }
   };
 
@@ -180,7 +177,6 @@ export default function ProfileSettingsScreen() {
               <Ionicons name="camera" size={12} color="#FFFFFF" />
             </View>
           </Pressable>
-          {isUploadingImage ? <Text style={styles.uploadText}>업로드 {uploadProgress || 0}%</Text> : null}
         </View>
 
         <View style={styles.form}>
@@ -395,12 +391,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderWidth: 2,
     borderColor: "#FFFFFF",
-  },
-  uploadText: {
-    color: COLORS.subtle,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 10,
   },
   errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "800", marginTop: 10 },
   inlineError: { alignItems: "flex-start", gap: 8 },

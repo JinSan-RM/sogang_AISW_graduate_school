@@ -3,21 +3,54 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { z } from "zod";
 
 import BackButton from "../../components/BackButton";
+import AdminBoardContentPanel, {
+  AdminBoardContentQueryState,
+  AdminBoardTargetQueryState,
+  adminBoardContentQueryPolicy,
+  beginNoticeEditorOperation,
+  noticeEditorBoardTransition,
+  noticeEditorOperationResult,
+  publicNoticeBoardSelection,
+  type NoticeEditorOperation,
+} from "../../components/admin/AdminBoardContentPanel";
+import AdminBoardManagementNavigator, {
+  adminBoardContentTarget,
+  adminBoardCreateCancelTransition,
+  adminBoardCreationResult,
+  adminBoardCreateTransition,
+  adminBoardNavigationIntentResolution,
+  adminBoardScopeTransition,
+  adminBoardSelectionTransition,
+  adminBoardsWithCreatedBoard,
+  boardSettingsSaveResult,
+  shouldClearOptimisticCreatedBoard,
+  type AdminBoardNavigationIntent,
+} from "../../components/admin/AdminBoardManagementNavigator";
+import AdminBoardSettingsPanel, { adminBoardPermissionOptions } from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import {
+  adminBoardCapability,
   adminBoardContentControl,
-  adminContentBoards,
-  nextAdminContentSelection,
+  adminBoardDestinationForLegacySection,
+  adminBoardDestinationForSlug,
+  adminBoardNavigationTransition,
+  adminDeferredEventGateInitialState,
+  adminDeferredEventGateTransition,
+  adminCalendarQueryEnabled,
+  adminFaqQueryEnabled,
   representativeImageUpdatePayload,
+  type AdminBoardContentKind,
+  type AdminBoardDestination,
+  type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
 import {
@@ -25,6 +58,13 @@ import {
   koreaDateTimeInputToUtcISOString,
   utcApiDateTimeToKoreaInput,
 } from "../../utils/dateFormat";
+import {
+  adminBoardSettingsDraft,
+  adminBoardSettingsPayload,
+  externalLinkMetadata,
+  validateExternalHttpUrl,
+  type AdminBoardSettingsDraft,
+} from "../../utils/adminBoardSettings";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
@@ -46,6 +86,7 @@ import {
 } from "../../utils/councilIntroductions";
 import { formatCohortName } from "../../utils/userLabel";
 import type {
+  ApiSuccess,
   AdminReportItem,
   AdminAuditLog,
   AdminUserItem,
@@ -106,8 +147,9 @@ const eventSchema = z.object({
 });
 
 type EventForm = z.infer<typeof eventSchema>;
-type AdminSection = "dashboard" | "banners" | "notices" | "boards" | "executives" | "cohortLeaders" | "pastCouncils" | "posts" | "suggestions" | "mutualAid" | "accounts" | "duesPayers" | "reports" | "faqs" | "events" | "registration";
-type BoardScope = "all" | "notices" | "council" | "participation" | "community";
+type AdminBoardsQueryData = ApiSuccess<Board[]>;
+type OptimisticManagedBoard = { board: Board; insertedGeneration: number };
+type AdminSection = "dashboard" | "banners" | "boardManagement" | "accounts" | "duesPayers" | "reports" | "registration";
 type AdminPostMode = "all" | "notice" | "pinned";
 type SuggestionAdminFilter = "received" | "answered" | "all";
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -256,39 +298,14 @@ const emptyFAQ: FAQForm = {
 const SECTIONS: { key: AdminSection; label: string; icon: IconName }[] = [
   { key: "dashboard", label: "콘솔", icon: "speedometer-outline" },
   { key: "banners", label: "배너", icon: "albums-outline" },
-  { key: "notices", label: "공지사항", icon: "megaphone-outline" },
-  { key: "boards", label: "게시판", icon: "grid-outline" },
-  { key: "executives", label: "원우회 소개", icon: "people-circle-outline" },
-  { key: "cohortLeaders", label: "기장단", icon: "ribbon-outline" },
-  { key: "pastCouncils", label: "역대 원우회", icon: "time-outline" },
-  { key: "posts", label: "게시글", icon: "document-text-outline" },
-  { key: "suggestions", label: "건의사항", icon: "chatbox-ellipses-outline" },
-  { key: "mutualAid", label: "상조회", icon: "flower-outline" },
+  { key: "boardManagement", label: "게시판 관리", icon: "grid-outline" },
   { key: "accounts", label: "계정", icon: "people-outline" },
   { key: "duesPayers", label: "원우회비", icon: "receipt-outline" },
   { key: "reports", label: "신고", icon: "flag-outline" },
-  { key: "faqs", label: "FAQ", icon: "help-circle-outline" },
-  { key: "events", label: "일정", icon: "calendar-outline" },
   { key: "registration", label: "가입 설정", icon: "person-add-outline" },
 ];
 
 const ADMIN_SECTION_KEYS = SECTIONS.map((item) => item.key);
-
-const BOARD_SCOPE_FILTERS: { key: BoardScope; label: string; categories: string[] }[] = [
-  { key: "all", label: "전체", categories: [] },
-  { key: "notices", label: "공지사항", categories: ["notices"] },
-  { key: "council", label: "원우회", categories: ["council", "gsa"] },
-  { key: "participation", label: "참여활동", categories: ["participation", "club", "study", "alumni"] },
-  { key: "community", label: "커뮤니티/자료", categories: ["community", "resources"] },
-];
-
-const CONTENT_SCOPE_FILTERS: { key: AdminContentScope; label: string }[] = [
-  { key: "all", label: "전체" },
-  { key: "notices", label: "공지사항" },
-  { key: "participation", label: "참여활동" },
-  { key: "community", label: "커뮤니티·자료" },
-  { key: "council", label: "원우회" },
-];
 
 const ADMIN_POST_MODE_FILTERS: { key: AdminPostMode; label: string }[] = [
   { key: "all", label: "전체" },
@@ -327,18 +344,6 @@ const BOARD_TYPE_LABELS: Record<string, string> = {
   mutual_aid: "상조회",
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  notices: "공지",
-  community: "커뮤니티",
-  resources: "자료",
-  participation: "참여",
-  council: "원우회",
-  club: "동아리",
-  study: "스터디",
-  alumni: "동문",
-  gsa: "원우회",
-};
-
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
   academic: "학사",
   council: "원우회",
@@ -355,11 +360,6 @@ function firstParam(value?: string | string[]) {
 function parseAdminSection(value?: string | string[]) {
   const raw = firstParam(value);
   return ADMIN_SECTION_KEYS.includes(raw as AdminSection) ? (raw as AdminSection) : null;
-}
-
-function parseBoardScope(value?: string | string[]) {
-  const raw = firstParam(value);
-  return BOARD_SCOPE_FILTERS.some((item) => item.key === raw) ? (raw as BoardScope) : null;
 }
 
 const REPORT_STATUS_LABELS: Record<ReportStatus | "all", string> = {
@@ -524,6 +524,39 @@ function sameDate(left: Date | null, right?: Date) {
   return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
 }
 
+export type ExternalLinkDraftState = { boardId: number | null; draft: string };
+
+export function externalLinkBoardTransition(
+  current: ExternalLinkDraftState,
+  board?: Board,
+): ExternalLinkDraftState {
+  const boardId = board?.id ?? null;
+  if (current.boardId === boardId) return current;
+  const metadata = board?.metadata ?? {};
+  const key = (["notion_url", "external_url", "url", "link"] as const)
+    .find((candidate) => typeof metadata[candidate] === "string");
+  return { boardId, draft: key ? String(metadata[key]) : "" };
+}
+
+export function externalLinkSaveTransition(
+  current: ExternalLinkDraftState,
+  targetBoardId: number,
+  savedUrl: string,
+): ExternalLinkDraftState {
+  if (current.boardId !== targetBoardId) return current;
+  return { ...current, draft: savedUrl.trim() };
+}
+
+export function externalLinkNavigationTransition(
+  currentBoardId: number | null,
+  nextBoardId: number | null,
+  saving: boolean,
+): { accepted: boolean; boardId: number | null } {
+  return saving
+    ? { accepted: false, boardId: currentBoardId }
+    : { accepted: true, boardId: nextBoardId };
+}
+
 function Panel({ children }: { children: ReactNode }) {
   return (
     <View
@@ -538,6 +571,16 @@ function Panel({ children }: { children: ReactNode }) {
     >
       {children}
     </View>
+  );
+}
+
+function UnsupportedBoardContent({ board }: { board?: Board }) {
+  return (
+    <Panel>
+      <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+        {board ? `${board.name}의 전용 콘텐츠 편집기를 지원하지 않습니다.` : "게시판을 선택해주세요."}
+      </Text>
+    </Panel>
   );
 }
 
@@ -1320,25 +1363,6 @@ function SuggestionAdminCard({ item }: { item: PostListItem }) {
   );
 }
 
-function BoardCard({ item, onEdit }: { item: Board; onEdit: (item: Board) => void }) {
-  return (
-    <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, padding: 14, gap: 8 }}>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-        <StatusText active={Boolean(item.is_active)} />
-        <Chip active label={BOARD_TYPE_LABELS[item.board_type] ?? item.board_type} />
-        <Text style={{ color: COLORS.muted, fontSize: 12 }}>{CATEGORY_LABELS[item.category] ?? item.category}</Text>
-      </View>
-      <Text style={{ color: COLORS.text, fontSize: 17, fontWeight: "900" }}>{item.name}</Text>
-      <Text style={{ color: COLORS.muted }}>{item.slug}</Text>
-      {item.description ? <Text style={{ color: COLORS.muted, lineHeight: 20 }}>{item.description}</Text> : null}
-      <Text style={{ color: COLORS.muted, fontSize: 12 }}>
-        읽기 {item.read_permission} / 쓰기 {item.write_permission} / 순서 {item.sort_order}
-      </Text>
-      <ActionButton icon="settings-outline" label="게시판 수정" onPress={() => onEdit(item)} tone="outline" />
-    </View>
-  );
-}
-
 function UserCard({
   item,
   onRoleToggle,
@@ -1510,14 +1534,26 @@ export default function AdminScreen() {
   const params = useLocalSearchParams<{ editEventId?: string; section?: string; scope?: string }>();
   const editEventIdParam = firstParam(params.editEventId);
   const editEventId = editEventIdParam ? Number(editEventIdParam) : null;
+  const rawAdminSection = firstParam(params.section);
+  const rawAdminLinkKey = [rawAdminSection ?? "", firstParam(params.scope) ?? "", editEventIdParam ?? ""].join(":");
   const user = useUserStore((state) => state.user);
   const queryClient = useQueryClient();
   const [section, setSection] = useState<AdminSection>(parseAdminSection(params.section) ?? "dashboard");
-  const [boardScope, setBoardScope] = useState<BoardScope>(parseBoardScope(params.scope) ?? "all");
-  const [postContentScope, setPostContentScope] = useState<AdminContentScope>("all");
+  const [boardManagementScope, setBoardManagementScope] = useState<AdminContentScope>("all");
+  const [boardManagementBoardId, setBoardManagementBoardId] = useState<number | null>(null);
+  const [boardManagementTab, setBoardManagementTab] = useState<AdminBoardManagementTab>("content");
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const [boardSettingsDraft, setBoardSettingsDraft] = useState<AdminBoardSettingsDraft | null>(null);
+  const [boardSettingsSaving, setBoardSettingsSaving] = useState(false);
+  const [optimisticManagedBoard, setOptimisticManagedBoard] = useState<OptimisticManagedBoard | null>(null);
+  const [pendingBoardNavigationIntent, setPendingBoardNavigationIntent] = useState<AdminBoardNavigationIntent | null>(null);
+  const pendingBoardNavigationIntentRef = useRef<AdminBoardNavigationIntent | null>(null);
+  const boardManagementBoardIdRef = useRef<number | null>(null);
+  const boardSettingsSavingRef = useRef(false);
+  const handledLegacySection = useRef<string | null>(null);
+  const deferredEventNavigationRef = useRef(adminDeferredEventGateInitialState(rawAdminLinkKey));
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
-  const [postBoardId, setPostBoardId] = useState<number | null>(null);
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
   const [replacingRepresentativeImagePostId, setReplacingRepresentativeImagePostId] = useState<number | null>(null);
   const [mutualAidFilter, setMutualAidFilter] = useState<MutualAidStatus | "all">("processing");
@@ -1530,14 +1566,19 @@ export default function AdminScreen() {
   const [bannerUploadSlot, setBannerUploadSlot] = useState<BannerImageSlot | null>(null);
   const [bannerSaving, setBannerSaving] = useState(false);
   const [bannerSaveMessage, setBannerSaveMessage] = useState<BannerSaveMessage>(null);
-  const [editingBoardId, setEditingBoardId] = useState<number | null>(null);
   const [boardForm, setBoardForm] = useState<BoardForm>(emptyBoard);
   const [selectedNoticeBoardId, setSelectedNoticeBoardId] = useState<number | null>(null);
+  const selectedNoticeBoardIdRef = useRef<number | null>(null);
   const [editingNoticeId, setEditingNoticeId] = useState<number | null>(null);
+  const editingNoticeIdRef = useRef<number | null>(null);
+  const [editingNoticeBoardId, setEditingNoticeBoardId] = useState<number | null>(null);
+  const noticeEditRequestRef = useRef(0);
   const [noticeForm, setNoticeForm] = useState<NoticeForm>(emptyNotice);
   const [noticeAttachments, setNoticeAttachments] = useState<MediaAsset[]>([]);
   const [noticeMetadata, setNoticeMetadata] = useState<Record<string, unknown>>({});
-  const [noticeUploading, setNoticeUploading] = useState(false);
+  const [noticeOperationKind, setNoticeOperationKind] = useState<NoticeEditorOperation["kind"] | null>(null);
+  const noticeOperationRef = useRef<NoticeEditorOperation | null>(null);
+  const noticeOperationIdRef = useRef(0);
   const [noticeUploadProgress, setNoticeUploadProgress] = useState(0);
   const [currentCouncils, setCurrentCouncils] = useState<CurrentCouncilFormData[]>([]);
   const [currentCouncilUploading, setCurrentCouncilUploading] = useState<IntroImageTarget | null>(null);
@@ -1550,6 +1591,14 @@ export default function AdminScreen() {
   const [pastCouncilsSaving, setPastCouncilsSaving] = useState(false);
   const [editingFAQId, setEditingFAQId] = useState<number | null>(null);
   const [faqForm, setFAQForm] = useState<FAQForm>(emptyFAQ);
+  const [externalLinkDraftState, setExternalLinkDraftState] = useState<ExternalLinkDraftState>({ boardId: null, draft: "" });
+  const externalLinkDraft = externalLinkDraftState.draft;
+  const setExternalLinkDraft = (draft: string) => setExternalLinkDraftState((current) => ({ ...current, draft }));
+  const [externalLinkSaving, setExternalLinkSaving] = useState(false);
+  const [externalLinkError, setExternalLinkError] = useState<string | null>(null);
+  const externalLinkBoardIdRef = useRef<number | null>(null);
+  const externalLinkSelectedBoardRef = useRef<Board | undefined>(undefined);
+  const externalLinkSavingRef = useRef(false);
   const [newMajorName, setNewMajorName] = useState("");
   const [newMajorOrder, setNewMajorOrder] = useState("50");
   const [policyVersion, setPolicyVersion] = useState("");
@@ -1577,10 +1626,50 @@ export default function AdminScreen() {
     queryFn: () => boardApi.getAdminBoards(),
     enabled: isAdmin,
   });
+  const queriedManagedBoards = useMemo(() => boardsQuery.data?.data ?? [], [boardsQuery.data?.data]);
+  const managedBoards = useMemo(
+    () => optimisticManagedBoard
+      ? adminBoardsWithCreatedBoard(queriedManagedBoards, optimisticManagedBoard.board)
+      : queriedManagedBoards,
+    [optimisticManagedBoard, queriedManagedBoards],
+  );
+  const boards = managedBoards;
+  const managedContentTarget = adminBoardContentTarget(
+    managedBoards,
+    boardManagementScope,
+    boardManagementBoardId,
+    boardsQuery.status,
+  );
+  const selectedManagedBoard = managedContentTarget.status === "board" ? managedContentTarget.board : undefined;
+  const selectedBoardCapability = adminBoardCapability(selectedManagedBoard);
+  const hasManagedContentTarget = managedContentTarget.status === "aggregate" || managedContentTarget.status === "board";
+  const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content" && hasManagedContentTarget;
+  const managedContentKind = selectedBoardCapability.kind;
+  const externalLinkSelectedBoard = managedContentKind === "external-link" ? selectedManagedBoard : undefined;
+  const externalLinkSelectedBoardId = externalLinkSelectedBoard?.id ?? null;
+  externalLinkSelectedBoardRef.current = externalLinkSelectedBoard;
+  const noticeQueryPolicy = adminBoardContentQueryPolicy({
+    section,
+    tab: boardManagementTab,
+    kind: managedContentKind,
+    board: selectedManagedBoard,
+    targetStatus: managedContentTarget.status,
+  });
+  const managedStandardPostsBoardId = isManagedContentActive ? selectedManagedBoard?.id : undefined;
+  const showsStandardPosts = noticeQueryPolicy.showsStandardPosts;
+  const showsSuggestionContent = noticeQueryPolicy.showsSuggestions;
+  const showsMutualAidContent = noticeQueryPolicy.showsMutualAid;
+  const showsActivityHistoryContent = noticeQueryPolicy.showsActivityHistory;
+  const publicNoticeBoardId = publicNoticeBoardSelection(managedBoards, selectedNoticeBoardId);
   const eventsQuery = useQuery({
     queryKey: ["admin-events"],
     queryFn: () => eventApi.getEvents(),
-    enabled: isAdmin,
+    enabled: isAdmin && adminCalendarQueryEnabled(
+      section,
+      Boolean(editEventId),
+      isManagedContentActive,
+      managedContentKind,
+    ),
   });
   const adminEventList = eventsQuery.data?.data ?? [];
   const editEventExists = Boolean(editEventId) && adminEventList.some((event) => event.id === editEventId);
@@ -1604,7 +1693,7 @@ export default function AdminScreen() {
   const faqsQuery = useQuery({
     queryKey: ["admin-faqs"],
     queryFn: () => faqApi.getFAQs({ include_inactive: true }),
-    enabled: isAdmin,
+    enabled: isAdmin && adminFaqQueryEnabled(section, isManagedContentActive, managedContentKind),
   });
   const adminMajorsQuery = useQuery({
     queryKey: ["admin-registration-majors"],
@@ -1617,32 +1706,63 @@ export default function AdminScreen() {
     enabled: isAdmin && section === "registration",
   });
   const noticePostsQuery = useQuery({
-    queryKey: ["admin-notices", selectedNoticeBoardId],
-    queryFn: () => postApi.getPosts(selectedNoticeBoardId ?? 0, 1, 50, { sort: "latest" }),
-    enabled: isAdmin && Boolean(selectedNoticeBoardId),
+    queryKey: ["admin-notices", publicNoticeBoardId],
+    queryFn: () => postApi.getPosts(publicNoticeBoardId ?? 0, 1, 50, { sort: "latest" }),
+    enabled: isAdmin && noticeQueryPolicy.noticeSource === "public" && Boolean(publicNoticeBoardId),
+  });
+  const unifiedNoticePostsQuery = useQuery({
+    queryKey: ["admin-notices", "managed", noticeQueryPolicy.noticeBoardId],
+    queryFn: () => postApi.getAdminPosts({
+      page: 1,
+      size: 50,
+      board_id: noticeQueryPolicy.noticeBoardId,
+    }),
+    enabled: isAdmin
+      && noticeQueryPolicy.noticeSource === "admin"
+      && Boolean(noticeQueryPolicy.noticeBoardId),
   });
   const adminPostsQuery = useQuery({
-    queryKey: ["admin-posts", appliedPostSearch, postBoardId, postMode],
+    queryKey: [
+      "admin-posts",
+      section === "dashboard" ? "dashboard" : appliedPostSearch,
+      section === "dashboard" ? undefined : managedStandardPostsBoardId,
+      section === "dashboard" ? "all" : postMode,
+    ],
     queryFn: () =>
       postApi.getAdminPosts({
         page: 1,
         size: 50,
-        q: appliedPostSearch.trim() || undefined,
-        board_id: postBoardId ?? undefined,
-        is_notice: postMode === "notice" ? true : undefined,
-        is_pinned: postMode === "pinned" ? true : undefined,
+        q: section === "dashboard" ? undefined : appliedPostSearch.trim() || undefined,
+        board_id: section === "dashboard" ? undefined : managedStandardPostsBoardId,
+        is_notice: section === "dashboard" ? undefined : postMode === "notice" ? true : undefined,
+        is_pinned: section === "dashboard" ? undefined : postMode === "pinned" ? true : undefined,
       }),
-    enabled: isAdmin && (section === "dashboard" || section === "posts"),
+    enabled: isAdmin && (section === "dashboard" || showsStandardPosts),
   });
   const mutualAidPostsQuery = useQuery({
-    queryKey: ["admin-mutual-aid"],
-    queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "mutual_aid" }),
-    enabled: isAdmin && (section === "dashboard" || section === "mutualAid"),
+    queryKey: ["admin-mutual-aid", section === "dashboard" ? "dashboard" : noticeQueryPolicy.mutualAidBoardId],
+    queryFn: () => postApi.getAdminPosts({
+      page: 1,
+      size: 100,
+      board_type: "mutual_aid",
+      board_id: section === "dashboard" ? undefined : noticeQueryPolicy.mutualAidBoardId,
+    }),
+    enabled: isAdmin && (section === "dashboard" || (showsMutualAidContent && Boolean(noticeQueryPolicy.mutualAidBoardId))),
   });
   const suggestionPostsQuery = useQuery({
-    queryKey: ["admin-suggestions"],
-    queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "suggestion" }),
-    enabled: isAdmin && (section === "dashboard" || section === "suggestions"),
+    queryKey: ["admin-suggestions", section === "dashboard" ? "dashboard" : noticeQueryPolicy.suggestionBoardId],
+    queryFn: () => postApi.getAdminPosts({
+      page: 1,
+      size: 100,
+      board_type: "suggestion",
+      board_id: section === "dashboard" ? undefined : noticeQueryPolicy.suggestionBoardId,
+    }),
+    enabled: isAdmin && (section === "dashboard" || (showsSuggestionContent && Boolean(noticeQueryPolicy.suggestionBoardId))),
+  });
+  const activityHistoryPostsQuery = useQuery({
+    queryKey: ["admin-notices", "activity-history"],
+    queryFn: () => postApi.getAdminPosts({ page: 1, size: 100, board_type: "notice" }),
+    enabled: isAdmin && showsActivityHistoryContent,
   });
 
   const noticeBoards = useMemo(
@@ -1668,37 +1788,173 @@ export default function AdminScreen() {
   });
 
   useEffect(() => {
-    if (!selectedNoticeBoardId && noticeBoards[0]) {
-      setSelectedNoticeBoardId(noticeBoards[0].id);
-    }
-  }, [noticeBoards, selectedNoticeBoardId]);
+    const nextPublicBoardId = publicNoticeBoardSelection(noticeBoards, selectedNoticeBoardId);
+    const shouldInitialize = selectedNoticeBoardId === null && nextPublicBoardId !== null;
+    const shouldCorrectPublicSelection = noticeQueryPolicy.noticeSource === "public"
+      && selectedNoticeBoardId !== nextPublicBoardId;
+    if (!shouldInitialize && !shouldCorrectPublicSelection) return;
+    noticeEditRequestRef.current += 1;
+    selectedNoticeBoardIdRef.current = nextPublicBoardId;
+    setSelectedNoticeBoardId(nextPublicBoardId);
+    editingNoticeIdRef.current = null;
+    setEditingNoticeId(null);
+    setEditingNoticeBoardId(null);
+    setNoticeForm(emptyNotice);
+    setNoticeAttachments([]);
+    setNoticeMetadata({});
+    setNoticeUploadProgress(0);
+  }, [noticeBoards, noticeQueryPolicy.noticeSource, selectedNoticeBoardId]);
 
   useEffect(() => {
+    if (isManagedContentActive && managedContentKind === "notice" && selectedManagedBoard) {
+      const transition = noticeEditorBoardTransition(
+        selectedNoticeBoardIdRef.current,
+        selectedManagedBoard.id,
+        editingNoticeBoardId,
+      );
+      if (selectedNoticeBoardIdRef.current === transition.selectedBoardId) return;
+      noticeEditRequestRef.current += 1;
+      selectedNoticeBoardIdRef.current = transition.selectedBoardId;
+      setSelectedNoticeBoardId(transition.selectedBoardId);
+      if (transition.shouldResetEditor) {
+        editingNoticeIdRef.current = null;
+        setEditingNoticeId(null);
+        setEditingNoticeBoardId(null);
+        setNoticeForm(emptyNotice);
+        setNoticeAttachments([]);
+        setNoticeMetadata({});
+        setNoticeUploadProgress(0);
+      }
+    }
+  }, [editingNoticeBoardId, isManagedContentActive, managedContentKind, selectedManagedBoard]);
+
+  useEffect(() => {
+    setBoardSettingsDraft(selectedManagedBoard ? adminBoardSettingsDraft(selectedManagedBoard) : null);
+  }, [selectedManagedBoard]);
+
+  useEffect(() => {
+    boardManagementBoardIdRef.current = boardManagementBoardId;
+  }, [boardManagementBoardId]);
+
+  useEffect(() => {
+    const board = externalLinkSelectedBoardRef.current;
+    externalLinkBoardIdRef.current = externalLinkSelectedBoardId;
+    setExternalLinkDraftState((current) => externalLinkBoardTransition(current, board));
+    setExternalLinkError(null);
+  }, [externalLinkSelectedBoardId]);
+
+  useEffect(() => {
+    if (!optimisticManagedBoard) return;
+    const queryState = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"]);
+    if (shouldClearOptimisticCreatedBoard(
+      optimisticManagedBoard.board.id,
+      optimisticManagedBoard.insertedGeneration,
+      queryState?.dataUpdateCount ?? 0,
+      queryState?.status ?? "pending",
+      queriedManagedBoards,
+    )) {
+      setOptimisticManagedBoard(null);
+    }
+  }, [boardsQuery.dataUpdatedAt, boardsQuery.fetchStatus, optimisticManagedBoard, queriedManagedBoards, queryClient]);
+
+  useEffect(() => {
+    const transition = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "sync",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = transition.state;
+  }, [rawAdminLinkKey]);
+
+  useEffect(() => {
+    const intent = pendingBoardNavigationIntent;
+    if (!intent || pendingBoardNavigationIntentRef.current !== intent) return;
+    const resolution = adminBoardNavigationIntentResolution(intent, boards, boardsQuery.status);
+    if (resolution.status === "pending" || resolution.status === "error") return;
+    if (pendingBoardNavigationIntentRef.current !== intent) return;
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+    if (resolution.status === "missing") {
+      Alert.alert("게시판 확인", "요청한 게시판을 찾을 수 없습니다.");
+      return;
+    }
+    externalLinkBoardIdRef.current = resolution.destination.boardId;
+    boardManagementBoardIdRef.current = resolution.destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(resolution.destination.scope);
+    setBoardManagementBoardId(resolution.destination.boardId);
+    setBoardManagementTab(resolution.destination.tab);
+    setCreatingBoard(false);
+  }, [boards, boardsQuery.status, pendingBoardNavigationIntent]);
+
+  useEffect(() => {
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+    if (noticeOperationRef.current) noticeEditRequestRef.current += 1;
     const nextSection = parseAdminSection(params.section);
     if (nextSection) {
       setSection(nextSection);
     }
-    const nextScope = parseBoardScope(params.scope);
-    if (nextScope) {
-      setBoardScope(nextScope);
-    }
-  }, [params.scope, params.section]);
+  }, [editEventIdParam, params.scope, params.section]);
+
+  useEffect(() => {
+    const transition = adminBoardNavigationTransition(handledLegacySection.current, {
+      type: "legacy",
+      rawSection: rawAdminSection,
+      boards,
+      boardsReady: boardsQuery.isSuccess,
+      rawLinkKey: rawAdminLinkKey,
+    });
+    if (!transition) return;
+    handledLegacySection.current = transition.handledSection;
+    if (!transition.destination) return;
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+    boardManagementBoardIdRef.current = transition.destination.boardId;
+    externalLinkBoardIdRef.current = transition.destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(transition.destination.scope);
+    setBoardManagementBoardId(transition.destination.boardId);
+    setBoardManagementTab(transition.destination.tab);
+    setCreatingBoard(false);
+  }, [boards, boardsQuery.isSuccess, rawAdminLinkKey, rawAdminSection]);
 
   useEffect(() => {
     if (!editEventMissing) {
       return;
     }
-    setSection("events");
+    const gate = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "apply",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = gate.state;
+    if (!gate.shouldApply) return;
+    const destination = adminBoardDestinationForSlug("academic-calendar", boards);
+    boardManagementBoardIdRef.current = destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(destination.scope);
+    setBoardManagementBoardId(destination.boardId);
+    setBoardManagementTab(destination.tab);
     reset(emptyEvent);
-    router.replace({ pathname: "/admin", params: { section: "events" } } as never);
-  }, [editEventMissing, reset]);
+    router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
+  }, [boards, editEventMissing, rawAdminLinkKey, reset]);
 
   useEffect(() => {
     const event = editEventQuery.data?.data;
     if (!event) {
       return;
     }
-    setSection("events");
+    const gate = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "apply",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = gate.state;
+    if (!gate.shouldApply) return;
+    const destination = adminBoardDestinationForSlug("academic-calendar", boards);
+    boardManagementBoardIdRef.current = destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(destination.scope);
+    setBoardManagementBoardId(destination.boardId);
+    setBoardManagementTab(destination.tab);
     reset({
       title: event.title,
       category: event.category,
@@ -1707,7 +1963,7 @@ export default function AdminScreen() {
       location: event.location ?? "",
       description: event.description ?? "",
     });
-  }, [editEventQuery.data?.data, reset]);
+  }, [boards, editEventQuery.data?.data, rawAdminLinkKey, reset]);
 
   useEffect(() => {
     const currentBanners = bannersQuery.data?.data ?? [];
@@ -1759,19 +2015,19 @@ export default function AdminScreen() {
 
   const banners = bannersQuery.data?.data ?? [];
   const sortedBanners = [...banners].sort((left, right) => (left.sort_order ?? 0) - (right.sort_order ?? 0) || left.id - right.id);
-  const boards = boardsQuery.data?.data ?? [];
-  const postContentBoards = adminContentBoards(boards, "all");
-  const visiblePostBoards = adminContentBoards(boards, postContentScope);
-  const selectedPostBoard = postContentBoards.find((board) => board.id === postBoardId);
-  const selectedPostContentControl = adminBoardContentControl(selectedPostBoard);
   const reports = reportsQuery.data?.data ?? [];
   const users = usersQuery.data?.data ?? [];
   const faqs = faqsQuery.data?.data ?? [];
   const adminMajors: MajorOption[] = adminMajorsQuery.data?.data ?? [];
   const adminPrivacyPolicy: PrivacyPolicyVersion | undefined = adminPrivacyPolicyQuery.data?.data;
   const events = adminEventList;
-  const noticePosts = noticePostsQuery.data?.data ?? [];
+  const activeNoticePostsQuery = noticeQueryPolicy.noticeSource === "admin"
+    ? unifiedNoticePostsQuery
+    : noticePostsQuery;
+  const noticePosts = activeNoticePostsQuery.data?.data ?? [];
   const adminPosts = adminPostsQuery.data?.data ?? [];
+  const activityHistoryPosts = (activityHistoryPostsQuery.data?.data ?? [])
+    .filter((item) => item.metadata?.show_in_council_activity === true);
   const mutualAidPosts = mutualAidPostsQuery.data?.data ?? [];
   const visibleMutualAidPosts = mutualAidFilter === "all"
     ? mutualAidPosts
@@ -1785,10 +2041,8 @@ export default function AdminScreen() {
   const adminPostTotal = adminPostsQuery.data?.pagination?.total ?? adminPosts.length;
   const stats = statsQuery.data?.data;
   const auditLogs: AdminAuditLog[] = auditLogsQuery.data?.data ?? [];
-  const selectedNoticeBoard = noticeBoards.find((board) => board.id === selectedNoticeBoardId);
-  const boardScopeFilter = BOARD_SCOPE_FILTERS.find((item) => item.key === boardScope) ?? BOARD_SCOPE_FILTERS[0];
-  const visibleBoards =
-    boardScopeFilter.key === "all" ? boards : boards.filter((board) => boardScopeFilter.categories.includes(board.category));
+  const selectedNoticeBoard = noticeBoards.find((board) => board.id === selectedNoticeBoardId)
+    ?? (managedContentKind === "notice" ? selectedManagedBoard : undefined);
   const activeBannerCount = banners.filter((item) => item.is_active).length;
   const councilBoardCount = boards.filter((board) => ["council", "gsa"].includes(board.category)).length;
   const clubPromoBoard = boards.find((board) => board.slug === "club-promo");
@@ -1798,11 +2052,29 @@ export default function AdminScreen() {
   const suggestedBannerOrder = nextBannerOrder(sortedBanners);
   const previewBannerPosition = editingBannerId ? selectedBannerPosition ?? 1 : nextBannerPosition;
   const previewBannerTotal = editingBannerId ? Math.max(sortedBanners.length, 1) : nextBannerPosition;
-  const openAdminSection = (nextSection: AdminSection, nextScope?: BoardScope) => {
+  const noticeOperationPending = noticeOperationKind !== null;
+  const managedNavigationLocked = boardSettingsSaving || externalLinkSaving || noticeOperationPending;
+  const clearPendingBoardNavigationIntent = () => {
+    pendingBoardNavigationIntentRef.current = null;
+    setPendingBoardNavigationIntent(null);
+  };
+  const beginExplicitAdminNavigation = () => {
+    const eventCancellation = adminDeferredEventGateTransition(deferredEventNavigationRef.current, {
+      type: "cancel",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    deferredEventNavigationRef.current = eventCancellation.state;
+    const acknowledgement = adminBoardNavigationTransition(handledLegacySection.current, {
+      type: "explicit",
+      rawLinkKey: rawAdminLinkKey,
+    });
+    if (acknowledgement) handledLegacySection.current = acknowledgement.handledSection;
+    clearPendingBoardNavigationIntent();
+  };
+  const openAdminSection = (nextSection: AdminSection) => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
     setSection(nextSection);
-    if (nextScope) {
-      setBoardScope(nextScope);
-    }
   };
   const dispatchEventReminders = async () => {
     try {
@@ -2008,24 +2280,8 @@ export default function AdminScreen() {
   };
 
   const resetBoardForm = () => {
-    setEditingBoardId(null);
     setBoardForm(emptyBoard);
-  };
-
-  const handleEditBoard = (item: Board) => {
-    setEditingBoardId(item.id);
-    setBoardForm({
-      name: item.name,
-      slug: item.slug,
-      category: item.category,
-      board_type: item.board_type,
-      description: item.description ?? "",
-      sort_order: String(item.sort_order ?? 0),
-      allow_anonymous: item.allow_anonymous,
-      read_permission: item.read_permission,
-      write_permission: item.write_permission,
-      is_active: item.is_active !== false,
-    });
+    setCreatingBoard(false);
   };
 
   const handleSaveBoard = async () => {
@@ -2048,12 +2304,21 @@ export default function AdminScreen() {
     };
 
     try {
-      if (editingBoardId) {
-        const { slug: _slug, ...updatePayload } = payload;
-        await boardApi.updateAdminBoard(editingBoardId, updatePayload);
-      } else {
-        await boardApi.createAdminBoard(payload);
-      }
+      const created = await boardApi.createAdminBoard(payload);
+      const creationResult = adminBoardCreationResult(managedBoards, created.data);
+      const transition = creationResult.transition;
+      queryClient.setQueryData<AdminBoardsQueryData>(["admin-boards"], (current) => ({
+        ...(current ?? { status: "success" as const }),
+        data: adminBoardsWithCreatedBoard(current?.data ?? creationResult.boards, created.data),
+      }));
+      const insertedGeneration = queryClient.getQueryState<AdminBoardsQueryData>(["admin-boards"])?.dataUpdateCount ?? 0;
+      setOptimisticManagedBoard({ board: created.data, insertedGeneration });
+      syncExternalLinkNavigationBoardId(transition.boardId);
+      boardManagementBoardIdRef.current = transition.boardId;
+      setBoardManagementScope(transition.scope);
+      setBoardManagementBoardId(transition.boardId);
+      setBoardManagementTab(transition.tab);
+      setCreatingBoard(transition.creatingBoard);
       resetBoardForm();
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
       queryClient.invalidateQueries({ queryKey: ["boards"] });
@@ -2063,18 +2328,294 @@ export default function AdminScreen() {
     }
   };
 
+  const syncExternalLinkNavigationBoardId = (nextBoardId: number | null) => {
+    const transition = externalLinkNavigationTransition(
+      externalLinkBoardIdRef.current,
+      nextBoardId,
+      externalLinkSavingRef.current,
+    );
+    if (!transition.accepted) return false;
+    externalLinkBoardIdRef.current = transition.boardId;
+    return true;
+  };
+
+  const openManagedBoardDestination = (destination: AdminBoardDestination | null) => {
+    if (!destination) return;
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    if (!syncExternalLinkNavigationBoardId(destination.boardId)) return;
+    boardManagementBoardIdRef.current = destination.boardId;
+    setSection("boardManagement");
+    setBoardManagementScope(destination.scope);
+    setBoardManagementBoardId(destination.boardId);
+    setBoardManagementTab(destination.tab);
+    setCreatingBoard(false);
+  };
+
+  const openManagedBoard = (slug: string, tab: AdminBoardManagementTab = "content") => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    const intent = { slug, tab };
+    const resolution = adminBoardNavigationIntentResolution(intent, boards, boardsQuery.status);
+    if (resolution.status === "pending" || resolution.status === "error") {
+      pendingBoardNavigationIntentRef.current = intent;
+      setPendingBoardNavigationIntent(intent);
+      return;
+    }
+    if (resolution.status === "missing") {
+      Alert.alert("게시판 확인", "요청한 게시판을 찾을 수 없습니다.");
+      return;
+    }
+    openManagedBoardDestination(resolution.destination);
+  };
+
+  const openAllManagedPosts = () => {
+    openManagedBoardDestination(adminBoardDestinationForLegacySection("posts", boards));
+  };
+
+  const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    const transition = adminBoardScopeTransition(boards, boardManagementBoardId, nextScope);
+    if (!syncExternalLinkNavigationBoardId(transition.boardId)) return;
+    boardManagementBoardIdRef.current = transition.boardId;
+    setBoardManagementScope(transition.scope);
+    setBoardManagementBoardId(transition.boardId);
+    setBoardManagementTab(transition.tab);
+    setCreatingBoard(transition.creatingBoard);
+  };
+
+  const handleBoardManagementBoardChange = (boardId: number | null) => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    if (managedContentKind === "notice" && boardId !== selectedNoticeBoardIdRef.current) {
+      resetNoticeForm();
+    }
+    const transition = adminBoardSelectionTransition(boardId);
+    if (!syncExternalLinkNavigationBoardId(transition.boardId)) return;
+    boardManagementBoardIdRef.current = transition.boardId;
+    setBoardManagementBoardId(transition.boardId);
+    setBoardManagementTab(transition.tab);
+    setCreatingBoard(transition.creatingBoard);
+  };
+
+  const handleCreateManagedBoard = () => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    const transition = adminBoardCreateTransition();
+    resetBoardForm();
+    setCreatingBoard(transition.creatingBoard);
+    setBoardManagementTab(transition.tab);
+  };
+
+  const handleBoardManagementTabChange = (tab: AdminBoardManagementTab) => {
+    if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    setBoardManagementTab(tab);
+  };
+
+  const handleSaveBoardSettings = async () => {
+    if (!selectedManagedBoard || !boardSettingsDraft || boardSettingsSavingRef.current) return;
+    const targetBoardId = selectedManagedBoard.id;
+    let payload: ReturnType<typeof adminBoardSettingsPayload>;
+    try {
+      payload = adminBoardSettingsPayload(boardSettingsDraft);
+    } catch {
+      Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
+      return;
+    }
+
+    boardSettingsSavingRef.current = true;
+    setBoardSettingsSaving(true);
+    try {
+      const response = await boardApi.updateAdminBoard(
+        targetBoardId,
+        payload,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
+        queryClient.invalidateQueries({ queryKey: ["boards"] }),
+      ]);
+      const savedDraft = adminBoardSettingsDraft(response.data);
+      const result = boardSettingsSaveResult(
+        targetBoardId,
+        boardManagementBoardIdRef.current,
+        boardSettingsDraft,
+        savedDraft,
+        "success",
+      );
+      if (result.applyDraft) {
+        setBoardSettingsDraft(result.nextDraft);
+      }
+      if (result.notification === "success") {
+        Alert.alert("저장 완료", "게시판 운영 설정이 저장되었습니다.");
+      }
+    } catch {
+      const result = boardSettingsSaveResult(
+        targetBoardId,
+        boardManagementBoardIdRef.current,
+        boardSettingsDraft,
+        boardSettingsDraft,
+        "failure",
+      );
+      if (result.notification === "failure") {
+        Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
+      }
+    } finally {
+      boardSettingsSavingRef.current = false;
+      setBoardSettingsSaving(false);
+    }
+  };
+
+  const handleCancelBoardForm = () => {
+    beginExplicitAdminNavigation();
+    const wasCreatingBoard = creatingBoard;
+    resetBoardForm();
+    if (wasCreatingBoard) {
+      const transition = adminBoardCreateCancelTransition();
+      setCreatingBoard(transition.creatingBoard);
+      setBoardManagementTab(transition.tab);
+    }
+  };
+
+  const renderBoardFormPanel = () => (
+    <Panel>
+      <View style={{ gap: 10 }}>
+        <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+          게시판 등록
+        </Text>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.name} onChangeText={(value) => setBoardForm((current) => ({ ...current, name: value }))} placeholder="게시판 이름" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.slug} onChangeText={(value) => setBoardForm((current) => ({ ...current, slug: value }))} placeholder="slug" />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.category} onChangeText={(value) => setBoardForm((current) => ({ ...current, category: value }))} placeholder="카테고리" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field value={boardForm.sort_order} onChangeText={(value) => setBoardForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
+          </View>
+        </View>
+        <Field value={boardForm.description} onChangeText={(value) => setBoardForm((current) => ({ ...current, description: value }))} placeholder="설명" multiline />
+        <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판 유형</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {Object.entries(BOARD_TYPE_LABELS).map(([value, label]) => (
+            <Chip
+              key={value}
+              active={boardForm.board_type === value}
+              label={label}
+              onPress={() => setBoardForm((current) => ({ ...current, board_type: value }))}
+            />
+          ))}
+        </View>
+        <Text style={{ color: COLORS.muted, fontWeight: "800" }}>권한</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {adminBoardPermissionOptions("read").map((permission) => (
+            <Chip key={`read-${permission}`} active={boardForm.read_permission === permission} label={`읽기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, read_permission: permission }))} />
+          ))}
+          {(["user", "admin"] as const).map((permission) => (
+            <Chip key={`write-${permission}`} active={boardForm.write_permission === permission} label={`쓰기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, write_permission: permission }))} />
+          ))}
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton
+              label={boardForm.allow_anonymous ? "익명 허용" : "실명 게시"}
+              onPress={() => setBoardForm((current) => ({ ...current, allow_anonymous: !current.allow_anonymous }))}
+              tone={boardForm.allow_anonymous ? "primary" : "outline"}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ActionButton
+              label={boardForm.is_active ? "활성" : "숨김"}
+              onPress={() => setBoardForm((current) => ({ ...current, is_active: !current.is_active }))}
+              tone={boardForm.is_active ? "primary" : "muted"}
+            />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton icon="save-outline" label="게시판 등록" onPress={handleSaveBoard} />
+          </View>
+          {creatingBoard ? (
+            <View style={{ flex: 1 }}>
+              <ActionButton label="취소" onPress={handleCancelBoardForm} tone="outline" />
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </Panel>
+  );
+
+  const currentNoticeEditorTarget = () => ({
+    boardId: selectedNoticeBoardIdRef.current ?? -1,
+    editingNoticeId: editingNoticeIdRef.current,
+    generation: noticeEditRequestRef.current,
+  });
+
+  const startNoticeEditorOperation = (kind: NoticeEditorOperation["kind"]) => {
+    const boardId = selectedNoticeBoardIdRef.current;
+    if (boardId === null) return null;
+    const nextOperation: NoticeEditorOperation = {
+      id: ++noticeOperationIdRef.current,
+      kind,
+      boardId,
+      editingNoticeId: editingNoticeIdRef.current,
+      generation: noticeEditRequestRef.current,
+    };
+    const transition = beginNoticeEditorOperation(noticeOperationRef.current, nextOperation);
+    if (!transition.accepted) return null;
+    noticeOperationRef.current = transition.operation;
+    setNoticeOperationKind(kind);
+    return transition.operation;
+  };
+
+  const finishNoticeEditorOperation = (operation: NoticeEditorOperation) => {
+    if (noticeOperationRef.current?.id !== operation.id) return;
+    noticeOperationRef.current = null;
+    setNoticeOperationKind(null);
+  };
+
   const resetNoticeForm = () => {
+    noticeEditRequestRef.current += 1;
+    editingNoticeIdRef.current = null;
     setEditingNoticeId(null);
+    setEditingNoticeBoardId(null);
     setNoticeForm(emptyNotice);
     setNoticeAttachments([]);
     setNoticeMetadata({});
     setNoticeUploadProgress(0);
   };
 
+  const handleSelectNoticeBoard = (nextBoardId: number) => {
+    if (noticeOperationRef.current) return;
+    const transition = noticeEditorBoardTransition(
+      selectedNoticeBoardIdRef.current,
+      nextBoardId,
+      editingNoticeBoardId,
+    );
+    if (transition.shouldResetEditor) resetNoticeForm();
+    selectedNoticeBoardIdRef.current = transition.selectedBoardId;
+    setSelectedNoticeBoardId(transition.selectedBoardId);
+  };
+
   const handleEditNotice = async (item: PostListItem) => {
+    if (noticeOperationRef.current) return;
+    const targetBoardId = item.board_id;
+    const requestId = ++noticeEditRequestRef.current;
     try {
       const detail = await postApi.getPostDetail(item.id);
+      if (
+        noticeEditRequestRef.current !== requestId
+        || selectedNoticeBoardIdRef.current !== targetBoardId
+      ) return;
+      editingNoticeIdRef.current = item.id;
       setEditingNoticeId(item.id);
+      setEditingNoticeBoardId(targetBoardId);
       setNoticeForm({
         title: detail.data.title,
         content: detail.data.content,
@@ -2086,31 +2627,42 @@ export default function AdminScreen() {
       setNoticeAttachments(detail.data.attachments ?? []);
       setNoticeMetadata(detail.data.metadata ?? {});
     } catch {
+      if (noticeEditRequestRef.current !== requestId) return;
       Alert.alert("불러오기 실패", "공지 상세를 불러올 수 없습니다.");
     }
   };
 
   const handleUploadNoticeImage = async () => {
-    if (noticeUploading) {
-      return;
-    }
+    const operation = startNoticeEditorOperation("upload");
+    if (!operation) return;
     try {
-      setNoticeUploading(true);
       setNoticeUploadProgress(0);
-      const uploaded = await pickAndUploadContentImage(setNoticeUploadProgress);
-      if (uploaded) {
+      const uploaded = await pickAndUploadContentImage((progress) => {
+        if (noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success").apply) {
+          setNoticeUploadProgress(progress);
+        }
+      });
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success");
+      if (uploaded && result.apply) {
         setNoticeAttachments((current) => (current.some((item) => item.id === uploaded.id) ? current : [...current, uploaded]));
       }
     } catch {
-      Alert.alert("이미지 업로드 실패", "이미지 파일을 다시 선택해주세요.");
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "failure");
+      if (result.notification === "failure") {
+        Alert.alert("이미지 업로드 실패", "이미지 파일을 다시 선택해주세요.");
+      }
     } finally {
-      setNoticeUploading(false);
+      finishNoticeEditorOperation(operation);
     }
   };
 
   const handleSaveNotice = async () => {
     if (!selectedNoticeBoardId) {
       Alert.alert("공지 확인", "공지 게시판을 선택하세요.");
+      return;
+    }
+    if (editingNoticeId && editingNoticeBoardId !== selectedNoticeBoardId) {
+      Alert.alert("공지 확인", "다른 공지 게시판의 수정 내용입니다. 공지를 다시 선택해주세요.");
       return;
     }
     if (!noticeForm.title.trim() || !noticeForm.content.trim()) {
@@ -2121,6 +2673,9 @@ export default function AdminScreen() {
       Alert.alert("원우회 활동내역", "활동내역에 표시할 공지에는 사진을 1장 이상 첨부하세요.");
       return;
     }
+
+    const operation = startNoticeEditorOperation("save");
+    if (!operation) return;
 
     const payload = {
       title: noticeForm.title.trim(),
@@ -2136,21 +2691,25 @@ export default function AdminScreen() {
     };
 
     try {
-      if (editingNoticeId) {
-        await postApi.updatePost(editingNoticeId, payload);
-        await postApi.setPin(editingNoticeId, noticeForm.is_pinned);
+      if (operation.editingNoticeId) {
+        await postApi.updatePost(operation.editingNoticeId, payload);
+        await postApi.setPin(operation.editingNoticeId, noticeForm.is_pinned);
       } else {
-        const response = await postApi.createPost(selectedNoticeBoardId, payload);
+        const response = await postApi.createPost(operation.boardId, payload);
         if (noticeForm.is_pinned) {
           await postApi.setPin(response.data.id, true);
         }
       }
-      resetNoticeForm();
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success");
       queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
       queryClient.invalidateQueries({ queryKey: ["posts"] });
-      Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
+      if (result.apply) resetNoticeForm();
+      if (result.notification === "success") Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
     } catch {
-      Alert.alert("저장 실패", "공지사항 입력 정보를 확인하세요.");
+      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "failure");
+      if (result.notification === "failure") Alert.alert("저장 실패", "공지사항 입력 정보를 확인하세요.");
+    } finally {
+      finishNoticeEditorOperation(operation);
     }
   };
 
@@ -2364,9 +2923,44 @@ export default function AdminScreen() {
     }
   };
 
-  const handlePostContentScopeChange = (nextScope: AdminContentScope) => {
-    setPostContentScope(nextScope);
-    setPostBoardId(nextAdminContentSelection(boards, postBoardId, nextScope));
+  const handleSaveExternalLink = async () => {
+    if (
+      !selectedManagedBoard
+      || managedContentKind !== "external-link"
+      || externalLinkSavingRef.current
+    ) return;
+
+    const validationError = validateExternalHttpUrl(externalLinkDraft);
+    if (validationError) {
+      setExternalLinkError(validationError);
+      return;
+    }
+
+    const targetBoardId = selectedManagedBoard.id;
+    const targetDraft = externalLinkDraft.trim();
+    try {
+      externalLinkSavingRef.current = true;
+      setExternalLinkSaving(true);
+      setExternalLinkError(null);
+      await boardApi.updateAdminBoard(targetBoardId, {
+        metadata: externalLinkMetadata(selectedManagedBoard, targetDraft),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-boards"] }),
+        queryClient.invalidateQueries({ queryKey: ["boards"] }),
+      ]);
+      if (externalLinkBoardIdRef.current === targetBoardId) {
+        setExternalLinkDraftState((current) => externalLinkSaveTransition(current, targetBoardId, targetDraft));
+        Alert.alert("저장 완료", "외부 링크가 저장되었습니다.");
+      }
+    } catch {
+      if (externalLinkBoardIdRef.current === targetBoardId) {
+        setExternalLinkError("외부 링크를 저장하지 못했습니다. 입력값을 유지했으니 다시 저장해주세요.");
+      }
+    } finally {
+      externalLinkSavingRef.current = false;
+      setExternalLinkSaving(false);
+    }
   };
 
   const handleReplacePostRepresentativeImage = async (item: PostListItem) => {
@@ -2582,9 +3176,9 @@ export default function AdminScreen() {
     const eventUpdateId = editEventQuery.data?.data?.id ?? null;
     if (editEventId && !eventUpdateId) {
       Alert.alert("일정 확인", "이미 삭제되었거나 없는 일정입니다. 목록에서 다시 선택해주세요.");
-      setSection("events");
+      openManagedBoard("academic-calendar");
       reset(emptyEvent);
-      router.replace({ pathname: "/admin", params: { section: "events" } } as never);
+      router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       return;
     }
 
@@ -2607,7 +3201,7 @@ export default function AdminScreen() {
     try {
       if (eventUpdateId) {
         await eventApi.updateEvent(eventUpdateId, payload);
-        router.replace({ pathname: "/admin", params: { section: "events" } } as never);
+        router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       } else {
         await eventApi.createEvent(payload);
       }
@@ -2621,8 +3215,8 @@ export default function AdminScreen() {
   };
 
   const handleEditEvent = (event: EventItem) => {
-    setSection("events");
-    router.push({ pathname: "/admin", params: { editEventId: String(event.id) } } as never);
+    openManagedBoard("academic-calendar");
+    router.push({ pathname: "/admin", params: { section: "boardManagement", editEventId: String(event.id) } } as never);
   };
 
   const deleteEventFromList = async (event: EventItem) => {
@@ -2630,7 +3224,7 @@ export default function AdminScreen() {
       await eventApi.deleteEvent(event.id);
       if (editEventId === event.id) {
         reset(emptyEvent);
-        router.replace({ pathname: "/admin", params: { section: "events" } } as never);
+        router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       }
       queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -2659,6 +3253,581 @@ export default function AdminScreen() {
     ]);
   };
 
+  const handleEditActivityHistoryNotice = (item: PostListItem) => {
+    if (noticeOperationRef.current) return;
+    beginExplicitAdminNavigation();
+    if (!syncExternalLinkNavigationBoardId(item.board_id)) return;
+    resetNoticeForm();
+    selectedNoticeBoardIdRef.current = item.board_id;
+    setSelectedNoticeBoardId(item.board_id);
+    boardManagementBoardIdRef.current = item.board_id;
+    setBoardManagementScope("notices");
+    setBoardManagementBoardId(item.board_id);
+    setBoardManagementTab("content");
+    setCreatingBoard(false);
+    void handleEditNotice(item);
+  };
+
+  const renderNoticeContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+            {editingNoticeId ? "공지사항 수정" : "공지사항 등록"}
+          </Text>
+          {!isManagedContentActive ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {noticeBoards.map((board) => (
+                <Chip
+                  key={board.id}
+                  active={selectedNoticeBoardId === board.id}
+                  label={board.name}
+                  onPress={noticeOperationPending ? undefined : () => handleSelectNoticeBoard(board.id)}
+                />
+              ))}
+            </ScrollView>
+          ) : null}
+          <Field value={noticeForm.title} onChangeText={(value) => setNoticeForm((current) => ({ ...current, title: value }))} placeholder="공지 제목" editable={!noticeOperationPending} />
+          <Field value={noticeForm.content} onChangeText={(value) => setNoticeForm((current) => ({ ...current, content: value }))} placeholder="공지 내용" multiline editable={!noticeOperationPending} />
+          <View style={{ gap: 6 }}>
+            <Text style={{ color: COLORS.text, fontWeight: "900" }}>신청·접수 마감</Text>
+            <Field value={noticeForm.deadline_at} onChangeText={(value) => setNoticeForm((current) => ({ ...current, deadline_at: value }))} placeholder="2026-07-31T18:00 (선택)" editable={!noticeOperationPending} />
+          </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: COLORS.text, fontWeight: "900" }}>분류</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {NOTICE_CATEGORY_OPTIONS.map((option) => (
+                <Chip
+                  key={option.value}
+                  active={noticeForm.category === option.value}
+                  label={option.label}
+                  onPress={noticeOperationPending ? undefined : () => setNoticeForm((current) => ({ ...current, category: option.value }))}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12, gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: COLORS.text, fontWeight: "900" }}>공지 이미지</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 3 }}>
+                  본문에 함께 표시할 이미지를 첨부합니다.
+                </Text>
+              </View>
+              <ActionButton
+                icon="image-outline"
+                label={noticeOperationKind === "upload" ? `업로드 ${noticeUploadProgress || 0}%` : "이미지 첨부"}
+                onPress={handleUploadNoticeImage}
+                tone={noticeAttachments.length > 0 ? "outline" : "primary"}
+                disabled={noticeOperationPending}
+              />
+            </View>
+            {noticeAttachments.length === 0 ? (
+              <Text style={{ color: COLORS.muted, fontSize: 13 }}>아직 첨부된 이미지가 없습니다.</Text>
+            ) : null}
+            {noticeAttachments.map((attachment) => {
+              const url = mediaUrl(attachment.url);
+              const isImage = attachment.content_type?.startsWith("image/");
+              return (
+                <View
+                  key={attachment.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    borderRadius: RADIUS.button,
+                    borderWidth: 1,
+                    borderColor: COLORS.border,
+                    backgroundColor: COLORS.surface,
+                    padding: 10,
+                  }}
+                >
+                  {isImage && url ? (
+                    <MediaImage media={attachment} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
+                  ) : (
+                    <View style={{ width: 56, height: 56, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
+                      <Ionicons name="document-attach-outline" size={22} color={COLORS.primary} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ color: COLORS.text, fontWeight: "900" }} numberOfLines={1}>
+                      {attachment.original_filename}
+                    </Text>
+                    <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
+                      {Math.ceil((attachment.file_size ?? 0) / 1024)} KB
+                    </Text>
+                  </View>
+                  <Pressable disabled={noticeOperationPending} hitSlop={8} onPress={() => setNoticeAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                    <Ionicons name="close-circle" size={22} color={COLORS.subtle} />
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+          <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: noticeForm.show_in_council_activity ? COLORS.primary : COLORS.border, backgroundColor: noticeForm.show_in_council_activity ? COLORS.primary50 : COLORS.surfaceAlt, padding: 12, gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: COLORS.text, fontWeight: "900" }}>원우회 활동내역 연동</Text>
+                <Text style={{ color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 3 }}>
+                  이 공지의 사진과 본문을 원우회 활동내역 목록·상세에도 표시합니다.
+                </Text>
+              </View>
+              <ActionButton
+                icon={noticeForm.show_in_council_activity ? "checkmark-circle" : "ellipse-outline"}
+                label={noticeForm.show_in_council_activity ? "연동함" : "연동 안 함"}
+                onPress={() => setNoticeForm((current) => ({ ...current, show_in_council_activity: !current.show_in_council_activity }))}
+                tone={noticeForm.show_in_council_activity ? "primary" : "outline"}
+                disabled={noticeOperationPending}
+              />
+            </View>
+            {noticeForm.show_in_council_activity && noticeAttachments.length === 0 ? (
+              <Text style={{ color: "#B45309", fontSize: 12, fontWeight: "800" }}>연동하려면 공지 이미지를 1장 이상 첨부해야 합니다.</Text>
+            ) : null}
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <ActionButton
+                label={noticeForm.is_pinned ? "상단 고정" : "일반 공지"}
+                icon="pin-outline"
+                onPress={() => setNoticeForm((current) => ({ ...current, is_pinned: !current.is_pinned }))}
+                tone={noticeForm.is_pinned ? "primary" : "outline"}
+                disabled={noticeOperationPending}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ActionButton icon="save-outline" label={noticeOperationKind === "save" ? "저장 중" : editingNoticeId ? "공지 저장" : "공지 등록"} onPress={handleSaveNotice} disabled={noticeOperationPending} />
+            </View>
+          </View>
+          {editingNoticeId ? <ActionButton label="수정 취소" onPress={resetNoticeForm} tone="outline" disabled={noticeOperationPending} /> : null}
+        </View>
+      </Panel>
+      <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+        {selectedNoticeBoard?.name ?? "공지 게시판"} 목록
+      </Text>
+      <AdminBoardContentQueryState
+        isLoading={activeNoticePostsQuery.isLoading}
+        isError={activeNoticePostsQuery.isError}
+        isEmpty={noticePosts.length === 0}
+        emptyMessage="표시할 공지사항이 없습니다."
+        onRetry={() => void activeNoticePostsQuery.refetch()}
+      />
+      {noticePosts.map((item) => (
+        <NoticeCard key={item.id} item={item} onEdit={handleEditNotice} onPinToggle={handlePinNotice} onDelete={handleDeleteNotice} />
+      ))}
+    </View>
+  );
+
+  const renderStandardPostContent = () => {
+    const contentBoard = selectedManagedBoard;
+    const contentControl = adminBoardContentControl(contentBoard);
+    return (
+      <View style={{ gap: 12 }}>
+        <Panel>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
+              {contentBoard ? `${contentBoard.name} 콘텐츠 관리` : "전체 게시글 관리"}
+            </Text>
+            <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+              게시글을 검색하고 열기, 수정, 고정, 삭제와 지원 게시판의 대표 이미지를 관리합니다.
+            </Text>
+            {contentBoard ? (
+              <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary100, backgroundColor: COLORS.primary50, padding: 12, gap: 9 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{contentBoard.name} 관리</Text>
+                  <Chip active label={BOARD_TYPE_LABELS[contentBoard.board_type] ?? contentBoard.board_type} />
+                </View>
+                <Text style={{ color: COLORS.muted, lineHeight: 19 }}>{contentControl.description}</Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {contentControl.createLabel ? (
+                    <ActionButton
+                      icon="add-circle-outline"
+                      label={contentControl.createLabel}
+                      onPress={() => router.push({ pathname: "/board/post/create", params: { boardId: String(contentBoard.id) } } as never)}
+                    />
+                  ) : null}
+                </View>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <ActionButton
+                  icon="add-circle-outline"
+                  label="동아리 안내 등록"
+                  disabled={!clubPromoBoard}
+                  onPress={() => {
+                    if (clubPromoBoard) router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
+                  }}
+                  tone="outline"
+                />
+                <ActionButton
+                  icon="git-network-outline"
+                  label="네트워킹 안내 등록"
+                  disabled={!networkingProgramsBoard}
+                  onPress={() => {
+                    if (networkingProgramsBoard) router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
+                  }}
+                  tone="outline"
+                />
+              </View>
+            )}
+            <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
+            <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
+            <Text style={{ color: COLORS.muted, fontWeight: "800" }}>상태 필터</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {ADMIN_POST_MODE_FILTERS.map((item) => (
+                <Chip key={item.key} active={postMode === item.key} label={item.label} onPress={() => setPostMode(item.key)} />
+              ))}
+            </View>
+            <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>총 {adminPostTotal}개 게시글</Text>
+          </View>
+        </Panel>
+        <AdminBoardContentQueryState
+          isLoading={adminPostsQuery.isLoading}
+          isError={adminPostsQuery.isError}
+          isEmpty={adminPosts.length === 0}
+          emptyMessage="표시할 게시글이 없습니다."
+          onRetry={() => void adminPostsQuery.refetch()}
+        />
+        {adminPosts.map((item) => (
+          <AdminPostCard
+            key={item.id}
+            item={item}
+            board={boards.find((board) => board.id === item.board_id)}
+            onPinToggle={handlePinAdminPost}
+            onDelete={handleDeleteAdminPost}
+            onRepresentativeImageChange={(post) => void handleReplacePostRepresentativeImage(post)}
+            isReplacingRepresentativeImage={replacingRepresentativeImagePostId === item.id}
+          />
+        ))}
+      </View>
+    );
+  };
+
+  const renderMutualAidContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>상조회 신청 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            신청 상세에서 증빙서류를 확인한 후 처리 완료 또는 반려를 선택합니다. 반려 시 사유 입력이 필수입니다.
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {([['processing', '처리중'], ['completed', '처리 완료'], ['rejected', '반려'], ['all', '전체']] as const).map(([value, label]) => (
+              <Chip key={value} active={mutualAidFilter === value} label={label} onPress={() => setMutualAidFilter(value)} />
+            ))}
+          </View>
+          <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
+            처리 대기 {processingMutualAidCount}건 · 전체 {mutualAidPosts.length}건
+          </Text>
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState
+        isLoading={mutualAidPostsQuery.isLoading}
+        isError={mutualAidPostsQuery.isError}
+        isEmpty={visibleMutualAidPosts.length === 0}
+        emptyMessage="해당 상태의 상조회 신청이 없습니다."
+        onRetry={() => void mutualAidPostsQuery.refetch()}
+      />
+      {visibleMutualAidPosts.map((item) => <MutualAidAdminCard key={item.id} item={item} />)}
+    </View>
+  );
+
+  const renderSuggestionContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>건의사항 답변 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            작성자는 익명으로 유지됩니다. 상세 화면에서 공식 답변을 입력하면 답변완료로 처리되고 작성자에게 알림이 전송됩니다.
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {([['received', '대기중'], ['answered', '답변완료'], ['all', '전체']] as const).map(([value, label]) => (
+              <Chip key={value} active={suggestionFilter === value} label={label} onPress={() => setSuggestionFilter(value)} />
+            ))}
+          </View>
+          <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
+            답변 대기 {pendingSuggestionCount}건 · 전체 {suggestionPosts.length}건
+          </Text>
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState
+        isLoading={suggestionPostsQuery.isLoading}
+        isError={suggestionPostsQuery.isError}
+        isEmpty={visibleSuggestionPosts.length === 0}
+        emptyMessage="해당 상태의 건의사항이 없습니다."
+        onRetry={() => void suggestionPostsQuery.refetch()}
+      />
+      {visibleSuggestionPosts.map((item) => <SuggestionAdminCard key={item.id} item={item} />)}
+    </View>
+  );
+
+  const renderActivityHistoryContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 활동내역 연동 공지</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            원우회 활동내역 연동이 켜진 공지만 표시합니다. 수정하면 같은 게시판 관리 화면에서 실제 공지 게시판으로 전환됩니다.
+          </Text>
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState
+        isLoading={activityHistoryPostsQuery.isLoading}
+        isError={activityHistoryPostsQuery.isError}
+        isEmpty={activityHistoryPosts.length === 0}
+        emptyMessage="연동된 공지사항이 없습니다."
+        onRetry={() => void activityHistoryPostsQuery.refetch()}
+      />
+      {activityHistoryPosts.map((item) => (
+        <NoticeCard
+          key={item.id}
+          item={item}
+          onEdit={handleEditActivityHistoryNotice}
+          onPinToggle={handlePinNotice}
+          onDelete={handleDeleteNotice}
+        />
+      ))}
+    </View>
+  );
+
+  const renderExecutivesContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 소개 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+            현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
+          </Text>
+        </View>
+      </Panel>
+      {!executivesBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-executives 게시판을 찾을 수 없습니다.</Text></Panel> : null}
+      {currentCouncils.map((council, cardIndex) => (
+        <Panel key={`current-council-${cardIndex}`}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.title || "현재 원우회"}</Text>
+            <Field value={council.title} onChangeText={(value) => updateCurrentCouncil(cardIndex, { title: value })} placeholder="원우회 이름 예: 제30대 원우회" />
+            <Field value={council.greeting} onChangeText={(value) => updateCurrentCouncil(cardIndex, { greeting: value })} placeholder="인사말" multiline />
+            <Field value={council.intro} onChangeText={(value) => updateCurrentCouncil(cardIndex, { intro: value })} placeholder="원우회 소개글" multiline />
+            <IntroBannerEditor
+              value={council.banner_image_url}
+              uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === undefined}
+              onUpload={() => void handleUploadCurrentCouncilImage(cardIndex)}
+              onRemove={() => updateCurrentCouncil(cardIndex, { banner_image_url: "" })}
+            />
+            {council.members.map((member, memberIndex) => (
+              <IntroMemberEditor
+                key={`current-council-${cardIndex}-member-${memberIndex}`}
+                member={member}
+                index={memberIndex}
+                uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === memberIndex}
+                uploadDisabled={Boolean(currentCouncilUploading)}
+                canMoveUp={memberIndex > 0}
+                canMoveDown={memberIndex < council.members.length - 1}
+                onChange={(patch) => updateCurrentCouncilMember(cardIndex, memberIndex, patch)}
+                onUpload={() => void handleUploadCurrentCouncilImage(cardIndex, memberIndex)}
+                onMoveUp={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
+                onMoveDown={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
+                onRemove={() => updateCurrentCouncil(cardIndex, { members: council.members.filter((_, index) => index !== memberIndex) })}
+              />
+            ))}
+            <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCurrentCouncil(cardIndex, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(currentCouncilUploading)} tone="outline" />
+          </View>
+        </Panel>
+      ))}
+      <Panel><ActionButton icon="save-outline" label={executivesSaving ? "저장 중" : "원우회 소개 저장"} onPress={() => void handleSaveExecutives()} disabled={executivesSaving || Boolean(currentCouncilUploading) || !executivesBoard} /></Panel>
+    </View>
+  );
+
+  const renderCohortLeadersContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>기수별 기장단 소개 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>기수별 대표 이미지, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.</Text>
+        </View>
+      </Panel>
+      {!cohortLeadersBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-cohort-leaders 게시판을 찾을 수 없습니다.</Text></Panel> : null}
+      {cohortLeaders.map((leader, index) => (
+        <Panel key={`cohort-leader-${index}`}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{leader.cohort || "새 기수"} 기장단</Text>
+            <Field value={leader.cohort} onChangeText={(value) => updateCohortLeader(index, { cohort: value })} placeholder="기수 예: 75" />
+            <Field value={leader.greeting} onChangeText={(value) => updateCohortLeader(index, { greeting: value })} placeholder="인사말 예: 안녕하세요, 75기 기장 홍길동입니다!" />
+            <Field value={leader.intro} onChangeText={(value) => updateCohortLeader(index, { intro: value })} placeholder="기장단 소개글" multiline />
+            <IntroBannerEditor
+              value={leader.banner_image_url}
+              uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === undefined}
+              onUpload={() => void handleUploadCohortLeaderImage(index)}
+              onRemove={() => updateCohortLeader(index, { banner_image_url: "" })}
+            />
+            {leader.members.map((member, memberIndex) => (
+              <IntroMemberEditor
+                key={`cohort-leader-${index}-member-${memberIndex}`}
+                member={member}
+                index={memberIndex}
+                uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === memberIndex}
+                uploadDisabled={Boolean(cohortLeaderUploading)}
+                canMoveUp={memberIndex > 0}
+                canMoveDown={memberIndex < leader.members.length - 1}
+                onChange={(patch) => updateCohortLeaderMember(index, memberIndex, patch)}
+                onUpload={() => void handleUploadCohortLeaderImage(index, memberIndex)}
+                onMoveUp={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex - 1) })}
+                onMoveDown={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex + 1) })}
+                onRemove={() => updateCohortLeader(index, { members: leader.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
+              />
+            ))}
+            <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCohortLeader(index, { members: [...leader.members, { ...emptyExecutiveMember }] })} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="기수 위로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(cohortLeaderUploading) || index === 0} tone="outline" /></View>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="기수 아래로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(cohortLeaderUploading) || index === cohortLeaders.length - 1} tone="outline" /></View>
+            </View>
+            <ActionButton icon="trash-outline" label="이 기수 삭제" onPress={() => setCohortLeaders((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(cohortLeaderUploading)} tone="danger" />
+          </View>
+        </Panel>
+      ))}
+      <Panel><View style={{ gap: 8 }}><ActionButton icon="person-add-outline" label="기수 추가" onPress={() => setCohortLeaders((current) => [...current, { ...emptyCohortLeader, members: [] }])} disabled={Boolean(cohortLeaderUploading)} tone="outline" /><ActionButton icon="save-outline" label={cohortLeadersSaving ? "저장 중" : "기장단 소개 저장"} onPress={() => void handleSaveCohortLeaders()} disabled={cohortLeadersSaving || Boolean(cohortLeaderUploading) || !cohortLeadersBoard} /></View></Panel>
+    </View>
+  );
+
+  const renderPastCouncilsContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
+      {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-past-councils 게시판을 찾을 수 없습니다. 게시판 목록을 다시 불러와주세요.</Text></Panel> : null}
+      {pastCouncils.map((council, index) => (
+        <Panel key={`past-council-${index}`}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.cohort || "새 역대 원우회"} 원우회</Text>
+            <Field value={council.cohort} onChangeText={(value) => updatePastCouncil(index, { cohort: value })} placeholder="원우회 대수 예: 29" />
+            <Field value={council.greeting} onChangeText={(value) => updatePastCouncil(index, { greeting: value })} placeholder="인사말" multiline />
+            <Field value={council.intro} onChangeText={(value) => updatePastCouncil(index, { intro: value })} placeholder="원우회 소개글" multiline />
+            <Field value={council.activities_text} onChangeText={(value) => updatePastCouncil(index, { activities_text: value })} placeholder={'활동내역을 한 줄에 하나씩 입력\n예: 25.05.05 기말 세미나 개최'} multiline />
+            <IntroBannerEditor value={council.banner_image_url} uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined} onUpload={() => void handleUploadPastCouncilImage(index)} onRemove={() => updatePastCouncil(index, { banner_image_url: "" })} />
+            {council.members.map((member, memberIndex) => (
+              <IntroMemberEditor
+                key={`past-council-${index}-member-${memberIndex}`}
+                member={member}
+                index={memberIndex}
+                uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === memberIndex}
+                uploadDisabled={Boolean(pastCouncilUploading)}
+                canMoveUp={memberIndex > 0}
+                canMoveDown={memberIndex < council.members.length - 1}
+                onChange={(patch) => updatePastCouncilMember(index, memberIndex, patch)}
+                onUpload={() => void handleUploadPastCouncilImage(index, memberIndex)}
+                onMoveUp={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
+                onMoveDown={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
+                onRemove={() => updatePastCouncil(index, { members: council.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
+              />
+            ))}
+            <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updatePastCouncil(index, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(pastCouncilUploading)} tone="outline" />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="원우회 위로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(pastCouncilUploading) || index === 0} tone="outline" /></View>
+              <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="원우회 아래로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(pastCouncilUploading) || index === pastCouncils.length - 1} tone="outline" /></View>
+            </View>
+            <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(pastCouncilUploading)} tone="danger" />
+          </View>
+        </Panel>
+      ))}
+      <Panel><View style={{ gap: 8 }}><ActionButton icon="add-circle-outline" label="역대 원우회 추가" onPress={() => setPastCouncils((current) => [...current, { ...emptyPastCouncil, members: [] }])} disabled={Boolean(pastCouncilUploading)} tone="outline" /><ActionButton icon="save-outline" label={pastCouncilsSaving ? "저장 중" : "역대 원우회 저장"} onPress={() => void handleSavePastCouncils()} disabled={pastCouncilsSaving || Boolean(pastCouncilUploading) || !pastCouncilsBoard} /></View></Panel>
+    </View>
+  );
+
+  const renderOrganizationIntroContent = () => {
+    switch (selectedManagedBoard?.slug) {
+      case "gsa-executives":
+        return renderExecutivesContent();
+      case "gsa-cohort-leaders":
+        return renderCohortLeadersContent();
+      case "gsa-past-councils":
+        return renderPastCouncilsContent();
+      default:
+        return <UnsupportedBoardContent board={selectedManagedBoard} />;
+    }
+  };
+
+  const renderFaqContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>{editingFAQId ? "FAQ 수정" : "FAQ 등록"}</Text>
+          <Field value={faqForm.question} onChangeText={(value) => setFAQForm((current) => ({ ...current, question: value }))} placeholder="질문" />
+          <Field value={faqForm.answer} onChangeText={(value) => setFAQForm((current) => ({ ...current, answer: value }))} placeholder="답변" multiline />
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><Field value={faqForm.category} onChangeText={(value) => setFAQForm((current) => ({ ...current, category: value }))} placeholder="분류" /></View>
+            <View style={{ width: 92 }}><Field value={faqForm.sort_order} onChangeText={(value) => setFAQForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" /></View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><ActionButton icon="save-outline" label={editingFAQId ? "FAQ 저장" : "FAQ 등록"} onPress={handleSaveFAQ} /></View>
+            {editingFAQId ? <View style={{ flex: 1 }}><ActionButton label="취소" onPress={resetFAQForm} tone="outline" /></View> : null}
+          </View>
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState isLoading={faqsQuery.isLoading} isError={faqsQuery.isError} isEmpty={faqs.length === 0} emptyMessage="등록된 FAQ가 없습니다." onRetry={() => void faqsQuery.refetch()} />
+      {faqs.map((item) => <FAQCard key={item.id} item={item} onEdit={handleEditFAQ} onDelete={handleDeleteFAQ} />)}
+    </View>
+  );
+
+  const renderCalendarContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>{editEventId ? "일정 수정" : "일정 등록"}</Text>
+          <Controller control={control} name="title" render={({ field }) => <Field onChangeText={field.onChange} placeholder="일정 제목" value={field.value ?? ""} />} />
+          <Controller control={control} name="category" render={({ field }) => (
+            <View style={{ gap: 7 }}>
+              <Text style={{ color: COLORS.text, fontWeight: "900" }}>일정 분류</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => <Chip key={value} active={field.value === value} label={label} onPress={() => field.onChange(value)} />)}</View>
+            </View>
+          )} />
+          <Controller control={control} name="start_at" render={({ field }) => <EventDateTimePicker label="시작일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />} />
+          <Controller control={control} name="end_at" render={({ field }) => <EventDateTimePicker label="종료일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="11:00" />} />
+          <Controller control={control} name="location" render={({ field }) => <Field onChangeText={field.onChange} placeholder="장소" value={field.value ?? ""} />} />
+          <Controller control={control} name="description" render={({ field }) => <Field multiline onChangeText={field.onChange} placeholder="상세 설명" value={field.value ?? ""} />} />
+          <ActionButton icon="save-outline" label={editEventId ? "일정 저장" : "일정 등록"} onPress={handleSubmit(onSubmitEvent)} />
+        </View>
+      </Panel>
+      <AdminBoardContentQueryState isLoading={eventsQuery.isLoading} isError={eventsQuery.isError} isEmpty={events.length === 0} emptyMessage="등록된 일정이 없습니다." onRetry={() => void eventsQuery.refetch()} />
+      {events.map((event) => <View key={event.id} style={{ gap: 8 }}><EventCard event={event} onEdit={handleEditEvent} /><ActionButton icon="trash-outline" label="일정 삭제" onPress={() => handleDeleteEventFromList(event)} tone="danger" /></View>)}
+    </View>
+  );
+
+  const renderExternalLinkContent = () => (
+    <View style={{ gap: 12 }}>
+      <Panel>
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>외부 링크 관리</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>사용자 화면에서 열 외부 HTTP(S) 주소를 입력하세요.</Text>
+          <Field value={externalLinkDraft} onChangeText={(value) => { setExternalLinkDraft(value); setExternalLinkError(null); }} placeholder="https://example.com" editable={!externalLinkSaving} />
+          {externalLinkError ? <Text style={{ color: COLORS.error, fontWeight: "800" }}>{externalLinkError}</Text> : null}
+          <ActionButton icon="save-outline" label={externalLinkSaving ? "저장 중" : "외부 링크 저장"} onPress={() => void handleSaveExternalLink()} disabled={externalLinkSaving} />
+        </View>
+      </Panel>
+    </View>
+  );
+
+  const renderGuideContent = () => (
+    <Panel>
+      <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
+        이 가이드는 별도 콘텐츠 저장 형식을 사용하지 않습니다. 이름, 설명, 노출과 권한은 운영 설정에서 관리할 수 있습니다.
+      </Text>
+    </Panel>
+  );
+
+  const managedContentRenderers: Partial<Record<AdminBoardContentKind, () => ReactNode>> = {
+    "aggregate-posts": renderStandardPostContent,
+    "posts": renderStandardPostContent,
+    "resource": renderStandardPostContent,
+    "album": renderStandardPostContent,
+    "activity-certification": renderStandardPostContent,
+    "notice": renderNoticeContent,
+    "suggestion": renderSuggestionContent,
+    "mutual-aid": renderMutualAidContent,
+    "activity-history": renderActivityHistoryContent,
+    "organization-intro": renderOrganizationIntroContent,
+    calendar: renderCalendarContent,
+    faq: renderFaqContent,
+    "external-link": renderExternalLinkContent,
+    guide: renderGuideContent,
+  };
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <View style={{ gap: 14 }}>
@@ -2678,7 +3847,9 @@ export default function AdminScreen() {
           {SECTIONS.map((item) => (
             <Pressable
               key={item.key}
-              onPress={() => setSection(item.key)}
+              accessibilityState={{ disabled: managedNavigationLocked }}
+              disabled={managedNavigationLocked}
+              onPress={() => openAdminSection(item.key)}
               style={{
                 minWidth: 92,
                 alignItems: "center",
@@ -2702,6 +3873,15 @@ export default function AdminScreen() {
         {section === "dashboard" ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>운영 바로가기</Text>
+            <AdminBoardTargetQueryState
+              status={boardsQuery.isPending ? "loading" : boardsQuery.isError ? "error" : "aggregate"}
+              onRetry={() => void boardsQuery.refetch()}
+            />
+            {pendingBoardNavigationIntent ? (
+              <Text accessibilityLiveRegion="polite" style={{ color: COLORS.muted, fontSize: 12 }}>
+                게시판 목록을 확인한 뒤 요청한 바로가기로 이동합니다.
+              </Text>
+            ) : null}
             <ShortcutCard
               icon="albums-outline"
               title="배너 등록 · 미리보기"
@@ -2714,78 +3894,84 @@ export default function AdminScreen() {
               title="공지사항 등록"
               description="학사공지, 행사공지 등 관리자 전용 공지 게시판에 새 공지를 작성합니다."
               meta={`${noticeBoards.length}개 공지 게시판 관리`}
-              onPress={() => openAdminSection("notices")}
+              onPress={() => openManagedBoard("all-notices")}
             />
             <ShortcutCard
               icon="people-circle-outline"
               title="원우회 게시판 설정"
               description="활동내역, 회계장부, 상조회 같은 원우회 메뉴 게시판의 권한과 노출을 관리합니다."
               meta={`${councilBoardCount}개 원우회 게시판 설정`}
-              onPress={() => openAdminSection("boards", "council")}
+              onPress={() => openManagedBoard("council-activity", "settings")}
             />
             <ShortcutCard
               icon="people-circle-outline"
               title="원우회 소개 등록"
               description="현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록합니다."
               meta={currentCouncils[0]?.members.length ? `${currentCouncils[0].members.length}개 임원 카드 등록` : "등록 필요"}
-              onPress={() => openAdminSection("executives")}
+              onPress={() => openManagedBoard("gsa-executives")}
             />
             <ShortcutCard
               icon="ribbon-outline"
               title="기수별 기장단 등록"
               description="기장·부기장 이름, 소개글과 대표·프로필 이미지를 관리자 전용으로 등록합니다."
               meta={`${cohortLeaders.length}개 기수 등록`}
-              onPress={() => openAdminSection("cohortLeaders")}
+              onPress={() => openManagedBoard("gsa-cohort-leaders")}
             />
             <ShortcutCard
               icon="time-outline"
               title="역대 원우회 관리"
               description="역대 원우회 임원진, 소개와 활동내역을 별도 관리합니다."
               meta={`${pastCouncils.length}개 원우회 등록`}
-              onPress={() => openAdminSection("pastCouncils")}
+              onPress={() => openManagedBoard("gsa-past-councils")}
             />
             <ShortcutCard
               icon="document-text-outline"
               title="전체 게시글 관리"
               description="전체 게시글을 검색하고 고정, 수정, 삭제 같은 운영 작업을 처리합니다."
               meta={`${adminPostTotal}개 게시글 조회`}
-              onPress={() => openAdminSection("posts")}
+              onPress={openAllManagedPosts}
             />
             <ShortcutCard
               icon="flower-outline"
               title="상조회 신청 처리"
               description="신청 내용과 비공개 증빙서류를 확인하고 처리 완료 또는 반려로 변경합니다."
               meta={`처리 대기 ${processingMutualAidCount}건`}
-              onPress={() => openAdminSection("mutualAid")}
+              onPress={() => openManagedBoard("mutual-aid")}
             />
             <ShortcutCard
               icon="chatbox-ellipses-outline"
               title="건의사항 답변"
               description="익명 건의사항을 확인하고 원우회 공식 답변을 등록합니다."
               meta={`답변 대기 ${pendingSuggestionCount}건`}
-              onPress={() => openAdminSection("suggestions")}
+              onPress={() => openManagedBoard("suggestions")}
             />
             <ShortcutCard
               icon="people-outline"
               title="동아리 게시글 등록"
               description="대표 사진과 가입 신청 링크를 포함한 동아리 소개 글을 등록합니다."
               meta={clubPromoBoard ? "관리자 전용 게시판" : "동아리 게시판 확인 필요"}
-              onPress={() => {
-                if (clubPromoBoard) {
-                  router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
-                }
-              }}
+              onPress={() => openManagedBoard("club-promo")}
             />
             <ShortcutCard
               icon="git-network-outline"
               title="네트워킹 게시글 등록"
               description="대표 사진과 참가 신청 링크를 포함한 네트워킹 안내 글을 등록합니다."
               meta={networkingProgramsBoard ? "관리자 전용 게시판" : "네트워킹 게시판 확인 필요"}
-              onPress={() => {
-                if (networkingProgramsBoard) {
-                  router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
-                }
-              }}
+              onPress={() => openManagedBoard("networking-programs")}
+            />
+            <ShortcutCard
+              icon="help-circle-outline"
+              title="FAQ 관리"
+              description="FAQ 목록, 정렬 순서와 노출 상태를 관리합니다."
+              meta={`${faqs.length}개 FAQ`}
+              onPress={() => openManagedBoard("gsa-faq")}
+            />
+            <ShortcutCard
+              icon="calendar-outline"
+              title="일정 관리"
+              description="학사 일정과 원우회 일정을 등록하고 수정합니다."
+              meta={`${events.length}개 일정`}
+              onPress={() => openManagedBoard("academic-calendar")}
             />
             <ShortcutCard
               icon="notifications-outline"
@@ -2969,7 +4155,7 @@ export default function AdminScreen() {
                         key={board.id}
                         active={selectedNoticeBoardId === board.id}
                         label={board.name}
-                        onPress={() => setSelectedNoticeBoardId(board.id)}
+                        onPress={() => handleSelectNoticeBoard(board.id)}
                       />
                     ))}
                   </ScrollView>
@@ -3072,600 +4258,51 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "notices" ? (
+        {section === "boardManagement" ? (
           <View style={{ gap: 12 }}>
             <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editingNoticeId ? "공지사항 수정" : "공지사항 등록"}
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                  {noticeBoards.map((board) => (
-                    <Chip
-                      key={board.id}
-                      active={selectedNoticeBoardId === board.id}
-                      label={board.name}
-                      onPress={() => setSelectedNoticeBoardId(board.id)}
-                    />
-                  ))}
-                </ScrollView>
-                <Field value={noticeForm.title} onChangeText={(value) => setNoticeForm((current) => ({ ...current, title: value }))} placeholder="공지 제목" />
-                <Field value={noticeForm.content} onChangeText={(value) => setNoticeForm((current) => ({ ...current, content: value }))} placeholder="공지 내용" multiline />
-                <View style={{ gap: 6 }}>
-                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>신청·접수 마감</Text>
-                  <Field value={noticeForm.deadline_at} onChangeText={(value) => setNoticeForm((current) => ({ ...current, deadline_at: value }))} placeholder="2026-07-31T18:00 (선택)" />
-                </View>
-                <View style={{ gap: 8 }}>
-                  <Text style={{ color: COLORS.text, fontWeight: "900" }}>분류</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {NOTICE_CATEGORY_OPTIONS.map((option) => (
-                      <Chip
-                        key={option.value}
-                        active={noticeForm.category === option.value}
-                        label={option.label}
-                        onPress={() => setNoticeForm((current) => ({ ...current, category: option.value }))}
-                      />
-                    ))}
-                  </View>
-                </View>
-                <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12, gap: 10 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "900" }}>공지 이미지</Text>
-                      <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 3 }}>
-                        본문에 함께 표시할 이미지를 첨부합니다.
-                      </Text>
-                    </View>
-                    <ActionButton
-                      icon="image-outline"
-                      label={noticeUploading ? `업로드 ${noticeUploadProgress || 0}%` : "이미지 첨부"}
-                      onPress={handleUploadNoticeImage}
-                      tone={noticeAttachments.length > 0 ? "outline" : "primary"}
-                      disabled={noticeUploading}
-                    />
-                  </View>
-                  {noticeAttachments.length === 0 ? (
-                    <Text style={{ color: COLORS.muted, fontSize: 13 }}>아직 첨부된 이미지가 없습니다.</Text>
-                  ) : null}
-                  {noticeAttachments.map((attachment) => {
-                    const url = mediaUrl(attachment.url);
-                    const isImage = attachment.content_type?.startsWith("image/");
-                    return (
-                      <View
-                        key={attachment.id}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 10,
-                          borderRadius: RADIUS.button,
-                          borderWidth: 1,
-                          borderColor: COLORS.border,
-                          backgroundColor: COLORS.surface,
-                          padding: 10,
-                        }}
-                      >
-                        {isImage && url ? (
-                          <MediaImage media={attachment} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
-                        ) : (
-                          <View style={{ width: 56, height: 56, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary50 }}>
-                            <Ionicons name="document-attach-outline" size={22} color={COLORS.primary} />
-                          </View>
-                        )}
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={{ color: COLORS.text, fontWeight: "900" }} numberOfLines={1}>
-                            {attachment.original_filename}
-                          </Text>
-                          <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 2 }}>
-                            {Math.ceil((attachment.file_size ?? 0) / 1024)} KB
-                          </Text>
-                        </View>
-                        <Pressable hitSlop={8} onPress={() => setNoticeAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                          <Ionicons name="close-circle" size={22} color={COLORS.subtle} />
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </View>
-                <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: noticeForm.show_in_council_activity ? COLORS.primary : COLORS.border, backgroundColor: noticeForm.show_in_council_activity ? COLORS.primary50 : COLORS.surfaceAlt, padding: 12, gap: 10 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "900" }}>원우회 활동내역 연동</Text>
-                      <Text style={{ color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 3 }}>
-                        이 공지의 사진과 본문을 원우회 활동내역 목록·상세에도 표시합니다.
-                      </Text>
-                    </View>
-                    <ActionButton
-                      icon={noticeForm.show_in_council_activity ? "checkmark-circle" : "ellipse-outline"}
-                      label={noticeForm.show_in_council_activity ? "연동함" : "연동 안 함"}
-                      onPress={() => setNoticeForm((current) => ({ ...current, show_in_council_activity: !current.show_in_council_activity }))}
-                      tone={noticeForm.show_in_council_activity ? "primary" : "outline"}
-                    />
-                  </View>
-                  {noticeForm.show_in_council_activity && noticeAttachments.length === 0 ? (
-                    <Text style={{ color: "#B45309", fontSize: 12, fontWeight: "800" }}>연동하려면 공지 이미지를 1장 이상 첨부해야 합니다.</Text>
-                  ) : null}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton
-                      label={noticeForm.is_pinned ? "상단 고정" : "일반 공지"}
-                      icon="pin-outline"
-                      onPress={() => setNoticeForm((current) => ({ ...current, is_pinned: !current.is_pinned }))}
-                      tone={noticeForm.is_pinned ? "primary" : "outline"}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton icon="save-outline" label={editingNoticeId ? "공지 저장" : "공지 등록"} onPress={handleSaveNotice} />
-                  </View>
-                </View>
-                {editingNoticeId ? <ActionButton label="수정 취소" onPress={resetNoticeForm} tone="outline" /> : null}
-              </View>
-            </Panel>
-            <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-              {selectedNoticeBoard?.name ?? "공지 게시판"} 목록
-            </Text>
-            {noticePostsQuery.isLoading ? <ActivityIndicator /> : null}
-            {!noticePostsQuery.isLoading && noticePosts.length === 0 ? (
-              <Panel>
-                <Text style={{ color: COLORS.muted }}>표시할 공지사항이 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {noticePosts.map((item) => (
-              <NoticeCard key={item.id} item={item} onEdit={handleEditNotice} onPinToggle={handlePinNotice} onDelete={handleDeleteNotice} />
-            ))}
-          </View>
-        ) : null}
-
-        {section === "boards" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editingBoardId ? "게시판 수정" : "게시판 등록"}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.name} onChangeText={(value) => setBoardForm((current) => ({ ...current, name: value }))} placeholder="게시판 이름" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.slug} onChangeText={(value) => setBoardForm((current) => ({ ...current, slug: value }))} placeholder="slug" editable={!editingBoardId} />
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.category} onChangeText={(value) => setBoardForm((current) => ({ ...current, category: value }))} placeholder="카테고리" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field value={boardForm.sort_order} onChangeText={(value) => setBoardForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
-                  </View>
-                </View>
-                <Field value={boardForm.description} onChangeText={(value) => setBoardForm((current) => ({ ...current, description: value }))} placeholder="설명" multiline />
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판 유형</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {Object.entries(BOARD_TYPE_LABELS).map(([value, label]) => (
-                    <Chip key={value} active={boardForm.board_type === value} label={label} onPress={() => setBoardForm((current) => ({ ...current, board_type: value }))} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>권한</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {(["user", "admin"] as const).map((permission) => (
-                    <Chip key={`read-${permission}`} active={boardForm.read_permission === permission} label={`읽기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, read_permission: permission }))} />
-                  ))}
-                  {(["user", "admin"] as const).map((permission) => (
-                    <Chip key={`write-${permission}`} active={boardForm.write_permission === permission} label={`쓰기 ${permission}`} onPress={() => setBoardForm((current) => ({ ...current, write_permission: permission }))} />
-                  ))}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton
-                      label={boardForm.allow_anonymous ? "익명 허용" : "실명 게시"}
-                      onPress={() => setBoardForm((current) => ({ ...current, allow_anonymous: !current.allow_anonymous }))}
-                      tone={boardForm.allow_anonymous ? "primary" : "outline"}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton
-                      label={boardForm.is_active ? "활성" : "숨김"}
-                      onPress={() => setBoardForm((current) => ({ ...current, is_active: !current.is_active }))}
-                      tone={boardForm.is_active ? "primary" : "muted"}
-                    />
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton icon="save-outline" label={editingBoardId ? "게시판 저장" : "게시판 등록"} onPress={handleSaveBoard} />
-                  </View>
-                  {editingBoardId ? (
-                    <View style={{ flex: 1 }}>
-                      <ActionButton label="취소" onPress={resetBoardForm} tone="outline" />
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            </Panel>
-            {boardsQuery.isLoading ? <ActivityIndicator /> : null}
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>게시판 설정 범위</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  공지사항, 원우회, 참여활동, 커뮤니티/자료 게시판을 묶음별로 확인하고 권한과 노출 상태를 조정합니다.
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {BOARD_SCOPE_FILTERS.map((item) => (
-                    <Chip
-                      key={item.key}
-                      active={boardScope === item.key}
-                      label={item.label}
-                      onPress={() => setBoardScope(item.key)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            </Panel>
-            {!boardsQuery.isLoading && visibleBoards.length === 0 ? (
-              <Panel>
-                <Text style={{ color: COLORS.muted }}>표시할 게시판이 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {visibleBoards.map((item) => (
-              <BoardCard key={item.id} item={item} onEdit={handleEditBoard} />
-            ))}
-          </View>
-        ) : null}
-
-        {section === "executives" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 소개 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
-                </Text>
-              </View>
-            </Panel>
-            {!executivesBoard ? (
-              <Panel>
-                <Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-executives 게시판을 찾을 수 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {currentCouncils.map((council, cardIndex) => (
-              <Panel key={`current-council-${cardIndex}`}>
-                <View style={{ gap: 10 }}>
-                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.title || "현재 원우회"}</Text>
-                  <Field value={council.title} onChangeText={(value) => updateCurrentCouncil(cardIndex, { title: value })} placeholder="원우회 이름 예: 제30대 원우회" />
-                  <Field value={council.greeting} onChangeText={(value) => updateCurrentCouncil(cardIndex, { greeting: value })} placeholder="인사말" multiline />
-                  <Field value={council.intro} onChangeText={(value) => updateCurrentCouncil(cardIndex, { intro: value })} placeholder="원우회 소개글" multiline />
-                  <IntroBannerEditor
-                    value={council.banner_image_url}
-                    uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === undefined}
-                    onUpload={() => void handleUploadCurrentCouncilImage(cardIndex)}
-                    onRemove={() => updateCurrentCouncil(cardIndex, { banner_image_url: "" })}
-                  />
-                  {council.members.map((member, memberIndex) => (
-                    <IntroMemberEditor
-                      key={`current-council-${cardIndex}-member-${memberIndex}`}
-                      member={member}
-                      index={memberIndex}
-                      uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === memberIndex}
-                      uploadDisabled={Boolean(currentCouncilUploading)}
-                      canMoveUp={memberIndex > 0}
-                      canMoveDown={memberIndex < council.members.length - 1}
-                      onChange={(patch) => updateCurrentCouncilMember(cardIndex, memberIndex, patch)}
-                      onUpload={() => void handleUploadCurrentCouncilImage(cardIndex, memberIndex)}
-                      onMoveUp={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
-                      onMoveDown={() => updateCurrentCouncil(cardIndex, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
-                      onRemove={() => updateCurrentCouncil(cardIndex, { members: council.members.filter((_, index) => index !== memberIndex) })}
-                    />
-                  ))}
-                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCurrentCouncil(cardIndex, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(currentCouncilUploading)} tone="outline" />
-                </View>
-              </Panel>
-            ))}
-            <Panel>
-              <View style={{ gap: 8 }}>
-                <ActionButton
-                  icon="save-outline"
-                  label={executivesSaving ? "저장 중" : "원우회 소개 저장"}
-                  onPress={() => void handleSaveExecutives()}
-                  disabled={executivesSaving || Boolean(currentCouncilUploading) || !executivesBoard}
-                />
-              </View>
-            </Panel>
-          </View>
-        ) : null}
-
-        {section === "cohortLeaders" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>기수별 기장단 소개 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  기수별 대표 이미지, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.
-                </Text>
-              </View>
-            </Panel>
-            {!cohortLeadersBoard ? (
-              <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-cohort-leaders 게시판을 찾을 수 없습니다.</Text></Panel>
-            ) : null}
-            {cohortLeaders.map((leader, index) => (
-              <Panel key={`cohort-leader-${index}`}>
-                <View style={{ gap: 10 }}>
-                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{leader.cohort || "새 기수"} 기장단</Text>
-                  <Field value={leader.cohort} onChangeText={(value) => updateCohortLeader(index, { cohort: value })} placeholder="기수 예: 75" />
-                  <Field value={leader.greeting} onChangeText={(value) => updateCohortLeader(index, { greeting: value })} placeholder="인사말 예: 안녕하세요, 75기 기장 홍길동입니다!" />
-                  <Field value={leader.intro} onChangeText={(value) => updateCohortLeader(index, { intro: value })} placeholder="기장단 소개글" multiline />
-                  <IntroBannerEditor
-                    value={leader.banner_image_url}
-                    uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === undefined}
-                    onUpload={() => void handleUploadCohortLeaderImage(index)}
-                    onRemove={() => updateCohortLeader(index, { banner_image_url: "" })}
-                  />
-                  {leader.members.map((member, memberIndex) => (
-                    <IntroMemberEditor
-                      key={`cohort-leader-${index}-member-${memberIndex}`}
-                      member={member}
-                      index={memberIndex}
-                      uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === memberIndex}
-                      uploadDisabled={Boolean(cohortLeaderUploading)}
-                      canMoveUp={memberIndex > 0}
-                      canMoveDown={memberIndex < leader.members.length - 1}
-                      onChange={(patch) => updateCohortLeaderMember(index, memberIndex, patch)}
-                      onUpload={() => void handleUploadCohortLeaderImage(index, memberIndex)}
-                      onMoveUp={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex - 1) })}
-                      onMoveDown={() => updateCohortLeader(index, { members: moveCouncilIntroductionItem(leader.members, memberIndex, memberIndex + 1) })}
-                      onRemove={() => updateCohortLeader(index, { members: leader.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
-                    />
-                  ))}
-                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updateCohortLeader(index, { members: [...leader.members, { ...emptyExecutiveMember }] })} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="기수 위로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(cohortLeaderUploading) || index === 0} tone="outline" /></View>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="기수 아래로" onPress={() => setCohortLeaders((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(cohortLeaderUploading) || index === cohortLeaders.length - 1} tone="outline" /></View>
-                  </View>
-                  <ActionButton icon="trash-outline" label="이 기수 삭제" onPress={() => setCohortLeaders((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(cohortLeaderUploading)} tone="danger" />
-                </View>
-              </Panel>
-            ))}
-            <Panel>
-              <View style={{ gap: 8 }}>
-                <ActionButton icon="person-add-outline" label="기수 추가" onPress={() => setCohortLeaders((current) => [...current, { ...emptyCohortLeader, members: [] }])} disabled={Boolean(cohortLeaderUploading)} tone="outline" />
-                <ActionButton icon="save-outline" label={cohortLeadersSaving ? "저장 중" : "기장단 소개 저장"} onPress={() => void handleSaveCohortLeaders()} disabled={cohortLeadersSaving || Boolean(cohortLeaderUploading) || !cohortLeadersBoard} />
-              </View>
-            </Panel>
-          </View>
-        ) : null}
-
-        {section === "pastCouncils" ? (
-          <View style={{ gap: 12 }}>
-            <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
-            {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>DB 마이그레이션 후 gsa-past-councils 게시판을 사용할 수 있습니다.</Text></Panel> : null}
-            {pastCouncils.map((council, index) => (
-              <Panel key={`past-council-${index}`}>
-                <View style={{ gap: 10 }}>
-                  <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{council.cohort || "새 역대 원우회"} 원우회</Text>
-                  <Field value={council.cohort} onChangeText={(value) => updatePastCouncil(index, { cohort: value })} placeholder="원우회 대수 예: 29" />
-                  <Field value={council.greeting} onChangeText={(value) => updatePastCouncil(index, { greeting: value })} placeholder="인사말" multiline />
-                  <Field value={council.intro} onChangeText={(value) => updatePastCouncil(index, { intro: value })} placeholder="원우회 소개글" multiline />
-                  <Field value={council.activities_text} onChangeText={(value) => updatePastCouncil(index, { activities_text: value })} placeholder={'활동내역을 한 줄에 하나씩 입력\n예: 25.05.05 기말 세미나 개최'} multiline />
-                  <IntroBannerEditor
-                    value={council.banner_image_url}
-                    uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined}
-                    onUpload={() => void handleUploadPastCouncilImage(index)}
-                    onRemove={() => updatePastCouncil(index, { banner_image_url: "" })}
-                  />
-                  {council.members.map((member, memberIndex) => (
-                    <IntroMemberEditor
-                      key={`past-council-${index}-member-${memberIndex}`}
-                      member={member}
-                      index={memberIndex}
-                      uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === memberIndex}
-                      uploadDisabled={Boolean(pastCouncilUploading)}
-                      canMoveUp={memberIndex > 0}
-                      canMoveDown={memberIndex < council.members.length - 1}
-                      onChange={(patch) => updatePastCouncilMember(index, memberIndex, patch)}
-                      onUpload={() => void handleUploadPastCouncilImage(index, memberIndex)}
-                      onMoveUp={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex - 1) })}
-                      onMoveDown={() => updatePastCouncil(index, { members: moveCouncilIntroductionItem(council.members, memberIndex, memberIndex + 1) })}
-                      onRemove={() => updatePastCouncil(index, { members: council.members.filter((_, itemIndex) => itemIndex !== memberIndex) })}
-                    />
-                  ))}
-                  <ActionButton icon="person-add-outline" label="임원 카드 추가" onPress={() => updatePastCouncil(index, { members: [...council.members, { ...emptyExecutiveMember }] })} disabled={Boolean(pastCouncilUploading)} tone="outline" />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="원우회 위로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index - 1))} disabled={Boolean(pastCouncilUploading) || index === 0} tone="outline" /></View>
-                    <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="원우회 아래로" onPress={() => setPastCouncils((current) => moveCouncilIntroductionItem(current, index, index + 1))} disabled={Boolean(pastCouncilUploading) || index === pastCouncils.length - 1} tone="outline" /></View>
-                  </View>
-                  <ActionButton icon="trash-outline" label="이 원우회 삭제" onPress={() => setPastCouncils((current) => current.filter((_, itemIndex) => itemIndex !== index))} disabled={Boolean(pastCouncilUploading)} tone="danger" />
-                </View>
-              </Panel>
-            ))}
-            <Panel><View style={{ gap: 8 }}><ActionButton icon="add-circle-outline" label="역대 원우회 추가" onPress={() => setPastCouncils((current) => [...current, { ...emptyPastCouncil, members: [] }])} disabled={Boolean(pastCouncilUploading)} tone="outline" /><ActionButton icon="save-outline" label={pastCouncilsSaving ? "저장 중" : "역대 원우회 저장"} onPress={() => void handleSavePastCouncils()} disabled={pastCouncilsSaving || Boolean(pastCouncilUploading) || !pastCouncilsBoard} /></View></Panel>
-          </View>
-        ) : null}
-
-        {section === "posts" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>전체 게시글 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  콘텐츠 그룹과 게시판을 선택해 공통 운영 기능과 게시판별 전용 기능을 함께 관리합니다.
-                </Text>
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>콘텐츠 그룹</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                  {CONTENT_SCOPE_FILTERS.map((item) => (
-                    <Chip
-                      key={item.key}
-                      active={postContentScope === item.key}
-                      label={item.label}
-                      onPress={() => handlePostContentScopeChange(item.key)}
-                    />
-                  ))}
-                </ScrollView>
-                {postContentScope === "all" ? (
-                  <View style={{ gap: 8 }}>
-                    <Text style={{ color: COLORS.subtle, fontSize: 12, lineHeight: 18 }}>
-                      전체 검색에서는 기존 빠른 등록과 공통 관리 기능을 그대로 사용할 수 있습니다.
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                      <ActionButton
-                        icon="add-circle-outline"
-                        label="동아리 안내 등록"
-                        disabled={!clubPromoBoard}
-                        onPress={() => {
-                          if (clubPromoBoard) {
-                            router.push({ pathname: "/board/post/create", params: { boardId: String(clubPromoBoard.id) } } as never);
-                          }
-                        }}
-                        tone="outline"
-                      />
-                      <ActionButton
-                        icon="git-network-outline"
-                        label="네트워킹 안내 등록"
-                        disabled={!networkingProgramsBoard}
-                        onPress={() => {
-                          if (networkingProgramsBoard) {
-                            router.push({ pathname: "/board/post/create", params: { boardId: String(networkingProgramsBoard.id) } } as never);
-                          }
-                        }}
-                        tone="outline"
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  <View style={{ gap: 10 }}>
-                    <Text style={{ color: COLORS.muted, fontWeight: "800" }}>게시판</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 8 }}>
-                      {visiblePostBoards.map((board) => (
-                        <Chip
-                          key={board.id}
-                          active={postBoardId === board.id}
-                          label={board.name}
-                          onPress={() => setPostBoardId(board.id)}
-                        />
-                      ))}
-                    </ScrollView>
-                    {selectedPostBoard ? (
-                      <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary100, backgroundColor: COLORS.primary50, padding: 12, gap: 9 }}>
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                          <Text style={{ color: COLORS.primary900, fontSize: 16, fontWeight: "900" }}>{selectedPostBoard.name} 관리</Text>
-                          <Chip active label={BOARD_TYPE_LABELS[selectedPostBoard.board_type] ?? selectedPostBoard.board_type} />
-                        </View>
-                        <Text style={{ color: COLORS.muted, lineHeight: 19 }}>{selectedPostContentControl.description}</Text>
-                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                          {selectedPostContentControl.createLabel ? (
-                            <ActionButton
-                              icon="add-circle-outline"
-                              label={selectedPostContentControl.createLabel}
-                              onPress={() => router.push({ pathname: "/board/post/create", params: { boardId: String(selectedPostBoard.id) } } as never)}
-                            />
-                          ) : null}
-                          {selectedPostContentControl.dedicatedSection && selectedPostContentControl.dedicatedLabel ? (
-                            <ActionButton
-                              icon="options-outline"
-                              label={selectedPostContentControl.dedicatedLabel}
-                              onPress={() => openAdminSection(selectedPostContentControl.dedicatedSection!)}
-                              tone="outline"
-                            />
-                          ) : null}
-                          <ActionButton
-                            icon="settings-outline"
-                            label="게시판 설정"
-                            onPress={() => openAdminSection("boards", postContentScope)}
-                            tone="outline"
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <Text style={{ color: COLORS.muted }}>이 그룹에서 관리할 게시판이 없습니다.</Text>
-                    )}
-                  </View>
-                )}
-                <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
-                <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
-                <Text style={{ color: COLORS.muted, fontWeight: "800" }}>상태 필터</Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {ADMIN_POST_MODE_FILTERS.map((item) => (
-                    <Chip key={item.key} active={postMode === item.key} label={item.label} onPress={() => setPostMode(item.key)} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
-                  총 {adminPostTotal}개 게시글
-                </Text>
-              </View>
-            </Panel>
-            {adminPostsQuery.isLoading ? <ActivityIndicator /> : null}
-            {!adminPostsQuery.isLoading && adminPosts.length === 0 ? (
-              <Panel>
-                <Text style={{ color: COLORS.muted }}>표시할 게시글이 없습니다.</Text>
-              </Panel>
-            ) : null}
-            {adminPosts.map((item) => (
-              <AdminPostCard
-                key={item.id}
-                item={item}
-                board={boards.find((board) => board.id === item.board_id)}
-                onPinToggle={handlePinAdminPost}
-                onDelete={handleDeleteAdminPost}
-                onRepresentativeImageChange={(post) => void handleReplacePostRepresentativeImage(post)}
-                isReplacingRepresentativeImage={replacingRepresentativeImagePostId === item.id}
+              <AdminBoardManagementNavigator
+                boards={boards}
+                scope={boardManagementScope}
+                selectedBoardId={boardManagementBoardId}
+                selectedTab={boardManagementTab}
+                creatingBoard={creatingBoard}
+                disabled={managedNavigationLocked || !boardsQuery.isSuccess}
+                onScopeChange={handleBoardManagementScopeChange}
+                onBoardChange={handleBoardManagementBoardChange}
+                onTabChange={handleBoardManagementTabChange}
+                onCreateBoard={handleCreateManagedBoard}
               />
-            ))}
-          </View>
-        ) : null}
-
-        {section === "mutualAid" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>상조회 신청 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  신청 상세에서 증빙서류를 확인한 후 처리 완료 또는 반려를 선택합니다. 반려 시 사유 입력이 필수입니다.
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {([
-                    ["processing", "처리중"],
-                    ["completed", "처리 완료"],
-                    ["rejected", "반려"],
-                    ["all", "전체"],
-                  ] as const).map(([value, label]) => (
-                    <Chip key={value} active={mutualAidFilter === value} label={label} onPress={() => setMutualAidFilter(value)} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
-                  처리 대기 {processingMutualAidCount}건 · 전체 {mutualAidPosts.length}건
-                </Text>
-              </View>
             </Panel>
-            {mutualAidPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-            {!mutualAidPostsQuery.isLoading && visibleMutualAidPosts.length === 0 ? (
-              <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 상조회 신청이 없습니다.</Text></Panel>
-            ) : null}
-            {visibleMutualAidPosts.map((item) => <MutualAidAdminCard key={item.id} item={item} />)}
-          </View>
-        ) : null}
 
-        {section === "suggestions" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>건의사항 답변 관리</Text>
-                <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-                  작성자는 익명으로 유지됩니다. 상세 화면에서 공식 답변을 입력하면 답변완료로 처리되고 작성자에게 알림이 전송됩니다.
-                </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {([['received', '대기중'], ['answered', '답변완료'], ['all', '전체']] as const).map(([value, label]) => (
-                    <Chip key={value} active={suggestionFilter === value} label={label} onPress={() => setSuggestionFilter(value)} />
-                  ))}
-                </View>
-                <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>
-                  답변 대기 {pendingSuggestionCount}건 · 전체 {suggestionPosts.length}건
-                </Text>
-              </View>
-            </Panel>
-            {suggestionPostsQuery.isLoading ? <ActivityIndicator color={COLORS.primary} /> : null}
-            {!suggestionPostsQuery.isLoading && visibleSuggestionPosts.length === 0 ? (
-              <Panel><Text style={{ color: COLORS.muted }}>해당 상태의 건의사항이 없습니다.</Text></Panel>
+            <AdminBoardTargetQueryState
+              status={managedContentTarget.status}
+              missingReason={managedContentTarget.status === "missing" ? managedContentTarget.reason : undefined}
+              onRetry={() => void boardsQuery.refetch()}
+            />
+
+            {boardsQuery.isSuccess && creatingBoard && boardManagementTab === "settings" ? renderBoardFormPanel() : null}
+
+            {!creatingBoard && boardManagementTab === "settings" && selectedManagedBoard && boardSettingsDraft ? (
+              <Panel>
+                <AdminBoardSettingsPanel
+                  board={selectedManagedBoard}
+                  draft={boardSettingsDraft}
+                  lockedPolicies={selectedBoardCapability.lockedPolicies}
+                  saving={boardSettingsSaving}
+                  onChange={setBoardSettingsDraft}
+                  onSave={() => void handleSaveBoardSettings()}
+                />
+              </Panel>
             ) : null}
-            {visibleSuggestionPosts.map((item) => <SuggestionAdminCard key={item.id} item={item} />)}
+
+            {!creatingBoard && boardManagementTab === "content" && hasManagedContentTarget ? (
+              <AdminBoardContentPanel
+                board={selectedManagedBoard}
+                capability={selectedBoardCapability}
+                renderers={managedContentRenderers}
+              />
+            ) : null}
           </View>
         ) : null}
 
@@ -3721,42 +4358,6 @@ export default function AdminScreen() {
             ) : null}
             {reports.map((report) => (
               <ReportCard key={report.id} report={report} onStatusChange={handleReportStatus} onDeleteTarget={handleDeleteTarget} />
-            ))}
-          </View>
-        ) : null}
-
-        {section === "faqs" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editingFAQId ? "FAQ 수정" : "FAQ 등록"}
-                </Text>
-                <Field value={faqForm.question} onChangeText={(value) => setFAQForm((current) => ({ ...current, question: value }))} placeholder="질문" />
-                <Field value={faqForm.answer} onChangeText={(value) => setFAQForm((current) => ({ ...current, answer: value }))} placeholder="답변" multiline />
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Field value={faqForm.category} onChangeText={(value) => setFAQForm((current) => ({ ...current, category: value }))} placeholder="분류" />
-                  </View>
-                  <View style={{ width: 92 }}>
-                    <Field value={faqForm.sort_order} onChangeText={(value) => setFAQForm((current) => ({ ...current, sort_order: value }))} placeholder="순서" />
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ActionButton icon="save-outline" label={editingFAQId ? "FAQ 저장" : "FAQ 등록"} onPress={handleSaveFAQ} />
-                  </View>
-                  {editingFAQId ? (
-                    <View style={{ flex: 1 }}>
-                      <ActionButton label="취소" onPress={resetFAQForm} tone="outline" />
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            </Panel>
-            {faqsQuery.isLoading ? <ActivityIndicator /> : null}
-            {faqs.map((item) => (
-              <FAQCard key={item.id} item={item} onEdit={handleEditFAQ} onDelete={handleDeleteFAQ} />
             ))}
           </View>
         ) : null}
