@@ -310,7 +310,7 @@ export const boardApi = {
       name: string;
       category: string;
       board_type: string;
-      description?: string;
+      description?: string | null;
       sort_order: number;
       allow_anonymous: boolean;
       read_permission: string;

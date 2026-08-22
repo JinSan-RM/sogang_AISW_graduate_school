@@ -474,10 +474,15 @@ def _reject_existing_insert_targets(
     existing = []
     for storage_id in storage_ids:
         media_exists = bool(_media_candidates_for_storage_id(all_media, storage_id))
-        file_exists = any(
-            _matching_media_files(root.expanduser().resolve(), (storage_id,))
+        matching_files = [
+            path
             for root in (public_media_dir, private_media_dir)
-        )
+            for path in _matching_media_files(root.expanduser().resolve(), (storage_id,))
+        ]
+        symlink = next((path for path in matching_files if path.is_symlink()), None)
+        if symlink is not None:
+            raise ValueError(f"symlinked selected media file is not allowed: {symlink.name}")
+        file_exists = bool(matching_files)
         if media_exists or file_exists:
             existing.append(storage_id)
     if existing:
