@@ -1,4 +1,5 @@
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const KST_OFFSET_HOURS = 9;
+const KST_OFFSET_MS = KST_OFFSET_HOURS * 60 * 60 * 1000;
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
 type CalendarParts = {
@@ -78,6 +79,41 @@ function shortDateBase(parts: CalendarParts) {
 
 function time24Base(parts: CalendarParts) {
   return `${String(parts.hours).padStart(2, "0")}:${String(parts.minutes).padStart(2, "0")}`;
+}
+
+export function koreaDateTimeInputToUtcISOString(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+
+  const [, yearValue, monthValue, dayValue, hourValue, minuteValue] = match;
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  const hours = Number(hourValue);
+  const minutes = Number(minuteValue);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  const isValid = year >= 1000
+    && year <= 9999
+    && month >= 1
+    && month <= 12
+    && day >= 1
+    && calendarDate.getUTCFullYear() === year
+    && calendarDate.getUTCMonth() === month - 1
+    && calendarDate.getUTCDate() === day
+    && hours >= 0
+    && hours <= 23
+    && minutes >= 0
+    && minutes <= 59;
+  if (!isValid) return null;
+
+  return new Date(Date.UTC(year, month - 1, day, hours - KST_OFFSET_HOURS, minutes)).toISOString();
+}
+
+export function utcApiDateTimeToKoreaInput(value?: string | null): string {
+  if (!value) return "";
+  const parts = displayParts(value);
+  if (!parts) return "";
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}T${time24Base(parts)}`;
 }
 
 export function formatBoardDate(value?: string | null): string {

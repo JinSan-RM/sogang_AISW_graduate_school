@@ -20,6 +20,11 @@ import {
   representativeImageUpdatePayload,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
+import {
+  formatBoardDateTime,
+  koreaDateTimeInputToUtcISOString,
+  utcApiDateTimeToKoreaInput,
+} from "../../utils/dateFormat";
 import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
@@ -1488,7 +1493,7 @@ function EventCard({ event, onEdit }: { event: EventItem; onEdit: (event: EventI
         </Text>
       </View>
       <Text style={{ color: COLORS.text, fontSize: 17, fontWeight: "900" }}>{event.title}</Text>
-      <Text style={{ color: COLORS.muted }}>{formatDate(event.start_at)}</Text>
+      <Text style={{ color: COLORS.muted }}>{formatBoardDateTime(event.start_at)}</Text>
       <View style={{ flexDirection: "row", gap: 8 }}>
         <View style={{ flex: 1 }}>
           <ActionButton label="수정" onPress={() => onEdit(event)} tone="outline" />
@@ -1697,8 +1702,8 @@ export default function AdminScreen() {
     reset({
       title: event.title,
       category: event.category,
-      start_at: event.start_at.slice(0, 16),
-      end_at: event.end_at?.slice(0, 16) ?? "",
+      start_at: utcApiDateTimeToKoreaInput(event.start_at),
+      end_at: utcApiDateTimeToKoreaInput(event.end_at),
       location: event.location ?? "",
       description: event.description ?? "",
     });
@@ -2583,9 +2588,9 @@ export default function AdminScreen() {
       return;
     }
 
-    const startDate = new Date(values.start_at);
-    const endDate = values.end_at ? new Date(values.end_at) : null;
-    if (Number.isNaN(startDate.getTime()) || (endDate && Number.isNaN(endDate.getTime()))) {
+    const startAt = koreaDateTimeInputToUtcISOString(values.start_at);
+    const endAt = values.end_at ? koreaDateTimeInputToUtcISOString(values.end_at) : null;
+    if (!startAt || (values.end_at && !endAt)) {
       Alert.alert("일정 시간 확인", "날짜를 선택하고 시간은 HH:mm 형식으로 입력해주세요.");
       return;
     }
@@ -2593,8 +2598,8 @@ export default function AdminScreen() {
     const payload = {
       title: values.title,
       category: values.category,
-      start_at: startDate.toISOString(),
-      end_at: endDate ? endDate.toISOString() : undefined,
+      start_at: startAt,
+      end_at: endAt ?? undefined,
       location: cleanOptional(values.location ?? ""),
       description: cleanOptional(values.description ?? ""),
     };
@@ -3827,14 +3832,14 @@ export default function AdminScreen() {
                   control={control}
                   name="start_at"
                   render={({ field }) => (
-                    <EventDateTimePicker label="시작일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />
+                    <EventDateTimePicker label="시작일시 (한국시간)" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />
                   )}
                 />
                 <Controller
                   control={control}
                   name="end_at"
                   render={({ field }) => (
-                    <EventDateTimePicker label="종료일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="11:00" />
+                    <EventDateTimePicker label="종료일시 (한국시간)" value={field.value ?? ""} onChange={field.onChange} fallbackTime="11:00" />
                   )}
                 />
                 <Controller

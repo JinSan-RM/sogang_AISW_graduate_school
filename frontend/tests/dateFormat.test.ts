@@ -9,6 +9,8 @@ import {
   formatRelativeTime,
   formatShortDate,
   formatTime24,
+  koreaDateTimeInputToUtcISOString,
+  utcApiDateTimeToKoreaInput,
 } from "../utils/dateFormat";
 
 test("게시판 날짜를 한국 시간 기준 YY.MM.DD(요일)로 표시한다", () => {
@@ -31,6 +33,29 @@ test("일정 화면은 선택일, 시각, 상세 메타데이터 형식을 구�
   assert.equal(formatBoardDateTime("2026-06-26T09:00:00Z"), "26.06.26(금) · 18:00");
   assert.equal(formatTime24("2026-06-26T09:00:00Z"), "18:00");
   assert.equal(formatHomeScheduleDate("2026-06-26T09:00:00Z"), "06.26(금)");
+});
+
+test("관리자 일정 입력은 한국시간으로 해석해 UTC API 값으로 저장한다", () => {
+  assert.equal(
+    koreaDateTimeInputToUtcISOString("2026-08-19T18:00"),
+    "2026-08-19T09:00:00.000Z",
+  );
+  assert.equal(
+    koreaDateTimeInputToUtcISOString("2026-01-01T00:30"),
+    "2025-12-31T15:30:00.000Z",
+  );
+});
+
+test("UTC 일정 값은 관리자 수정 폼의 동일한 한국시간으로 복원한다", () => {
+  assert.equal(utcApiDateTimeToKoreaInput("2026-08-19T09:00:00Z"), "2026-08-19T18:00");
+  assert.equal(utcApiDateTimeToKoreaInput("2026-08-19T09:00:00"), "2026-08-19T18:00");
+  assert.equal(utcApiDateTimeToKoreaInput("2025-12-31T15:30:00Z"), "2026-01-01T00:30");
+});
+
+test("관리자 일정 입력은 존재하지 않는 한국 날짜와 시간을 거부한다", () => {
+  assert.equal(koreaDateTimeInputToUtcISOString("2026-02-30T09:00"), null);
+  assert.equal(koreaDateTimeInputToUtcISOString("2026-08-19T24:00"), null);
+  assert.equal(koreaDateTimeInputToUtcISOString(""), null);
 });
 
 test("댓글 보조 시간은 1시간 미만만 상대 시간, 이후에는 한국 시간 시각을 사용한다", () => {
