@@ -16,3 +16,10 @@ test("홈 공지는 단일 슬러그 대신 모든 활성 공지 게시판의 �
   assert.doesNotMatch(homeSource, /function noticeCategoryLabel/);
   assert.doesNotMatch(homeSource, /noticeCategoryLabel\(post\.category\)/);
 });
+
+test("#186 홈 공지사항 더보기는 이전 필터와 무관하게 전체 공지 루트를 연다", () => {
+  assert.match(
+    homeSource,
+    /<SectionHeader\s+title="공지사항"[\s\S]*?requestTabRootReset\("notices"\)[\s\S]*?router\.navigate\(NOTICES_TAB_ROUTE as never\)[\s\S]*?\/>/,
+  );
+});

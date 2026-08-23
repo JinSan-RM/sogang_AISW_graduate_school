@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { mediaAccessQueryOptions } from "../hooks/useMediaAccessUrl";
-import { enabledRefetch, noticeRefreshControlRefreshing, refreshQueries } from "../utils/pullToRefresh";
+import type { NoticeFilter } from "../utils/noticeFeed";
+import {
+  enabledRefetch,
+  noticeRefreshControlRefreshing,
+  refreshQueries,
+  selectNoticeFilterAndRefresh,
+} from "../utils/pullToRefresh";
 
 test("보호 이미지 접근 URL 옵션은 캐시를 유지하고 주기 갱신을 예약하지 않는다", () => {
   const options = mediaAccessQueryOptions({ id: 71, url: "/uploads/profile.png" });
@@ -54,4 +60,27 @@ test("공지 초기 로딩 중에는 pull indicator를 LoadingRows와 함께 표
     boardsRefetching: false,
     postsRefetching: true,
   }), true);
+});
+
+test("공지 필터 선택은 선택값을 바꾸고 매번 게시판과 공지 목록을 재조회한다", async () => {
+  for (const filter of ["all", "academic", "event", "other"] satisfies NoticeFilter[]) {
+    let selected: NoticeFilter = "all";
+    const calls: string[] = [];
+
+    await selectNoticeFilterAndRefresh(
+      filter,
+      (nextFilter) => {
+        selected = nextFilter;
+      },
+      async () => {
+        calls.push("boards");
+      },
+      async () => {
+        calls.push("posts");
+      },
+    );
+
+    assert.equal(selected, filter);
+    assert.deepEqual(calls, ["boards", "posts"]);
+  }
 });

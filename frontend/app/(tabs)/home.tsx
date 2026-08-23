@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -27,9 +28,10 @@ import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useAllMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
+import { requestTabRootReset } from "../../stores/tabRootResetStore";
 import { useUserStore } from "../../stores/userStore";
 import type { BannerItem, Board, EventItem, PostListItem } from "../../types";
-import { COMMUNITY_TAB_ROUTE, HOME_TAB_ROUTE, eventDayRoute, postDetailRoute } from "../../utils/appRoutes";
+import { COMMUNITY_TAB_ROUTE, HOME_TAB_ROUTE, NOTICES_TAB_ROUTE, eventDayRoute, postDetailRoute } from "../../utils/appRoutes";
 import { formatBoardDate, formatHomeScheduleDate } from "../../utils/dateFormat";
 import {
   calendarDateKey,
@@ -41,6 +43,7 @@ import {
   shiftCalendarMonth,
 } from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
+import { homeAlumniDirectoryErrorMessage, homeAlumniDirectoryLink } from "../../utils/homeAlumniDirectory";
 import { homeNoticeCategory, homeNoticePosts, isNoticeContentBoard } from "../../utils/noticeFeed";
 import { enabledRefetch, refreshQueries } from "../../utils/pullToRefresh";
 
@@ -666,6 +669,7 @@ export default function HomeScreen() {
   );
   const events = eventsQuery.data?.data ?? [];
   const albumPosts = albumQuery.data?.data ?? [];
+  const alumniDirectoryLink = useMemo(() => homeAlumniDirectoryLink(boards), [boards]);
   const hasUnreadNotifications = (notificationQuery.data?.data ?? []).some((notification) => !notification.is_read);
   const displayName = user?.nickname || "서강인";
   const isRefreshing = boardsRefetching
@@ -683,6 +687,16 @@ export default function HomeScreen() {
       noticeBoardIds.length > 0 ? noticesQuery.refetch : undefined,
       albumBoardId ? albumQuery.refetch : undefined,
     ]);
+  };
+  const openAlumniDirectory = () => {
+    if (alumniDirectoryLink.status !== "ready") {
+      Alert.alert("동문회 주소록", homeAlumniDirectoryErrorMessage(alumniDirectoryLink.status));
+      return;
+    }
+
+    void Linking.openURL(alumniDirectoryLink.url).catch(() => {
+      Alert.alert("동문회 주소록", homeAlumniDirectoryErrorMessage("open_failed"));
+    });
   };
 
   return (
@@ -717,7 +731,13 @@ export default function HomeScreen() {
         <HomeBannerCarousel banners={banners} />
       )}
 
-      <SectionHeader title="공지사항" onPress={() => router.push("/(tabs)/notices" as never)} />
+      <SectionHeader
+        title="공지사항"
+        onPress={() => {
+          requestTabRootReset("notices");
+          router.navigate(NOTICES_TAB_ROUTE as never);
+        }}
+      />
       <NoticeList
         posts={notices}
         boards={noticeBoards}
@@ -760,6 +780,22 @@ export default function HomeScreen() {
       ) : (
         <AlbumStrip posts={albumPosts} />
       )}
+
+      <Pressable
+        accessibilityLabel="동문회 주소록"
+        accessibilityRole="link"
+        onPress={openAlumniDirectory}
+        style={styles.alumniDirectoryRow}
+      >
+        <View style={styles.alumniDirectoryLeading}>
+          <Text style={styles.alumniDirectoryIcon}>📋</Text>
+          <View style={styles.alumniDirectoryCopy}>
+            <Text style={styles.alumniDirectoryTitle}>동문회 주소록</Text>
+            <Text style={styles.alumniDirectoryDescription}>선배 원우들의 연락처를 확인해보세요</Text>
+          </View>
+        </View>
+        <ForwardIcon size={18} color={COLORS.muted} />
+      </Pressable>
     </ScrollView>
   );
 }
@@ -1183,5 +1219,44 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "400",
     marginTop: 4,
+  },
+  alumniDirectoryRow: {
+    minHeight: 92,
+    marginTop: 28,
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 18,
+  },
+  alumniDirectoryLeading: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  alumniDirectoryIcon: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  alumniDirectoryCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  alumniDirectoryTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: "500",
+    lineHeight: 22,
+  },
+  alumniDirectoryDescription: {
+    color: COLORS.subtle,
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 18,
+    marginTop: 2,
   },
 });

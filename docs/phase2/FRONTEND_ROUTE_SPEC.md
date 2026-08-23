@@ -59,6 +59,7 @@ Sections:
 - Latest two notices across every active notice board, ordered by creation time without pin priority.
 - Upcoming schedule.
 - Recent community posts.
+- Final `동문회 주소록` entry that opens the active `alumni-directory` board's administrator-configured HTTP(S) external link.
 
 Quick menu:
 
@@ -72,6 +73,8 @@ Quick menu:
 The Home schedule card changes its displayed month and `GET /events` range in place when the previous/next arrows are pressed. Empty upcoming-schedule copy is not interactive. Multi-day events mark every KST calendar date from `start_at` through `end_at`, inclusive, in both the Home card and full calendar; day routes rely on the same overlap behavior from the events API. A day route opened from the Home schedule returns directly to the existing Home tab when its header back control is pressed instead of popping the hidden events stack; other event-entry back behavior remains unchanged.
 
 QA 161: Home, Notices, and shared board lists refresh through native pull gestures while retaining cached content, current filters/search, and scroll-rendering keys. Protected media access URLs do not refresh on a timer; `MediaImage` and `MediaImageBackground` explicitly refresh them after an image load error. Notification delivery and bootstrap refresh continue independently of the removed Home badge poll.
+
+QA 189: Selecting `전체`, `학사공지`, `행사공지`, or `기타공지` on the Notices root immediately keeps that filter selected and refetches both the board registry and notice posts, so newly published notices appear without a manual pull-to-refresh.
 
 QA 173/188: Explicitly pressing any Home, Notices, Community, Participation, or Council bottom tab always navigates to that tab root, including when the same tab is already active or a detail route only makes it appear active. Notices, Community, and Participation recreate their product defaults at the top of the list: `전체`, `행사 사진첩`, or `동아리 > 안내`, respectively. Home opens its main screen and Council opens its menu list. Header/Android Back from detail routes and programmatic My Page returns do not emit this reset and continue preserving the mounted list state described below.
 

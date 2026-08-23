@@ -13,7 +13,11 @@ import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
 import { NOTICES_TAB_ROUTE } from "../../utils/appRoutes";
-import { noticeRefreshControlRefreshing, refreshQueries } from "../../utils/pullToRefresh";
+import {
+  noticeRefreshControlRefreshing,
+  refreshQueries,
+  selectNoticeFilterAndRefresh,
+} from "../../utils/pullToRefresh";
 import {
   isNoticeContentBoard,
   NOTICE_FILTERS,
@@ -147,7 +151,14 @@ function NoticesContent() {
           return (
             <Pressable
               key={item.key}
-              onPress={() => setSelectedFilter(item.key)}
+              onPress={() => {
+                void selectNoticeFilterAndRefresh(
+                  item.key,
+                  setSelectedFilter,
+                  refetchBoards,
+                  noticeBoardIds.length > 0 ? postsQuery.refetch : undefined,
+                );
+              }}
               style={[styles.filterChip, active ? styles.filterChipActive : null]}
             >
               <Text style={[styles.filterText, active ? styles.filterTextActive : null]}>{item.label}</Text>
