@@ -202,6 +202,228 @@ def test_study_activity_extracts_two_digit_year_and_ignores_major_suffix() -> No
     assert metadata["participants"] == "74기 김가현, 68기 허명진"
 
 
+def test_study_activity_import_curates_title_and_links_confirmed_recruitment(api) -> None:
+    recruit = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="스터디 모집",
+        row_number=14,
+        data={
+            "writeId": "9740702",
+            "title": "[마감][딥러닝기초] 학점방어 스터디원 모집합니다! 📚🔥",
+            "content": "딥러닝기초 모집",
+            "writeUser": "74기 김가현",
+            "cohort": "74기",
+            "date": datetime(2026, 5, 20, 9, 0, 0),
+        },
+    )
+    activity = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="스터디 활동 인증",
+        row_number=20,
+        data={
+            "writeId": "9851140",
+            "title": "김가현 74기, 김수빈 74기, 장준혁 74기",
+            "content": "[스터디 내용]\n딥러닝기초 cs231n 6강, 7강 기말고사 준비",
+            "writeUser": "74기 김가현",
+            "cohort": "74기",
+            "date": datetime(2026, 6, 1, 9, 0, 0),
+        },
+    )
+
+    with api.session() as db:
+        db.add_all(
+            [
+                Board(
+                    name="Study Recruitment",
+                    slug="study-recruit",
+                    category="participation",
+                    board_type="post",
+                    read_permission="user",
+                    write_permission="user",
+                ),
+                Board(
+                    name="Study Activity",
+                    slug="study-activity",
+                    category="participation",
+                    board_type="activity_certification",
+                    read_permission="user",
+                    write_permission="user",
+                ),
+            ]
+        )
+        db.commit()
+
+        posts, first_stats, _ = import_articles_and_specials(
+            db, [recruit, activity], [], apply=True
+        )
+        db.commit()
+        imported_activity = posts["9851140"]
+        imported_source = posts["9740702"]
+
+        assert imported_activity.title == recruit.data["title"]
+        assert imported_activity.metadata_json["activity_source_post_id"] == str(imported_source.id)
+
+        _, second_stats, _ = import_articles_and_specials(
+            db, [recruit, activity], [], apply=True
+        )
+        db.commit()
+
+        assert first_stats["created_posts"] == 2
+        assert second_stats["unchanged_posts"] == 2
+
+
+def test_study_title_cleanup_does_not_change_another_activity_board(api) -> None:
+    recruit = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="스터디 모집",
+        row_number=14,
+        data={
+            "writeId": "9740702",
+            "title": "딥러닝기초 모집",
+            "content": "모집 본문",
+            "writeUser": "74기 김가현",
+            "date": datetime(2026, 5, 20, 9, 0, 0),
+        },
+    )
+    club_activity = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="동아리 활동 인증",
+        row_number=20,
+        data={
+            "writeId": "9851140",
+            "title": "서뽈링 5월 활동",
+            "content": "동아리 활동 소감",
+            "writeUser": "74기 작성자",
+            "date": datetime(2026, 6, 1, 9, 0, 0),
+        },
+    )
+
+    with api.session() as db:
+        db.add_all(
+            [
+                Board(
+                    name="Study Recruitment",
+                    slug="study-recruit",
+                    category="participation",
+                    board_type="post",
+                    read_permission="user",
+                    write_permission="user",
+                ),
+                Board(
+                    name="Club Activity",
+                    slug="club-activity",
+                    category="participation",
+                    board_type="activity_certification",
+                    read_permission="user",
+                    write_permission="user",
+                ),
+            ]
+        )
+        db.commit()
+
+        posts, _, _ = import_articles_and_specials(
+            db, [recruit, club_activity], [], apply=True
+        )
+        db.commit()
+        imported_club = posts["9851140"]
+
+        assert imported_club.title == "서뽈링 5월 활동"
+        assert "activity_source_post_id" not in imported_club.metadata_json
+
+
+def test_unmapped_study_activity_title_still_redacts_personal_information(api) -> None:
+    activity = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="스터디 활동 인증",
+        row_number=30,
+        data={
+            "writeId": "new-unmapped-study-row",
+            "title": "김서강 A74001 010-1234-5678",
+            "content": "스터디 소감",
+            "writeUser": "74기 김서강",
+            "date": datetime(2026, 6, 1, 9, 0, 0),
+        },
+    )
+
+    with api.session() as db:
+        db.add(
+            Board(
+                name="Study Activity",
+                slug="study-activity",
+                category="participation",
+                board_type="activity_certification",
+                read_permission="user",
+                write_permission="user",
+            )
+        )
+        db.commit()
+
+        posts, _, _ = import_articles_and_specials(db, [activity], [], apply=True)
+        db.commit()
+
+        assert posts[activity.source_id].title == (
+            "김서강 [학번 비공개] [연락처 비공개]"
+        )
+
+
+def test_study_activity_import_does_not_link_same_legacy_id_from_another_board(api) -> None:
+    wrong_source = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="자유게시판",
+        row_number=14,
+        data={
+            "writeId": "9740702",
+            "boardName": "전공 커뮤니티",
+            "title": "동일 ID의 다른 게시판 글",
+            "content": "일반 게시글",
+            "writeUser": "74기 작성자",
+            "date": datetime(2026, 5, 20, 9, 0, 0),
+        },
+    )
+    activity = SourceRow(
+        source_file="board_articles_ver3.xlsx",
+        sheet="스터디 활동 인증",
+        row_number=20,
+        data={
+            "writeId": "9851140",
+            "title": "김가현 74기, 김수빈 74기",
+            "content": "[스터디 내용]\n딥러닝기초 기말고사 준비",
+            "writeUser": "74기 김가현",
+            "date": datetime(2026, 6, 1, 9, 0, 0),
+        },
+    )
+
+    with api.session() as db:
+        db.add_all(
+            [
+                Board(
+                    name="Major Community",
+                    slug="community-major",
+                    category="community",
+                    board_type="post",
+                    read_permission="user",
+                    write_permission="user",
+                ),
+                Board(
+                    name="Study Activity",
+                    slug="study-activity",
+                    category="participation",
+                    board_type="activity_certification",
+                    read_permission="user",
+                    write_permission="user",
+                ),
+            ]
+        )
+        db.commit()
+
+        posts, _, _ = import_articles_and_specials(
+            db, [wrong_source, activity], [], apply=True
+        )
+        db.commit()
+
+        assert "activity_source_post_id" not in posts[activity.source_id].metadata_json
+
+
 def test_activity_participants_skip_template_notes_and_remove_student_ids() -> None:
     metadata = _activity_certification_metadata(
         """[이름 / 기수]

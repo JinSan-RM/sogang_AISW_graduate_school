@@ -9,6 +9,7 @@ import {
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostFilters,
+  activityCertificationCardTitle,
   currentClubActivitySourcePosts,
   loadAllPublishedActivitySourcePosts,
   loadPublishedActivitySourcePosts,
@@ -30,6 +31,21 @@ test("스터디 활동 인증 목록은 카드 배지를 숨긴다", () => {
 test("동아리와 네트워킹 활동 인증 목록은 카드 배지를 유지한다", () => {
   assert.equal(shouldShowActivityCertificationBadge("club-activity"), true);
   assert.equal(shouldShowActivityCertificationBadge("networking-activity"), true);
+});
+
+test("스터디 활동 인증 카드만 게시글 제목을 표시한다", () => {
+  const post = { title: "[마감][딥러닝기초] 학점방어 스터디원 모집합니다! 📚🔥" };
+
+  assert.equal(
+    activityCertificationCardTitle(post, "study-activity"),
+    "[마감][딥러닝기초] 학점방어 스터디원 모집합니다! 📚🔥",
+  );
+  assert.equal(activityCertificationCardTitle(post, "club-activity"), null);
+  assert.equal(activityCertificationCardTitle(post, "networking-activity"), null);
+});
+
+test("스터디 활동 인증 카드의 빈 제목은 표시하지 않는다", () => {
+  assert.equal(activityCertificationCardTitle({ title: "   " }, "study-activity"), null);
 });
 
 

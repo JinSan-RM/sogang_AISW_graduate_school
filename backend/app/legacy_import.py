@@ -35,6 +35,11 @@ from app.models.post import Post
 from app.models.post_extension import PostSuggestion
 from app.models.user import User
 from app.security import hash_password, utc_now
+from app.study_activity_cleanup import (
+    LEGACY_STUDY_ACTIVITY_SOURCE_WRITE_IDS,
+    LEGACY_STUDY_ACTIVITY_TITLES,
+    curated_study_activity_title,
+)
 
 
 ARTICLE_HEADERS = [
@@ -505,10 +510,26 @@ def upsert_ledger(
     return record
 
 
-def _post_payload(row: SourceRow, board: Board, author: User) -> dict[str, Any]:
-    original_title = value_as_text(row.data.get("title")) or "제목 없음"
+def _post_payload(
+    row: SourceRow,
+    board: Board,
+    author: User,
+    *,
+    activity_source_post_id: int | None = None,
+) -> dict[str, Any]:
+    source_title = value_as_text(row.data.get("title")) or "제목 없음"
+    original_title = (
+        curated_study_activity_title(row.source_id, source_title)
+        if board.slug == "study-activity"
+        else source_title
+    )
     normalized_body = normalize_content(row.data.get("content")) or original_title
-    redacted_title, title_pii = redact_text(original_title)
+    redacted_source_title, title_pii = redact_text(source_title)
+    uses_curated_study_title = (
+        board.slug == "study-activity"
+        and row.source_id in LEGACY_STUDY_ACTIVITY_TITLES
+    )
+    redacted_title = original_title if uses_curated_study_title else redacted_source_title
     redacted_body, body_pii = redact_text(normalized_body)
     title = shortened_title(redacted_title)
     created_at = parse_datetime(row.data.get("date"))
@@ -522,7 +543,7 @@ def _post_payload(row: SourceRow, board: Board, author: User) -> dict[str, Any]:
         "legacy_board_name": value_as_text(row.data.get("boardName")),
         "legacy_author": author.nickname,
         "legacy_author_cohort": author.cohort,
-        "legacy_original_title": redact_text(original_title)[0],
+        "legacy_original_title": redacted_source_title,
         "legacy_source_hash": row.source_hash,
         "legacy_updated_at": updated_at.isoformat(),
         "legacy_comment_count": value_as_int(row.data.get("commentCount")),
@@ -530,6 +551,8 @@ def _post_payload(row: SourceRow, board: Board, author: User) -> dict[str, Any]:
     }
     if board.board_type == "activity_certification":
         metadata.update(_activity_certification_metadata(normalized_body, created_at, title))
+        if activity_source_post_id is not None:
+            metadata["activity_source_post_id"] = str(activity_source_post_id)
     if board.slug == "study-recruit":
         metadata["recruitment_status"] = "closed"
     if board.board_type == "notice":
@@ -921,7 +944,31 @@ def import_articles_and_specials(
             preferred=preferred_user,
         )
         try:
-            payload = _post_payload(row, board, author)
+            source_legacy_id = (
+                LEGACY_STUDY_ACTIVITY_SOURCE_WRITE_IDS.get(row.source_id)
+                if board.slug == "study-activity"
+                else None
+            )
+            source_post_candidate = (
+                posts_by_source_id.get(source_legacy_id)
+                or existing_posts.get(source_legacy_id)
+                if source_legacy_id is not None
+                else None
+            )
+            study_recruit_board = boards.get("study-recruit")
+            source_post = (
+                source_post_candidate
+                if source_post_candidate is not None
+                and study_recruit_board is not None
+                and source_post_candidate.board_id == study_recruit_board.id
+                else None
+            )
+            payload = _post_payload(
+                row,
+                board,
+                author,
+                activity_source_post_id=source_post.id if source_post is not None else None,
+            )
         except ValueError as exc:
             stats["failed_articles"] += 1
             upsert_ledger(
@@ -971,6 +1018,25 @@ def import_articles_and_specials(
         )
 
     if apply:
+        study_activity_board = boards.get("study-activity")
+        study_recruit_board = boards.get("study-recruit")
+        for activity_legacy_id, source_legacy_id in LEGACY_STUDY_ACTIVITY_SOURCE_WRITE_IDS.items():
+            activity_post = posts_by_source_id.get(activity_legacy_id)
+            source_post = posts_by_source_id.get(source_legacy_id) or existing_posts.get(source_legacy_id)
+            if (
+                activity_post is None
+                or source_post is None
+                or study_activity_board is None
+                or study_recruit_board is None
+                or activity_post.board_id != study_activity_board.id
+                or source_post.board_id != study_recruit_board.id
+            ):
+                continue
+            metadata = dict(activity_post.metadata_json or {})
+            if metadata.get("activity_source_post_id") != str(source_post.id):
+                metadata["activity_source_post_id"] = str(source_post.id)
+                activity_post.metadata_json = metadata
+
         for special_rows, board_slug, metadata_key, entity_type in (
             (cohort_entries, "gsa-cohort-leaders", "cohort_leaders", "cohort_leader"),
             (council_entries, "gsa-past-councils", "past_councils", "past_council"),

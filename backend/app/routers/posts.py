@@ -32,6 +32,7 @@ from app.response import success_response
 from app.rate_limit import enforce_rate_limit
 from app.schemas.post import MutualAidUpdate, PostCreate, PostUpdate, SuggestionUpdate
 from app.security import utc_now
+from app.study_activity_cleanup import post_content_preview
 from app.audit import log_admin_action
 
 router = APIRouter()
@@ -48,6 +49,8 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
     metadata = dict(post.metadata_json)
     if board.board_type == "activity_certification" and not include_sensitive:
         metadata.pop("bank_account", None)
+    if board.slug == "study-activity" and not include_sensitive:
+        metadata.pop("legacy_original_title", None)
     if board.board_type == "mutual_aid" and not include_sensitive:
         metadata.pop("proof_url", None)
     return metadata
@@ -401,7 +404,7 @@ def get_posts(
             "id": post.id,
             "board_id": post.board_id,
             "title": post.title,
-            "content_preview": post.content[:100],
+            "content_preview": post_content_preview(post.content, board.slug),
             "author_id": _visible_post_author_id(post, board, current_user),
             "author_nickname": _post_author_nickname(post, board, current_user, nickname),
             "author_cohort": _post_author_cohort(post, board, current_user, nickname, cohort),
@@ -430,7 +433,7 @@ def get_posts(
             "created_at": post.created_at,
             "highlights": {
                 "title": _highlight(post.title, q),
-                "content_preview": _highlight(post.content[:100], q),
+                "content_preview": _highlight(post_content_preview(post.content, board.slug), q),
             }
             if q
             else None,

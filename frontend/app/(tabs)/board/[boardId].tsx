@@ -16,7 +16,11 @@ import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
 import { boardParentRoute, boardRoute, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
 import { tabNameFromRoute, useTabHighlightStore } from "../../../stores/tabHighlightStore";
-import { activityCertificationBadgeLabel, shouldShowActivityCertificationBadge } from "../../../utils/activityCertification";
+import {
+  activityCertificationBadgeLabel,
+  activityCertificationCardTitle,
+  shouldShowActivityCertificationBadge,
+} from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import {
   cohortLeaderFormsFromMetadata,
@@ -824,7 +828,8 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
 
 function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem; boardSlug?: string; index: number; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
-  // 활동 인증 제목은 "동아리 활동 인증 26.06.23"처럼 자동 생성되므로 소감(내용)을 우선 표시한다.
+  const cardTitle = activityCertificationCardTitle(post, boardSlug);
+  // 동아리·네트워킹 인증은 기존처럼 소감과 배지를 우선하고, 스터디만 모집/스터디 제목을 함께 표시한다.
   const preview = compactPreview(post) || post.content_preview.trim() || post.title.trim();
   const thumbnailUrl = imageUrl(post.thumbnail_url);
   const activityDate =
@@ -846,6 +851,11 @@ function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem;
           <View style={styles.activityPill}>
             <Text style={styles.activityPillText}>{activityCertificationBadgeLabel(post, boardSlug)}</Text>
           </View>
+        ) : null}
+        {cardTitle ? (
+          <Text numberOfLines={2} style={styles.activityTitle}>
+            {cardTitle}
+          </Text>
         ) : null}
         {preview ? (
           <Text numberOfLines={2} style={styles.activityPreview}>

@@ -161,6 +161,14 @@ export function shouldShowActivityCertificationBadge(boardSlug?: string): boolea
   return boardSlug !== "study-activity";
 }
 
+export function activityCertificationCardTitle(
+  post: Pick<PostListItem, "title">,
+  boardSlug?: string,
+): string | null {
+  if (boardSlug !== "study-activity") return null;
+  return post.title.trim() || null;
+}
+
 export function activitySourcePostFilters(): { sort: "latest"; status: "published" } {
   return { sort: "latest", status: "published" };
 }
