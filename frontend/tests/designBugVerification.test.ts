@@ -109,6 +109,15 @@ test("#62·63 공지 목록은 공통 로딩과 중앙 빈 상태 레이아웃�
   assert.match(noticeListSource, /emptyState:[\s\S]*justifyContent: "center"/);
 });
 
+test("활동 인증 목록 이미지는 이전의 가로형 고정 비율을 사용한다", () => {
+  assert.match(boardSource, /activityThumb:[\s\S]*aspectRatio: 2\.05/);
+});
+
+test("활동 인증 상세 이미지는 사진첩과 같은 240px 고정 프레임을 사용한다", () => {
+  assert.match(postDetailSource, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
+  assert.match(postDetailSource, /visualHeroAlbum:[\s\S]*height: 240/);
+});
+
 test("#189 공지 필터 버튼은 선택 변경과 최신 목록 재조회를 함께 실행한다", () => {
   assert.match(
     noticeListSource,

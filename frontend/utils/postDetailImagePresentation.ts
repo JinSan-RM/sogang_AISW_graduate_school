@@ -15,9 +15,9 @@ export function postDetailImagePresentation({
 }: PostDetailImagePresentationInput): PostDetailImagePresentation {
   if (placement === "attachment") return "natural";
   if (boardType === "album") return "fixed-contain";
+  if (boardType === "activity_certification") return "fixed-cover";
   if (
-    boardType === "activity_certification"
-    || boardSlug === "club-promo"
+    boardSlug === "club-promo"
     || boardSlug === "networking-programs"
     || isCouncilActivityEntry
   ) {

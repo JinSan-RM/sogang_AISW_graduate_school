@@ -8,8 +8,11 @@ test("공지 첨부와 일반 첨부는 원본 비율을 사용한다", () => {
   assert.equal(postDetailImagePresentation({ placement: "attachment", boardType: "post" }), "natural");
 });
 
-test("참여활동 대표 이미지는 원본 비율을 사용한다", () => {
-  assert.equal(postDetailImagePresentation({ placement: "hero", boardType: "activity_certification" }), "natural");
+test("활동 인증 대표 이미지는 고정 가로 프레임을 채운다", () => {
+  assert.equal(postDetailImagePresentation({ placement: "hero", boardType: "activity_certification" }), "fixed-cover");
+});
+
+test("동아리와 네트워킹 모집 대표 이미지는 원본 비율을 유지한다", () => {
   assert.equal(
     postDetailImagePresentation({ placement: "hero", boardType: "post", boardSlug: "club-promo" }),
     "natural",

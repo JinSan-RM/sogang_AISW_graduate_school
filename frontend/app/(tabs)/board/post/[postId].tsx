@@ -596,7 +596,7 @@ export default function PostDetailScreen() {
       <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
         {hasVisualHero ? (
           <View style={styles.visualHeroBlock}>
-            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum ? styles.visualHeroAlbum : null]}>
+            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null]}>
               {heroAttachment ? (
                 hasNaturalHero ? (
                   hasExpandableHero ? (

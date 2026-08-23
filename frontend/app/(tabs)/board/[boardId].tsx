@@ -1542,7 +1542,7 @@ const styles = StyleSheet.create({
   },
   activityThumb: {
     position: "relative",
-    aspectRatio: 328 / 219, // Figma 인증사진 328x219
+    aspectRatio: 2.05, // 활동 인증 피드의 기존 가로형 고정 비율
     borderRadius: 8,
     overflow: "hidden",
   },
