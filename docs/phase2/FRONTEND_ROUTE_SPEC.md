@@ -59,7 +59,7 @@ Sections:
 - Latest two notices across every active notice board, ordered by creation time without pin priority.
 - Upcoming schedule.
 - Recent community posts.
-- Final `동문회 주소록` entry that opens the active `alumni-directory` board's administrator-configured HTTP(S) external link.
+- Final `동문회 주소록` entry that always opens the fixed Rembr directory URL `https://app.rmbr.in/SPbmZjUxRzb`; board metadata and administrator external-link settings do not override the Home destination.
 
 Quick menu:
 
@@ -127,7 +127,7 @@ Presentation rules from the approved Figma capture set:
 - Home schedule summaries use `MM.DD(weekday)`.
 - Home notice metadata uses `학사공지`, `행사공지`, or `기타공지`; webinar and special-lecture aliases are presented as `행사공지`, and raw codes such as `other` are never shown.
 - Home banners are image-only assets registered by an administrator. The app renders the selected responsive image without synthesized title, badge, description, deadline, theme overlay, or gradient; only the carousel page indicator and optional navigation link remain app UI.
-- Notice-detail and administrator-managed participation-guide images use the available full width and each image's natural aspect ratio so landscape and portrait images avoid internal letterboxing. When the calculated natural height exceeds 500px, the detail shows a top-anchored 500px preview with a `사진 전체보기` control that opens the complete image in a vertically scrollable in-app viewer. Activity-certification feeds use the restored fixed `2.05:1` landscape frame, and activity-certification detail galleries use a full-width `240px` frame with cover sizing. The threshold does not apply to activity certifications, council activity history, photo albums, mutual-aid evidence, general community attachments, or any list thumbnail; their existing image policies remain unchanged.
+- Notice-detail and administrator-managed participation-guide images use the available full width and each image's natural aspect ratio so landscape and portrait images avoid internal letterboxing. When the calculated natural height exceeds 500px, the detail shows a top-anchored 500px preview with a `사진 전체보기` control that opens the complete image in a vertically scrollable in-app viewer. Activity-certification feeds keep the restored fixed `2.05:1` landscape frame. Club- and study-activity certification detail galleries use a full-width `240px` frame with contain sizing, matching the council-leader gallery so portrait and landscape images remain uncropped; networking and generic activity-certification detail galleries keep cover sizing. Club-activity feed previews skip legacy template rows labeled `[동아리명] :` or `[동아리 명] :`, while other activity feeds keep their existing text. The natural-image threshold does not apply to activity certifications, council activity history, photo albums, mutual-aid evidence, general community attachments, or any list thumbnail; their existing image policies remain unchanged.
 - Notification rows are an explicit exception: today's items use `오전/오후 h:mm`, and older rows use `YY.MM.DD` without a weekday.
 - QA 153: lecture-review bookmarks in My Activity render only `YY.MM.DD(weekday)`; they omit `Anonymous`, cohort, and the author/date separator. Other bookmark metadata is unchanged.
 - Council activity-history rows contain date and title only; their detail contains title, divider, and body without reactions or comments.

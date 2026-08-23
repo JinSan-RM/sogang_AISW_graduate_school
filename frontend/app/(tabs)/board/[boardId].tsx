@@ -19,6 +19,7 @@ import { tabNameFromRoute, useTabHighlightStore } from "../../../stores/tabHighl
 import {
   activityCertificationBadgeLabel,
   activityCertificationCardTitle,
+  activityCertificationPreview,
   shouldShowActivityCertificationBadge,
 } from "../../../utils/activityCertification";
 import { formatBoardDate } from "../../../utils/dateFormat";
@@ -830,7 +831,7 @@ function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem;
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
   const cardTitle = activityCertificationCardTitle(post, boardSlug);
   // 동아리·네트워킹 인증은 기존처럼 소감과 배지를 우선하고, 스터디만 모집/스터디 제목을 함께 표시한다.
-  const preview = compactPreview(post) || post.content_preview.trim() || post.title.trim();
+  const preview = activityCertificationPreview(post, boardSlug);
   const thumbnailUrl = imageUrl(post.thumbnail_url);
   const activityDate =
     typeof post.metadata?.activity_date === "string" && post.metadata.activity_date.trim()

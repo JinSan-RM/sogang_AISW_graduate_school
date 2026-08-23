@@ -4,7 +4,7 @@ type DirectoryBoard = {
   metadata?: Record<string, unknown> | null;
 };
 
-const EXTERNAL_LINK_KEYS = ["notion_url", "external_url", "url", "link"] as const;
+export const HOME_ALUMNI_DIRECTORY_URL = "https://app.rmbr.in/SPbmZjUxRzb";
 
 export type HomeAlumniDirectoryLink =
   | { status: "ready"; url: string }
@@ -23,28 +23,6 @@ export function homeAlumniDirectoryErrorMessage(reason: HomeAlumniDirectoryError
   return "등록된 주소록 링크를 열 수 없습니다. 주소를 확인해 주세요.";
 }
 
-export function homeAlumniDirectoryLink(boards: DirectoryBoard[]): HomeAlumniDirectoryLink {
-  const board = boards.find((item) => item.slug === "alumni-directory" && item.is_active !== false);
-  if (!board) return { status: "missing" };
-
-  const candidates = EXTERNAL_LINK_KEYS
-    .map((key) => board?.metadata?.[key])
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (candidates.length === 0) return { status: "missing" };
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = new URL(candidate);
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        return { status: "ready", url: candidate };
-      }
-    } catch {
-      // 다음 호환 metadata 키에 유효한 주소가 있는지 계속 확인한다.
-    }
-  }
-
-  return { status: "invalid" };
+export function homeAlumniDirectoryLink(_boards: DirectoryBoard[]): HomeAlumniDirectoryLink {
+  return { status: "ready", url: HOME_ALUMNI_DIRECTORY_URL };
 }

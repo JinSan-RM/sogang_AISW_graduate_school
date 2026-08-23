@@ -6,6 +6,7 @@ import {
   CURRENT_CLUB_NAMES,
   activityBankAccountFieldState,
   activityCertificationBadgeLabel,
+  activityCertificationPreview,
   activityParticipantSelectionError,
   activityParticipantsFromMetadata,
   activitySourcePostFilters,
@@ -46,6 +47,43 @@ test("스터디 활동 인증 카드만 게시글 제목을 표시한다", () =>
 
 test("스터디 활동 인증 카드의 빈 제목은 표시하지 않는다", () => {
   assert.equal(activityCertificationCardTitle({ title: "   " }, "study-activity"), null);
+});
+
+test("동아리 활동 인증 목록은 동아리명 입력 줄을 건너뛴다", () => {
+  assert.equal(
+    activityCertificationPreview(
+      { title: "기존 제목", content_preview: "[동아리명] : 알바트로스냅\n즐겁게 촬영했습니다." },
+      "club-activity",
+    ),
+    "즐겁게 촬영했습니다.",
+  );
+  assert.equal(
+    activityCertificationPreview(
+      { title: "기존 제목", content_preview: "[동아리 명] : 서뽈링\n정기 활동을 진행했습니다." },
+      "club-activity",
+    ),
+    "정기 활동을 진행했습니다.",
+  );
+});
+
+test("동아리명 입력 줄 제외는 다른 활동 인증 목록에 적용하지 않는다", () => {
+  assert.equal(
+    activityCertificationPreview(
+      { title: "기존 제목", content_preview: "[동아리명] : 알바트로스냅\n즐겁게 촬영했습니다." },
+      "networking-activity",
+    ),
+    "[동아리명] : 알바트로스냅",
+  );
+});
+
+test("다른 활동 인증 목록의 기존 전체 미리보기 폴백을 유지한다", () => {
+  assert.equal(
+    activityCertificationPreview(
+      { title: "기존 제목", content_preview: "기존 제목\n기존 제목" },
+      "study-activity",
+    ),
+    "기존 제목\n기존 제목",
+  );
 });
 
 

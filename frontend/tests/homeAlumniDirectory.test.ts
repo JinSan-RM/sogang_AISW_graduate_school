@@ -30,45 +30,27 @@ async function directoryErrorMessageResolver() {
   return resolver;
 }
 
-test("홈 동문회 주소록은 활성 alumni-directory에 관리자가 입력한 HTTPS 링크를 사용한다", async () => {
+test("홈 동문회 주소록은 게시판 설정이 없어도 지정된 리맴버 링크를 사용한다", async () => {
+  const resolveLink = await directoryLinkResolver();
+
+  assert.deepEqual(resolveLink([]), {
+    status: "ready",
+    url: "https://app.rmbr.in/SPbmZjUxRzb",
+  });
+});
+
+test("홈 동문회 주소록은 게시판 활성 상태와 관리자 링크보다 지정된 리맴버 링크를 우선한다", async () => {
   const resolveLink = await directoryLinkResolver();
 
   assert.deepEqual(
     resolveLink([
-      { slug: "networking-programs", is_active: true, metadata: { external_url: "https://wrong.example.com" } },
-      { slug: "alumni-directory", is_active: true, metadata: { external_url: "  https://remember.example.com/alumni  " } },
-    ]),
-    { status: "ready", url: "https://remember.example.com/alumni" },
-  );
-});
-
-test("홈 동문회 주소록은 누락 링크와 잘못된 링크를 구분한다", async () => {
-  const resolveLink = await directoryLinkResolver();
-
-  assert.deepEqual(
-    resolveLink([{ slug: "alumni-directory", is_active: false, metadata: { external_url: "https://remember.example.com/alumni" } }]),
-    { status: "missing" },
-  );
-  assert.deepEqual(
-    resolveLink([{ slug: "alumni-directory", is_active: true, metadata: { external_url: "javascript:alert(1)" } }]),
-    { status: "invalid" },
-  );
-});
-
-test("앞선 링크 키가 비었거나 잘못돼도 뒤의 유효한 HTTP(S) 링크를 사용한다", async () => {
-  const resolveLink = await directoryLinkResolver();
-
-  assert.deepEqual(
-    resolveLink([{
-      slug: "alumni-directory",
-      is_active: true,
-      metadata: {
-        notion_url: " ",
-        external_url: "javascript:alert(1)",
-        url: " https://directory.example.com/alumni ",
+      {
+        slug: "alumni-directory",
+        is_active: false,
+        metadata: { external_url: "https://wrong.example.com/alumni" },
       },
-    }]),
-    { status: "ready", url: "https://directory.example.com/alumni" },
+    ]),
+    { status: "ready", url: "https://app.rmbr.in/SPbmZjUxRzb" },
   );
 });
 
