@@ -1221,7 +1221,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   alumniDirectoryRow: {
-    minHeight: 92,
+    minHeight: 50,
     marginTop: 28,
     borderTopWidth: 0.5,
     borderTopColor: COLORS.border,
@@ -1231,7 +1231,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 18,
   },
-  alumniDirectoryLeading: {
+    alumniDirectoryLeading: {
     flex: 1,
     minWidth: 0,
     flexDirection: "row",
@@ -1240,7 +1240,7 @@ const styles = StyleSheet.create({
   },
   alumniDirectoryIcon: {
     fontSize: 18,
-    lineHeight: 22,
+    lineHeight: 15,
   },
   alumniDirectoryCopy: {
     flex: 1,
@@ -1250,13 +1250,13 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 16,
     fontWeight: "500",
-    lineHeight: 22,
+    lineHeight: 15,
   },
   alumniDirectoryDescription: {
     color: COLORS.subtle,
     fontSize: 13,
     fontWeight: "400",
-    lineHeight: 18,
+    lineHeight: 15,
     marginTop: 2,
   },
 });
