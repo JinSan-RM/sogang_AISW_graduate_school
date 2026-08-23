@@ -5,8 +5,9 @@ import test from "node:test";
 import {
   INITIAL_TAB_ROOT_RESET_REVISIONS,
   resetRevisionForTab,
-  shouldRequestTabRootReset,
+  tabRootPressAction,
   type TabRootName,
+  type VisibleTabRootName,
 } from "../stores/tabRootResetStore";
 
 const layoutSource = readFileSync("app/(tabs)/_layout.tsx", "utf8");
@@ -14,7 +15,7 @@ const noticesSource = readFileSync("app/(tabs)/notices.tsx", "utf8");
 const communitySource = readFileSync("app/(tabs)/community.tsx", "utf8");
 const participationSource = readFileSync("app/(tabs)/participation.tsx", "utf8");
 
-function tabScreenBlock(tabName: TabRootName) {
+function tabScreenBlock(tabName: VisibleTabRootName) {
   const nameIndex = layoutSource.indexOf(`name="${tabName}"`);
   assert.notEqual(nameIndex, -1, `${tabName} Tabs.Screen이 있어야 합니다.`);
 
@@ -31,9 +32,18 @@ test("하단 탭 초기화 revision의 기본값은 세 대상 탭 모두 0이�
   });
 });
 
-test("비활성 탭으로 재진입할 때만 초기화를 요청한다", () => {
-  assert.equal(shouldRequestTabRootReset(false), true);
-  assert.equal(shouldRequestTabRootReset(true), false);
+test("모든 하단 탭은 누를 때마다 자신의 루트 이동 액션을 만든다", () => {
+  const expectedActions = [
+    ["home", { route: "/(tabs)/home", resetTab: null }],
+    ["notices", { route: "/(tabs)/notices", resetTab: "notices" }],
+    ["community", { route: "/(tabs)/community", resetTab: "community" }],
+    ["participation", { route: "/(tabs)/participation", resetTab: "participation" }],
+    ["council", { route: "/(tabs)/council", resetTab: null }],
+  ] as const;
+
+  for (const [tabName, expected] of expectedActions) {
+    assert.deepEqual(tabRootPressAction(tabName), expected);
+  }
 });
 
 test("선택한 탭 revision만 증가시키고 다른 탭 및 기존 객체는 보존한다", () => {
@@ -52,16 +62,19 @@ test("선택한 탭 revision만 증가시키고 다른 탭 및 기존 객체는 
   }
 });
 
-test("공지사항·커뮤니티·참여활동 탭은 tabPress에서 자신의 초기화를 요청한다", () => {
-  for (const tabName of ["notices", "community", "participation"] satisfies TabRootName[]) {
+test("다섯 하단 탭은 tabPress를 공통 루트 이동 처리기로 전달한다", () => {
+  for (const tabName of ["home", "notices", "community", "participation", "council"] satisfies VisibleTabRootName[]) {
     const block = tabScreenBlock(tabName);
     assert.match(block, /listeners\s*=/, `${tabName}에 탭 이벤트 listener가 필요합니다.`);
     assert.match(block, /\btabPress\s*:/, `${tabName}은 tabPress만 처리해야 합니다.`);
-    assert.match(block, /navigation\.isFocused\(\)/, `${tabName}의 활성 상태를 확인해야 합니다.`);
-    assert.match(block, new RegExp(`requestTabRootReset\\(["']${tabName}["']\\)`));
+    assert.match(block, new RegExp(`handleTabRootPress\\(["']${tabName}["']`));
   }
 
-  assert.match(layoutSource, /shouldRequestTabRootReset/);
+  assert.match(layoutSource, /event\.preventDefault\(\)/);
+  assert.match(layoutSource, /tabRootPressAction/);
+  assert.match(layoutSource, /requestTabRootReset\(action\.resetTab\)/);
+  assert.match(layoutSource, /router\.navigate\(action\.route/);
+  assert.doesNotMatch(layoutSource, /navigation\.isFocused\(\)/);
 });
 
 test("focus나 blur 이벤트로는 탭 루트를 초기화하지 않는다", () => {

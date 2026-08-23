@@ -73,7 +73,7 @@ The Home schedule card changes its displayed month and `GET /events` range in pl
 
 QA 161: Home, Notices, and shared board lists refresh through native pull gestures while retaining cached content, current filters/search, and scroll-rendering keys. Protected media access URLs do not refresh on a timer; `MediaImage` and `MediaImageBackground` explicitly refresh them after an image load error. Notification delivery and bootstrap refresh continue independently of the removed Home badge poll.
 
-QA 173: Explicitly pressing an inactive Notices, Community, or Participation bottom tab recreates that tab root at its product default and the top of the list: `전체`, `행사 사진첩`, or `동아리 > 안내`, respectively. Repressing the already-active tab does not reset it. Header/Android Back from detail routes and programmatic My Page returns do not emit this reset and continue preserving the mounted list state described below.
+QA 173/188: Explicitly pressing any Home, Notices, Community, Participation, or Council bottom tab always navigates to that tab root, including when the same tab is already active or a detail route only makes it appear active. Notices, Community, and Participation recreate their product defaults at the top of the list: `전체`, `행사 사진첩`, or `동아리 > 안내`, respectively. Home opens its main screen and Council opens its menu list. Header/Android Back from detail routes and programmatic My Page returns do not emit this reset and continue preserving the mounted list state described below.
 
 ## 4. Board List Screen Requirements
 
