@@ -386,7 +386,7 @@ export default function PostDetailScreen() {
     boardSlug: board?.slug,
   });
   const hasNaturalHero = heroImagePresentation === "natural";
-  const hasExpandableHero = isActivityCertification || isAdminParticipationGuide;
+  const hasExpandableHero = isAdminParticipationGuide;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -596,7 +596,7 @@ export default function PostDetailScreen() {
       <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
         {hasVisualHero ? (
           <View style={styles.visualHeroBlock}>
-            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null]}>
+            <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum ? styles.visualHeroAlbum : null]}>
               {heroAttachment ? (
                 hasNaturalHero ? (
                   hasExpandableHero ? (
@@ -1610,7 +1610,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2F7",
   },
   visualHeroAlbum: {
-    height: 240, // Figma: 사진첩 큰사진·활동 인증 슬라이더 240h
+    height: 240, // Figma: 사진첩 큰사진 슬라이더 240h
   },
   visualHeroNatural: {
     position: "relative",
