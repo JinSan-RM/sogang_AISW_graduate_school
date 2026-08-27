@@ -4403,68 +4403,6 @@ export default function AdminScreen() {
           </View>
         ) : null}
 
-        {section === "events" ? (
-          <View style={{ gap: 12 }}>
-            <Panel>
-              <View style={{ gap: 10 }}>
-                <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>
-                  {editEventId ? "일정 수정" : "일정 등록"}
-                </Text>
-                <Controller
-                  control={control}
-                  name="title"
-                  render={({ field }) => <Field onChangeText={field.onChange} placeholder="일정 제목" value={field.value ?? ""} />}
-                />
-                <Controller
-                  control={control}
-                  name="category"
-                  render={({ field }) => (
-                    <View style={{ gap: 7 }}>
-                      <Text style={{ color: COLORS.text, fontWeight: "900" }}>일정 분류</Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                        {Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => (
-                          <Chip key={value} active={field.value === value} label={label} onPress={() => field.onChange(value)} />
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="start_at"
-                  render={({ field }) => (
-                    <EventDateTimePicker label="시작일시 (한국시간)" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="end_at"
-                  render={({ field }) => (
-                    <EventDateTimePicker label="종료일시 (한국시간)" value={field.value ?? ""} onChange={field.onChange} fallbackTime="11:00" />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="location"
-                  render={({ field }) => <Field onChangeText={field.onChange} placeholder="장소" value={field.value ?? ""} />}
-                />
-                <Controller
-                  control={control}
-                  name="description"
-                  render={({ field }) => <Field multiline onChangeText={field.onChange} placeholder="상세 설명" value={field.value ?? ""} />}
-                />
-                <ActionButton icon="save-outline" label={editEventId ? "일정 저장" : "일정 등록"} onPress={handleSubmit(onSubmitEvent)} />
-              </View>
-            </Panel>
-            {eventsQuery.isLoading ? <ActivityIndicator /> : null}
-            {events.map((event) => (
-              <View key={event.id} style={{ gap: 8 }}>
-                <EventCard event={event} onEdit={handleEditEvent} />
-                <ActionButton icon="trash-outline" label="일정 삭제" onPress={() => handleDeleteEventFromList(event)} tone="danger" />
-              </View>
-            ))}
-          </View>
-        ) : null}
       </View>
     </ScrollView>
   );
