@@ -800,6 +800,35 @@ Rules:
 
 - When authenticated, posts written by blocked authors are excluded from the list.
 
+### GET `/posts/feed`
+
+Auth: user
+
+Query:
+
+- `scope`: required; `notices`, `resources`, or `council_activity`
+- `page`: default `1`, minimum `1`
+- `size`: default `20`, minimum `1`, maximum `100`
+- `q`: optional non-empty search keyword
+- `notice_category`: optional; `academic`, `event`, or `other`, valid only when `scope=notices`
+- `sort`: `latest` (default), `popular`, or `views`
+
+Scope rules:
+
+- `notices` combines active boards whose `board_type` is `notice`. Calendar boards are excluded. `notice_category` uses the same academic, event/webinar, and other mapping as notice search.
+- `resources` combines active boards whose category is `resources`.
+- `council_activity` combines legacy `council-activity` and `gsa-activity` board posts with notice posts whose `metadata.show_in_council_activity` value is `true`.
+
+The response uses the shared paginated success envelope and the same post-list item fields as `GET /boards/{board_id}/posts`. The total is calculated after scope, active-board, read-permission, publication-status, soft-delete, search, notice-category, and blocked-author filters are applied. Author-name search and blocked-author filtering preserve anonymous and forced-anonymous board identity rules.
+
+Ordering is deterministic across all selected boards:
+
+- `latest`: `is_pinned DESC, created_at DESC, id DESC`
+- `popular`: `is_pinned DESC, like_count DESC, comment_count DESC, created_at DESC, id DESC`
+- `views`: `is_pinned DESC, view_count DESC, created_at DESC, id DESC`
+
+Supplying `notice_category` for a non-notice scope returns normalized `422 VALIDATION_ERROR`.
+
 ### GET `/posts/{post_id}`
 
 Auth: user

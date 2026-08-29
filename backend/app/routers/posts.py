@@ -8,7 +8,7 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.author_snapshots import resolve_author_display
-from app.board_policies import canonical_post_category, hides_author_identity
+from app.board_policies import ANONYMOUS_BOARD_SLUGS, canonical_post_category, hides_author_identity
 from app.deps import can_read_board, can_write_board, get_current_user, get_db, require_admin
 from app.errors import AppException
 from app.models.board import Board
@@ -283,6 +283,294 @@ def _validate_post_content(board: Board, content: str) -> None:
     raise AppException(status_code=422, message="Post content is required.", code="VALIDATION_ERROR")
 
 
+def _post_list_order(sort: str):
+    if sort == "popular":
+        return (
+            Post.is_pinned.desc(),
+            Post.like_count.desc(),
+            Post.comment_count.desc(),
+            Post.created_at.desc(),
+            Post.id.desc(),
+        )
+    if sort == "views":
+        return (
+            Post.is_pinned.desc(),
+            Post.view_count.desc(),
+            Post.created_at.desc(),
+            Post.id.desc(),
+        )
+    return (Post.is_pinned.desc(), Post.created_at.desc(), Post.id.desc())
+
+
+def _post_feed_scope_filter(scope: str):
+    if scope == "notices":
+        return Board.board_type == "notice"
+    if scope == "resources":
+        return Board.category == "resources"
+    return or_(
+        Board.slug.in_(["council-activity", "gsa-activity"]),
+        and_(
+            Board.board_type == "notice",
+            Post.metadata_json["show_in_council_activity"].as_boolean().is_(True),
+        ),
+    )
+
+
+def _post_feed_notice_filters(scope: str, notice_category: str | None):
+    if notice_category is None:
+        return []
+    if scope != "notices":
+        raise AppException(
+            status_code=422,
+            message="Request validation failed.",
+            code="VALIDATION_ERROR",
+        )
+    if notice_category == "academic":
+        return [
+            or_(
+                Board.slug.in_(["academic-notices", "academic-calendar"]),
+                func.lower(func.coalesce(Post.category, "")).in_(["academic", "academic-notice"]),
+                Post.category.ilike("%학사%"),
+            )
+        ]
+    if notice_category == "event":
+        return [
+            or_(
+                Board.slug.in_(["event-notices", "webinar-notices"]),
+                func.lower(func.coalesce(Post.category, "")).in_(["event", "webinar", "event-notice"]),
+                Post.category.ilike("%행사%"),
+                Post.category.ilike("%특강%"),
+            )
+        ]
+    return [
+        Board.slug == "all-notices",
+        or_(
+            func.lower(func.coalesce(Post.category, "")) == "other",
+            Post.category.ilike("%기타%"),
+        ),
+    ]
+
+
+def _post_feed_search_filter(q: str | None, current_user: User):
+    if q is None:
+        return None
+    keyword = f"%{q}%"
+    return or_(
+        Post.title.ilike(keyword),
+        Post.content.ilike(keyword),
+        and_(
+            Post.is_anonymous.is_(False),
+            Board.slug.not_in(ANONYMOUS_BOARD_SLUGS),
+            or_(
+                User.nickname.ilike(keyword),
+                Post.author_nickname_snapshot.ilike(keyword),
+            ),
+        ),
+    )
+
+
+def _post_feed_block_filter(db: Session, current_user: User):
+    blocked_author_ids = db.scalars(
+        select(UserBlock.blocked_user_id).where(UserBlock.blocker_id == current_user.id)
+    ).all()
+    if not blocked_author_ids:
+        return None
+    return or_(
+        Post.is_anonymous.is_(True),
+        Board.slug.in_(ANONYMOUS_BOARD_SLUGS),
+        Post.author_id.is_(None),
+        Post.author_id.not_in(blocked_author_ids),
+    )
+
+
+def _post_attachment_subqueries():
+    attachment_counts = (
+        select(PostAttachment.post_id, func.count(PostAttachment.id).label("attachment_count"))
+        .group_by(PostAttachment.post_id)
+        .subquery()
+    )
+    image_attachment_order = (
+        select(
+            PostAttachment.post_id.label("post_id"),
+            MediaAsset.id.label("thumbnail_media_id"),
+            MediaAsset.url.label("thumbnail_url"),
+            func.row_number()
+            .over(
+                partition_by=PostAttachment.post_id,
+                order_by=(PostAttachment.sort_order.asc(), PostAttachment.id.asc()),
+            )
+            .label("rank"),
+        )
+        .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
+        .where(MediaAsset.content_type.ilike("image/%"), MediaAsset.status == "ready")
+        .subquery()
+    )
+    thumbnails = (
+        select(
+            image_attachment_order.c.post_id,
+            image_attachment_order.c.thumbnail_media_id,
+            image_attachment_order.c.thumbnail_url,
+        )
+        .where(image_attachment_order.c.rank == 1)
+        .subquery()
+    )
+    return attachment_counts, thumbnails
+
+
+def _serialize_post_list_item(
+    *,
+    db: Session,
+    post: Post,
+    board: Board,
+    nickname: str | None,
+    cohort: str | None,
+    attachment_count: int,
+    thumbnail_media_id: int | None,
+    thumbnail_url: str | None,
+    current_user: User,
+    q: str | None,
+    activity_source_title: str | None = None,
+) -> dict:
+    content_preview = post_content_preview(post.content, board.slug)
+    hide_mutual_aid_media = board.board_type == "mutual_aid" and current_user.role != "admin"
+    return {
+        "id": post.id,
+        "board_id": post.board_id,
+        "title": post.title,
+        "content_preview": content_preview,
+        "author_id": _visible_post_author_id(post, board, current_user),
+        "author_nickname": _post_author_nickname(post, board, current_user, nickname),
+        "author_cohort": _post_author_cohort(post, board, current_user, nickname, cohort),
+        "is_anonymous": post.is_anonymous,
+        "is_pinned": post.is_pinned,
+        "is_notice": post.is_notice,
+        "status": post.status,
+        "category": post.category,
+        "activity_source_title": activity_source_title,
+        "metadata": _safe_metadata(post, board),
+        "suggestion": _suggestion_payload(db, post.id) if board.board_type == "suggestion" else None,
+        "mutual_aid": _mutual_aid_payload(db, post.id) if board.board_type == "mutual_aid" else None,
+        "attachment_count": 0 if hide_mutual_aid_media else attachment_count,
+        "thumbnail_media_id": None if hide_mutual_aid_media else thumbnail_media_id,
+        "thumbnail_url": None if hide_mutual_aid_media else thumbnail_url,
+        "view_count": post.view_count,
+        "like_count": post.like_count,
+        "comment_count": post.comment_count,
+        "deadline_at": post.deadline_at,
+        "created_at": post.created_at,
+        "highlights": {
+            "title": _highlight(post.title, q),
+            "content_preview": _highlight(content_preview, q),
+        }
+        if q
+        else None,
+    }
+
+
+def _post_feed_response(
+    *,
+    db: Session,
+    current_user: User,
+    filters: list,
+    order_by: tuple,
+    page: int,
+    size: int,
+    q: str | None,
+):
+    total = (
+        db.scalar(
+            select(func.count(Post.id))
+            .select_from(Post)
+            .join(Board, Board.id == Post.board_id)
+            .outerjoin(User, User.id == Post.author_id)
+            .where(*filters)
+        )
+        or 0
+    )
+    total_pages = math.ceil(total / size) if total > 0 else 0
+    attachment_counts, thumbnails = _post_attachment_subqueries()
+    rows = db.execute(
+        select(
+            Post,
+            Board,
+            User.nickname,
+            User.cohort,
+            func.coalesce(attachment_counts.c.attachment_count, 0),
+            thumbnails.c.thumbnail_media_id,
+            thumbnails.c.thumbnail_url,
+        )
+        .join(Board, Board.id == Post.board_id)
+        .outerjoin(User, User.id == Post.author_id)
+        .outerjoin(attachment_counts, attachment_counts.c.post_id == Post.id)
+        .outerjoin(thumbnails, thumbnails.c.post_id == Post.id)
+        .where(*filters)
+        .order_by(*order_by)
+        .offset((page - 1) * size)
+        .limit(size)
+    ).all()
+    data = [
+        _serialize_post_list_item(
+            db=db,
+            post=post,
+            board=board,
+            nickname=nickname,
+            cohort=cohort,
+            attachment_count=attachment_count,
+            thumbnail_media_id=thumbnail_media_id,
+            thumbnail_url=thumbnail_url,
+            current_user=current_user,
+            q=q,
+        )
+        for post, board, nickname, cohort, attachment_count, thumbnail_media_id, thumbnail_url in rows
+    ]
+    return success_response(
+        data,
+        pagination={
+            "page": page,
+            "size": size,
+            "total": total,
+            "total_pages": total_pages,
+        },
+    )
+
+
+@router.get("/posts/feed")
+def get_post_feed(
+    scope: str = Query(pattern="^(notices|resources|council_activity)$"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    q: str | None = Query(None, min_length=1),
+    notice_category: str | None = Query(None, pattern="^(academic|event|other)$"),
+    sort: str = Query("latest", pattern="^(latest|popular|views)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    filters = [
+        Board.is_active.is_(True),
+        Post.deleted_at.is_(None),
+        post_status_read_filter(current_user),
+        _post_feed_scope_filter(scope),
+    ]
+    if current_user.role != "admin":
+        filters.append(Board.read_permission.in_(["guest", "user"]))
+    filters.extend(_post_feed_notice_filters(scope, notice_category))
+    search_filter = _post_feed_search_filter(q, current_user)
+    if search_filter is not None:
+        filters.append(search_filter)
+    block_filter = _post_feed_block_filter(db, current_user)
+    if block_filter is not None:
+        filters.append(block_filter)
+    return _post_feed_response(
+        db=db,
+        current_user=current_user,
+        filters=filters,
+        order_by=_post_list_order(sort),
+        page=page,
+        size=size,
+        q=q,
+    )
+
+
 @router.get("/boards/{board_id}/posts")
 def get_posts(
     board_id: int,
@@ -342,43 +630,8 @@ def get_posts(
     )
     total_pages = math.ceil(total / size) if total > 0 else 0
 
-    if sort == "popular":
-        order_by = (Post.is_pinned.desc(), Post.like_count.desc(), Post.comment_count.desc(), Post.created_at.desc())
-    elif sort == "views":
-        order_by = (Post.is_pinned.desc(), Post.view_count.desc(), Post.created_at.desc())
-    else:
-        order_by = (Post.is_pinned.desc(), Post.created_at.desc(), Post.id.desc())
-
-    attachment_counts = (
-        select(PostAttachment.post_id, func.count(PostAttachment.id).label("attachment_count"))
-        .group_by(PostAttachment.post_id)
-        .subquery()
-    )
-    image_attachment_order = (
-        select(
-            PostAttachment.post_id.label("post_id"),
-            MediaAsset.id.label("thumbnail_media_id"),
-            MediaAsset.url.label("thumbnail_url"),
-            func.row_number()
-            .over(
-                partition_by=PostAttachment.post_id,
-                order_by=(PostAttachment.sort_order.asc(), PostAttachment.id.asc()),
-            )
-            .label("rank"),
-        )
-        .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
-        .where(MediaAsset.content_type.ilike("image/%"), MediaAsset.status == "ready")
-        .subquery()
-    )
-    thumbnails = (
-        select(
-            image_attachment_order.c.post_id,
-            image_attachment_order.c.thumbnail_media_id,
-            image_attachment_order.c.thumbnail_url,
-        )
-        .where(image_attachment_order.c.rank == 1)
-        .subquery()
-    )
+    order_by = _post_list_order(sort)
+    attachment_counts, thumbnails = _post_attachment_subqueries()
 
     rows = db.execute(
         select(
@@ -400,44 +653,19 @@ def get_posts(
     activity_source_titles = _club_activity_source_titles(db, board, [row[0] for row in rows])
 
     data = [
-        {
-            "id": post.id,
-            "board_id": post.board_id,
-            "title": post.title,
-            "content_preview": post_content_preview(post.content, board.slug),
-            "author_id": _visible_post_author_id(post, board, current_user),
-            "author_nickname": _post_author_nickname(post, board, current_user, nickname),
-            "author_cohort": _post_author_cohort(post, board, current_user, nickname, cohort),
-            "is_anonymous": post.is_anonymous,
-            "is_pinned": post.is_pinned,
-            "is_notice": post.is_notice,
-            "status": post.status,
-            "category": post.category,
-            "activity_source_title": activity_source_titles.get(_activity_source_post_id(post.metadata_json)),
-            "metadata": _safe_metadata(post, board),
-            "suggestion": _suggestion_payload(db, post.id) if board.board_type == "suggestion" else None,
-            "mutual_aid": _mutual_aid_payload(db, post.id) if board.board_type == "mutual_aid" else None,
-            "attachment_count": 0
-            if board.board_type == "mutual_aid" and current_user.role != "admin"
-            else attachment_count,
-            "thumbnail_media_id": None
-            if board.board_type == "mutual_aid" and current_user.role != "admin"
-            else thumbnail_media_id,
-            "thumbnail_url": None
-            if board.board_type == "mutual_aid" and current_user.role != "admin"
-            else thumbnail_url,
-            "view_count": post.view_count,
-            "like_count": post.like_count,
-            "comment_count": post.comment_count,
-            "deadline_at": post.deadline_at,
-            "created_at": post.created_at,
-            "highlights": {
-                "title": _highlight(post.title, q),
-                "content_preview": _highlight(post_content_preview(post.content, board.slug), q),
-            }
-            if q
-            else None,
-        }
+        _serialize_post_list_item(
+            db=db,
+            post=post,
+            board=board,
+            nickname=nickname,
+            cohort=cohort,
+            attachment_count=attachment_count,
+            thumbnail_media_id=thumbnail_media_id,
+            thumbnail_url=thumbnail_url,
+            current_user=current_user,
+            q=q,
+            activity_source_title=activity_source_titles.get(_activity_source_post_id(post.metadata_json)),
+        )
         for post, nickname, cohort, attachment_count, thumbnail_media_id, thumbnail_url in rows
     ]
 
