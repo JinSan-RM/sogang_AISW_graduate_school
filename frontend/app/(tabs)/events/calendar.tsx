@@ -32,10 +32,9 @@ const COLORS = {
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사",
-  council: "원우회",
-  event: "행사",
-  external: "외부",
+  academic: "학사일정",
+  event: "행사일정",
+  other: "기타일정",
 };
 
 function monthLabel(date: Date) {
