@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -90,10 +90,39 @@ export function refreshPostQueryFirstPage(
   queryClient: QueryClient,
   queryKey: QueryKey,
   load: () => Promise<PostPage>,
+  shouldCommit: () => boolean = () => true,
 ): Promise<void> {
   return refreshFirstPostPage(load, (data) => {
-    queryClient.setQueryData(queryKey, data);
+    if (shouldCommit()) {
+      queryClient.setQueryData(queryKey, data);
+    }
   });
+}
+
+export function createPostFirstPageRefreshCoordinator(
+  onRefreshingChange: (isRefreshing: boolean) => void,
+) {
+  let activeCount = 0;
+  let latestRequestId = 0;
+
+  return {
+    async run(task: (isLatest: () => boolean) => Promise<void>): Promise<void> {
+      const requestId = ++latestRequestId;
+      activeCount += 1;
+      if (activeCount === 1) {
+        onRefreshingChange(true);
+      }
+
+      try {
+        await task(() => requestId === latestRequestId);
+      } finally {
+        activeCount -= 1;
+        if (activeCount === 0) {
+          onRefreshingChange(false);
+        }
+      }
+    },
+  };
 }
 
 export function postInfiniteItems(data?: PostInfiniteData): PostListItem[] {
@@ -107,15 +136,17 @@ function usePostInfiniteQuery(
   const queryClient = useQueryClient();
   const query = useInfiniteQuery(options);
   const [isRefreshingFirstPage, setIsRefreshingFirstPage] = useState(false);
+  const refreshCoordinatorRef = useRef<ReturnType<typeof createPostFirstPageRefreshCoordinator> | null>(null);
+  if (!refreshCoordinatorRef.current) {
+    refreshCoordinatorRef.current = createPostFirstPageRefreshCoordinator(setIsRefreshingFirstPage);
+  }
+  const refreshCoordinator = refreshCoordinatorRef.current;
   const items = useMemo(() => postInfiniteItems(query.data), [query.data]);
-  const refreshFirstPage = useCallback(async () => {
-    setIsRefreshingFirstPage(true);
-    try {
-      await refreshPostQueryFirstPage(queryClient, options.queryKey, loadFirstPage);
-    } finally {
-      setIsRefreshingFirstPage(false);
-    }
-  }, [loadFirstPage, options.queryKey, queryClient]);
+  const refreshFirstPage = useCallback(
+    () => refreshCoordinator.run((isLatest) =>
+      refreshPostQueryFirstPage(queryClient, options.queryKey, loadFirstPage, isLatest)),
+    [loadFirstPage, options.queryKey, queryClient, refreshCoordinator],
+  );
 
   return {
     ...query,

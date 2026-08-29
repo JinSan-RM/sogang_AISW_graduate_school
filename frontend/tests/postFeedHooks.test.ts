@@ -51,7 +51,13 @@ type PostHookContract = {
     queryClient: QueryClient,
     queryKey: readonly unknown[],
     load: () => Promise<ApiSuccess<PostListItem[]>>,
+    shouldCommit?: () => boolean,
   ) => Promise<void>;
+  createPostFirstPageRefreshCoordinator: (
+    onRefreshingChange: (isRefreshing: boolean) => void,
+  ) => {
+    run: (task: (isLatest: () => boolean) => Promise<void>) => Promise<void>;
+  };
   postInfiniteItems: (data?: {
     pages: ApiSuccess<PostListItem[]>[];
     pageParams: number[];
@@ -110,6 +116,16 @@ function responseAdapter(captured: { url?: string; params?: unknown }[]): AxiosA
       statusText: "OK",
     };
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 test("집계 피드 서비스는 scope와 필터를 /posts/feed 요청에 그대로 전달한다", async () => {
@@ -228,4 +244,49 @@ test("무한 쿼리 items는 페이지 순서를 유지하며 중복 게시글�
 
   assert.deepEqual(hooks.postInfiniteItems(data).map((item) => item.id), [1, 2, 3]);
   assert.deepEqual(hooks.postInfiniteItems(), []);
+});
+
+test("겹친 첫 페이지 새로고침은 모든 요청이 끝날 때까지 진행 중이며 최신 요청만 커밋한다", async () => {
+  const { hooks } = await modules();
+
+  for (const completionOrder of ["older-first", "newer-first"] as const) {
+    const queryClient = new QueryClient();
+    const queryKey = ["posts", "feed", "notices", { q: completionOrder }] as const;
+    const initial = firstPostPageData(page(1, 1, [post(1)]));
+    queryClient.setQueryData(queryKey, initial);
+    const refreshingStates: boolean[] = [];
+    const coordinator = hooks.createPostFirstPageRefreshCoordinator((value) => {
+      refreshingStates.push(value);
+    });
+    const older = deferred<ApiSuccess<PostListItem[]>>();
+    const newer = deferred<ApiSuccess<PostListItem[]>>();
+
+    const olderRun = coordinator.run((isLatest) =>
+      hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => older.promise, isLatest));
+    const newerRun = coordinator.run((isLatest) =>
+      hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => newer.promise, isLatest));
+
+    assert.deepEqual(refreshingStates, [true]);
+
+    if (completionOrder === "older-first") {
+      older.resolve(page(1, 1, [post(10)]));
+      await olderRun;
+      assert.deepEqual(refreshingStates, [true]);
+      assert.deepEqual(queryClient.getQueryData(queryKey), initial);
+
+      newer.resolve(page(1, 1, [post(20)]));
+      await newerRun;
+    } else {
+      newer.resolve(page(1, 1, [post(20)]));
+      await newerRun;
+      assert.deepEqual(refreshingStates, [true]);
+      assert.deepEqual(queryClient.getQueryData(queryKey), firstPostPageData(page(1, 1, [post(20)])));
+
+      older.resolve(page(1, 1, [post(10)]));
+      await olderRun;
+    }
+
+    assert.deepEqual(refreshingStates, [true, false]);
+    assert.deepEqual(queryClient.getQueryData(queryKey), firstPostPageData(page(1, 1, [post(20)])));
+  }
 });
