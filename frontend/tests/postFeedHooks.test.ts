@@ -54,9 +54,13 @@ type PostHookContract = {
     shouldCommit?: () => boolean,
   ) => Promise<void>;
   createPostFirstPageRefreshCoordinator: (
-    onRefreshingChange: (isRefreshing: boolean) => void,
+    onRefreshingChange: () => void,
   ) => {
-    run: (task: (isLatest: () => boolean) => Promise<void>) => Promise<void>;
+    run: (
+      queryKey: readonly unknown[],
+      task: (isLatest: () => boolean) => Promise<void>,
+    ) => Promise<void>;
+    isRefreshing: (queryKey: readonly unknown[]) => boolean;
   };
   postInfiniteItems: (data?: {
     pages: ApiSuccess<PostListItem[]>[];
@@ -255,15 +259,16 @@ test("겹친 첫 페이지 새로고침은 모든 요청이 끝날 때까지 진
     const initial = firstPostPageData(page(1, 1, [post(1)]));
     queryClient.setQueryData(queryKey, initial);
     const refreshingStates: boolean[] = [];
-    const coordinator = hooks.createPostFirstPageRefreshCoordinator((value) => {
-      refreshingStates.push(value);
+    let coordinator!: ReturnType<PostHookContract["createPostFirstPageRefreshCoordinator"]>;
+    coordinator = hooks.createPostFirstPageRefreshCoordinator(() => {
+      refreshingStates.push(coordinator.isRefreshing(queryKey));
     });
     const older = deferred<ApiSuccess<PostListItem[]>>();
     const newer = deferred<ApiSuccess<PostListItem[]>>();
 
-    const olderRun = coordinator.run((isLatest) =>
+    const olderRun = coordinator.run(queryKey, (isLatest) =>
       hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => older.promise, isLatest));
-    const newerRun = coordinator.run((isLatest) =>
+    const newerRun = coordinator.run(queryKey, (isLatest) =>
       hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => newer.promise, isLatest));
 
     assert.deepEqual(refreshingStates, [true]);
@@ -288,5 +293,60 @@ test("겹친 첫 페이지 새로고침은 모든 요청이 끝날 때까지 진
 
     assert.deepEqual(refreshingStates, [true, false]);
     assert.deepEqual(queryClient.getQueryData(queryKey), firstPostPageData(page(1, 1, [post(20)])));
+  }
+});
+
+test("서로 다른 키의 겹친 새로고침은 각각 커밋하고 표시기는 현재 키 상태만 반영한다", async () => {
+  const { hooks } = await modules();
+
+  for (const completionOrder of ["a-first", "b-first"] as const) {
+    const queryClient = new QueryClient();
+    const keyA = ["posts", "feed", "notices", { q: "A" }] as const;
+    const keyB = ["posts", "feed", "notices", { q: "B" }] as const;
+    const initialA = firstPostPageData(page(1, 1, [post(1)]));
+    const initialB = firstPostPageData(page(1, 1, [post(2)]));
+    queryClient.setQueryData(keyA, initialA);
+    queryClient.setQueryData(keyB, initialB);
+    let currentKey: readonly unknown[] = keyA;
+    const currentIndicatorStates: boolean[] = [];
+    let coordinator!: ReturnType<PostHookContract["createPostFirstPageRefreshCoordinator"]>;
+    coordinator = hooks.createPostFirstPageRefreshCoordinator(() => {
+      currentIndicatorStates.push(coordinator.isRefreshing(currentKey));
+    });
+    const loadA = deferred<ApiSuccess<PostListItem[]>>();
+    const loadB = deferred<ApiSuccess<PostListItem[]>>();
+
+    const runA = coordinator.run(keyA, (isLatest) =>
+      hooks.refreshPostQueryFirstPage(queryClient, keyA, () => loadA.promise, isLatest));
+    assert.equal(coordinator.isRefreshing(currentKey), true);
+
+    currentKey = keyB;
+    assert.equal(coordinator.isRefreshing(currentKey), false);
+    const runB = coordinator.run(keyB, (isLatest) =>
+      hooks.refreshPostQueryFirstPage(queryClient, keyB, () => loadB.promise, isLatest));
+    assert.equal(coordinator.isRefreshing(currentKey), true);
+
+    if (completionOrder === "a-first") {
+      loadA.resolve(page(1, 1, [post(10)]));
+      await runA;
+      assert.equal(coordinator.isRefreshing(currentKey), true);
+      assert.deepEqual(queryClient.getQueryData(keyA), firstPostPageData(page(1, 1, [post(10)])));
+
+      loadB.resolve(page(1, 1, [post(20)]));
+      await runB;
+    } else {
+      loadB.resolve(page(1, 1, [post(20)]));
+      await runB;
+      assert.equal(coordinator.isRefreshing(currentKey), false);
+      assert.deepEqual(queryClient.getQueryData(keyB), firstPostPageData(page(1, 1, [post(20)])));
+
+      loadA.resolve(page(1, 1, [post(10)]));
+      await runA;
+    }
+
+    assert.equal(coordinator.isRefreshing(currentKey), false);
+    assert.deepEqual(queryClient.getQueryData(keyA), firstPostPageData(page(1, 1, [post(10)])));
+    assert.deepEqual(queryClient.getQueryData(keyB), firstPostPageData(page(1, 1, [post(20)])));
+    assert.equal(currentIndicatorStates.at(-1), false);
   }
 });
