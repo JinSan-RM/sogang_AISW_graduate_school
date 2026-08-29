@@ -1,30 +1,150 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import type {
+  InfiniteData,
+  QueryClient,
+  QueryKey,
+  UseInfiniteQueryOptions,
+  UseInfiniteQueryResult,
+} from "@tanstack/react-query";
 
 import { commentApi, postApi } from "../services/api";
-import type { ApiSuccess, PostDetail } from "../types";
+import type { ApiSuccess, PostDetail, PostListItem } from "../types";
 import { loadAllBoardPosts } from "../utils/noticeFeed";
 import { applyBookmarkResult } from "../utils/postDetailCache";
+import {
+  nextPostPage,
+  refreshFirstPostPage,
+  uniquePostItems,
+} from "../utils/postFeedPagination";
+import type { PostPage } from "../utils/postFeedPagination";
 
 const PAGE_SIZE = 20;
 
-export function useBoardPosts(
+export type PostFilters = {
+  q?: string;
+  category?: string;
+  status?: string;
+  sort?: "latest" | "popular" | "views";
+};
+
+export type PostFeedScope = "notices" | "resources" | "council_activity";
+
+export type AggregatePostFilters = {
+  q?: string;
+  notice_category?: "academic" | "event" | "other";
+  sort?: "latest" | "popular" | "views";
+};
+
+type PostInfiniteData = InfiniteData<PostPage, number>;
+type PostInfiniteQueryOptions = UseInfiniteQueryOptions<
+  PostPage,
+  Error,
+  PostInfiniteData,
+  QueryKey,
+  number
+>;
+
+export type InfinitePostQuery = UseInfiniteQueryResult<PostInfiniteData, Error> & {
+  items: PostListItem[];
+  refreshFirstPage: () => Promise<void>;
+  isRefreshingFirstPage: boolean;
+};
+
+export function boardPostInfiniteQueryOptions(
   boardId: number,
-  filters?: { q?: string; category?: string; status?: string; sort?: "latest" | "popular" | "views" }
-) {
-  return useInfiniteQuery({
+  filters?: PostFilters,
+  enabled = true,
+): PostInfiniteQueryOptions {
+  return {
     queryKey: ["posts", boardId, filters],
     queryFn: ({ pageParam }) => postApi.getPosts(boardId, pageParam, PAGE_SIZE, filters),
     initialPageParam: 1,
-    enabled: Number.isFinite(boardId) && boardId > 0,
+    enabled: enabled && Number.isFinite(boardId) && boardId > 0,
     retry: false,
-    getNextPageParam: (lastPage) => {
-      const pagination = lastPage.pagination;
-      if (!pagination) {
-        return undefined;
-      }
-      return pagination.page < pagination.total_pages ? pagination.page + 1 : undefined;
-    },
+    getNextPageParam: nextPostPage,
+  };
+}
+
+export function aggregatePostInfiniteQueryOptions(
+  scope: PostFeedScope,
+  filters?: AggregatePostFilters,
+  enabled = true,
+): PostInfiniteQueryOptions {
+  return {
+    queryKey: ["posts", "feed", scope, filters],
+    queryFn: ({ pageParam }) => postApi.getFeed({ scope, page: pageParam, size: PAGE_SIZE, ...filters }),
+    initialPageParam: 1,
+    enabled,
+    retry: false,
+    getNextPageParam: nextPostPage,
+  };
+}
+
+export function refreshPostQueryFirstPage(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  load: () => Promise<PostPage>,
+): Promise<void> {
+  return refreshFirstPostPage(load, (data) => {
+    queryClient.setQueryData(queryKey, data);
   });
+}
+
+export function postInfiniteItems(data?: PostInfiniteData): PostListItem[] {
+  return uniquePostItems(data?.pages ?? []);
+}
+
+function usePostInfiniteQuery(
+  options: PostInfiniteQueryOptions,
+  loadFirstPage: () => Promise<PostPage>,
+): InfinitePostQuery {
+  const queryClient = useQueryClient();
+  const query = useInfiniteQuery(options);
+  const [isRefreshingFirstPage, setIsRefreshingFirstPage] = useState(false);
+  const items = useMemo(() => postInfiniteItems(query.data), [query.data]);
+  const refreshFirstPage = useCallback(async () => {
+    setIsRefreshingFirstPage(true);
+    try {
+      await refreshPostQueryFirstPage(queryClient, options.queryKey, loadFirstPage);
+    } finally {
+      setIsRefreshingFirstPage(false);
+    }
+  }, [loadFirstPage, options.queryKey, queryClient]);
+
+  return {
+    ...query,
+    items,
+    refreshFirstPage,
+    isRefreshingFirstPage,
+  };
+}
+
+export function useBoardPosts(
+  boardId: number,
+  filters?: PostFilters,
+  enabled = true,
+): InfinitePostQuery {
+  return usePostInfiniteQuery(
+    boardPostInfiniteQueryOptions(boardId, filters, enabled),
+    () => postApi.getPosts(boardId, 1, PAGE_SIZE, filters),
+  );
+}
+
+export function useAggregatePosts(
+  scope: PostFeedScope,
+  filters?: AggregatePostFilters,
+  enabled = true,
+): InfinitePostQuery {
+  return usePostInfiniteQuery(
+    aggregatePostInfiniteQueryOptions(scope, filters, enabled),
+    () => postApi.getFeed({ scope, page: 1, size: PAGE_SIZE, ...filters }),
+  );
 }
 
 export function useMultiBoardPosts(

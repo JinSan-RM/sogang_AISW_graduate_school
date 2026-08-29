@@ -369,6 +369,17 @@ export const postApi = {
     });
     return response.data;
   },
+  getFeed: async (params: {
+    scope: "notices" | "resources" | "council_activity";
+    page: number;
+    size: number;
+    q?: string;
+    notice_category?: "academic" | "event" | "other";
+    sort?: "latest" | "popular" | "views";
+  }) => {
+    const response = await api.get<ApiSuccess<PostListItem[]>>("/posts/feed", { params });
+    return response.data;
+  },
   getPostDetail: async (postId: number) => {
     const response = await api.get<ApiSuccess<PostDetail>>(`/posts/${postId}`);
     return response.data;

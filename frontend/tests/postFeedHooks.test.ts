@@ -1,0 +1,231 @@
+import assert from "node:assert/strict";
+import { registerHooks } from "node:module";
+import test from "node:test";
+
+import { QueryClient } from "@tanstack/react-query";
+import type { AxiosAdapter } from "axios";
+
+import type { ApiSuccess, PostListItem } from "../types";
+import { firstPostPageData } from "../utils/postFeedPagination";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "react-native") {
+      return nextResolve("react-native-web", context);
+    }
+    if (specifier === "expo-secure-store" || specifier === "expo-constants") {
+      return nextResolve("node:fs", context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+(globalThis as typeof globalThis & { __DEV__: boolean }).__DEV__ = true;
+
+const modulesPromise = Promise.all([
+  import("../services/api"),
+  import("../hooks/usePosts"),
+]);
+
+type FeedParams = {
+  scope: "notices" | "resources" | "council_activity";
+  page: number;
+  size: number;
+  q?: string;
+  notice_category?: "academic" | "event" | "other";
+  sort?: "latest" | "popular" | "views";
+};
+
+type PostHookContract = {
+  boardPostInfiniteQueryOptions: (
+    boardId: number,
+    filters?: { q?: string; category?: string; status?: string; sort?: "latest" | "popular" | "views" },
+    enabled?: boolean,
+  ) => Record<string, unknown>;
+  aggregatePostInfiniteQueryOptions: (
+    scope: FeedParams["scope"],
+    filters?: Omit<FeedParams, "scope" | "page" | "size">,
+    enabled?: boolean,
+  ) => Record<string, unknown>;
+  refreshPostQueryFirstPage: (
+    queryClient: QueryClient,
+    queryKey: readonly unknown[],
+    load: () => Promise<ApiSuccess<PostListItem[]>>,
+  ) => Promise<void>;
+  postInfiniteItems: (data?: {
+    pages: ApiSuccess<PostListItem[]>[];
+    pageParams: number[];
+  }) => PostListItem[];
+};
+
+async function modules() {
+  const [{ api, postApi }, postHooks] = await modulesPromise;
+  return {
+    api,
+    postApi,
+    hooks: postHooks as unknown as PostHookContract,
+  };
+}
+
+function post(id: number): PostListItem {
+  return {
+    id,
+    board_id: 7,
+    title: `게시글 ${id}`,
+    content_preview: "내용",
+    author_id: 1,
+    author_nickname: "작성자",
+    is_anonymous: false,
+    is_pinned: false,
+    is_notice: false,
+    status: "published",
+    view_count: 0,
+    like_count: 0,
+    comment_count: 0,
+    created_at: "2026-08-29T00:00:00Z",
+  };
+}
+
+function page(currentPage: number, totalPages: number, items: PostListItem[]) {
+  return {
+    status: "success" as const,
+    data: items,
+    pagination: {
+      page: currentPage,
+      size: 20,
+      total: totalPages * 20,
+      total_pages: totalPages,
+    },
+  };
+}
+
+function responseAdapter(captured: { url?: string; params?: unknown }[]): AxiosAdapter {
+  return async (config) => {
+    captured.push({ url: config.url, params: config.params });
+    return {
+      config,
+      data: page(1, 1, [post(1)]),
+      headers: {},
+      status: 200,
+      statusText: "OK",
+    };
+  };
+}
+
+test("집계 피드 서비스는 scope와 필터를 /posts/feed 요청에 그대로 전달한다", async () => {
+  const { api, postApi } = await modules();
+  const captured: { url?: string; params?: unknown }[] = [];
+  const originalAdapter = api.defaults.adapter;
+  api.defaults.adapter = responseAdapter(captured);
+
+  const params: FeedParams = {
+    scope: "notices",
+    page: 3,
+    size: 20,
+    q: "장학금",
+    notice_category: "academic",
+    sort: "popular",
+  };
+
+  try {
+    await (postApi as typeof postApi & { getFeed: (value: FeedParams) => Promise<unknown> }).getFeed(params);
+  } finally {
+    api.defaults.adapter = originalAdapter;
+  }
+
+  assert.deepEqual(captured, [{ url: "/posts/feed", params }]);
+});
+
+test("단일 게시판 쿼리 옵션은 기존 키를 보존하고 enabled와 페이지 요청을 적용한다", async () => {
+  const { api, hooks } = await modules();
+  const filters = { q: "프로젝트", category: "study", status: "published", sort: "latest" as const };
+  const disabled = hooks.boardPostInfiniteQueryOptions(7, filters, false);
+  const invalid = hooks.boardPostInfiniteQueryOptions(0, filters, true);
+  const enabled = hooks.boardPostInfiniteQueryOptions(7, filters, true);
+
+  assert.deepEqual(disabled.queryKey, ["posts", 7, filters]);
+  assert.equal(disabled.enabled, false);
+  assert.equal(invalid.enabled, false);
+  assert.equal(enabled.enabled, true);
+
+  const captured: { url?: string; params?: unknown }[] = [];
+  const originalAdapter = api.defaults.adapter;
+  api.defaults.adapter = responseAdapter(captured);
+  try {
+    await (enabled.queryFn as (context: { pageParam: number }) => Promise<unknown>)({ pageParam: 4 });
+  } finally {
+    api.defaults.adapter = originalAdapter;
+  }
+
+  assert.deepEqual(captured, [{
+    url: "/boards/7/posts",
+    params: { page: 4, size: 20, ...filters },
+  }]);
+});
+
+test("집계 쿼리 옵션은 scope별 키를 격리하고 feed 페이지 요청을 적용한다", async () => {
+  const { api, hooks } = await modules();
+  const filters = { q: "세미나", notice_category: "event" as const, sort: "views" as const };
+  const disabled = hooks.aggregatePostInfiniteQueryOptions("notices", filters, false);
+  const notices = hooks.aggregatePostInfiniteQueryOptions("notices", filters, true);
+  const resources = hooks.aggregatePostInfiniteQueryOptions("resources", { q: "세미나", sort: "views" }, true);
+
+  assert.deepEqual(notices.queryKey, ["posts", "feed", "notices", filters]);
+  assert.notDeepEqual(notices.queryKey, resources.queryKey);
+  assert.equal(disabled.enabled, false);
+  assert.equal(notices.enabled, true);
+
+  const captured: { url?: string; params?: unknown }[] = [];
+  const originalAdapter = api.defaults.adapter;
+  api.defaults.adapter = responseAdapter(captured);
+  try {
+    await (notices.queryFn as (context: { pageParam: number }) => Promise<unknown>)({ pageParam: 2 });
+  } finally {
+    api.defaults.adapter = originalAdapter;
+  }
+
+  assert.deepEqual(captured, [{
+    url: "/posts/feed",
+    params: { scope: "notices", page: 2, size: 20, ...filters },
+  }]);
+});
+
+test("첫 페이지 새로고침은 정확한 현재 키만 교체하고 실패 시 기존 캐시를 보존한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const currentKey = ["posts", "feed", "notices", { q: "장학금" }] as const;
+  const siblingKey = ["posts", "feed", "notices", { q: "행사" }] as const;
+  const oldCurrent = { pages: [page(1, 2, [post(1)]), page(2, 2, [post(2)])], pageParams: [1, 2] };
+  const oldSibling = firstPostPageData(page(1, 1, [post(3)]));
+  queryClient.setQueryData(currentKey, oldCurrent);
+  queryClient.setQueryData(siblingKey, oldSibling);
+
+  const fresh = page(1, 1, [post(4)]);
+  await hooks.refreshPostQueryFirstPage(queryClient, currentKey, async () => fresh);
+
+  assert.deepEqual(queryClient.getQueryData(currentKey), firstPostPageData(fresh));
+  assert.deepEqual(queryClient.getQueryData(siblingKey), oldSibling);
+
+  const beforeFailure = queryClient.getQueryData(currentKey);
+  await assert.rejects(
+    () => hooks.refreshPostQueryFirstPage(queryClient, currentKey, async () => {
+      throw new Error("offline");
+    }),
+    { message: "offline" },
+  );
+  assert.strictEqual(queryClient.getQueryData(currentKey), beforeFailure);
+});
+
+test("무한 쿼리 items는 페이지 순서를 유지하며 중복 게시글을 제거한다", async () => {
+  const { hooks } = await modules();
+  const data = {
+    pages: [
+      page(1, 2, [post(1), post(2)]),
+      page(2, 2, [post(2), post(3)]),
+    ],
+    pageParams: [1, 2],
+  };
+
+  assert.deepEqual(hooks.postInfiniteItems(data).map((item) => item.id), [1, 2, 3]);
+  assert.deepEqual(hooks.postInfiniteItems(), []);
+});
