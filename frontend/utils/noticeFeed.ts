@@ -23,6 +23,28 @@ export const NOTICE_FILTERS: { key: NoticeFilter; label: string }[] = [
   { key: "other", label: "기타공지" },
 ];
 
+export function noticeFeedQueryFilters(filter: NoticeFilter): {
+  notice_category: Exclude<NoticeFilter, "all"> | undefined;
+  sort: "latest";
+} {
+  return {
+    notice_category: filter === "all" ? undefined : filter,
+    sort: "latest",
+  };
+}
+
+export function canLoadNextNoticePage({
+  hasNextPage,
+  isFetchingNextPage,
+  isRefreshingFirstPage,
+}: {
+  hasNextPage: boolean | undefined;
+  isFetchingNextPage: boolean;
+  isRefreshingFirstPage: boolean;
+}): boolean {
+  return hasNextPage === true && !isFetchingNextPage && !isRefreshingFirstPage;
+}
+
 export function isNoticeContentBoard(board: Board) {
   return board.is_active !== false && board.board_type === "notice";
 }

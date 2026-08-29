@@ -2,13 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { EmptyCalendarIcon } from "../../components/icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBoardsQuery } from "../../hooks/useApi";
 import LoadingState from "../../components/LoadingState";
 import NoticeRow, { type NoticeRowModel } from "../../components/NoticeRow";
-import { useMultiBoardPosts } from "../../hooks/usePosts";
+import { useAggregatePosts } from "../../hooks/usePosts";
 import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 import type { Board } from "../../types";
 import { formatBoardDate } from "../../utils/dateFormat";
@@ -19,9 +19,11 @@ import {
   selectNoticeFilterAndRefresh,
 } from "../../utils/pullToRefresh";
 import {
+  canLoadNextNoticePage,
+  categoryFromNoticePost,
   isNoticeContentBoard,
   NOTICE_FILTERS,
-  noticePostsForFilter,
+  noticeFeedQueryFilters,
   type NoticeFilter,
 } from "../../utils/noticeFeed";
 
@@ -104,24 +106,23 @@ function NoticesContent() {
         .sort((left, right) => left.sort_order - right.sort_order),
     [boardData?.data]
   );
-  const noticeBoardIds = useMemo(() => noticeBoards.map((board) => board.id), [noticeBoards]);
-  const postsQuery = useMultiBoardPosts(noticeBoardIds, {
-    sort: "latest",
-  });
+  const boardById = useMemo(() => new Map(noticeBoards.map((board) => [board.id, board])), [noticeBoards]);
+  const noticeFilters = useMemo(() => noticeFeedQueryFilters(selectedFilter), [selectedFilter]);
+  const postsQuery = useAggregatePosts("notices", noticeFilters);
 
   const realRows = useMemo<NoticeRowModel[]>(() => {
-    return noticePostsForFilter(postsQuery.data ?? [], noticeBoards, selectedFilter).map(({ post, category }) => ({
-        key: `post-${post.id}`,
-        postId: post.id,
-        title: post.title,
-        category,
-        date: [formatBoardDate(post.created_at), deadlineLabel(post.deadline_at)].filter(Boolean).join(" · "),
-        isPinned: post.is_pinned,
-      }));
-  }, [noticeBoards, postsQuery.data, selectedFilter]);
+    return postsQuery.items.map((post) => ({
+      key: `post-${post.id}`,
+      postId: post.id,
+      title: post.title,
+      category: categoryFromNoticePost(post, boardById.get(post.board_id)),
+      date: [formatBoardDate(post.created_at), deadlineLabel(post.deadline_at)].filter(Boolean).join(" · "),
+      isPinned: post.is_pinned,
+    }));
+  }, [boardById, postsQuery.items]);
 
   const isOfflinePreview = boardsError || postsQuery.isError || (!boardsLoading && noticeBoards.length === 0);
-  const isLoading = boardsLoading || (noticeBoardIds.length > 0 && postsQuery.isLoading);
+  const isLoading = boardsLoading || postsQuery.isLoading;
   const visibleRows = realRows;
 
   return (
@@ -156,7 +157,6 @@ function NoticesContent() {
                   item.key,
                   setSelectedFilter,
                   refetchBoards,
-                  noticeBoardIds.length > 0 ? postsQuery.refetch : undefined,
                 );
               }}
               style={[styles.filterChip, active ? styles.filterChipActive : null]}
@@ -171,9 +171,7 @@ function NoticesContent() {
         <Pressable
           onPress={() => {
             void refetchBoards();
-            if (noticeBoardIds.length > 0) {
-              void postsQuery.refetch();
-            }
+            void postsQuery.refetch();
           }}
           style={styles.connectionStrip}
         >
@@ -184,42 +182,47 @@ function NoticesContent() {
         </Pressable>
       ) : null}
 
-      <ScrollView
+      <FlatList
+        data={visibleRows}
         style={styles.listScroller}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.listContent, !isLoading && visibleRows.length === 0 ? styles.listContentEmpty : null]}
-        refreshControl={
-          <RefreshControl
-            refreshing={noticeRefreshControlRefreshing({
-              boardsLoading,
-              boardsRefetching,
-              postsRefetching: postsQuery.isRefetching,
-            })}
-            onRefresh={() => {
-              void refreshQueries([
-                refetchBoards,
-                noticeBoardIds.length > 0 ? postsQuery.refetch : undefined,
-              ]);
-            }}
-            tintColor={COLORS.primary}
+        keyExtractor={(item) => item.key}
+        renderItem={({ item, index }) => (
+          <NoticeRow
+            item={item}
+            isLast={index === visibleRows.length - 1}
+            returnTo={NOTICES_TAB_ROUTE}
           />
+        )}
+        refreshing={noticeRefreshControlRefreshing({
+          boardsLoading,
+          boardsRefetching,
+          postsRefetching: postsQuery.isRefreshingFirstPage,
+        })}
+        onRefresh={() => {
+          void refreshQueries([refetchBoards, postsQuery.refreshFirstPage]);
+        }}
+        onEndReached={() => {
+          if (canLoadNextNoticePage(postsQuery)) {
+            void postsQuery.fetchNextPage();
+          }
+        }}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={
+          postsQuery.isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} /> : null
         }
-      >
-        {isLoading ? <LoadingRows /> : null}
-        {!isLoading && visibleRows.length > 0 ? (
-          <View style={styles.list}>
-            {visibleRows.map((item, index) => (
-              <NoticeRow key={item.key} item={item} isLast={index === visibleRows.length - 1} returnTo={NOTICES_TAB_ROUTE} />
-            ))}
-          </View>
-        ) : null}
-        {!isLoading && visibleRows.length === 0 ? (
-          <EmptyState
-            title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지사항이 없어요"}
-            description={isOfflinePreview ? "잠시 후 다시 시도해주세요" : "새로운 공지가 등록되면 알려드릴게요"}
-          />
-        ) : null}
-      </ScrollView>
+        ListEmptyComponent={
+          isLoading ? (
+            <LoadingRows />
+          ) : (
+            <EmptyState
+              title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지사항이 없어요"}
+              description={isOfflinePreview ? "잠시 후 다시 시도해주세요" : "새로운 공지가 등록되면 알려드릴게요"}
+            />
+          )
+        }
+      />
     </View>
   );
 }
@@ -305,9 +308,6 @@ const styles = StyleSheet.create({
   },
   listContentEmpty: {
     flexGrow: 1,
-  },
-  list: {
-    backgroundColor: COLORS.surface,
   },
   loadingWrap: {
     minHeight: 160,

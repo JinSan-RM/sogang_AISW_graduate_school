@@ -62,12 +62,17 @@ test("공지 초기 로딩 중에는 pull indicator를 LoadingRows와 함께 표
   }), true);
 });
 
-test("공지 필터 선택은 선택값을 바꾸고 매번 게시판과 공지 목록을 재조회한다", async () => {
+test("공지 필터 선택은 선택값과 쿼리 키를 바꾸고 이전 공지 쿼리는 재조회하지 않는다", async () => {
   for (const filter of ["all", "academic", "event", "other"] satisfies NoticeFilter[]) {
     let selected: NoticeFilter = "all";
     const calls: string[] = [];
 
-    await selectNoticeFilterAndRefresh(
+    await (selectNoticeFilterAndRefresh as (
+      filter: NoticeFilter,
+      selectFilter: (filter: NoticeFilter) => void,
+      refetchBoards: () => Promise<unknown>,
+      oldPostRefetch: () => Promise<unknown>,
+    ) => Promise<void>)(
       filter,
       (nextFilter) => {
         selected = nextFilter;
@@ -81,6 +86,6 @@ test("공지 필터 선택은 선택값을 바꾸고 매번 게시판과 공지 
     );
 
     assert.equal(selected, filter);
-    assert.deepEqual(calls, ["boards", "posts"]);
+    assert.deepEqual(calls, ["boards"]);
   }
 });

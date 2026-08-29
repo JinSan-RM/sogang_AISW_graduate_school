@@ -29,8 +29,7 @@ export async function selectNoticeFilterAndRefresh(
   filter: NoticeFilter,
   selectFilter: (filter: NoticeFilter) => void,
   refetchBoards: Refetch,
-  refetchPosts?: Refetch,
 ): Promise<void> {
   selectFilter(filter);
-  await refreshQueries([refetchBoards, refetchPosts]);
+  await refreshQueries([refetchBoards]);
 }

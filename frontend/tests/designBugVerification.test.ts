@@ -120,13 +120,6 @@ test("활동 인증 상세 이미지는 240px 고정·접기 없이 원본 비�
   assert.match(postDetailSource, /visualHeroAlbum:[\s\S]*height: 240/);
 });
 
-test("#189 공지 필터 버튼은 선택 변경과 최신 목록 재조회를 함께 실행한다", () => {
-  assert.match(
-    noticeListSource,
-    /NOTICE_FILTERS\.map\([\s\S]*?<Pressable[\s\S]*?onPress=\{\(\) => \{[\s\S]*?selectNoticeFilterAndRefresh\(\s*item\.key,\s*setSelectedFilter,\s*refetchBoards,\s*noticeBoardIds\.length > 0 \? postsQuery\.refetch : undefined,\s*\);/,
-  );
-});
-
 test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시트를 사용한다", () => {
   assert.match(postDetailSource, /<BookmarkIcon filled=\{isBookmarked\}/);
   assert.match(postDetailSource, /<MoreIcon color=\{COLORS\.text\} \/>/);

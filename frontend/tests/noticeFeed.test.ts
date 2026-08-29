@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ApiSuccess, Board, PostListItem } from "../types";
-import { isNoticeContentBoard, noticePostsForFilter } from "../utils/noticeFeed";
+import {
+  isNoticeContentBoard,
+  noticePostsForFilter,
+  type NoticeFilter,
+} from "../utils/noticeFeed";
 import * as noticeFeed from "../utils/noticeFeed";
 
 type HomeNoticeSelector = (
@@ -24,6 +28,15 @@ type AllBoardPostLoader = (
   pageSize?: number
 ) => Promise<PostListItem[]>;
 type HomeNoticeCategory = (post: PostListItem, board?: Board) => string;
+type NoticeFeedQueryFilters = (filter: NoticeFilter) => {
+  notice_category: Exclude<NoticeFilter, "all"> | undefined;
+  sort: "latest";
+};
+type CanLoadNextNoticePage = (state: {
+  hasNextPage: boolean | undefined;
+  isFetchingNextPage: boolean;
+  isRefreshingFirstPage: boolean;
+}) => boolean;
 
 function selectHomeNotices(posts: PostListItem[], boards: Board[], limit = 2) {
   const selector = (noticeFeed as typeof noticeFeed & { homeNoticePosts?: HomeNoticeSelector }).homeNoticePosts;
@@ -42,6 +55,22 @@ function homeCategory(postItem: PostListItem, boardItem?: Board) {
     .homeNoticeCategory;
   if (!helper) assert.fail("homeNoticeCategory must be exported");
   return helper(postItem, boardItem);
+}
+
+function noticeQueryFilters(filter: NoticeFilter) {
+  const helper = (noticeFeed as typeof noticeFeed & {
+    noticeFeedQueryFilters?: NoticeFeedQueryFilters;
+  }).noticeFeedQueryFilters;
+  if (!helper) assert.fail("noticeFeedQueryFilters must be exported");
+  return helper(filter);
+}
+
+function canLoadNextNoticePage(state: Parameters<CanLoadNextNoticePage>[0]) {
+  const helper = (noticeFeed as typeof noticeFeed & {
+    canLoadNextNoticePage?: CanLoadNextNoticePage;
+  }).canLoadNextNoticePage;
+  if (!helper) assert.fail("canLoadNextNoticePage must be exported");
+  return helper(state);
 }
 
 function board(id: number, slug: string, boardType = "notice"): Board {
@@ -114,6 +143,48 @@ test("기타 탭은 전체 공지 게시판의 전체 분류 글도 기타 공�
 
 test("행사 탭은 행사와 특강 공지를 함께 표시한다", () => {
   assert.deepEqual(noticePostsForFilter(posts, boards, "event").map((item) => item.post.id), [4, 3]);
+});
+
+test("공지 필터는 고정 배치의 클라이언트 필터가 아니라 서버 집계 조건으로 변환된다", () => {
+  assert.deepEqual(noticeQueryFilters("all"), {
+    notice_category: undefined,
+    sort: "latest",
+  });
+  assert.deepEqual(noticeQueryFilters("academic"), {
+    notice_category: "academic",
+    sort: "latest",
+  });
+  assert.deepEqual(noticeQueryFilters("event"), {
+    notice_category: "event",
+    sort: "latest",
+  });
+  assert.deepEqual(noticeQueryFilters("other"), {
+    notice_category: "other",
+    sort: "latest",
+  });
+});
+
+test("공지 다음 페이지는 다음 페이지가 있고 다른 피드 요청이 없을 때만 불러온다", () => {
+  assert.equal(canLoadNextNoticePage({
+    hasNextPage: true,
+    isFetchingNextPage: false,
+    isRefreshingFirstPage: false,
+  }), true);
+  assert.equal(canLoadNextNoticePage({
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isRefreshingFirstPage: false,
+  }), false);
+  assert.equal(canLoadNextNoticePage({
+    hasNextPage: true,
+    isFetchingNextPage: true,
+    isRefreshingFirstPage: false,
+  }), false);
+  assert.equal(canLoadNextNoticePage({
+    hasNextPage: true,
+    isFetchingNextPage: false,
+    isRefreshingFirstPage: true,
+  }), false);
 });
 
 test("홈 공지는 모든 활성 공지 카테고리에서 최신 두 개를 선택한다", () => {
