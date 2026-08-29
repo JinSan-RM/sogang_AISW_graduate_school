@@ -69,6 +69,33 @@ export function NoticeTabIcon({ size = 22, color = TAB_INACTIVE }: IconProps) {
   );
 }
 
+// 참여활동 상세 대표 이미지 플레이스홀더 — 디자인 icon/image 36px, stroke 1.7 #999999.
+export function ImagePlaceholderIcon({ size = 36, color = "#999999" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect x={4.5} y={6} width={27} height={24} rx={3} stroke={color} strokeWidth={1.7} />
+      <Circle cx={12.8} cy={14.2} r={2.4} stroke={color} strokeWidth={1.5} />
+      <Path d="M4.5 25.5L13 18L20 24L25 19.5L31.5 25.5" stroke={color} strokeWidth={1.7} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 원우회 답변 타이틀 아이콘 — 💬 이모지(말풍선+점 3개) 모양을 벡터로 그렸다.
+// (이모지는 윈도우 등 일부 환경에서 렌더링되지 않아 SVG로 대체)
+export function CouncilReplyIcon({ size = 15, color = "#2761FF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M8 1.5C3.86 1.5 0.5 4.28 0.5 7.7C0.5 9.6 1.54 11.29 3.17 12.42C3.05 13.22 2.7 14.13 2 14.83C1.83 15 1.95 15.29 2.19 15.27C3.83 15.12 5.17 14.42 6.02 13.75C6.66 13.88 7.32 13.95 8 13.95C12.14 13.95 15.5 11.12 15.5 7.7C15.5 4.28 12.14 1.5 8 1.5Z"
+        fill={color}
+      />
+      <Circle cx={4.9} cy={7.8} r={1.05} fill="#FFFFFF" />
+      <Circle cx={8} cy={7.8} r={1.05} fill="#FFFFFF" />
+      <Circle cx={11.1} cy={7.8} r={1.05} fill="#FFFFFF" />
+    </Svg>
+  );
+}
+
 export function CommunityTabIcon({ size = 22, color = TAB_INACTIVE }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
@@ -450,10 +477,33 @@ export function SendIcon({ size = 36 }: IconProps) {
 
 // 공지 첨부파일 다운로드 아이콘 — 디자인 원본 18x18.
 export function DownloadIcon({ size = 18, color = "#2761FF" }: IconProps) {
+  // 디자인 원본 18x18: 아래 화살표 + 밑줄.
   return (
     <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
       <Path d="M9 2.5V11.5M12.5 8L9 11.5L5.5 8" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
       <Path d="M3.5 14H14.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 공지 알림 토스트 아이콘 — 디자인 원본 32x32 (뱃지 원 + 종).
+export function NoticeToastIcon({ size = 32 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <Rect width={32} height={32} rx={16} fill="#E6F1FB" />
+      <Path
+        d="M12.0001 14C12.0001 12.9391 12.4215 11.9217 13.1717 11.1716C13.9218 10.4214 14.9392 10 16.0001 10C17.0609 10 18.0784 10.4214 18.8285 11.1716C19.5787 11.9217 20.0001 12.9391 20.0001 14C20.0001 16.6667 21.3334 17.3333 21.3334 18H10.6667C10.6667 17.3333 12.0001 16.6667 12.0001 14Z"
+        stroke="#0C447C"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M14.6667 20.6667C14.6667 21.0203 14.8072 21.3594 15.0573 21.6095C15.3073 21.8595 15.6465 22 16.0001 22C16.3537 22 16.6928 21.8595 16.9429 21.6095C17.1929 21.3594 17.3334 21.0203 17.3334 20.6667"
+        stroke="#0C447C"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+      />
     </Svg>
   );
 }

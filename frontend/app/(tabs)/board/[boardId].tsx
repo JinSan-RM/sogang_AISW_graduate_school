@@ -827,7 +827,7 @@ function ParticipationGuideTile({ post, board, index, onPress }: { post: PostLis
   );
 }
 
-function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem; boardSlug?: string; index: number; onPress: (postId: number) => void }) {
+function ActivityTile({ post, boardSlug, index, isLast, onPress }: { post: PostListItem; boardSlug?: string; index: number; isLast?: boolean; onPress: (postId: number) => void }) {
   const gradient = ALBUM_GRADIENTS[index % ALBUM_GRADIENTS.length];
   const cardTitle = activityCertificationCardTitle(post, boardSlug);
   // 동아리·네트워킹 인증은 기존처럼 소감과 배지를 우선하고, 스터디만 모집/스터디 제목을 함께 표시한다.
@@ -839,7 +839,7 @@ function ActivityTile({ post, boardSlug, index, onPress }: { post: PostListItem;
       : post.created_at;
 
   return (
-    <Pressable onPress={() => onPress(post.id)} style={styles.activityCard}>
+    <Pressable onPress={() => onPress(post.id)} style={[styles.activityCard, isLast ? styles.activityCardLast : null]}>
       {thumbnailUrl ? (
         <MediaImageBackground media={{ id: post.thumbnail_media_id, url: thumbnailUrl }} imageStyle={styles.activityImage} style={styles.activityThumb}>
           <View style={styles.activityScrim} />
@@ -1109,9 +1109,14 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
               <IconButton icon="chevron-back" label="뒤로" onPress={exitBoardDepth} />
             )}
             <Text style={styles.appBarTitle}>{display.name}</Text>
-            <Pressable accessibilityLabel="검색" onPress={() => setShowSearch(true)} style={styles.iconButton}>
-              <SearchIcon size={20} />
-            </Pressable>
+            {/* 참여활동(동아리·스터디·네트워킹) 화면에는 검색이 없다 (Figma) */}
+            {isActivityCards || isParticipationGuideCards || isStudyRecruit ? (
+              <View style={styles.iconButton} />
+            ) : (
+              <Pressable accessibilityLabel="검색" onPress={() => setShowSearch(true)} style={styles.iconButton}>
+                <SearchIcon size={20} />
+              </Pressable>
+            )}
           </>
         )}
       </View>
@@ -1221,7 +1226,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
             ) : isParticipationGuideCards ? (
               <ParticipationGuideTile post={item} board={itemBoard} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             ) : isActivityCards ? (
-              <ActivityTile post={item} boardSlug={itemBoard?.slug ?? board?.slug} index={index} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
+              <ActivityTile post={item} boardSlug={itemBoard?.slug ?? board?.slug} index={index} isLast={index === posts.length - 1} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             ) : (
               <PostCard post={item} boardType={itemBoard?.board_type} boardSlug={itemBoard?.slug} isLast={index === posts.length - 1} onPress={(postId) => router.push(postDetailRoute(postId, boardId, detailReturnRoute) as never)} />
             );
@@ -1319,7 +1324,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   filterWrap: {
-    height: 54, // Figma: 서브필터 54h, padding 12/16, 하단 구분선 없음
+    height: 54, // Figma: 서브필터 54h, padding 12/16 (일반 게시판은 하단 구분선 없음)
     backgroundColor: COLORS.surface,
   },
   filterScroller: {
@@ -1540,6 +1545,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 0.5,
     borderBottomColor: "#E1E4E9",
+  },
+  activityCardLast: {
+    borderBottomWidth: 0, // 마지막 인증 카드 아래에는 구분선을 긋지 않는다
   },
   activityThumb: {
     position: "relative",

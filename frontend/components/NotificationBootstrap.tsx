@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
 
 import { notificationApi } from "../services/api";
+import { NoticeToastIcon } from "./icons";
 import { useUserStore } from "../stores/userStore";
 import type { NotificationItem } from "../types";
 import { setStoredPushToken } from "../utils/pushTokenStorage";
@@ -197,36 +198,39 @@ export default function NotificationBootstrap() {
   }
 
   return (
-    <View
+    <Pressable
+      accessibilityRole="button"
+      onPress={openVisibleNotification}
+      // Figma 공지토스트: 흰 카드 + 0.5 테두리 + 그림자, radius 14
       style={{
         position: "absolute",
-        top: 12,
+        top: 8,
         left: 12,
         right: 12,
         zIndex: 9999,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: "#bfdbfe",
-        backgroundColor: "#eff6ff",
-        padding: 12,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        borderRadius: 14,
+        borderWidth: 0.5,
+        borderColor: "#E1E4E9",
+        backgroundColor: "#FFFFFF",
+        paddingHorizontal: 14,
+        paddingVertical: 12,
         shadowColor: "#000",
-        shadowOpacity: 0.16,
-        shadowRadius: 10,
+        shadowOpacity: 0.12,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 8,
       }}
     >
-          <Text style={{ color: "#112d4e", fontSize: 13, fontWeight: "900" }}>새 알림</Text>
-      <Text style={{ color: "#111827", marginTop: 4, fontWeight: "700" }}>{visibleNotification.message}</Text>
-      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-        <Pressable
-          onPress={() => setVisibleNotification(null)}
-          style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 8 }}
-        >
-            <Text style={{ color: "#64748b", fontWeight: "900" }}>나중에</Text>
-        </Pressable>
-        <Pressable onPress={openVisibleNotification} style={{ borderRadius: 8, backgroundColor: "#112d4e", paddingHorizontal: 12, paddingVertical: 8 }}>
-            <Text style={{ color: "#ffffff", fontWeight: "900" }}>열기</Text>
-        </Pressable>
+      <NoticeToastIcon size={32} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ color: "#15171C", fontSize: 13, fontWeight: "500", lineHeight: 16 }}>AI·SW 캠퍼스</Text>
+        <Text numberOfLines={1} style={{ color: "#6B7280", fontSize: 13, fontWeight: "400", lineHeight: 16 }}>
+          {visibleNotification.message}
+        </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
