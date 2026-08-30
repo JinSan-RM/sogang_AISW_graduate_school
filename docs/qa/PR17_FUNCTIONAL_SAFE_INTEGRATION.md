@@ -32,12 +32,12 @@
 
 ## Visual verification
 
-All executed browser checks used the existing seeded fixture at a 320px content viewport. Screenshots were captured from the rendered in-app browser; opening the notice result in the Codex browser panel was queued, because subagent browser visibility is unsupported.
+All executed browser checks used the existing seeded fixture at a 320px content viewport. Screenshots were emitted transiently in the browser-tool output; no local screenshot artifact path was returned. Codex browser-panel delivery was NOT EXECUTED/BLOCKED: the subagent in-app-browser visibility capability is unsupported, and the panel-open request for `http://localhost:58081/notices` returned `queued` rather than a delivered panel.
 
 | Surface | Outcome | Evidence |
 | --- | --- | --- |
 | Notice list: 전체/학사공지/행사공지/기타공지, search, dividers | PASS | Rendered `/notices` shows all four filters, a visible search icon, and row separators; seeded rows include academic, event, and other labels. |
-| Home notices: labels and no `일정` leak | PASS | Rendered `/home` shows `기타공지` and `행사공지`; the notice section contains no `일정` category label. The fixture did not place an academic row in this home slice. |
+| Home notices: 학사공지/행사공지/기타공지 labels and no `일정` leak | PARTIAL | Rendered `/home` shows `기타공지` and `행사공지`, with no `일정` category label in the notice section. No `학사공지` row was present in the rendered home slice, so the full three-label family was not verified. |
 | Home schedule: hidden codes, selected date, data and detail navigation | PARTIAL | Rendered home calendar selected 2026-08-30 with no scheduled item and no raw category code. The fixture's only event is 2026-07-25, so its home-month data card was unavailable; list/day/detail navigation was verified below. |
 | Schedule list | PASS | Rendered `/events` shows seeded `세미나` labeled `행사일정`, without a raw `event` code. |
 | Schedule calendar | PARTIAL | Rendered `/events/calendar` shows the selected 30th and no raw category code, but the August view has no seeded event; academic/other labels cannot be rendered from this fixture. |
@@ -66,11 +66,14 @@ Approved functional exceptions were retained where observed: notice search, the 
 
 ## QA process and concerns
 
-- Local QA Compose was started by this task and will be stopped after evidence commit. Its frontend and API were healthy at `http://localhost:58081` and `http://localhost:58000`.
-- The in-app browser rendered all executed pages. Its visibility capability is unsupported in this subagent thread; a Codex-panel request for `http://localhost:58081/notices` returned `queued`.
+- Local QA Compose project `aisw_p0qa` was started by this task and was stopped with `scripts/qa-compose.ps1 -Action Down` after captures. Its frontend and API had been healthy at `http://localhost:58081` and `http://localhost:58000`; the QA database, media, frontend-node-modules, and npm-cache volumes were preserved.
+- Current `lmsp-app-1` and `lmsp-db-1` containers are project `lmsp`, working directory `C:\Users\yug67\develope\personal\LMSP`, and were already up during Fix Round 1. They are unrelated to `aisw_p0qa` and were left untouched.
+- Browser-panel delivery remains NOT EXECUTED/BLOCKED in this subagent: `http://localhost:58081/notices` was the queued panel URL; no screenshot file was produced. To reproduce for controller delivery, start `aisw_p0qa` with `scripts/qa-compose.ps1 -Action Up`, retain its existing volumes, open `http://localhost:58081/notices` in the controller's in-app browser at 320 × 800, and use the existing seeded session (or the documented `test@sogang.ac.kr` / `password123` account).
 - Rendered console warnings were limited to deprecated `shadow*` styles, deprecated `props.pointerEvents`, and Expo web's unsupported push-token listener. They did not block the rendered checks.
 - No application, migration, schema, seed, compose, package, backend, or frontend source file was changed for this QA task.
 
 ## Commit and final branch evidence
 
-Commit hash and final `status --short --branch`, `diff --stat 9f151de...HEAD`, and `log --oneline 9f151de..HEAD` results are recorded after the documentation-only commit.
+- Pre-Fix-Round-1 evidence commit: `07c4f7a6821172b9a85d0ef5c374613c412acd70` (`docs: verify functional-safe PR 17 integration`). At that point, `git status --short --branch` reported only `## codex/pr17-functional-design-integration`.
+- At that point, `git diff --stat 9f151de...HEAD` reported 26 files changed, 2164 insertions, and 197 deletions. The range log was: `07c4f7a`, `91af240`, `da8ce9d`, `534a066`, `7e5915a`, `5e025d4`, `c4f44fd`, `455774c`, `10d3d8c`, `1fa066e`, `8f7e0e8`, `3d0a321`, and `a5e83d0`.
+- The Fix Round 1 correction is committed separately after this document is written; its commit hash cannot truthfully be self-recorded inside that same commit. The uncommitted SDD task report records the post-correction commit hash and final status/stat/log evidence.
