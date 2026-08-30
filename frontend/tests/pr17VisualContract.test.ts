@@ -12,3 +12,8 @@ test("공지 토스트 디자인은 공지에만 적용되고 닫기와 safe are
   assert.match(notification, /event\.stopPropagation\(\)/);
   assert.match(notification, /onPress=\{openVisibleNotification\}/);
 });
+
+test("메시지 한 줄 제한은 공지 토스트에만 적용된다", () => {
+  assert.match(notification, /isNotice \? \(\s*<Text numberOfLines=\{1\}/);
+  assert.match(notification, /:\s*\(\s*<Text(?![^>]*numberOfLines)/);
+});

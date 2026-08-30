@@ -248,9 +248,15 @@ export default function NotificationBootstrap() {
         <Text style={{ color: isNotice ? "#15171C" : "#112d4e", fontSize: 13, lineHeight: 16, fontWeight: isNotice ? "500" : "900" }}>
           {isNotice ? "AI·SW 캠퍼스" : "새 알림"}
         </Text>
-        <Text numberOfLines={1} style={{ color: "#111827", marginTop: isNotice ? 0 : 4, fontSize: 13, lineHeight: 16, fontWeight: isNotice ? "400" : "700" }}>
-          {visibleNotification.message}
-        </Text>
+        {isNotice ? (
+          <Text numberOfLines={1} style={{ color: "#111827", marginTop: 0, fontSize: 13, lineHeight: 16, fontWeight: "400" }}>
+            {visibleNotification.message}
+          </Text>
+        ) : (
+          <Text style={{ color: "#111827", marginTop: 4, fontSize: 13, lineHeight: 16, fontWeight: "700" }}>
+            {visibleNotification.message}
+          </Text>
+        )}
       </View>
       <Pressable
         accessibilityLabel="알림 닫기"
