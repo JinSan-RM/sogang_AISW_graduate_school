@@ -821,7 +821,7 @@ export default function PostCreateScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+      <View style={[styles.appBar, isActivity ? styles.appBarNoDivider : null, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="닫기"
           onPress={() => {
@@ -886,7 +886,7 @@ export default function PostCreateScreen() {
                 ) : (
                   <>
                     <CameraAddIcon size={26} />
-                    <Text style={styles.activityPhotoText}>
+                    <Text style={styles.attachExtensionHint}>
                       {isUploading ? "업로드 중" : "활동 사진을 추가해주세요"}
                     </Text>
                   </>
@@ -978,6 +978,7 @@ export default function PostCreateScreen() {
                           onBlur={() => setParticipantSearchFocused(false)}
                           onChangeText={setParticipantQuery}
                           onFocus={() => setParticipantSearchFocused(true)}
+                          accessibilityLabel="이름 또는 학번으로 검색"
                           placeholder="이름 또는 학번으로 검색"
                           placeholderTextColor="#A6ACB7"
                           style={[styles.activityInlineInput, { outlineStyle: "none" } as never]}
@@ -1715,6 +1716,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
+  appBarNoDivider: {
+    borderBottomWidth: 0,
+  },
   iconButton: {
     width: 42,
     height: 42,
@@ -1726,6 +1730,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 18,
     fontWeight: "500",
+    lineHeight: 22,
   },
   formScroller: {
     flex: 1,
@@ -1979,11 +1984,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
-  activityPhotoText: {
+  attachExtensionHint: {
     color: "#A6ACB7",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "400",
-    lineHeight: 16,
+    lineHeight: 15,
   },
   activityAttachmentList: {
     gap: 6,
@@ -2452,6 +2457,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
