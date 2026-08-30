@@ -206,7 +206,7 @@ export default function PostDetailScreen() {
   const createCommentMutation = useCreateComment(postId);
   const updateCommentMutation = useUpdateComment(postId);
   const deleteCommentMutation = useDeleteComment(postId);
-  const deletePostMutation = useDeletePost(postId, post?.board_id ?? 0);
+  const deletePostMutation = useDeletePost(postId, post?.board_id ?? 0, board);
   const updateSuggestionMutation = useUpdateSuggestion(postId);
   const updateMutualAidMutation = useUpdateMutualAid(postId);
 

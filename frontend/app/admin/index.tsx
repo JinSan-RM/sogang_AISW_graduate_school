@@ -35,6 +35,7 @@ import AdminBoardManagementNavigator, {
 import AdminBoardSettingsPanel, { adminBoardPermissionOptions } from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
+import { invalidatePostMutationCaches, postMutationCacheTargets } from "../../hooks/usePosts";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import {
@@ -2701,8 +2702,10 @@ export default function AdminScreen() {
         }
       }
       const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success");
-      queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+        invalidatePostMutationCaches(queryClient, postMutationCacheTargets(operation.boardId, selectedNoticeBoard)),
+      ]);
       if (result.apply) resetNoticeForm();
       if (result.notification === "success") Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
     } catch {
@@ -2716,8 +2719,11 @@ export default function AdminScreen() {
   const handlePinNotice = async (item: PostListItem) => {
     try {
       await postApi.setPin(item.id, !item.is_pinned);
-      queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      const board = boards.find((candidate) => candidate.id === item.board_id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+        invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, board)),
+      ]);
     } catch {
       Alert.alert("처리 실패", "공지 고정 상태를 변경할 수 없습니다.");
     }
@@ -2732,8 +2738,11 @@ export default function AdminScreen() {
         onPress: async () => {
           try {
             await postApi.deletePost(item.id);
-            queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-            queryClient.invalidateQueries({ queryKey: ["posts"] });
+            const board = boards.find((candidate) => candidate.id === item.board_id);
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+              invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, board)),
+            ]);
           } catch {
             Alert.alert("삭제 실패", "공지사항을 삭제할 수 없습니다.");
           }
@@ -2980,8 +2989,7 @@ export default function AdminScreen() {
       await postApi.updatePost(item.id, representativeImageUpdatePayload(detailResponse.data, replacement));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
-        queryClient.invalidateQueries({ queryKey: ["posts", item.board_id] }),
-        queryClient.invalidateQueries({ queryKey: ["multi-board-posts"] }),
+        invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, itemBoard)),
         queryClient.invalidateQueries({ queryKey: ["post", item.id] }),
       ]);
       Alert.alert("변경 완료", "대표 이미지가 변경되었습니다.");
@@ -2995,9 +3003,12 @@ export default function AdminScreen() {
   const handlePinAdminPost = async (item: PostListItem) => {
     try {
       await postApi.setPin(item.id, !item.is_pinned);
-      queryClient.invalidateQueries({ queryKey: ["admin-posts"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-      queryClient.invalidateQueries({ queryKey: ["posts"] });
+      const board = boards.find((candidate) => candidate.id === item.board_id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+        invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, board)),
+      ]);
     } catch {
       Alert.alert("처리 실패", "게시글 고정 상태를 변경할 수 없습니다.");
     }
@@ -3012,9 +3023,12 @@ export default function AdminScreen() {
         onPress: async () => {
           try {
             await postApi.deletePost(item.id);
-            queryClient.invalidateQueries({ queryKey: ["admin-posts"] });
-            queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-            queryClient.invalidateQueries({ queryKey: ["posts"] });
+            const board = boards.find((candidate) => candidate.id === item.board_id);
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
+              queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+              invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, board)),
+            ]);
           } catch {
             Alert.alert("삭제 실패", "게시글을 삭제할 수 없습니다.");
           }
@@ -3048,7 +3062,15 @@ export default function AdminScreen() {
             }
             await reportApi.updateAdminReport(report.id, { status: "resolved" });
             queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
-            queryClient.invalidateQueries({ queryKey: ["posts"] });
+            if (report.target.board_id) {
+              const board = boards.find((candidate) => candidate.id === report.target.board_id);
+              await invalidatePostMutationCaches(
+                queryClient,
+                postMutationCacheTargets(report.target.board_id, board, {
+                  refreshHomeNotices: report.target_type === "comment" ? false : undefined,
+                }),
+              );
+            }
             Alert.alert("처리 완료", `${targetLabel}을 삭제했습니다.`);
           } catch {
             Alert.alert("삭제 실패", `신고된 ${targetLabel}을 삭제할 수 없습니다.`);

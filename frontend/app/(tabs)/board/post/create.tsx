@@ -325,8 +325,6 @@ export default function PostCreateScreen() {
   const existingPost = editPostQuery.data?.data;
   const boardId = existingPost?.board_id ?? selectedBoardId;
 
-  const createMutation = useCreatePost(boardId);
-  const updateMutation = useUpdatePost(postId ?? 0, boardId);
   const { data: boardsRes, isError: isBoardsError, isLoading: isBoardsLoading, refetch: refetchBoards } = useBoardsQuery();
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -348,6 +346,8 @@ export default function PostCreateScreen() {
     () => boards.find((item) => item.id === boardId),
     [boardId, boards]
   );
+  const createMutation = useCreatePost(boardId, board);
+  const updateMutation = useUpdatePost(postId ?? 0, boardId, board);
   const fallbackBoardType = [10, 11, 12].includes(boardId)
     ? "activity_certification"
     : boardId === 15
