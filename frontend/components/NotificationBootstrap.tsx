@@ -207,6 +207,7 @@ export default function NotificationBootstrap() {
 
   return (
     <Pressable
+      accessibilityRole="button"
       onPress={openVisibleNotification}
       style={{
         position: "absolute",
@@ -244,12 +245,12 @@ export default function NotificationBootstrap() {
       }}
     >
       {isNotice ? <NoticeToastIcon size={32} /> : null}
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, gap: isNotice ? 2 : 0 }}>
         <Text style={{ color: isNotice ? "#15171C" : "#112d4e", fontSize: 13, lineHeight: 16, fontWeight: isNotice ? "500" : "900" }}>
           {isNotice ? "AI·SW 캠퍼스" : "새 알림"}
         </Text>
         {isNotice ? (
-          <Text numberOfLines={1} style={{ color: "#111827", marginTop: 0, fontSize: 13, lineHeight: 16, fontWeight: "400" }}>
+          <Text numberOfLines={1} style={{ color: "#6B7280", fontSize: 13, lineHeight: 16, fontWeight: "400" }}>
             {visibleNotification.message}
           </Text>
         ) : (

@@ -886,7 +886,7 @@ export default function PostCreateScreen() {
                 ) : (
                   <>
                     <CameraAddIcon size={26} />
-                    <Text style={styles.attachExtensionHint}>
+                    <Text style={styles.activityPhotoText}>
                       {isUploading ? "업로드 중" : "활동 사진을 추가해주세요"}
                     </Text>
                   </>
@@ -1469,25 +1469,28 @@ export default function PostCreateScreen() {
             </View>
           ) : null}
           {!isAdminParticipationPost ? (
-            <View style={styles.compactAttachActions}>
-              {compactAttachmentActions.map((action) => (
-                <Pressable
-                  disabled={isUploading}
-                  key={action.picker}
-                  onPress={action.onPress}
-                  style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
-                >
-                  {action.picker === "images" ? (
-                    <AttachImageIcon size={16} color={COLORS.muted} />
-                  ) : (
-                    <AttachFileIcon size={16} color={COLORS.muted} />
-                  )}
-                  <Text style={styles.compactAttachText}>
-                    {isUploading ? "업로드 중" : action.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <>
+              <View style={styles.compactAttachActions}>
+                {compactAttachmentActions.map((action) => (
+                  <Pressable
+                    disabled={isUploading}
+                    key={action.picker}
+                    onPress={action.onPress}
+                    style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
+                  >
+                    {action.picker === "images" ? (
+                      <AttachImageIcon size={16} color={COLORS.muted} />
+                    ) : (
+                      <AttachFileIcon size={16} color={COLORS.muted} />
+                    )}
+                    <Text style={styles.compactAttachText}>
+                      {isUploading ? "업로드 중" : action.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.attachExtensionHint}>이미지: JPG, PNG | 파일: PDF, DOCX</Text>
+            </>
           ) : (
             <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
               <Ionicons name="image-outline" size={16} color={COLORS.muted} />
@@ -1910,6 +1913,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
     padding: 12,
+  },
+  activityPhotoText: {
+    color: "#A6ACB7",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 16,
   },
   activityPhotoTile: {
     width: 62,
