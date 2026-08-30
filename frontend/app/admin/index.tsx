@@ -346,12 +346,9 @@ const BOARD_TYPE_LABELS: Record<string, string> = {
 };
 
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사",
-  council: "원우회",
-  event: "행사",
-  exam: "시험",
-  external: "외부",
-  other: "기타",
+  academic: "학사일정",
+  event: "행사일정",
+  other: "기타일정",
 };
 
 function firstParam(value?: string | string[]) {

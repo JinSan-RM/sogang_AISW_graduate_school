@@ -23,7 +23,7 @@ const fontSource = source("utils/fonts.ts");
 const qaComposeSource = source("../docker-compose.qa.yml");
 
 test("global font patch flattens styles before they reach React DOM", () => {
-  assert.match(fontSource, /style: \{ \.\.\.hostStyle, fontFamily \}/);
+  assert.match(fontSource, /style: \{ \.\.\.hostStyle, fontFamily, fontWeight: "normal" \}/);
   assert.doesNotMatch(fontSource, /style: StyleSheet\.flatten\(\[\{ fontFamily \}, style\]\)/);
   assert.doesNotMatch(fontSource, /style: \[\{ fontFamily \}, style\]/);
 });
@@ -62,14 +62,12 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 공지 상세 세로 이미지는 360 프레임으로 접고 사진 전체보기로 펼친다", () => {
-  assert.match(postDetailSource, /<NaturalAspectMediaImage key=\{heroAttachment\.id\} media=\{heroAttachment\}/);
-  // 세로로 긴 이미지(비율 임계값 미만)만 접힌 프레임 + 전체보기 버튼을 쓴다
+test("#41·45 공지 상세 세로 이미지는 4:5(400) 프레임으로 잘라서 보여준다", () => {
+  // 세로로 긴 이미지(비율 임계값 미만)는 4:5 프레임으로 잘라서만 보여준다 (전체보기 없음)
   assert.match(postDetailSource, /attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT/);
   assert.match(postDetailSource, /collapseNoticeImage \? styles\.noticeImageAttachment : null/);
-  assert.match(postDetailSource, /사진 전체보기/);
-  assert.match(postDetailSource, /<NaturalAspectMediaImage[\s\S]*media=\{attachment\}/);
-  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 360/);
+  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 400/);
+  assert.doesNotMatch(postDetailSource, /noticeImageExpandButton/);
   assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
 });
 

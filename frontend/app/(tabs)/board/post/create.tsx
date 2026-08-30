@@ -821,7 +821,8 @@ export default function PostCreateScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+      {/* Figma Verify-PhotoPreview: 활동 인증 상단바에는 구분선이 없다 */}
+      <View style={[styles.appBar, isActivity ? styles.appBarNoDivider : null, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="닫기"
           onPress={() => {
@@ -978,7 +979,7 @@ export default function PostCreateScreen() {
                           onBlur={() => setParticipantSearchFocused(false)}
                           onChangeText={setParticipantQuery}
                           onFocus={() => setParticipantSearchFocused(true)}
-                          placeholder="이름 또는 학번으로 검색"
+                          placeholder="이름으로 검색"
                           placeholderTextColor="#A6ACB7"
                           style={[styles.activityInlineInput, { outlineStyle: "none" } as never]}
                           value={participantQuery}
@@ -1487,6 +1488,9 @@ export default function PostCreateScreen() {
                 </Pressable>
               ))}
             </View>
+          ) : null}
+          {!isAdminParticipationPost ? (
+            <Text style={styles.attachExtensionHint}>이미지: JPG, PNG | 파일: PDF, DOCX</Text>
           ) : (
             <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
               <Ionicons name="image-outline" size={16} color={COLORS.muted} />
@@ -1722,10 +1726,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 21,
   },
+  appBarNoDivider: {
+    borderBottomWidth: 0,
+  },
   appBarTitle: {
     color: COLORS.text,
     fontSize: 18,
     fontWeight: "500",
+    lineHeight: 22, // Figma: 글쓰기 18/22 Medium
   },
   formScroller: {
     flex: 1,
@@ -2157,7 +2165,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   activityFieldTitle: {
-    color: COLORS.text, // Figma: 참가자/계좌 소제목 #15171C
+    color: COLORS.text, // Figma Verify 최신 스펙: 참가자/계좌 소제목 #15171C
     fontSize: 13,
     fontWeight: "500",
     lineHeight: 16,
@@ -2452,6 +2460,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
+    lineHeight: 17, // Figma: 입력 텍스트 14/17 Regular
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -2604,6 +2613,12 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     gap: 8, // Figma: 첨부 옵션 버튼 간격 8
+  },
+  attachExtensionHint: {
+    color: "#A6ACB7", // Figma: 첨부 확장자 안내 12/15
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 15,
   },
   compactAttachText: {
     color: COLORS.muted,

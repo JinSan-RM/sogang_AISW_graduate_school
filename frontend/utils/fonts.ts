@@ -36,7 +36,19 @@ function familyForWeight(weight: unknown): string {
 
 // Patches the default <Text> / <TextInput> render so every instance renders with
 // the Inter face matching its fontWeight, without touching each screen's styles.
+function applyWebFontSmoothing(): void {
+  // 피그마는 antialiased로 렌더링한다. 브라우저 기본(subpixel)은 같은 폰트도
+  // 더 두껍고 진해 보여서, 웹 렌더링을 피그마와 동일하게 맞춘다.
+  if (typeof document === "undefined") return;
+  if (document.getElementById("font-smoothing-patch")) return;
+  const style = document.createElement("style");
+  style.id = "font-smoothing-patch";
+  style.textContent = "*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}";
+  document.head.appendChild(style);
+}
+
 export function patchDefaultFontFamily(): void {
+  applyWebFontSmoothing();
   patchComponent(Text as unknown as PatchableComponent);
   patchComponent(TextInput as unknown as PatchableComponent);
 }
@@ -81,7 +93,9 @@ function patchComponent(component: PatchableComponent): void {
     const hostStyle = (StyleSheet.flatten((host.props as { style?: StyleProp<TextStyle> }).style) ?? {}) as Record<string, unknown>;
     // React DOM requires the style prop to be an object, so never pass a React
     // Native style array through to the resulting <div>/<span>/<input>.
-    let patched = React.cloneElement(host, { style: { ...hostStyle, fontFamily } } as Partial<typeof host.props>);
+    // 각 Pretendard 페이스는 weight "normal"로 등록되므로 fontWeight를 남겨두면
+    // 브라우저가 이미 굵은 글리프 위에 인조 볼드를 한 번 더 입힌다(faux bold). 굵기는 fontFamily가 담당한다.
+    let patched = React.cloneElement(host, { style: { ...hostStyle, fontFamily, fontWeight: "normal" } } as Partial<typeof host.props>);
     for (let index = chain.length - 2; index >= 0; index -= 1) {
       patched = React.cloneElement(chain[index], undefined, patched);
     }
