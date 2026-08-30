@@ -1,13 +1,17 @@
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import type { NotificationItem } from "../types";
 import { setStoredPushToken } from "../utils/pushTokenStorage";
 import { showWebNotification } from "../utils/webNotifications";
+import { notificationToastKind, notificationToastTop } from "../utils/notificationToastPresentation";
+import { NoticeToastIcon } from "./icons";
 
 declare const require: any;
 
@@ -105,6 +109,7 @@ async function registerPushToken() {
 }
 
 export default function NotificationBootstrap() {
+  const insets = useSafeAreaInsets();
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const latestSeenIdRef = useRef(getStoredLatestId());
   const initializedRef = useRef(false);
@@ -196,37 +201,68 @@ export default function NotificationBootstrap() {
     return null;
   }
 
+  const toastKind = notificationToastKind(visibleNotification.notification_type);
+  const top = notificationToastTop(insets.top);
+  const isNotice = toastKind === "notice";
+
   return (
-    <View
+    <Pressable
+      onPress={openVisibleNotification}
       style={{
         position: "absolute",
-        top: 12,
+        top,
         left: 12,
         right: 12,
         zIndex: 9999,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: "#bfdbfe",
-        backgroundColor: "#eff6ff",
-        padding: 12,
-        shadowColor: "#000",
-        shadowOpacity: 0.16,
-        shadowRadius: 10,
+        ...(isNotice
+          ? {
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              borderRadius: 14,
+              borderWidth: 0.5,
+              borderColor: "#E1E4E9",
+              backgroundColor: "#FFFFFF",
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              shadowColor: "#000000",
+              shadowOpacity: 0.12,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: 6 },
+              elevation: 8,
+            }
+          : {
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: "#bfdbfe",
+              backgroundColor: "#eff6ff",
+              padding: 12,
+              shadowColor: "#000",
+              shadowOpacity: 0.16,
+              shadowRadius: 10,
+            }),
       }}
     >
-          <Text style={{ color: "#112d4e", fontSize: 13, fontWeight: "900" }}>새 알림</Text>
-      <Text style={{ color: "#111827", marginTop: 4, fontWeight: "700" }}>{visibleNotification.message}</Text>
-      <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-        <Pressable
-          onPress={() => setVisibleNotification(null)}
-          style={{ borderRadius: 8, borderWidth: 1, borderColor: "#dbe3ef", backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 8 }}
-        >
-            <Text style={{ color: "#64748b", fontWeight: "900" }}>나중에</Text>
-        </Pressable>
-        <Pressable onPress={openVisibleNotification} style={{ borderRadius: 8, backgroundColor: "#112d4e", paddingHorizontal: 12, paddingVertical: 8 }}>
-            <Text style={{ color: "#ffffff", fontWeight: "900" }}>열기</Text>
-        </Pressable>
+      {isNotice ? <NoticeToastIcon size={32} /> : null}
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: isNotice ? "#15171C" : "#112d4e", fontSize: 13, lineHeight: 16, fontWeight: isNotice ? "500" : "900" }}>
+          {isNotice ? "AI·SW 캠퍼스" : "새 알림"}
+        </Text>
+        <Text numberOfLines={1} style={{ color: "#111827", marginTop: isNotice ? 0 : 4, fontSize: 13, lineHeight: 16, fontWeight: isNotice ? "400" : "700" }}>
+          {visibleNotification.message}
+        </Text>
       </View>
-    </View>
+      <Pressable
+        accessibilityLabel="알림 닫기"
+        accessibilityRole="button"
+        hitSlop={10}
+        onPress={(event) => {
+          event.stopPropagation();
+          setVisibleNotification(null);
+        }}
+      >
+        <Ionicons name="close" size={18} color="#6B7280" />
+      </Pressable>
+    </Pressable>
   );
 }

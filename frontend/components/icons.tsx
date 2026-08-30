@@ -458,6 +458,28 @@ export function DownloadIcon({ size = 18, color = "#2761FF" }: IconProps) {
   );
 }
 
+// 공지 알림 토스트 아이콘 — 디자인 원본 32x32 (뱃지 원 + 종).
+export function NoticeToastIcon({ size = 32 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <Rect width={32} height={32} rx={16} fill="#E6F1FB" />
+      <Path
+        d="M12.0001 14C12.0001 12.9391 12.4215 11.9217 13.1717 11.1716C13.9218 10.4214 14.9392 10 16.0001 10C17.0609 10 18.0784 10.4214 18.8285 11.1716C19.5787 11.9217 20.0001 12.9391 20.0001 14C20.0001 16.6667 21.3334 17.3333 21.3334 18H10.6667C10.6667 17.3333 12.0001 16.6667 12.0001 14Z"
+        stroke="#0C447C"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M14.6667 20.6667C14.6667 21.0203 14.8072 21.3594 15.0573 21.6095C15.3073 21.8595 15.6465 22 16.0001 22C16.3537 22 16.6928 21.8594 16.9429 21.6095C17.1929 21.3594 17.3334 21.0203 17.3334 20.6667"
+        stroke="#0C447C"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 // 공지 첨부링크 바로가기 아이콘 — 디자인 원본 18x18.
 export function ExternalLinkIcon({ size = 18, color = "#2761FF" }: IconProps) {
   return (
