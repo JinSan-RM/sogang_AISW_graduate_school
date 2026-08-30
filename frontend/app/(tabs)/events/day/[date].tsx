@@ -22,10 +22,7 @@ const COLORS = {
 
 const EVENT_CATEGORY_LABELS: Record<string, string> = {
   academic: "학사일정",
-  council: "원우회",
   event: "행사일정",
-  exam: "시험일정",
-  external: "외부일정",
   other: "기타일정",
 };
 
