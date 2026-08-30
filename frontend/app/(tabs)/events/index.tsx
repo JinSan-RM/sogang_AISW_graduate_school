@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LoadingState from "../../../components/LoadingState";
 import { eventApi } from "../../../services/api";
 import type { EventItem } from "../../../types";
+import { eventCategoryLabel } from "../../../utils/eventCategoryPresentation";
 import { formatBoardDateTime } from "../../../utils/dateFormat";
 
 import { BackIcon } from "../../../components/icons";
@@ -20,17 +21,11 @@ const COLORS = {
   bg: "#FFFFFF",
 };
 
-const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사일정",
-  event: "행사일정",
-  other: "기타일정",
-};
-
 function EventRow({ item }: { item: EventItem }) {
   return (
     <Pressable onPress={() => router.push(`/events/${item.id}` as never)} style={styles.eventRow}>
       <View style={styles.categoryPill}>
-        <Text style={styles.categoryText}>{EVENT_CATEGORY_LABELS[item.category] ?? item.category}</Text>
+        <Text style={styles.categoryText}>{eventCategoryLabel(item.category)}</Text>
       </View>
       <Text numberOfLines={2} style={styles.eventTitle}>
         {item.title}

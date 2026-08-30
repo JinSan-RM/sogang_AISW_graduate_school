@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../components/LoadingState";
 import { eventApi } from "../../../services/api";
+import { eventCategoryLabel, eventCategoryTone } from "../../../utils/eventCategoryPresentation";
 import { formatBoardDateTime } from "../../../utils/dateFormat";
 
 import { BackIcon, EventCalendarIcon } from "../../../components/icons";
@@ -18,21 +19,6 @@ const COLORS = {
   border: "#E1E4E9",
   bg: "#FFFFFF",
   danger: "#B91C1C",
-};
-
-const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사일정",
-  event: "행사일정",
-  other: "기타일정",
-};
-
-const EVENT_CATEGORY_TONES: Record<string, { backgroundColor: string; color: string }> = {
-  academic: { backgroundColor: "#E6F1FB", color: "#0C447C" },
-  council: { backgroundColor: "#F1EAFE", color: "#6C4FCB" },
-  event: { backgroundColor: "#FFF0F4", color: "#D65B7C" },
-  exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
-  external: { backgroundColor: "#EAF8F4", color: "#20856D" },
-  other: { backgroundColor: "#EDE8F6", color: "#4A2B7A" },
 };
 
 export default function EventDetailScreen() {
@@ -62,7 +48,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const categoryTone = EVENT_CATEGORY_TONES[event.category] ?? EVENT_CATEGORY_TONES.other;
+  const categoryTone = eventCategoryTone(event.category, "detail");
 
   return (
     <View style={styles.screen}>
@@ -83,7 +69,7 @@ export default function EventDetailScreen() {
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
         <View style={[styles.categoryPill, { backgroundColor: categoryTone.backgroundColor }]}>
-          <Text style={[styles.categoryText, { color: categoryTone.color }]}>{EVENT_CATEGORY_LABELS[event.category] ?? event.category}</Text>
+          <Text style={[styles.categoryText, { color: categoryTone.color }]}>{eventCategoryLabel(event.category)}</Text>
         </View>
 
         <View style={styles.metaRow}>

@@ -55,11 +55,18 @@ import {
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
 import { runAdminMutation } from "../../utils/adminMutationCoordinator";
+import { adminEventFormRouteTransition } from "../../utils/adminEventForm";
 import {
   formatBoardDateTime,
   koreaDateTimeInputToUtcISOString,
   utcApiDateTimeToKoreaInput,
 } from "../../utils/dateFormat";
+import {
+  EVENT_CATEGORY_OPTIONS,
+  eventCategoryLabel,
+  eventCategoryValueForSubmit,
+  eventDisplayCategory,
+} from "../../utils/eventCategoryPresentation";
 import {
   adminBoardSettingsDraft,
   adminBoardSettingsPayload,
@@ -344,12 +351,6 @@ const BOARD_TYPE_LABELS: Record<string, string> = {
   external_link: "외부링크",
   suggestion: "건의",
   mutual_aid: "상조회",
-};
-
-const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사일정",
-  event: "행사일정",
-  other: "기타일정",
 };
 
 function firstParam(value?: string | string[]) {
@@ -1512,7 +1513,7 @@ function EventCard({ event, onEdit }: { event: EventItem; onEdit: (event: EventI
       <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
         <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
         <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: "900" }}>
-          {EVENT_CATEGORY_LABELS[event.category] ?? event.category}
+          {eventCategoryLabel(event.category)}
         </Text>
       </View>
       <Text style={{ color: COLORS.text, fontSize: 17, fontWeight: "900" }}>{event.title}</Text>
@@ -1551,6 +1552,9 @@ export default function AdminScreen() {
   const boardSettingsSavingRef = useRef(false);
   const handledLegacySection = useRef<string | null>(null);
   const deferredEventNavigationRef = useRef(adminDeferredEventGateInitialState(rawAdminLinkKey));
+  const eventOriginalCategoryRef = useRef<string | null>(null);
+  const eventCategoryExplicitlySelectedRef = useRef(false);
+  const eventFormEditIdRef = useRef(editEventId);
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
@@ -1896,6 +1900,18 @@ export default function AdminScreen() {
   }, [editEventIdParam, params.scope, params.section]);
 
   useEffect(() => {
+    const transition = adminEventFormRouteTransition({
+      previousEditEventId: eventFormEditIdRef.current,
+      nextEditEventId: editEventId,
+    });
+    eventFormEditIdRef.current = editEventId;
+    if (!transition.shouldResetForm) return;
+    eventOriginalCategoryRef.current = transition.originalCategory;
+    eventCategoryExplicitlySelectedRef.current = transition.explicitlySelected;
+    reset(emptyEvent);
+  }, [editEventId, reset]);
+
+  useEffect(() => {
     const transition = adminBoardNavigationTransition(handledLegacySection.current, {
       type: "legacy",
       rawSection: rawAdminSection,
@@ -1933,6 +1949,8 @@ export default function AdminScreen() {
     setBoardManagementScope(destination.scope);
     setBoardManagementBoardId(destination.boardId);
     setBoardManagementTab(destination.tab);
+    eventOriginalCategoryRef.current = null;
+    eventCategoryExplicitlySelectedRef.current = false;
     reset(emptyEvent);
     router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
   }, [boards, editEventMissing, rawAdminLinkKey, reset]);
@@ -1954,9 +1972,11 @@ export default function AdminScreen() {
     setBoardManagementScope(destination.scope);
     setBoardManagementBoardId(destination.boardId);
     setBoardManagementTab(destination.tab);
+    eventOriginalCategoryRef.current = event.category;
+    eventCategoryExplicitlySelectedRef.current = false;
     reset({
       title: event.title,
-      category: event.category,
+      category: eventDisplayCategory(event.category),
       start_at: utcApiDateTimeToKoreaInput(event.start_at),
       end_at: utcApiDateTimeToKoreaInput(event.end_at),
       location: event.location ?? "",
@@ -3227,6 +3247,8 @@ export default function AdminScreen() {
     if (editEventId && !eventUpdateId) {
       Alert.alert("일정 확인", "이미 삭제되었거나 없는 일정입니다. 목록에서 다시 선택해주세요.");
       openManagedBoard("academic-calendar");
+      eventOriginalCategoryRef.current = null;
+      eventCategoryExplicitlySelectedRef.current = false;
       reset(emptyEvent);
       router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       return;
@@ -3241,7 +3263,11 @@ export default function AdminScreen() {
 
     const payload = {
       title: values.title,
-      category: values.category,
+      category: eventCategoryValueForSubmit({
+        originalCategory: eventOriginalCategoryRef.current,
+        selectedCategory: eventDisplayCategory(values.category),
+        explicitlySelected: eventCategoryExplicitlySelectedRef.current,
+      }),
       start_at: startAt,
       end_at: endAt ?? undefined,
       location: cleanOptional(values.location ?? ""),
@@ -3255,6 +3281,8 @@ export default function AdminScreen() {
       } else {
         await eventApi.createEvent(payload);
       }
+      eventOriginalCategoryRef.current = null;
+      eventCategoryExplicitlySelectedRef.current = false;
       reset(emptyEvent);
       queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -3273,6 +3301,8 @@ export default function AdminScreen() {
     try {
       await eventApi.deleteEvent(event.id);
       if (editEventId === event.id) {
+        eventOriginalCategoryRef.current = null;
+        eventCategoryExplicitlySelectedRef.current = false;
         reset(emptyEvent);
         router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       }
@@ -3824,7 +3854,19 @@ export default function AdminScreen() {
           <Controller control={control} name="category" render={({ field }) => (
             <View style={{ gap: 7 }}>
               <Text style={{ color: COLORS.text, fontWeight: "900" }}>일정 분류</Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{Object.entries(EVENT_CATEGORY_LABELS).map(([value, label]) => <Chip key={value} active={field.value === value} label={label} onPress={() => field.onChange(value)} />)}</View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {EVENT_CATEGORY_OPTIONS.map((option) => (
+                  <Chip
+                    key={option.value}
+                    active={eventDisplayCategory(field.value) === option.value}
+                    label={option.label}
+                    onPress={() => {
+                      eventCategoryExplicitlySelectedRef.current = true;
+                      field.onChange(option.value);
+                    }}
+                  />
+                ))}
+              </View>
             </View>
           )} />
           <Controller control={control} name="start_at" render={({ field }) => <EventDateTimePicker label="시작일시" value={field.value ?? ""} onChange={field.onChange} fallbackTime="09:00" />} />

@@ -62,11 +62,11 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 공지 상세 세로 이미지는 4:5(400) 프레임으로 잘라서 보여준다", () => {
+test("#41·45 공지 상세 세로 이미지는 기존 360px 프레임으로 잘라서 보여준다", () => {
   // 세로로 긴 이미지(비율 임계값 미만)는 4:5 프레임으로 잘라서만 보여준다 (전체보기 없음)
   assert.match(postDetailSource, /attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT/);
   assert.match(postDetailSource, /collapseNoticeImage \? styles\.noticeImageAttachment : null/);
-  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 400/);
+  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 360/);
   assert.doesNotMatch(postDetailSource, /noticeImageExpandButton/);
   assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
 });

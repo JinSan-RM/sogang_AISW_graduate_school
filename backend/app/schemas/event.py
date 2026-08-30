@@ -8,7 +8,7 @@ class EventCreate(BaseModel):
     title: str
     description: str | None = None
     location: str | None = None
-    category: Literal["academic", "event", "other"]
+    category: Literal["academic", "event", "exam", "council", "external", "other"]
     color: str | None = None
     start_at: datetime
     end_at: datetime | None = None

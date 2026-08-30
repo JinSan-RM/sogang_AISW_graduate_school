@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { Alert, BackHandler, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
+import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../../components/CommentItem";
@@ -10,10 +10,9 @@ import ExpandableNaturalAspectMediaImage from "../../../../components/Expandable
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
-import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ImagePlaceholderIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, CouncilReplyIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
-import { resolveMediaAccessUrl, useMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
-import type { MediaReference } from "../../../../utils/mediaAccess";
+import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import {
   useCreateComment,
   useDeleteComment,
@@ -146,34 +145,6 @@ function IconButton({ icon, onPress, label, size = 24, color = COLORS.text }: { 
     </Pressable>
   );
 }
-
-
-// Figma Detail-Image(Horizontal|Vertical)-Reordered: 참여활동 대표 이미지는
-// 가로형이면 320x240(4:3), 세로형이면 320x400(4:5) 고정 박스에 cover로 채운다.
-function ParticipationHeroImage({ media }: { media: MediaReference }) {
-  const [aspect, setAspect] = useState<number | null>(null);
-  const { uri } = useMediaAccessUrl(media);
-  useEffect(() => {
-    if (!uri) return;
-    let cancelled = false;
-    Image.getSize(
-      uri,
-      (width, height) => {
-        if (!cancelled && width > 0 && height > 0) setAspect(width / height);
-      },
-      () => undefined
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [uri]);
-  return (
-    <View style={[styles.participationHeroBox, { aspectRatio: aspect !== null && aspect < 1 ? 4 / 5 : 4 / 3 }]}>
-      <MediaImage media={media} resizeMode="cover" style={styles.participationHeroImage} />
-    </View>
-  );
-}
-
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; fromBoardId?: string; returnTo?: string }>();
   const insets = useSafeAreaInsets();
@@ -413,7 +384,7 @@ export default function PostDetailScreen() {
     boardSlug: board?.slug,
   });
   const hasNaturalHero = heroImagePresentation === "natural";
-  const hasExpandableHero = isActivityCertification;
+  const hasExpandableHero = isAdminParticipationGuide;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -591,90 +562,103 @@ export default function PostDetailScreen() {
     handleCreateComment();
   };
 
-  // Figma Detail-ImageVertical-Reordered: 참여활동 상세는 태그·제목 아래에 대표 이미지가 온다.
-  const visualHeroSection =
-    hasVisualHero ? (
-              <View style={[styles.visualHeroBlock, isAdminParticipationGuide ? styles.visualHeroBlockInset : null]}>
-                <View style={[hasNaturalHero ? styles.visualHeroNatural : styles.visualHero, isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null]}>
-                  {heroAttachment ? (
-                    isAdminParticipationGuide ? (
-                      <ParticipationHeroImage key={heroAttachment.id} media={heroAttachment} />
-                    ) : hasNaturalHero ? (
-                      hasExpandableHero ? (
-                        <ExpandableNaturalAspectMediaImage
-                          key={heroAttachment.id}
-                          media={heroAttachment}
-                          style={styles.visualHeroNaturalImage}
-                        />
-                      ) : (
-                        <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment} style={styles.visualHeroNaturalImage} />
-                      )
-                    ) : (
-                      <MediaImage
-                        media={heroAttachment}
-                        resizeMode={heroImagePresentation === "fixed-contain" ? "contain" : "cover"}
-                        style={styles.visualHeroImage}
-                      />
-                    )
-                  ) : isAdminParticipationGuide ? (
-                    <View style={styles.participationHeroPlaceholder}>
-                      <ImagePlaceholderIcon size={36} />
-                    </View>
-                  ) : (
-                    <LinearGradient
-                      colors={board?.board_type === "album" ? ALBUM_FALLBACK_GRADIENTS[normalizedGalleryIndex % ALBUM_FALLBACK_GRADIENTS.length] : ["#2761FF", "#86C8FF"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={[styles.visualHeroFallback, hasNaturalHero ? styles.visualHeroFallbackNatural : null]}
-                    />
-                  )}
-                  {board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? (
-                    <>
-                      {imageAttachments.length > 1 ? (
-                        <>
-                          <Pressable accessibilityLabel="이전 사진" onPress={showPreviousImage} style={[styles.galleryArrow, styles.galleryArrowLeft]}>
-                            {isPhotoAlbum ? <GalleryPrevIcon size={28} /> : <SliderPrevIcon size={28} />}
-                          </Pressable>
-                          <Pressable accessibilityLabel="다음 사진" onPress={showNextImage} style={[styles.galleryArrow, styles.galleryArrowRight]}>
-                            {isPhotoAlbum ? <GalleryNextIcon size={28} /> : <SliderNextIcon size={28} />}
-                          </Pressable>
-                        </>
-                      ) : null}
-                      {/* Figma: 사진첩 상세에는 n/N 카운터가 없다 */}
-                      {!isPhotoAlbum ? (
-                        <View style={styles.galleryCount}>
-                          <Text style={styles.galleryCountText}>{normalizedGalleryIndex + 1} / {galleryTotal}</Text>
-                        </View>
-                      ) : null}
-                    </>
-                  ) : null}
-                </View>
-                {board?.board_type === "album" && imageAttachments.length > 1 ? (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbs}>
-                    {(imageAttachments.length > 0 ? imageAttachments : [null, null, null, null]).map((attachment, index) => {
-                      return (
-                        <Pressable
-                          key={attachment?.id ?? `fallback-${index}`}
-                          accessibilityLabel={`${index + 1}번째 사진`}
-                          disabled={!attachment}
-                          onPress={() => setGalleryIndex(index)}
-                          style={[styles.galleryThumb, index === normalizedGalleryIndex ? styles.galleryThumbActive : null]}
-                        >
-                          {attachment ? (
-                            <MediaImage media={attachment} style={styles.galleryThumbImage} />
-                          ) : (
-                            <LinearGradient
-                              colors={ALBUM_FALLBACK_GRADIENTS[index % ALBUM_FALLBACK_GRADIENTS.length]}
-                              style={styles.galleryThumbFallback}
-                            />
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                ) : null}
+  const visualHeroSection = hasVisualHero ? (
+    <View style={[
+      styles.visualHeroBlock,
+      isAdminParticipationGuide ? styles.visualHeroBlockInset : null,
+    ]}>
+      <View style={[
+        hasNaturalHero ? styles.visualHeroNatural : styles.visualHero,
+        isPhotoAlbum ? styles.visualHeroAlbum : null,
+      ]}>
+        {heroAttachment ? (
+          hasNaturalHero ? (
+            hasExpandableHero ? (
+              <ExpandableNaturalAspectMediaImage
+                key={heroAttachment.id}
+                media={heroAttachment}
+                style={styles.visualHeroNaturalImage}
+              />
+            ) : (
+              <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment}
+                style={styles.visualHeroNaturalImage}
+              />
+            )
+          ) : (
+            <MediaImage
+              media={heroAttachment}
+              resizeMode={heroImagePresentation === "fixed-contain" ? "contain" : "cover"}
+              style={styles.visualHeroImage}
+            />
+          )
+        ) : isAdminParticipationGuide ? (
+          <View style={styles.participationHeroPlaceholder}>
+            <ImagePlaceholderIcon size={36} />
+          </View>
+        ) : (
+          <LinearGradient
+            colors={
+              board?.board_type === "album"
+                ? ALBUM_FALLBACK_GRADIENTS[
+                    normalizedGalleryIndex % ALBUM_FALLBACK_GRADIENTS.length
+                  ]
+                : ["#2761FF", "#86C8FF"]
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[
+              styles.visualHeroFallback,
+              hasNaturalHero ? styles.visualHeroFallbackNatural : null,
+            ]}
+          />
+        )}
+        {board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry ? (
+          <>
+            {imageAttachments.length > 1 ? (
+              <>
+                <Pressable accessibilityLabel="이전 사진" onPress={showPreviousImage} style={[styles.galleryArrow, styles.galleryArrowLeft]}>
+                  {isPhotoAlbum ? <GalleryPrevIcon size={28} /> : <SliderPrevIcon size={28} />}
+                </Pressable>
+                <Pressable accessibilityLabel="다음 사진" onPress={showNextImage} style={[styles.galleryArrow, styles.galleryArrowRight]}>
+                  {isPhotoAlbum ? <GalleryNextIcon size={28} /> : <SliderNextIcon size={28} />}
+                </Pressable>
+              </>
+            ) : null}
+            {/* Figma: 사진첩 상세에는 n/N 카운터가 없다 */}
+            {!isPhotoAlbum ? (
+              <View style={styles.galleryCount}>
+                <Text style={styles.galleryCountText}>{normalizedGalleryIndex + 1} / {galleryTotal}</Text>
               </View>
-            ) : null;
+            ) : null}
+          </>
+        ) : null}
+      </View>
+      {board?.board_type === "album" && imageAttachments.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryThumbs}>
+          {(imageAttachments.length > 0 ? imageAttachments : [null, null, null, null]).map((attachment, index) => {
+            return (
+              <Pressable
+                key={attachment?.id ?? `fallback-${index}`}
+                accessibilityLabel={`${index + 1}번째 사진`}
+                disabled={!attachment}
+                onPress={() => setGalleryIndex(index)}
+                style={[styles.galleryThumb, index === normalizedGalleryIndex ? styles.galleryThumbActive : null]}
+              >
+                {attachment ? (
+                  <MediaImage media={attachment} style={styles.galleryThumbImage} />
+                ) : (
+                  <LinearGradient
+                    colors={ALBUM_FALLBACK_GRADIENTS[index % ALBUM_FALLBACK_GRADIENTS.length]}
+                    style={styles.galleryThumbFallback}
+                  />
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+    </View>
+  ) : null;
 
   return (
     <View style={styles.screen}>
@@ -818,7 +802,7 @@ export default function PostDetailScreen() {
         ) : null}
 
         {visibleAttachments.length > 0 ? (
-          <View style={[styles.attachments, isMutualAidRequest ? styles.mutualAidAttachments : null]}>
+          <View style={[styles.attachmentsList, isMutualAidRequest ? styles.mutualAidAttachments : null]}>
             {isMutualAidRequest ? <Text style={styles.mutualAidSectionLabel}>증빙서류</Text> : null}
             {visibleAttachments.map((attachment) => {
               const isImage = attachment.content_type.startsWith("image/");
@@ -876,7 +860,7 @@ export default function PostDetailScreen() {
         ) : null}
 
         {board?.board_type === "notice" && contentUrl ? (
-          <View style={[styles.attachments, visibleAttachments.length > 0 ? styles.attachmentsFollowup : null]}>
+          <View style={[styles.attachmentsList, visibleAttachments.length > 0 ? styles.attachmentsFollowup : null]}>
             <Pressable onPress={() => Linking.openURL(contentUrl)} style={styles.fileAttachment}>
               <AttachLinkIcon size={16} />
               <Text numberOfLines={1} style={styles.fileName}>{contentUrl}</Text>
@@ -894,8 +878,7 @@ export default function PostDetailScreen() {
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
             <View style={styles.officialReplyTitleRow}>
-              {/* 💬 이모지 원본 이미지 — 텍스트 이모지는 윈도우에서 렌더링되지 않아 이미지로 사용 */}
-              <Image source={require("../../../../assets/images/council-reply.png")} style={styles.officialReplyIcon} />
+              <CouncilReplyIcon />
               <Text style={styles.officialReplyTitle}>원우회 답변</Text>
             </View>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
@@ -1627,36 +1610,17 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     lineHeight: 13,
   },
-  // Figma Detail-ImageVertical-4x5: 참여활동 상세 대표 이미지는 제목 아래, 좌우 20 패딩 안에서 radius 12
-  visualHeroBlockInset: {
-    marginHorizontal: 0,
-    marginTop: 14, // Figma: 제목 → 이미지 간격
-    marginBottom: 16,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  participationHeroPlaceholder: {
-    width: "100%",
-    aspectRatio: 320 / 240, // Figma: 대표 이미지 자리 기본 320x240 (4:3)
-    borderRadius: 12,
-    backgroundColor: "#F1F0E8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  participationHeroBox: {
-    width: "100%",
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#F1F0E8",
-  },
-  participationHeroImage: {
-    width: "100%",
-    height: "100%",
-  },
   visualHeroBlock: {
     marginHorizontal: -20,
     marginTop: -8,
     marginBottom: 18,
+  },
+  visualHeroBlockInset: {
+    marginHorizontal: 0,
+    marginTop: 14,
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   visualHero: {
     position: "relative",
@@ -1687,6 +1651,13 @@ const styles = StyleSheet.create({
     flex: 0,
     width: "100%",
     aspectRatio: 360 / 230,
+  },
+  participationHeroPlaceholder: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    backgroundColor: "#F1F0E8",
+    alignItems: "center",
+    justifyContent: "center",
   },
   galleryArrow: {
     // Figma: 배경 원 없이 흰 화살표만, 좌우 8 여백, 세로 중앙
@@ -1955,8 +1926,8 @@ const styles = StyleSheet.create({
   mutualAidAttachments: {
     marginTop: 26,
   },
-  attachments: {
-    gap: 12, // Figma 첨부목록 간격 12
+  attachmentsList: {
+    gap: 12,
     marginTop: 24,
   },
   fileAttachment: {
@@ -1976,7 +1947,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   noticeImageAttachment: {
-    height: 400, // Figma 이미지첨부 320x400 (4:5)
+    height: 360, // Figma 이미지첨부 360h
     backgroundColor: "#F1F0E8",
   },
   noticeImageRadius: {
@@ -2021,10 +1992,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-  },
-  officialReplyIcon: {
-    width: 16,
-    height: 16,
   },
   officialReplyTitle: {
     color: "#2761FF",

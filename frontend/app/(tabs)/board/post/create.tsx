@@ -979,7 +979,8 @@ export default function PostCreateScreen() {
                           onBlur={() => setParticipantSearchFocused(false)}
                           onChangeText={setParticipantQuery}
                           onFocus={() => setParticipantSearchFocused(true)}
-                          placeholder="이름으로 검색"
+                          accessibilityLabel="이름 또는 학번으로 검색"
+                          placeholder="이름 또는 학번으로 검색"
                           placeholderTextColor="#A6ACB7"
                           style={[styles.activityInlineInput, { outlineStyle: "none" } as never]}
                           value={participantQuery}
@@ -1469,28 +1470,28 @@ export default function PostCreateScreen() {
             </View>
           ) : null}
           {!isAdminParticipationPost ? (
-            <View style={styles.compactAttachActions}>
-              {compactAttachmentActions.map((action) => (
-                <Pressable
-                  disabled={isUploading}
-                  key={action.picker}
-                  onPress={action.onPress}
-                  style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
-                >
-                  {action.picker === "images" ? (
-                    <AttachImageIcon size={16} color={COLORS.muted} />
-                  ) : (
-                    <AttachFileIcon size={16} color={COLORS.muted} />
-                  )}
-                  <Text style={styles.compactAttachText}>
-                    {isUploading ? "업로드 중" : action.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          {!isAdminParticipationPost ? (
-            <Text style={styles.attachExtensionHint}>이미지: JPG, PNG | 파일: PDF, DOCX</Text>
+            <>
+              <View style={styles.compactAttachActions}>
+                {compactAttachmentActions.map((action) => (
+                  <Pressable
+                    disabled={isUploading}
+                    key={action.picker}
+                    onPress={action.onPress}
+                    style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
+                  >
+                    {action.picker === "images" ? (
+                      <AttachImageIcon size={16} color={COLORS.muted} />
+                    ) : (
+                      <AttachFileIcon size={16} color={COLORS.muted} />
+                    )}
+                    <Text style={styles.compactAttachText}>
+                      {isUploading ? "업로드 중" : action.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.attachExtensionHint}>이미지: JPG, PNG | 파일: PDF, DOCX</Text>
+            </>
           ) : (
             <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
               <Ionicons name="image-outline" size={16} color={COLORS.muted} />
@@ -1719,15 +1720,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
+  appBarNoDivider: {
+    borderBottomWidth: 0,
+  },
   iconButton: {
     width: 42,
     height: 42,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 21,
-  },
-  appBarNoDivider: {
-    borderBottomWidth: 0,
   },
   appBarTitle: {
     color: COLORS.text,
@@ -1914,6 +1915,12 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 12,
   },
+  activityPhotoText: {
+    color: "#A6ACB7",
+    fontSize: 13,
+    fontWeight: "400",
+    lineHeight: 16,
+  },
   activityPhotoTile: {
     width: 62,
     height: 62,
@@ -1987,11 +1994,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "900",
   },
-  activityPhotoText: {
+  attachExtensionHint: {
     color: "#A6ACB7",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "400",
-    lineHeight: 16,
+    lineHeight: 15,
   },
   activityAttachmentList: {
     gap: 6,
@@ -2613,12 +2620,6 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     gap: 8, // Figma: 첨부 옵션 버튼 간격 8
-  },
-  attachExtensionHint: {
-    color: "#A6ACB7", // Figma: 첨부 확장자 안내 12/15
-    fontSize: 12,
-    fontWeight: "400",
-    lineHeight: 15,
   },
   compactAttachText: {
     color: COLORS.muted,

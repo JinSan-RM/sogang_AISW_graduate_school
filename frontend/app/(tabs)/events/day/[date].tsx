@@ -8,6 +8,7 @@ import LoadingState from "../../../../components/LoadingState";
 import { eventApi } from "../../../../services/api";
 import type { EventItem } from "../../../../types";
 import { eventDayBackDecision } from "../../../../utils/appRoutes";
+import { eventCategoryLabel, eventCategoryTone } from "../../../../utils/eventCategoryPresentation";
 import { formatBoardDate, formatTime24 } from "../../../../utils/dateFormat";
 
 import { BackIcon, EmptyCalendarIcon } from "../../../../components/icons";
@@ -20,21 +21,6 @@ const COLORS = {
   bg: "#FFFFFF",
 };
 
-const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사일정",
-  event: "행사일정",
-  other: "기타일정",
-};
-
-const EVENT_CATEGORY_COLORS: Record<string, { backgroundColor: string; color: string }> = {
-  academic: { backgroundColor: "#E6F1FB", color: "#0C447C" },
-  council: { backgroundColor: "#F1EAFE", color: "#6C4FCB" },
-  event: { backgroundColor: "#FBEAF0", color: "#993556" },
-  exam: { backgroundColor: "#FFF5E8", color: "#B96B16" },
-  external: { backgroundColor: "#EAF8F4", color: "#20856D" },
-  other: { backgroundColor: "#EDE8F6", color: "#4A2B7A" },
-};
-
 function parseDateKey(value: string | string[] | undefined) {
   const dateKey = Array.isArray(value) ? value[0] : value;
   if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
@@ -45,14 +31,14 @@ function parseDateKey(value: string | string[] | undefined) {
 }
 
 function EventRow({ item }: { item: EventItem }) {
-  const categoryColors = EVENT_CATEGORY_COLORS[item.category] ?? EVENT_CATEGORY_COLORS.other;
+  const categoryTone = eventCategoryTone(item.category, "day");
 
   return (
     <Pressable onPress={() => router.push(`/events/${item.id}` as never)} style={styles.eventRow}>
       <View style={styles.eventTopRow}>
-        <View style={[styles.categoryPill, { backgroundColor: categoryColors.backgroundColor }]}>
-          <Text style={[styles.categoryText, { color: categoryColors.color }]}>
-            {EVENT_CATEGORY_LABELS[item.category] ?? item.category}
+        <View style={[styles.categoryPill, { backgroundColor: categoryTone.backgroundColor }]}>
+          <Text style={[styles.categoryText, { color: categoryTone.color }]}>
+            {eventCategoryLabel(item.category)}
           </Text>
         </View>
         <Text style={styles.eventTime}>{formatTime24(item.start_at)}</Text>

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LoadingState from "../../../components/LoadingState";
 import { eventApi } from "../../../services/api";
 import type { EventItem } from "../../../types";
+import { eventCategoryLabel } from "../../../utils/eventCategoryPresentation";
 import { formatTime24 } from "../../../utils/dateFormat";
 import {
   calendarMonthRange,
@@ -30,12 +31,6 @@ const COLORS = {
 };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-const EVENT_CATEGORY_LABELS: Record<string, string> = {
-  academic: "학사일정",
-  event: "행사일정",
-  other: "기타일정",
-};
 
 function monthLabel(date: Date) {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
@@ -60,7 +55,7 @@ function buildMonthCells(month: Date) {
 function EventRow({ item }: { item: EventItem }) {
   return (
     <Pressable onPress={() => router.push(`/events/${item.id}` as never)} style={styles.eventRow}>
-      <Text style={styles.categoryText}>{EVENT_CATEGORY_LABELS[item.category] ?? item.category}</Text>
+      <Text style={styles.categoryText}>{eventCategoryLabel(item.category)}</Text>
       <Text numberOfLines={2} style={styles.eventTitle}>
         {item.title}
       </Text>
