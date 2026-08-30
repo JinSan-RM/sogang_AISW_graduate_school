@@ -344,6 +344,7 @@ Source: Notion `Frontend-backend full integration`.
 
 Scope:
 
+- Completed: Integrated PR #17's schedule, notification, notice, and participation visuals onto the latest main without its irreversible event migration or three-value backend schema restriction. Existing six-value event data and title-only edits remain compatible; user-facing schedules normalize to three Korean labels, while search, participant name/student-number lookup, natural/expandable media, galleries, comments, attachments, admin CRUD, and navigation remain available. Verification evidence is recorded in docs/qa/PR17_FUNCTIONAL_SAFE_INTEGRATION.md.
 - Normalize API base URL handling for local, staging, and production.
 - Run login -> feature use -> logout flows.
 - Test all mobile routes from the target IA.
