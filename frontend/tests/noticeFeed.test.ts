@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ApiSuccess, Board, PostListItem } from "../types";
+import type { Board, PostListItem } from "../types";
 import {
   isNoticeContentBoard,
   noticePostsForFilter,
@@ -14,19 +14,6 @@ type HomeNoticeSelector = (
   boards: Board[],
   limit?: number
 ) => PostListItem[];
-type PostFilters = { q?: string; category?: string; status?: string; sort?: "latest" | "popular" | "views" };
-type PostPageLoader = (
-  boardId: number,
-  page: number,
-  size: number,
-  filters?: PostFilters
-) => Promise<ApiSuccess<PostListItem[]>>;
-type AllBoardPostLoader = (
-  boardId: number,
-  filters: PostFilters | undefined,
-  loadPage: PostPageLoader,
-  pageSize?: number
-) => Promise<PostListItem[]>;
 type HomeNoticeCategory = (post: PostListItem, board?: Board) => string;
 type NoticeFeedQueryFilters = (filter: NoticeFilter) => {
   notice_category: Exclude<NoticeFilter, "all"> | undefined;
@@ -42,12 +29,6 @@ function selectHomeNotices(posts: PostListItem[], boards: Board[], limit = 2) {
   const selector = (noticeFeed as typeof noticeFeed & { homeNoticePosts?: HomeNoticeSelector }).homeNoticePosts;
   if (!selector) assert.fail("homeNoticePosts must be exported");
   return selector(posts, boards, limit);
-}
-
-async function loadEveryBoardPost(boardId: number, filters: PostFilters, loadPage: PostPageLoader) {
-  const loader = (noticeFeed as typeof noticeFeed & { loadAllBoardPosts?: AllBoardPostLoader }).loadAllBoardPosts;
-  if (!loader) assert.fail("loadAllBoardPosts must be exported");
-  return loader(boardId, filters, loadPage);
 }
 
 function homeCategory(postItem: PostListItem, boardItem?: Board) {
@@ -223,26 +204,6 @@ test("홈 공지는 작성 시간이 같으면 큰 게시글 ID를 먼저 선택
   ];
 
   assert.deepEqual(selectHomeNotices(rows, homeBoards).map((item) => item.id), [2, 1]);
-});
-
-test("홈 공지 조회는 최신 일반 공지가 고정글 첫 페이지 밖에 있어도 모든 페이지를 모은다", async () => {
-  const requestedPages: number[] = [];
-  const loadPage: PostPageLoader = async (boardId, page, size, filters) => {
-    assert.equal(boardId, 9);
-    assert.equal(size, 20);
-    assert.deepEqual(filters, { sort: "latest" });
-    requestedPages.push(page);
-    return {
-      status: "success",
-      data: [post(page, 9)],
-      pagination: { page, size, total: 41, total_pages: 3 },
-    };
-  };
-
-  const rows = await loadEveryBoardPost(9, { sort: "latest" }, loadPage);
-
-  assert.deepEqual(requestedPages, [1, 2, 3]);
-  assert.deepEqual(rows.map((item) => item.id), [1, 2, 3]);
 });
 
 test("홈 공지의 other와 all 분류는 기타공지로 표시한다", () => {

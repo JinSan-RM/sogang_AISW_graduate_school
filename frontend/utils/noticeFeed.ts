@@ -1,19 +1,5 @@
 import type { ApiSuccess, Board, PostListItem } from "../types";
 
-export type PostListFilters = {
-  q?: string;
-  category?: string;
-  status?: string;
-  sort?: "latest" | "popular" | "views";
-};
-
-export type PostPageLoader = (
-  boardId: number,
-  page: number,
-  size: number,
-  filters?: PostListFilters
-) => Promise<ApiSuccess<PostListItem[]>>;
-
 export type NoticeFilter = "all" | "academic" | "event" | "other";
 
 export const NOTICE_FILTERS: { key: NoticeFilter; label: string }[] = [
@@ -124,21 +110,13 @@ export function homeNoticePosts(posts: PostListItem[], boards: Board[], limit = 
     .slice(0, limit);
 }
 
-export async function loadAllBoardPosts(
-  boardId: number,
-  filters: PostListFilters | undefined,
-  loadPage: PostPageLoader,
-  pageSize = 20
-) {
-  const posts: PostListItem[] = [];
-  let page = 1;
+export type HomeNoticePreviewLoader = (params: {
+  scope: "notices";
+  page: 1;
+  size: 2;
+  sort: "latest";
+}) => Promise<ApiSuccess<PostListItem[]>>;
 
-  while (true) {
-    const response = await loadPage(boardId, page, pageSize, filters);
-    posts.push(...response.data);
-
-    const pagination = response.pagination;
-    if (!pagination || pagination.page >= pagination.total_pages) return posts;
-    page = pagination.page + 1;
-  }
+export function loadHomeNoticePreview(loadFeed: HomeNoticePreviewLoader) {
+  return loadFeed({ scope: "notices", page: 1, size: 2, sort: "latest" });
 }

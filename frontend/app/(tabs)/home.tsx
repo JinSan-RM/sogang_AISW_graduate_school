@@ -26,7 +26,6 @@ import HomeSectionGate from "../../components/HomeSectionGate";
 import { BackIcon, BellIcon, EmptyCalendarIcon, ForwardIcon, ProfileIcon } from "../../components/icons";
 import { useMyPageDrawer } from "../../components/MyPageDrawer";
 import { useBoardsQuery } from "../../hooks/useApi";
-import { useAllMultiBoardPosts } from "../../hooks/usePosts";
 import { API_ORIGIN, bannerApi, eventApi, notificationApi, postApi } from "../../services/api";
 import { requestTabRootReset } from "../../stores/tabRootResetStore";
 import { useUserStore } from "../../stores/userStore";
@@ -44,7 +43,7 @@ import {
 } from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { homeAlumniDirectoryErrorMessage, homeAlumniDirectoryLink } from "../../utils/homeAlumniDirectory";
-import { homeNoticeCategory, homeNoticePosts, isNoticeContentBoard } from "../../utils/noticeFeed";
+import { homeNoticeCategory, isNoticeContentBoard, loadHomeNoticePreview } from "../../utils/noticeFeed";
 import { enabledRefetch, refreshQueries } from "../../utils/pullToRefresh";
 
 const COLORS = {
@@ -638,7 +637,6 @@ export default function HomeScreen() {
   } = useBoardsQuery();
   const boards = useMemo(() => flattenBoards(boardGroups?.data), [boardGroups?.data]);
   const noticeBoards = useMemo(() => boards.filter(isNoticeContentBoard), [boards]);
-  const noticeBoardIds = useMemo(() => noticeBoards.map((board) => board.id), [noticeBoards]);
   const popularBoardId = useMemo(() => findBoardId(boards, POPULAR_BOARD_SLUGS, "community"), [boards]);
   const albumBoardId = useMemo(() => findBoardId(boards, ALBUM_BOARD_SLUGS, "participation"), [boards]);
 
@@ -646,7 +644,11 @@ export default function HomeScreen() {
     queryKey: ["banners", "home"],
     queryFn: () => bannerApi.getBanners({ placement: "home" }),
   });
-  const noticesQuery = useAllMultiBoardPosts(noticeBoardIds, { sort: "latest" });
+  const noticesQuery = useQuery({
+    queryKey: ["home", "notices"],
+    queryFn: () => loadHomeNoticePreview(postApi.getFeed),
+    retry: false,
+  });
   const eventsQuery = useQuery({
     queryKey: ["home", "events", monthRange.start, monthRange.end],
     queryFn: () => eventApi.getEvents({ from_date: monthRange.start, to_date: monthRange.end }),
@@ -663,10 +665,7 @@ export default function HomeScreen() {
   });
 
   const banners = bannersQuery.data?.data ?? [];
-  const notices = useMemo(
-    () => homeNoticePosts(noticesQuery.data ?? [], noticeBoards),
-    [noticeBoards, noticesQuery.data]
-  );
+  const notices = noticesQuery.data?.data ?? [];
   const events = eventsQuery.data?.data ?? [];
   const albumPosts = albumQuery.data?.data ?? [];
   const alumniDirectoryLink = useMemo(() => homeAlumniDirectoryLink(boards), [boards]);
@@ -684,7 +683,7 @@ export default function HomeScreen() {
       bannersQuery.refetch,
       eventsQuery.refetch,
       enabledRefetch(isAuthenticated, notificationQuery.refetch),
-      noticeBoardIds.length > 0 ? noticesQuery.refetch : undefined,
+      noticesQuery.refetch,
       albumBoardId ? albumQuery.refetch : undefined,
     ]);
   };

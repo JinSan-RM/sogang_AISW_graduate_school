@@ -2,19 +2,37 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import type { ApiSuccess, PostListItem } from "../types";
+import * as noticeFeed from "../utils/noticeFeed";
+
 const homeSource = readFileSync("app/(tabs)/home.tsx", "utf8");
 
-test("홈 공지는 단일 슬러그 대신 모든 활성 공지 게시판의 최신 두 개를 사용한다", () => {
-  assert.match(homeSource, /useAllMultiBoardPosts/);
-  assert.match(homeSource, /boards\.filter\(isNoticeContentBoard\)/);
-  assert.match(homeSource, /useAllMultiBoardPosts\(noticeBoardIds, \{ sort: "latest" \}\)/);
-  assert.match(homeSource, /homeNoticePosts\(noticesQuery\.data \?\? \[\], noticeBoards\)/);
-  assert.match(homeSource, /boards=\{noticeBoards\}/);
-  assert.match(homeSource, /homeNoticeCategory\(post, boardById\.get\(post\.board_id\)\)/);
-  assert.doesNotMatch(homeSource, /NOTICE_BOARD_SLUGS/);
-  assert.doesNotMatch(homeSource, /postApi\.getPosts\(noticeBoardId/);
-  assert.doesNotMatch(homeSource, /function noticeCategoryLabel/);
-  assert.doesNotMatch(homeSource, /noticeCategoryLabel\(post\.category\)/);
+type HomeNoticePreviewLoader = (params: {
+  scope: "notices";
+  page: 1;
+  size: 2;
+  sort: "latest";
+}) => Promise<ApiSuccess<PostListItem[]>>;
+
+async function loadHomeNoticePreview(loadFeed: HomeNoticePreviewLoader) {
+  const loader = (noticeFeed as typeof noticeFeed & {
+    loadHomeNoticePreview?: (load: HomeNoticePreviewLoader) => Promise<ApiSuccess<PostListItem[]>>;
+  }).loadHomeNoticePreview;
+  if (!loader) assert.fail("loadHomeNoticePreview must be exported");
+  return loader(loadFeed);
+}
+
+test("홈 공지 미리보기는 최신 두 개를 한 번의 집계 요청으로 불러온다", async () => {
+  const response: ApiSuccess<PostListItem[]> = { status: "success", data: [] };
+  const calls: Parameters<HomeNoticePreviewLoader>[0][] = [];
+
+  const result = await loadHomeNoticePreview(async (params) => {
+    calls.push(params);
+    return response;
+  });
+
+  assert.deepEqual(calls, [{ scope: "notices", page: 1, size: 2, sort: "latest" }]);
+  assert.strictEqual(result, response);
 });
 
 test("#186 홈 공지사항 더보기는 이전 필터와 무관하게 전체 공지 루트를 연다", () => {

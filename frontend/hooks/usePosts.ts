@@ -16,7 +16,6 @@ import type {
 
 import { commentApi, postApi } from "../services/api";
 import type { ApiSuccess, PostDetail, PostListItem } from "../types";
-import { loadAllBoardPosts } from "../utils/noticeFeed";
 import { applyBookmarkResult } from "../utils/postDetailCache";
 import {
   nextPostPage,
@@ -203,23 +202,6 @@ export function useMultiBoardPosts(
         boardIds.map((boardId) => postApi.getPosts(boardId, 1, PAGE_SIZE, filters))
       );
       return responses.flatMap((response) => response.data);
-    },
-    enabled: boardIds.length > 0,
-    retry: false,
-  });
-}
-
-export function useAllMultiBoardPosts(
-  boardIds: number[],
-  filters?: { q?: string; category?: string; status?: string; sort?: "latest" | "popular" | "views" }
-) {
-  return useQuery({
-    queryKey: ["all-multi-board-posts", boardIds, filters],
-    queryFn: async () => {
-      const responses = await Promise.all(
-        boardIds.map((boardId) => loadAllBoardPosts(boardId, filters, postApi.getPosts))
-      );
-      return responses.flat();
     },
     enabled: boardIds.length > 0,
     retry: false,
