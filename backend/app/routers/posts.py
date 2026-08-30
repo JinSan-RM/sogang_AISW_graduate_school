@@ -368,16 +368,23 @@ def _post_feed_search_filter(q: str | None, current_user: User):
     if q is None:
         return None
     keyword = f"%{q}%"
+    author_match = or_(
+        User.nickname.ilike(keyword),
+        Post.author_nickname_snapshot.ilike(keyword),
+    )
+    if current_user.role == "admin":
+        return or_(
+            Post.title.ilike(keyword),
+            Post.content.ilike(keyword),
+            author_match,
+        )
     return or_(
         Post.title.ilike(keyword),
         Post.content.ilike(keyword),
         and_(
             Post.is_anonymous.is_(False),
             Board.slug.not_in(ANONYMOUS_BOARD_SLUGS),
-            or_(
-                User.nickname.ilike(keyword),
-                Post.author_nickname_snapshot.ilike(keyword),
-            ),
+            author_match,
         ),
     )
 

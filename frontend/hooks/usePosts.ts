@@ -15,16 +15,18 @@ import type {
 } from "@tanstack/react-query";
 
 import { commentApi, postApi } from "../services/api";
-import type { ApiSuccess, PostDetail, PostListItem } from "../types";
+import type { ApiSuccess, Board, PostDetail, PostListItem } from "../types";
 import { applyBookmarkResult } from "../utils/postDetailCache";
 import {
+  firstPostPageData,
   nextPostPage,
-  refreshFirstPostPage,
   uniquePostItems,
 } from "../utils/postFeedPagination";
 import type { PostPage } from "../utils/postFeedPagination";
 
 const PAGE_SIZE = 20;
+const AGGREGATE_POST_FEED_QUERY_KEY = ["posts", "feed"] as const;
+const HOME_NOTICE_QUERY_KEY = ["home", "notices"] as const;
 
 export type PostFilters = {
   q?: string;
@@ -34,12 +36,19 @@ export type PostFilters = {
 };
 
 export type PostFeedScope = "notices" | "resources" | "council_activity";
+const ALL_POST_FEED_SCOPES: readonly PostFeedScope[] = ["notices", "resources", "council_activity"];
 
 export type AggregatePostFilters = {
   q?: string;
   notice_category?: "academic" | "event" | "other";
   sort?: "latest" | "popular" | "views";
   pin_priority?: boolean;
+};
+
+export type PostMutationCacheTargets = {
+  boardIds: readonly number[];
+  feedScopes?: readonly PostFeedScope[];
+  refreshHomeNotices?: boolean;
 };
 
 type PostInfiniteData = InfiniteData<PostPage, number>;
@@ -95,11 +104,109 @@ export function refreshPostQueryFirstPage(
   load: () => Promise<PostPage>,
   shouldCommit: () => boolean = () => true,
 ): Promise<void> {
-  return refreshFirstPostPage(load, (data) => {
+  return (async () => {
+    await queryClient.cancelQueries({ queryKey, exact: true });
+    const firstPage = await load();
+    if (!shouldCommit()) return;
+    await queryClient.cancelQueries({ queryKey, exact: true });
     if (shouldCommit()) {
-      queryClient.setQueryData(queryKey, data);
+      queryClient.setQueryData(queryKey, firstPostPageData(firstPage));
     }
+  })();
+}
+
+export async function invalidatePostMutationCaches(
+  queryClient: QueryClient,
+  { boardIds, feedScopes = [], refreshHomeNotices = false }: PostMutationCacheTargets,
+): Promise<void> {
+  await Promise.all([
+    ...[...new Set(boardIds)].map((boardId) =>
+      queryClient.invalidateQueries({ queryKey: ["posts", boardId] })),
+    ...[...new Set(feedScopes)].map((scope) =>
+      queryClient.invalidateQueries({ queryKey: [...AGGREGATE_POST_FEED_QUERY_KEY, scope] })),
+    ...(refreshHomeNotices ? [queryClient.invalidateQueries({ queryKey: HOME_NOTICE_QUERY_KEY })] : []),
+  ]);
+}
+
+export function postMutationCacheTargets(
+  boardId: number,
+  board?: Pick<Board, "board_type" | "category" | "slug"> | null,
+  options: { refreshHomeNotices?: boolean } = {},
+): PostMutationCacheTargets {
+  if (board === undefined || board === null) {
+    return {
+      boardIds: [boardId],
+      feedScopes: ALL_POST_FEED_SCOPES,
+      refreshHomeNotices: options.refreshHomeNotices ?? true,
+    };
+  }
+  const feedScopes: PostFeedScope[] = [];
+  if (board?.board_type === "notice") {
+    feedScopes.push("notices", "council_activity");
+  } else if (board?.category === "resources") {
+    feedScopes.push("resources");
+  } else if (board?.slug === "council-activity" || board?.slug === "gsa-activity") {
+    feedScopes.push("council_activity");
+  }
+  return {
+    boardIds: [boardId],
+    feedScopes,
+    refreshHomeNotices: options.refreshHomeNotices ?? board?.board_type === "notice",
+  };
+}
+
+export function patchCachedPostListItem(
+  queryClient: QueryClient,
+  postId: number,
+  patch: Partial<Pick<PostListItem, "like_count" | "comment_count">>,
+): void {
+  queryClient.setQueriesData<PostInfiniteData>({ queryKey: ["posts"] }, (current) => {
+    if (!current?.pages) return current;
+    let changed = false;
+    const pages = current.pages.map((page) => {
+      let pageChanged = false;
+      const data = page.data.map((item) => {
+        if (item.id !== postId) return item;
+        changed = true;
+        pageChanged = true;
+        return { ...item, ...patch };
+      });
+      return pageChanged ? { ...page, data } : page;
+    });
+    return changed ? { ...current, pages } : current;
   });
+}
+
+export function invalidatePopularAggregatePostFeedCaches(
+  queryClient: QueryClient,
+  scopes?: readonly PostFeedScope[],
+): Promise<void> {
+  return queryClient.invalidateQueries({
+    queryKey: AGGREGATE_POST_FEED_QUERY_KEY,
+    predicate: (query) => {
+      const scope = query.queryKey[2];
+      const filters = query.queryKey[3];
+      return (scopes === undefined || scopes.includes(scope as PostFeedScope))
+        && typeof filters === "object"
+        && filters !== null
+        && !Array.isArray(filters)
+        && (filters as AggregatePostFilters).sort === "popular";
+    },
+  });
+}
+
+export function invalidatePostLikeCaches(
+  queryClient: QueryClient,
+  boardId: number,
+  board: Pick<Board, "board_type" | "category" | "slug"> | null | undefined,
+): Promise<void> {
+  const scopes = board === undefined || board === null
+    ? undefined
+    : postMutationCacheTargets(boardId, board).feedScopes;
+  return Promise.all([
+    invalidatePopularAggregatePostFeedCaches(queryClient, scopes),
+    queryClient.invalidateQueries({ queryKey: ["home", "popular", boardId], exact: true }),
+  ]).then(() => undefined);
 }
 
 export function createPostFirstPageRefreshCoordinator(
@@ -321,29 +428,36 @@ type PostMutationPayload = {
   attachment_ids?: number[];
 };
 
-export function useCreatePost(boardId: number) {
+export function useCreatePost(
+  boardId: number,
+  board?: Pick<Board, "board_type" | "category" | "slug"> | null,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: PostMutationPayload) => postApi.createPost(boardId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["posts", boardId] });
+    onSuccess: async () => {
+      await invalidatePostMutationCaches(queryClient, postMutationCacheTargets(boardId, board));
     },
   });
 }
 
-export function useUpdatePost(postId: number, boardId: number) {
+export function useUpdatePost(
+  postId: number,
+  boardId: number,
+  board?: Pick<Board, "board_type" | "category" | "slug"> | null,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: PostMutationPayload) => postApi.updatePost(postId, payload),
     onSuccess: async (_response, payload) => {
       const invalidations = [
         queryClient.invalidateQueries({ queryKey: ["post", postId] }),
-        queryClient.invalidateQueries({ queryKey: ["posts", boardId] }),
-        queryClient.invalidateQueries({ queryKey: ["multi-board-posts"] }),
       ];
+      const targets = postMutationCacheTargets(boardId, board);
       if (payload.board_id && payload.board_id !== boardId) {
-        invalidations.push(queryClient.invalidateQueries({ queryKey: ["posts", payload.board_id] }));
+        targets.boardIds = [boardId, payload.board_id];
       }
+      invalidations.push(invalidatePostMutationCaches(queryClient, targets));
       await Promise.all(invalidations);
     },
   });
@@ -374,17 +488,25 @@ export function useUpdateMutualAid(postId: number) {
   });
 }
 
-export function useDeletePost(postId: number, boardId: number) {
+export function useDeletePost(
+  postId: number,
+  boardId: number,
+  board?: Pick<Board, "board_type" | "category" | "slug"> | null,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => postApi.deletePost(postId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["posts", boardId] });
+    onSuccess: async () => {
+      await invalidatePostMutationCaches(queryClient, postMutationCacheTargets(boardId, board));
     },
   });
 }
 
-export function useToggleLike(postId: number, boardId: number) {
+export function useToggleLike(
+  postId: number,
+  boardId: number,
+  board: Pick<Board, "board_type" | "category" | "slug"> | null | undefined,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => postApi.toggleLike(postId),
@@ -402,7 +524,9 @@ export function useToggleLike(postId: number, boardId: number) {
           : current
       );
       queryClient.invalidateQueries({ queryKey: ["post", postId] });
+      patchCachedPostListItem(queryClient, postId, { like_count: response.data.like_count });
       queryClient.invalidateQueries({ queryKey: ["posts", boardId] });
+      void invalidatePostLikeCaches(queryClient, boardId, board);
     },
   });
 }

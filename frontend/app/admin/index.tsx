@@ -54,6 +54,7 @@ import {
   type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
+import { runAdminMutation } from "../../utils/adminMutationCoordinator";
 import {
   formatBoardDateTime,
   koreaDateTimeInputToUtcISOString,
@@ -2689,25 +2690,44 @@ export default function AdminScreen() {
     };
 
     try {
-      if (operation.editingNoticeId) {
-        await postApi.updatePost(operation.editingNoticeId, payload);
-        await postApi.setPin(operation.editingNoticeId, noticeForm.is_pinned);
-      } else {
-        const response = await postApi.createPost(operation.boardId, payload);
-        if (noticeForm.is_pinned) {
-          await postApi.setPin(response.data.id, true);
+      const outcome = await runAdminMutation({
+        primary: async () => {
+          if (operation.editingNoticeId) {
+            await postApi.updatePost(operation.editingNoticeId, payload);
+            return operation.editingNoticeId;
+          }
+          const response = await postApi.createPost(operation.boardId, payload);
+          return response.data.id;
+        },
+        secondary: async (postId) => {
+          if (operation.editingNoticeId || noticeForm.is_pinned) {
+            await postApi.setPin(postId, noticeForm.is_pinned);
+          }
+        },
+        afterPrimarySuccess: async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+            invalidatePostMutationCaches(queryClient, postMutationCacheTargets(operation.boardId, selectedNoticeBoard)),
+          ]);
+        },
+      });
+      const result = noticeEditorOperationResult(
+        operation,
+        currentNoticeEditorTarget(),
+        outcome.status === "primary_failure" ? "failure" : "success",
+      );
+      if (outcome.status === "primary_failure") {
+        if (result.notification === "failure") Alert.alert("저장 실패", "공지사항 입력 정보를 확인하세요.");
+        return;
+      }
+      if (result.apply) resetNoticeForm();
+      if (result.notification === "success") {
+        if (outcome.status === "partial") {
+          Alert.alert("부분 저장", "공지사항은 저장했지만 고정 상태를 변경하지 못했습니다.");
+        } else {
+          Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
         }
       }
-      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "success");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
-        invalidatePostMutationCaches(queryClient, postMutationCacheTargets(operation.boardId, selectedNoticeBoard)),
-      ]);
-      if (result.apply) resetNoticeForm();
-      if (result.notification === "success") Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
-    } catch {
-      const result = noticeEditorOperationResult(operation, currentNoticeEditorTarget(), "failure");
-      if (result.notification === "failure") Alert.alert("저장 실패", "공지사항 입력 정보를 확인하세요.");
     } finally {
       finishNoticeEditorOperation(operation);
     }
@@ -3051,26 +3071,37 @@ export default function AdminScreen() {
         text: "삭제",
         style: "destructive",
         onPress: async () => {
-          try {
-            if (report.target_type === "post") {
-              await postApi.deletePost(report.target.post_id ?? report.target_id);
-            } else {
-              await commentApi.deleteComment(report.target_id);
-            }
-            await reportApi.updateAdminReport(report.id, { status: "resolved" });
-            queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
-            if (report.target.board_id) {
-              const board = boards.find((candidate) => candidate.id === report.target.board_id);
-              await invalidatePostMutationCaches(
-                queryClient,
-                postMutationCacheTargets(report.target.board_id, board, {
-                  refreshHomeNotices: report.target_type === "comment" ? false : undefined,
-                }),
-              );
-            }
-            Alert.alert("처리 완료", `${targetLabel}을 삭제했습니다.`);
-          } catch {
+          const outcome = await runAdminMutation({
+            primary: async () => {
+              if (report.target_type === "post") {
+                await postApi.deletePost(report.target.post_id ?? report.target_id);
+              } else {
+                await commentApi.deleteComment(report.target_id);
+              }
+            },
+            secondary: async () => {
+              await reportApi.updateAdminReport(report.id, { status: "resolved" });
+            },
+            afterPrimarySuccess: async () => {
+              const invalidations = [queryClient.invalidateQueries({ queryKey: ["admin-reports"] })];
+              if (report.target.board_id) {
+                const board = boards.find((candidate) => candidate.id === report.target.board_id);
+                invalidations.push(invalidatePostMutationCaches(
+                  queryClient,
+                  postMutationCacheTargets(report.target.board_id, board, {
+                    refreshHomeNotices: report.target_type === "comment" ? false : undefined,
+                  }),
+                ));
+              }
+              await Promise.all(invalidations);
+            },
+          });
+          if (outcome.status === "primary_failure") {
             Alert.alert("삭제 실패", `신고된 ${targetLabel}을 삭제할 수 없습니다.`);
+          } else if (outcome.status === "partial") {
+            Alert.alert("부분 처리", `${targetLabel}은 삭제했지만 신고 상태를 처리 완료로 변경하지 못했습니다.`);
+          } else {
+            Alert.alert("처리 완료", `${targetLabel}을 삭제했습니다.`);
           }
         },
       },

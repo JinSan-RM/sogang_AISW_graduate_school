@@ -228,7 +228,7 @@ export default function PostDetailScreen() {
   const [commentDeleteError, setCommentDeleteError] = useState<string | null>(null);
   const [galleryIndex, setGalleryIndex] = useState(0);
 
-  const likeMutation = useToggleLike(postId, post?.board_id ?? 0);
+  const likeMutation = useToggleLike(postId, post?.board_id ?? 0, board);
   const bookmarkMutation = useToggleBookmark(postId);
   const createCommentMutation = useCreateComment(postId);
   const updateCommentMutation = useUpdateComment(postId);

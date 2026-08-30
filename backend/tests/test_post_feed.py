@@ -534,6 +534,84 @@ def test_feed_excludes_unreadable_deleted_and_blocked_author_posts(api) -> None:
     assert [item["id"] for item in response.json()["data"]] == [visible_id]
 
 
+def test_feed_author_search_keeps_anonymous_posts_hidden_from_users_but_available_to_admins(api) -> None:
+    with api.session() as db:
+        anonymous_post_board = _board(
+            name="Anonymous Resource Search",
+            slug="anonymous-resource-search",
+            category="resources",
+            board_type="resource",
+        )
+        forced_anonymous_board = _board(
+            name="Lecture Reviews",
+            slug="lecture-reviews",
+            category="resources",
+            board_type="resource",
+        )
+        db.add_all([anonymous_post_board, forced_anonymous_board])
+        db.flush()
+        anonymous_post = Post(
+            board_id=anonymous_post_board.id,
+            author_id=2,
+            author_nickname_snapshot="Archived Other Alias",
+            title="Anonymous author search probe",
+            content="Aggregate feed anonymous identity probe",
+            is_anonymous=True,
+        )
+        forced_anonymous_post = Post(
+            board_id=forced_anonymous_board.id,
+            author_id=2,
+            title="Forced anonymous author search probe",
+            content="Aggregate feed anonymous identity probe",
+        )
+        db.add_all([anonymous_post, forced_anonymous_post])
+        db.flush()
+        anonymous_post_id = anonymous_post.id
+        expected_ids = {anonymous_post.id, forced_anonymous_post.id}
+        db.commit()
+
+    user_author_search = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "resources", "q": "Other"},
+        headers=api.headers["owner"],
+    )
+    admin_author_search = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "resources", "q": "Other"},
+        headers=api.headers["admin"],
+    )
+    user_snapshot_author_search = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "resources", "q": "Archived Other Alias"},
+        headers=api.headers["owner"],
+    )
+    admin_snapshot_author_search = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "resources", "q": "Archived Other Alias"},
+        headers=api.headers["admin"],
+    )
+    user_content_search = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "resources", "q": "anonymous identity probe"},
+        headers=api.headers["owner"],
+    )
+
+    assert user_author_search.status_code == 200
+    assert user_author_search.json()["data"] == []
+    assert admin_author_search.status_code == 200
+    assert {item["id"] for item in admin_author_search.json()["data"]} == expected_ids
+    assert {item["author_id"] for item in admin_author_search.json()["data"]} == {2}
+    assert {item["author_nickname"] for item in admin_author_search.json()["data"]} == {"Other"}
+    assert user_snapshot_author_search.status_code == 200
+    assert user_snapshot_author_search.json()["data"] == []
+    assert admin_snapshot_author_search.status_code == 200
+    assert [item["id"] for item in admin_snapshot_author_search.json()["data"]] == [anonymous_post_id]
+    assert user_content_search.status_code == 200
+    assert {item["id"] for item in user_content_search.json()["data"]} == expected_ids
+    assert {item["author_id"] for item in user_content_search.json()["data"]} == {None}
+    assert {item["author_nickname"] for item in user_content_search.json()["data"]} == {"Anonymous"}
+
+
 def test_feed_rejects_unknown_scope_and_invalid_notice_filter(api) -> None:
     invalid_requests = [
         {"scope": "unknown"},

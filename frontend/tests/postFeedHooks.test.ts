@@ -3,6 +3,7 @@ import { registerHooks } from "node:module";
 import test from "node:test";
 
 import { QueryClient } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import type { AxiosAdapter } from "axios";
 
 import type { ApiSuccess, PostListItem } from "../types";
@@ -73,6 +74,37 @@ type PostHookContract = {
     pages: ApiSuccess<PostListItem[]>[];
     pageParams: number[];
   }) => PostListItem[];
+  invalidatePostMutationCaches?: (
+    queryClient: QueryClient,
+    targets: {
+      boardIds: readonly number[];
+      feedScopes?: readonly FeedParams["scope"][];
+      refreshHomeNotices?: boolean;
+    },
+  ) => Promise<void>;
+  patchCachedPostListItem?: (
+    queryClient: QueryClient,
+    postId: number,
+    patch: Partial<Pick<PostListItem, "like_count" | "comment_count">>,
+  ) => void;
+  invalidatePopularAggregatePostFeedCaches?: (
+    queryClient: QueryClient,
+    scopes?: readonly FeedParams["scope"][],
+  ) => Promise<void>;
+  invalidatePostLikeCaches?: (
+    queryClient: QueryClient,
+    boardId: number,
+    board: { board_type?: string | null; category?: string | null; slug?: string | null } | null | undefined,
+  ) => Promise<void>;
+  postMutationCacheTargets?: (
+    boardId: number,
+    board?: { board_type?: string | null; category?: string | null; slug?: string | null } | null,
+    options?: { refreshHomeNotices?: boolean },
+  ) => {
+    boardIds: readonly number[];
+    feedScopes?: readonly FeedParams["scope"][];
+    refreshHomeNotices?: boolean;
+  };
 };
 
 async function modules() {
@@ -241,6 +273,282 @@ test("첫 페이지 새로고침은 정확한 현재 키만 교체하고 실패 
     { message: "offline" },
   );
   assert.strictEqual(queryClient.getQueryData(currentKey), beforeFailure);
+});
+
+test("공지 구조 mutation은 관련 게시판·공지 피드·홈 공지만 stale 처리하고 resources/events/albums는 보존한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const boardKey = ["posts", 7, { sort: "latest" }] as const;
+  const aggregateKey = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const noticeFeedKey = ["posts", "feed", "notices", { sort: "latest" }] as const;
+  const homeNoticeKey = ["home", "notices"] as const;
+  const eventsKey = ["home", "events", "2026-08-01", "2026-08-31"] as const;
+  const albumKey = ["home", "album", 11] as const;
+  queryClient.setQueryData(boardKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(aggregateKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(noticeFeedKey, firstPostPageData(page(1, 1, [post(2)])));
+  queryClient.setQueryData(homeNoticeKey, page(1, 1, [post(2)]));
+  queryClient.setQueryData(eventsKey, { status: "success", data: [] });
+  queryClient.setQueryData(albumKey, page(1, 1, [post(3)]));
+
+  if (!hooks.invalidatePostMutationCaches) {
+    assert.fail("invalidatePostMutationCaches must invalidate aggregate and Home notice caches");
+  }
+  await hooks.invalidatePostMutationCaches(queryClient, {
+    boardIds: [7],
+    feedScopes: ["notices"],
+    refreshHomeNotices: true,
+  });
+
+  assert.equal(queryClient.getQueryState(boardKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(noticeFeedKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(homeNoticeKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(aggregateKey)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(eventsKey)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(albumKey)?.isInvalidated, false);
+});
+
+test("metadata 없는 structural mutation은 모든 aggregate와 Home 공지를 fallback stale 처리하지만 metadata가 있으면 기존 scope를 유지한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const boardKey = ["posts", 7, { sort: "latest" }] as const;
+  const noticeFeedKey = ["posts", "feed", "notices", { sort: "latest" }] as const;
+  const resourceFeedKey = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const councilFeedKey = ["posts", "feed", "council_activity", { sort: "latest" }] as const;
+  const homeNoticeKey = ["home", "notices"] as const;
+  const eventsKey = ["home", "events", "2026-08-01", "2026-08-31"] as const;
+  queryClient.setQueryData(boardKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(noticeFeedKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(resourceFeedKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(councilFeedKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(homeNoticeKey, page(1, 1, [post(1)]));
+  queryClient.setQueryData(eventsKey, { status: "success", data: [] });
+
+  if (!hooks.postMutationCacheTargets || !hooks.invalidatePostMutationCaches) {
+    assert.fail("structural mutations must expose scoped cache targets");
+  }
+  await hooks.invalidatePostMutationCaches(queryClient, hooks.postMutationCacheTargets(7, undefined));
+
+  assert.equal(queryClient.getQueryState(boardKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(noticeFeedKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(resourceFeedKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(councilFeedKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(homeNoticeKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(eventsKey)?.isInvalidated, false);
+
+  assert.deepEqual(
+    hooks.postMutationCacheTargets(7, { category: "resources" }),
+    { boardIds: [7], feedScopes: ["resources"], refreshHomeNotices: false },
+  );
+});
+
+test("신고 댓글 삭제는 관련 공지 board와 feed만 stale 처리하고 Home 공지 미리보기는 보존한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const boardKey = ["posts", 7, { sort: "latest" }] as const;
+  const noticeFeedKey = ["posts", "feed", "notices", { sort: "latest" }] as const;
+  const councilFeedKey = ["posts", "feed", "council_activity", { sort: "latest" }] as const;
+  const homeNoticeKey = ["home", "notices"] as const;
+  queryClient.setQueryData(boardKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(noticeFeedKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(councilFeedKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(homeNoticeKey, page(1, 1, [post(1)]));
+
+  if (!hooks.invalidatePostMutationCaches || !hooks.postMutationCacheTargets) {
+    assert.fail("report-comment targets must use the scoped post mutation cache helpers");
+  }
+  const targets = hooks.postMutationCacheTargets(
+    7,
+    { board_type: "notice", category: "notices", slug: "academic-notices" },
+    { refreshHomeNotices: false },
+  );
+  await hooks.invalidatePostMutationCaches(queryClient, targets);
+
+  assert.equal(queryClient.getQueryState(boardKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(noticeFeedKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(councilFeedKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(homeNoticeKey)?.isInvalidated, false);
+});
+
+test("좋아요 결과는 같은 게시글이 든 board·aggregate 목록 캐시만 patch하고 네트워크 stale 처리를 하지 않는다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const boardKey = ["posts", 7, { sort: "latest" }] as const;
+  const aggregateKey = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const siblingKey = ["posts", 8, { sort: "latest" }] as const;
+  queryClient.setQueryData(boardKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(aggregateKey, firstPostPageData(page(1, 1, [post(1), post(2)])));
+  queryClient.setQueryData(siblingKey, firstPostPageData(page(1, 1, [post(3)])));
+
+  if (!hooks.patchCachedPostListItem) {
+    assert.fail("patchCachedPostListItem must update matching cached list rows");
+  }
+  hooks.patchCachedPostListItem(queryClient, 1, { like_count: 9 });
+
+  const boardItems = queryClient.getQueryData<InfiniteData<ApiSuccess<PostListItem[]>, number>>(boardKey)!;
+  const aggregateItems = queryClient.getQueryData<InfiniteData<ApiSuccess<PostListItem[]>, number>>(aggregateKey)!;
+  const siblingItems = queryClient.getQueryData<InfiniteData<ApiSuccess<PostListItem[]>, number>>(siblingKey)!;
+  assert.equal(boardItems.pages[0].data[0].like_count, 9);
+  assert.equal(aggregateItems.pages[0].data[0].like_count, 9);
+  assert.equal(aggregateItems.pages[0].data[1].like_count, 0);
+  assert.equal(siblingItems.pages[0].data[0].like_count, 0);
+  assert.equal(queryClient.getQueryState(boardKey)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(aggregateKey)?.isInvalidated, false);
+});
+
+test("좋아요 뒤에는 인기순 aggregate만 stale 처리해 순서를 재평가하고 최신순 aggregate는 patch를 보존한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const latestKey = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const popularKey = ["posts", "feed", "resources", { sort: "popular" }] as const;
+  const boardPopularKey = ["posts", 7, { sort: "popular" }] as const;
+  queryClient.setQueryData(latestKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(popularKey, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(boardPopularKey, firstPostPageData(page(1, 1, [post(1)])));
+
+  if (!hooks.invalidatePopularAggregatePostFeedCaches) {
+    assert.fail("invalidatePopularAggregatePostFeedCaches must invalidate only popular aggregate feeds");
+  }
+  await hooks.invalidatePopularAggregatePostFeedCaches(queryClient);
+
+  assert.equal(queryClient.getQueryState(latestKey)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(popularKey)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(boardPopularKey)?.isInvalidated, false);
+});
+
+test("좋아요는 board metadata의 aggregate popular scope와 정확한 Home popular만 stale 처리한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const resourcesPopular = ["posts", "feed", "resources", { sort: "popular" }] as const;
+  const noticesPopular = ["posts", "feed", "notices", { sort: "popular" }] as const;
+  const councilPopular = ["posts", "feed", "council_activity", { sort: "popular" }] as const;
+  const resourcesLatest = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const homePopular = ["home", "popular", 7] as const;
+  const siblingHomePopular = ["home", "popular", 8] as const;
+  queryClient.setQueryData(resourcesPopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(noticesPopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(councilPopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(resourcesLatest, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(homePopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(siblingHomePopular, firstPostPageData(page(1, 1, [post(1)])));
+
+  if (!hooks.invalidatePostLikeCaches) {
+    assert.fail("invalidatePostLikeCaches must scope popular stale state using board metadata");
+  }
+  await hooks.invalidatePostLikeCaches(queryClient, 7, { category: "resources" });
+
+  assert.equal(queryClient.getQueryState(resourcesPopular)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(homePopular)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(noticesPopular)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(councilPopular)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(resourcesLatest)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(siblingHomePopular)?.isInvalidated, false);
+});
+
+test("cold deep-link 좋아요는 board metadata가 없으면 모든 aggregate popular와 해당 Home popular를 보수적으로 stale 처리한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const resourcesPopular = ["posts", "feed", "resources", { sort: "popular" }] as const;
+  const noticesPopular = ["posts", "feed", "notices", { sort: "popular" }] as const;
+  const councilPopular = ["posts", "feed", "council_activity", { sort: "popular" }] as const;
+  const resourcesLatest = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const homePopular = ["home", "popular", 7] as const;
+  const siblingHomePopular = ["home", "popular", 8] as const;
+  queryClient.setQueryData(resourcesPopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(noticesPopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(councilPopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(resourcesLatest, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(homePopular, firstPostPageData(page(1, 1, [post(1)])));
+  queryClient.setQueryData(siblingHomePopular, firstPostPageData(page(1, 1, [post(1)])));
+
+  if (!hooks.invalidatePostLikeCaches) {
+    assert.fail("cold deep-link likes must conservatively invalidate popular feeds");
+  }
+  await hooks.invalidatePostLikeCaches(queryClient, 7, undefined);
+
+  assert.equal(queryClient.getQueryState(resourcesPopular)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(noticesPopular)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(councilPopular)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(homePopular)?.isInvalidated, true);
+  assert.equal(queryClient.getQueryState(resourcesLatest)?.isInvalidated, false);
+  assert.equal(queryClient.getQueryState(siblingHomePopular)?.isInvalidated, false);
+});
+
+test("pull-to-refresh는 이미 시작된 raw query refetch가 새 첫 페이지를 덮지 못하게 취소한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const queryKey = ["posts", "feed", "notices", { notice_category: "academic" }] as const;
+  const staleResponse = deferred<ApiSuccess<PostListItem[]>>();
+  queryClient.setQueryData(queryKey, firstPostPageData(page(1, 1, [post(1)])));
+
+  const background = queryClient.fetchQuery({
+    queryKey,
+    queryFn: () => staleResponse.promise,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const fresh = page(1, 1, [post(20)]);
+  await hooks.refreshPostQueryFirstPage(queryClient, queryKey, async () => fresh);
+  staleResponse.resolve(page(1, 1, [post(10)]));
+  await background.catch(() => undefined);
+
+  assert.deepEqual(queryClient.getQueryData(queryKey), firstPostPageData(fresh));
+});
+
+test("pull 중 늦게 시작한 같은 키 raw refetch도 first-page commit 직전에 취소한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const queryKey = ["posts", "feed", "notices", { notice_category: "event" }] as const;
+  const freshResponse = deferred<ApiSuccess<PostListItem[]>>();
+  const staleResponse = deferred<ApiSuccess<PostListItem[]>>();
+  queryClient.setQueryData(queryKey, firstPostPageData(page(1, 1, [post(1)])));
+
+  const refresh = hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => freshResponse.promise);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const background = queryClient.fetchQuery({
+    queryKey,
+    queryFn: () => staleResponse.promise,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const fresh = page(1, 1, [post(20)]);
+  freshResponse.resolve(fresh);
+  await refresh;
+  staleResponse.resolve(page(1, 1, [post(10)]));
+  await background.catch(() => undefined);
+
+  assert.deepEqual(queryClient.getQueryData(queryKey), firstPostPageData(fresh));
+});
+
+test("이미 superseded된 pull은 최신 pull 뒤에 시작된 같은 키 refetch를 취소하지 않는다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const queryKey = ["posts", "feed", "notices", { notice_category: "other" }] as const;
+  const olderResponse = deferred<ApiSuccess<PostListItem[]>>();
+  const newerResponse = deferred<ApiSuccess<PostListItem[]>>();
+  const backgroundResponse = deferred<ApiSuccess<PostListItem[]>>();
+  const coordinator = hooks.createPostFirstPageRefreshCoordinator(() => undefined);
+  queryClient.setQueryData(queryKey, firstPostPageData(page(1, 1, [post(1)])));
+
+  const older = coordinator.run(queryKey, (isLatest) =>
+    hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => olderResponse.promise, isLatest));
+  const newer = coordinator.run(queryKey, (isLatest) =>
+    hooks.refreshPostQueryFirstPage(queryClient, queryKey, () => newerResponse.promise, isLatest));
+  newerResponse.resolve(page(1, 1, [post(20)]));
+  await newer;
+
+  const background = queryClient.fetchQuery({
+    queryKey,
+    queryFn: () => backgroundResponse.promise,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  olderResponse.resolve(page(1, 1, [post(10)]));
+  await older;
+  const backgroundResult = page(1, 1, [post(30)]);
+  backgroundResponse.resolve(backgroundResult);
+  await background;
+
+  assert.deepEqual(queryClient.getQueryData(queryKey), backgroundResult);
 });
 
 test("무한 쿼리 items는 페이지 순서를 유지하며 중복 게시글을 제거한다", async () => {

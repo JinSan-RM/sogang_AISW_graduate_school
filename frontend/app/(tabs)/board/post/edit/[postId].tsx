@@ -55,7 +55,7 @@ export default function PostEditScreen() {
   const isAlbum = board?.board_type === "album";
   const isMutualAid = board?.board_type === "mutual_aid";
   const isActivityCertification = board?.board_type === "activity_certification";
-  const updateMutation = useUpdatePost(postId, post?.board_id ?? 0);
+  const updateMutation = useUpdatePost(postId, post?.board_id ?? 0, board);
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
