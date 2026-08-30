@@ -53,6 +53,7 @@ import {
   type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
+import { adminEventFormRouteTransition } from "../../utils/adminEventForm";
 import {
   formatBoardDateTime,
   koreaDateTimeInputToUtcISOString,
@@ -1551,6 +1552,7 @@ export default function AdminScreen() {
   const deferredEventNavigationRef = useRef(adminDeferredEventGateInitialState(rawAdminLinkKey));
   const eventOriginalCategoryRef = useRef<string | null>(null);
   const eventCategoryExplicitlySelectedRef = useRef(false);
+  const eventFormEditIdRef = useRef(editEventId);
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
@@ -1894,6 +1896,18 @@ export default function AdminScreen() {
       setSection(nextSection);
     }
   }, [editEventIdParam, params.scope, params.section]);
+
+  useEffect(() => {
+    const transition = adminEventFormRouteTransition({
+      previousEditEventId: eventFormEditIdRef.current,
+      nextEditEventId: editEventId,
+    });
+    eventFormEditIdRef.current = editEventId;
+    if (!transition.shouldResetForm) return;
+    eventOriginalCategoryRef.current = transition.originalCategory;
+    eventCategoryExplicitlySelectedRef.current = transition.explicitlySelected;
+    reset(emptyEvent);
+  }, [editEventId, reset]);
 
   useEffect(() => {
     const transition = adminBoardNavigationTransition(handledLegacySection.current, {
