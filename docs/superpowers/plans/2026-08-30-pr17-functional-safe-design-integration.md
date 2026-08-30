@@ -667,7 +667,7 @@ git commit -m "feat: add safe notice notification card"
 - Modify: frontend/app/(tabs)/board/[boardId].tsx:810-860, 1092-1125, 1204-1230, 1524-1538
 - Modify: frontend/app/(tabs)/board/post/create.tsx:812-838, 969-994, 1478-1505, 1713-1735, 2148-2172, 2443-2468, 2596-2630
 - Modify: frontend/tests/pr17VisualContract.test.ts
-- Modify: frontend/tests/designBugVerification.test.ts
+- Test: frontend/tests/designBugVerification.test.ts
 
 **Interfaces:**
 
@@ -771,7 +771,7 @@ Expected: all tests and typecheck pass.
 - [ ] **Step 7: Commit the participation list/form slice**
 
 ~~~powershell
-git add -- 'frontend/app/(tabs)/board/[boardId].tsx' 'frontend/app/(tabs)/board/post/create.tsx' frontend/tests/pr17VisualContract.test.ts frontend/tests/designBugVerification.test.ts
+git add -- 'frontend/app/(tabs)/board/[boardId].tsx' 'frontend/app/(tabs)/board/post/create.tsx' frontend/tests/pr17VisualContract.test.ts
 git commit -m "fix: preserve participation search in PR styling"
 ~~~
 
@@ -784,7 +784,7 @@ git commit -m "fix: preserve participation search in PR styling"
 - Modify: frontend/app/(tabs)/board/post/[postId].tsx:1-15, 388-390, 564-735, 780-870, 893-905, 1598-1658, 1901-2005
 - Modify: frontend/components/icons.tsx
 - Modify: frontend/tests/pr17VisualContract.test.ts
-- Modify: frontend/tests/designBugVerification.test.ts
+- Test: frontend/tests/designBugVerification.test.ts
 - Test: frontend/tests/postDetailImagePresentation.test.ts
 
 **Interfaces:**
@@ -932,7 +932,7 @@ Expected: all focused tests and typecheck pass.
 - [ ] **Step 8: Commit the post-detail conflict resolution**
 
 ~~~powershell
-git add -- 'frontend/app/(tabs)/board/post/[postId].tsx' frontend/components/icons.tsx frontend/tests/pr17VisualContract.test.ts frontend/tests/designBugVerification.test.ts
+git add -- 'frontend/app/(tabs)/board/post/[postId].tsx' frontend/components/icons.tsx frontend/tests/pr17VisualContract.test.ts
 git commit -m "fix: merge PR detail layout without media regressions"
 ~~~
 
