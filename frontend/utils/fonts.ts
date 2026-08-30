@@ -36,7 +36,17 @@ function familyForWeight(weight: unknown): string {
 
 // Patches the default <Text> / <TextInput> render so every instance renders with
 // the Inter face matching its fontWeight, without touching each screen's styles.
+function applyWebFontSmoothing(): void {
+  if (typeof document === "undefined") return;
+  if (document.getElementById("font-smoothing-patch")) return;
+  const style = document.createElement("style");
+  style.id = "font-smoothing-patch";
+  style.textContent = "*{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}";
+  document.head.appendChild(style);
+}
+
 export function patchDefaultFontFamily(): void {
+  applyWebFontSmoothing();
   patchComponent(Text as unknown as PatchableComponent);
   patchComponent(TextInput as unknown as PatchableComponent);
 }
@@ -81,7 +91,7 @@ function patchComponent(component: PatchableComponent): void {
     const hostStyle = (StyleSheet.flatten((host.props as { style?: StyleProp<TextStyle> }).style) ?? {}) as Record<string, unknown>;
     // React DOM requires the style prop to be an object, so never pass a React
     // Native style array through to the resulting <div>/<span>/<input>.
-    let patched = React.cloneElement(host, { style: { ...hostStyle, fontFamily } } as Partial<typeof host.props>);
+    let patched = React.cloneElement(host, { style: { ...hostStyle, fontFamily, fontWeight: "normal" } } as Partial<typeof host.props>);
     for (let index = chain.length - 2; index >= 0; index -= 1) {
       patched = React.cloneElement(chain[index], undefined, patched);
     }

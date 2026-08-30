@@ -127,19 +127,6 @@ function NoticesContent() {
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
-        {/* 공지사항은 하단 탭 루트이므로 상단 뒤로가기 버튼을 비활성화합니다.
-        <IconButton
-          icon="chevron-back"
-          label="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-              return;
-            }
-            router.replace("/(tabs)/home" as never);
-          }}
-        />
-        */}
         <View style={styles.iconButton} />
         <Text style={styles.appBarTitle}>공지사항</Text>
         <IconButton icon="search-outline" label="검색" onPress={() => router.push("/search?scope=notices" as never)} />

@@ -38,6 +38,21 @@ test("활동 인증 폼은 PR 스타일과 이름·학번 검색 기능을 함�
 
 const detail = readFileSync("app/(tabs)/board/post/[postId].tsx", "utf8");
 
+const fonts = readFileSync("utils/fonts.ts", "utf8");
+const notices = readFileSync("app/(tabs)/notices.tsx", "utf8");
+
+test("웹 폰트는 PR smoothing과 faux-bold 방지를 사용한다", () => {
+  assert.match(fonts, /font-smoothing-patch/);
+  assert.match(fonts, /-webkit-font-smoothing:antialiased/);
+  assert.match(fonts, /fontFamily, fontWeight: "normal"/);
+});
+
+test("공지 목록 정리 후에도 검색과 네 필터 새로고침이 남는다", () => {
+  assert.match(notices, /router\.push\("\/search\?scope=notices"/);
+  assert.match(notices, /NOTICE_FILTERS\.map/);
+  assert.match(notices, /selectNoticeFilterAndRefresh/);
+});
+
 test("참여활동 상세는 PR 순서와 main 이미지 정책을 혼합한다", () => {
   assert.match(detail, /const visualHeroSection =/);
   assert.match(detail, /\{!isAdminParticipationGuide \? visualHeroSection : null\}/);

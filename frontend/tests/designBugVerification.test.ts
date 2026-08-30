@@ -23,7 +23,7 @@ const fontSource = source("utils/fonts.ts");
 const qaComposeSource = source("../docker-compose.qa.yml");
 
 test("global font patch flattens styles before they reach React DOM", () => {
-  assert.match(fontSource, /style: \{ \.\.\.hostStyle, fontFamily \}/);
+  assert.match(fontSource, /style: \{ \.\.\.hostStyle, fontFamily, fontWeight: "normal" \}/);
   assert.doesNotMatch(fontSource, /style: StyleSheet\.flatten\(\[\{ fontFamily \}, style\]\)/);
   assert.doesNotMatch(fontSource, /style: \[\{ fontFamily \}, style\]/);
 });
