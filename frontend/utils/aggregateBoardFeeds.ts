@@ -57,15 +57,17 @@ export function selectActiveBoardFeed<T>(mode: BoardFeedMode, feeds: BoardFeeds<
 export function canLoadNextBoardFeedPage(query: {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  isRefreshingFirstPage: boolean;
 }): boolean {
-  return query.hasNextPage && !query.isFetchingNextPage;
+  return query.hasNextPage && !query.isFetchingNextPage && !query.isRefreshingFirstPage;
 }
 
 type BoardFeedControl = {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
+  isRefreshingFirstPage: boolean;
   refreshFirstPage: () => unknown;
-  fetchNextPage: () => unknown;
+  loadNextPage: () => unknown;
   refetch: () => unknown;
 };
 
@@ -80,7 +82,7 @@ export function createBoardFeedController<T extends BoardFeedControl>(
     refreshFirstPage: () => query?.refreshFirstPage(),
     loadMore: () => {
       if (query && canLoadNextBoardFeedPage(query)) {
-        return query.fetchNextPage();
+        return query.loadNextPage();
       }
       return undefined;
     },

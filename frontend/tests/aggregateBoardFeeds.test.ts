@@ -170,8 +170,9 @@ test("새로고침, 다음 페이지, 재시도는 선택된 피드에만 위임
       name,
       hasNextPage: true,
       isFetchingNextPage: false,
+      isRefreshingFirstPage: false,
       refreshFirstPage: () => calls.push(`${name}:refresh`),
-      fetchNextPage: () => calls.push(`${name}:load-more`),
+      loadNextPage: () => calls.push(`${name}:load-more`),
       refetch: () => calls.push(`${name}:retry`),
     });
     const feeds = {
@@ -199,8 +200,9 @@ test("대기 중인 화면은 이전 피드 상태나 동작을 위임하지 않
   const feed = (name: string) => ({
     hasNextPage: true,
     isFetchingNextPage: false,
+    isRefreshingFirstPage: false,
     refreshFirstPage: () => calls.push(`${name}:refresh`),
-    fetchNextPage: () => calls.push(`${name}:load-more`),
+    loadNextPage: () => calls.push(`${name}:load-more`),
     refetch: () => calls.push(`${name}:retry`),
   });
   const controller = createBoardFeedController("pending", {
@@ -218,9 +220,26 @@ test("대기 중인 화면은 이전 피드 상태나 동작을 위임하지 않
 });
 
 test("다음 페이지는 다음 데이터가 있고 기존 요청이 끝난 뒤에만 불러온다", () => {
-  assert.equal(canLoadNextBoardFeedPage({ hasNextPage: true, isFetchingNextPage: false }), true);
-  assert.equal(canLoadNextBoardFeedPage({ hasNextPage: false, isFetchingNextPage: false }), false);
-  assert.equal(canLoadNextBoardFeedPage({ hasNextPage: true, isFetchingNextPage: true }), false);
+  assert.equal(canLoadNextBoardFeedPage({
+    hasNextPage: true,
+    isFetchingNextPage: false,
+    isRefreshingFirstPage: false,
+  }), true);
+  assert.equal(canLoadNextBoardFeedPage({
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isRefreshingFirstPage: false,
+  }), false);
+  assert.equal(canLoadNextBoardFeedPage({
+    hasNextPage: true,
+    isFetchingNextPage: true,
+    isRefreshingFirstPage: false,
+  }), false);
+  assert.equal(canLoadNextBoardFeedPage({
+    hasNextPage: true,
+    isFetchingNextPage: false,
+    isRefreshingFirstPage: true,
+  }), false);
 });
 
 test("피드 하단은 다음 페이지의 로딩과 재시도 상태를 구분한다", () => {

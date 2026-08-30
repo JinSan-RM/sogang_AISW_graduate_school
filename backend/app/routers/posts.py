@@ -283,10 +283,11 @@ def _validate_post_content(board: Board, content: str) -> None:
     raise AppException(status_code=422, message="Post content is required.", code="VALIDATION_ERROR")
 
 
-def _post_list_order(sort: str):
+def _post_list_order(sort: str, *, pin_priority: bool = True):
+    pin_order = (Post.is_pinned.desc(),) if pin_priority else ()
     if sort == "popular":
         return (
-            Post.is_pinned.desc(),
+            *pin_order,
             Post.like_count.desc(),
             Post.comment_count.desc(),
             Post.created_at.desc(),
@@ -294,12 +295,12 @@ def _post_list_order(sort: str):
         )
     if sort == "views":
         return (
-            Post.is_pinned.desc(),
+            *pin_order,
             Post.view_count.desc(),
             Post.created_at.desc(),
             Post.id.desc(),
         )
-    return (Post.is_pinned.desc(), Post.created_at.desc(), Post.id.desc())
+    return (*pin_order, Post.created_at.desc(), Post.id.desc())
 
 
 def _post_feed_scope_filter(scope: str):
@@ -342,11 +343,21 @@ def _post_feed_notice_filters(scope: str, notice_category: str | None):
                 Post.category.ilike("%특강%"),
             )
         ]
+    trimmed_category = func.trim(func.coalesce(Post.category, ""))
+    normalized_category = func.lower(trimmed_category)
     return [
-        Board.slug == "all-notices",
         or_(
-            func.lower(func.coalesce(Post.category, "")) == "other",
-            Post.category.ilike("%기타%"),
+            and_(
+                trimmed_category != "",
+                or_(
+                    normalized_category.contains("all"),
+                    normalized_category.contains("general"),
+                    normalized_category.contains("other"),
+                    Post.category.contains("전체"),
+                    Post.category.contains("기타"),
+                ),
+            ),
+            and_(trimmed_category == "", Board.slug == "all-notices"),
         ),
     ]
 
@@ -542,6 +553,7 @@ def get_post_feed(
     q: str | None = Query(None, min_length=1),
     notice_category: str | None = Query(None, pattern="^(academic|event|other)$"),
     sort: str = Query("latest", pattern="^(latest|popular|views)$"),
+    pin_priority: bool = Query(True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -564,7 +576,7 @@ def get_post_feed(
         db=db,
         current_user=current_user,
         filters=filters,
-        order_by=_post_list_order(sort),
+        order_by=_post_list_order(sort, pin_priority=pin_priority),
         page=page,
         size=size,
         q=q,

@@ -57,6 +57,7 @@ Query parameters:
 - `q`: 선택 검색어
 - `notice_category`: 공지에서만 `academic`, `event`, `other`
 - `sort`: `latest`, `popular`, `views`
+- `pin_priority`: 기본 `true`; 홈의 순수 최신순 미리보기만 `false`
 
 응답은 기존 공통 페이지 응답을 유지한다.
 
@@ -87,7 +88,7 @@ Sort rules:
 - `popular`: `is_pinned DESC, like_count DESC, comment_count DESC, created_at DESC, id DESC`
 - `views`: `is_pinned DESC, view_count DESC, created_at DESC, id DESC`
 
-현재 규모에서는 기존 `page/size` offset 계약을 유지한다. 클라이언트는 페이지 사이의 게시글 ID를 중복 제거한다. 커서 전환은 실제 데이터 증가나 동시 갱신 문제가 확인될 때 별도 작업으로 진행한다.
+`pin_priority=false`이면 각 정렬의 선두 `is_pinned DESC`만 제외하고 나머지 정렬과 ID 보조 정렬은 유지한다. 현재 규모에서는 기존 `page/size` offset 계약을 유지한다. 클라이언트는 페이지 사이의 게시글 ID를 중복 제거한다. 커서 전환은 실제 데이터 증가나 동시 갱신 문제가 확인될 때 별도 작업으로 진행한다.
 
 ## Frontend query behavior
 
@@ -118,7 +119,7 @@ Query identity에는 다음 값을 모두 포함한다.
 - 참여활동 안내·활동 인증: 기존 단일 게시판 무한 목록을 유지한다.
 - 건의사항·상조회: 기존 단일 게시판 무한 목록을 유지한다.
 - 원우회 활동내역: `scope=council_activity` 무한 목록을 사용한다.
-- 홈 최신 공지: `scope=notices&page=1&size=2&sort=latest`만 요청한다.
+- 홈 최신 공지: `scope=notices&page=1&size=2&sort=latest&pin_priority=false`만 요청한다.
 
 ## Pull-to-refresh
 

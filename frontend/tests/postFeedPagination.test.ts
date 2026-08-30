@@ -46,9 +46,13 @@ function page(
 }
 
 test("다음 페이지는 서버 페이지가 진행하고 데이터가 있을 때만 반환한다", () => {
-  assert.equal(nextPostPage(page(1, 3, [post(1)])), 2);
-  assert.equal(nextPostPage(page(1, 3, [])), undefined);
-  assert.equal(nextPostPage(page(3, 3, [post(3)])), undefined);
+  const first = page(1, 3, [post(1)]);
+  const second = page(2, 3, [post(2)]);
+
+  assert.equal(nextPostPage(first, [first], 1, [1]), 2);
+  assert.equal(nextPostPage(second, [first, second], 2, [1, 2]), 3);
+  assert.equal(nextPostPage(page(1, 3, []), [page(1, 3, [])], 1, [1]), undefined);
+  assert.equal(nextPostPage(page(3, 3, [post(3)]), [page(3, 3, [post(3)])], 3, [3]), undefined);
 });
 
 test("잘못된 페이지 메타데이터는 다음 페이지를 만들지 않는다", () => {
@@ -56,7 +60,18 @@ test("잘못된 페이지 메타데이터는 다음 페이지를 만들지 않�
   assert.equal(nextPostPage(page(0, 3, [post(1)])), undefined);
   assert.equal(nextPostPage(page(1.5, 3, [post(1)])), undefined);
   assert.equal(nextPostPage(page(1, 0, [post(1)])), undefined);
+  assert.equal(nextPostPage(page(1, 2.5, [post(1)])), undefined);
   assert.equal(nextPostPage(page(4, 3, [post(1)])), undefined);
+});
+
+test("서버가 요청 페이지를 반복하거나 회귀하면 다음 페이지를 중단한다", () => {
+  const first = page(1, 4, [post(1)]);
+  const repeated = page(1, 4, [post(2)]);
+  const second = page(2, 4, [post(2)]);
+  const regressed = page(2, 4, [post(3)]);
+
+  assert.equal(nextPostPage(repeated, [first, repeated], 2, [1, 2]), undefined);
+  assert.equal(nextPostPage(regressed, [first, second, regressed], 3, [1, 2, 3]), undefined);
 });
 
 test("페이지가 비어 있으면 페이지 메타데이터와 무관하게 다음 페이지를 만들지 않는다", () => {

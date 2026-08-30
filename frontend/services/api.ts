@@ -376,6 +376,7 @@ export const postApi = {
     q?: string;
     notice_category?: "academic" | "event" | "other";
     sort?: "latest" | "popular" | "views";
+    pin_priority?: boolean;
   }) => {
     const response = await api.get<ApiSuccess<PostListItem[]>>("/posts/feed", { params });
     return response.data;

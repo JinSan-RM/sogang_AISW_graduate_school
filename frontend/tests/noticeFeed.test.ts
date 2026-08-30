@@ -3,7 +3,9 @@ import test from "node:test";
 
 import type { Board, PostListItem } from "../types";
 import {
+  createNoticeFeedRetryActions,
   isNoticeContentBoard,
+  noticeFeedFailureState,
   noticePostsForFilter,
   type NoticeFilter,
 } from "../utils/noticeFeed";
@@ -166,6 +168,49 @@ test("공지 다음 페이지는 다음 페이지가 있고 다른 피드 요청
     isFetchingNextPage: false,
     isRefreshingFirstPage: true,
   }), false);
+});
+
+test("공지 오류 상태는 초기 페이지·다음 페이지·pull 새로고침 실패를 구분한다", () => {
+  assert.deepEqual(noticeFeedFailureState({
+    hasData: false,
+    isError: true,
+    isFetchNextPageError: false,
+    refreshFirstPageError: null,
+  }), { initial: true, nextPage: false, refresh: false });
+  assert.deepEqual(noticeFeedFailureState({
+    hasData: true,
+    isError: true,
+    isFetchNextPageError: true,
+    refreshFirstPageError: null,
+  }), { initial: false, nextPage: true, refresh: false });
+  assert.deepEqual(noticeFeedFailureState({
+    hasData: true,
+    isError: false,
+    isFetchNextPageError: false,
+    refreshFirstPageError: new Error("offline"),
+  }), { initial: false, nextPage: false, refresh: true });
+});
+
+test("공지 다음 페이지 재시도는 일반 refetch가 아니라 다음 페이지 로더를 사용한다", async () => {
+  const calls: string[] = [];
+  const actions = createNoticeFeedRetryActions({
+    refetch: async () => {
+      calls.push("initial");
+    },
+    loadNextPage: async () => {
+      calls.push("next");
+    },
+    refreshFirstPage: async () => {
+      calls.push("refresh");
+    },
+  });
+
+  await actions.retryNextPage();
+  assert.deepEqual(calls, ["next"]);
+  await actions.retryRefresh();
+  assert.deepEqual(calls, ["next", "refresh"]);
+  await actions.retryInitial();
+  assert.deepEqual(calls, ["next", "refresh", "initial"]);
 });
 
 test("홈 공지는 모든 활성 공지 카테고리에서 최신 두 개를 선택한다", () => {

@@ -681,11 +681,23 @@ function BoardFeedFooter({
   );
 }
 
+function FeedRefreshErrorBanner({ onRetry }: { onRetry: () => void }) {
+  return (
+    <Pressable onPress={onRetry} style={styles.feedRefreshError}>
+      <Ionicons name="refresh-outline" size={16} color={COLORS.danger} />
+      <Text style={styles.feedRefreshErrorText}>
+        새로고침하지 못했습니다. 탭해서 다시 시도하세요.
+      </Text>
+    </Pressable>
+  );
+}
+
 function CouncilActivityHistoryScreen({
   posts,
   isLoading,
   isError,
   refreshing,
+  refreshError,
   onRefresh,
   onRetry,
   hasNextPage,
@@ -701,6 +713,7 @@ function CouncilActivityHistoryScreen({
   isLoading: boolean;
   isError: boolean;
   refreshing: boolean;
+  refreshError: boolean;
   onRefresh: () => void;
   onRetry: () => void;
   hasNextPage: boolean;
@@ -719,6 +732,7 @@ function CouncilActivityHistoryScreen({
         <Text style={styles.appBarTitle}>원우회 활동내역</Text>
         <View style={styles.iconButton} />
       </View>
+      {refreshError ? <FeedRefreshErrorBanner onRetry={onRefresh} /> : null}
       {isLoading ? (
         <LoadingState />
       ) : (
@@ -729,7 +743,11 @@ function CouncilActivityHistoryScreen({
           onRefresh={onRefresh}
           contentContainerStyle={[styles.councilActivityContent, posts.length === 0 ? styles.emptyContent : null]}
           onEndReached={() => {
-            if (canLoadNextBoardFeedPage({ hasNextPage, isFetchingNextPage })) {
+            if (canLoadNextBoardFeedPage({
+              hasNextPage,
+              isFetchingNextPage,
+              isRefreshingFirstPage: refreshing,
+            })) {
               onLoadMore();
             }
           }}
@@ -992,6 +1010,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const isLoading = feedMode === "pending" || activePostsQuery?.isLoading === true;
   const isError = activePostsQuery?.isError === true;
   const isRefreshingFirstPage = activePostsQuery?.isRefreshingFirstPage === true;
+  const refreshFirstPageError = activePostsQuery?.refreshFirstPageError ?? null;
   const hasNextPage = activePostsQuery?.hasNextPage === true;
   const isFetchingNextPage = activePostsQuery?.isFetchingNextPage === true;
   const isFetchNextPageError = activePostsQuery?.isFetchNextPageError === true;
@@ -1109,6 +1128,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         isLoading={isLoading}
         isError={isError}
         refreshing={isRefreshingFirstPage}
+        refreshError={refreshFirstPageError !== null}
         onRefresh={() => void feedController.refreshFirstPage()}
         onRetry={() => void feedController.retry()}
         hasNextPage={hasNextPage}
@@ -1231,6 +1251,10 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           </View>
           <View style={styles.sortDivider} />
         </>
+      ) : null}
+
+      {refreshFirstPageError ? (
+        <FeedRefreshErrorBanner onRetry={() => void feedController.refreshFirstPage()} />
       ) : null}
 
       {isLoading ? (
@@ -1482,6 +1506,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     textAlign: "center",
+  },
+  feedRefreshError: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FECACA",
+    backgroundColor: COLORS.danger50,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  feedRefreshErrorText: {
+    flex: 1,
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "700",
   },
   albumContent: {
     paddingHorizontal: 16,

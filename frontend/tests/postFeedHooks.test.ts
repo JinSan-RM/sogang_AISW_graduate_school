@@ -34,6 +34,7 @@ type FeedParams = {
   q?: string;
   notice_category?: "academic" | "event" | "other";
   sort?: "latest" | "popular" | "views";
+  pin_priority?: boolean;
 };
 
 type PostHookContract = {
@@ -56,11 +57,17 @@ type PostHookContract = {
   createPostFirstPageRefreshCoordinator: (
     onRefreshingChange: () => void,
   ) => {
+    activate: (queryKey: readonly unknown[]) => void;
     run: (
       queryKey: readonly unknown[],
       task: (isLatest: () => boolean) => Promise<void>,
     ) => Promise<void>;
+    runLoadMore: (
+      queryKey: readonly unknown[],
+      task: () => Promise<unknown>,
+    ) => Promise<unknown> | undefined;
     isRefreshing: (queryKey: readonly unknown[]) => boolean;
+    refreshError: (queryKey: readonly unknown[]) => Error | null;
   };
   postInfiniteItems: (data?: {
     pages: ApiSuccess<PostListItem[]>[];
@@ -349,4 +356,103 @@ test("서로 다른 키의 겹친 새로고침은 각각 커밋하고 표시기�
     assert.deepEqual(queryClient.getQueryData(keyB), firstPostPageData(page(1, 1, [post(20)])));
     assert.equal(currentIndicatorStates.at(-1), false);
   }
+});
+
+test("같은 키의 즉시 중복 다음 페이지 호출은 동기 래치로 한 번만 실행한다", async () => {
+  const { hooks } = await modules();
+  const queryKey = ["posts", 7, { sort: "latest" }] as const;
+  const completion = deferred<void>();
+  let calls = 0;
+  const coordinator = hooks.createPostFirstPageRefreshCoordinator(() => undefined);
+
+  const first = coordinator.runLoadMore(queryKey, async () => {
+    calls += 1;
+    await completion.promise;
+  });
+  const duplicate = coordinator.runLoadMore(queryKey, async () => {
+    calls += 1;
+  });
+
+  assert.ok(first);
+  assert.equal(duplicate, undefined);
+  assert.equal(calls, 1);
+
+  completion.resolve();
+  await first;
+  await coordinator.runLoadMore(queryKey, async () => {
+    calls += 1;
+  });
+  assert.equal(calls, 2);
+});
+
+test("진행 중인 다음 페이지가 끝난 뒤 새 첫 페이지를 커밋하고 새로고침 중 추가 로딩을 차단한다", async () => {
+  const { hooks } = await modules();
+  const queryClient = new QueryClient();
+  const queryKey = ["posts", "feed", "resources", { sort: "latest" }] as const;
+  const initial = firstPostPageData(page(1, 3, [post(1)]));
+  queryClient.setQueryData(queryKey, initial);
+  const loadMoreCompletion = deferred<void>();
+  const refreshCompletion = deferred<ApiSuccess<PostListItem[]>>();
+  const events: string[] = [];
+  const coordinator = hooks.createPostFirstPageRefreshCoordinator(() => undefined);
+
+  const loadMore = coordinator.runLoadMore(queryKey, async () => {
+    events.push("next:start");
+    await loadMoreCompletion.promise;
+    events.push("next:commit");
+    queryClient.setQueryData(queryKey, {
+      pages: [page(1, 3, [post(1)]), page(2, 3, [post(2)])],
+      pageParams: [1, 2],
+    });
+  });
+  const refresh = coordinator.run(queryKey, (isLatest) => {
+    events.push("refresh:start");
+    return hooks.refreshPostQueryFirstPage(
+      queryClient,
+      queryKey,
+      () => refreshCompletion.promise,
+      isLatest,
+    );
+  });
+  const deniedDuringRefresh = coordinator.runLoadMore(queryKey, async () => {
+    events.push("next:unexpected");
+  });
+
+  assert.ok(loadMore);
+  assert.equal(deniedDuringRefresh, undefined);
+  assert.deepEqual(events, ["next:start"]);
+
+  loadMoreCompletion.resolve();
+  await loadMore;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(events, ["next:start", "next:commit", "refresh:start"]);
+
+  const fresh = page(1, 3, [post(10)]);
+  refreshCompletion.resolve(fresh);
+  await refresh;
+  assert.deepEqual(queryClient.getQueryData(queryKey), firstPostPageData(fresh));
+});
+
+test("첫 페이지 새로고침 오류는 소비되어 키별로 노출되고 재시도·키 변경에서 해제된다", async () => {
+  const { hooks } = await modules();
+  const keyA = ["posts", "feed", "notices", { notice_category: "academic" }] as const;
+  const keyB = ["posts", "feed", "notices", { notice_category: "event" }] as const;
+  const coordinator = hooks.createPostFirstPageRefreshCoordinator(() => undefined);
+
+  coordinator.activate(keyA);
+  await coordinator.run(keyA, async () => {
+    throw new Error("refresh offline");
+  });
+  assert.equal(coordinator.refreshError(keyA)?.message, "refresh offline");
+
+  await coordinator.run(keyA, async () => undefined);
+  assert.equal(coordinator.refreshError(keyA), null);
+
+  await coordinator.run(keyA, async () => {
+    throw new Error("stale key error");
+  });
+  coordinator.activate(keyB);
+  assert.equal(coordinator.refreshError(keyB), null);
+  coordinator.activate(keyA);
+  assert.equal(coordinator.refreshError(keyA), null);
 });

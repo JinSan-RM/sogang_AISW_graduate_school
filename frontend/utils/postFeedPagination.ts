@@ -4,7 +4,12 @@ import type { ApiSuccess, PostListItem } from "../types";
 
 export type PostPage = ApiSuccess<PostListItem[]>;
 
-export function nextPostPage(lastPage: PostPage): number | undefined {
+export function nextPostPage(
+  lastPage: PostPage,
+  allPages: PostPage[] = [lastPage],
+  lastPageParam: number = lastPage.pagination?.page ?? Number.NaN,
+  allPageParams: number[] = [lastPageParam],
+): number | undefined {
   if (!Array.isArray(lastPage.data) || lastPage.data.length === 0) {
     return undefined;
   }
@@ -14,14 +19,27 @@ export function nextPostPage(lastPage: PostPage): number | undefined {
     !pagination ||
     !Number.isInteger(pagination.page) ||
     pagination.page < 1 ||
+    !Number.isInteger(lastPageParam) ||
+    lastPageParam < 1 ||
+    pagination.page !== lastPageParam ||
     !Number.isInteger(pagination.total_pages) ||
     pagination.total_pages < 1 ||
-    pagination.page >= pagination.total_pages
+    pagination.page >= pagination.total_pages ||
+    allPages.length !== allPageParams.length ||
+    allPageParams.at(-1) !== lastPageParam
   ) {
     return undefined;
   }
 
-  return pagination.page + 1;
+  const priorServerPages = allPages
+    .slice(0, -1)
+    .map((page) => page.pagination?.page)
+    .filter((page): page is number => Number.isInteger(page));
+  if (priorServerPages.some((page) => page >= pagination.page)) {
+    return undefined;
+  }
+
+  return lastPageParam + 1;
 }
 
 export function uniquePostItems(pages: readonly PostPage[]): PostListItem[] {

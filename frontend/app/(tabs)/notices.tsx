@@ -21,8 +21,10 @@ import {
 import {
   canLoadNextNoticePage,
   categoryFromNoticePost,
+  createNoticeFeedRetryActions,
   isNoticeContentBoard,
   NOTICE_FILTERS,
+  noticeFeedFailureState,
   noticeFeedQueryFilters,
   type NoticeFilter,
 } from "../../utils/noticeFeed";
@@ -109,6 +111,13 @@ function NoticesContent() {
   const boardById = useMemo(() => new Map(noticeBoards.map((board) => [board.id, board])), [noticeBoards]);
   const noticeFilters = useMemo(() => noticeFeedQueryFilters(selectedFilter), [selectedFilter]);
   const postsQuery = useAggregatePosts("notices", noticeFilters);
+  const feedFailures = noticeFeedFailureState({
+    hasData: postsQuery.data !== undefined,
+    isError: postsQuery.isError,
+    isFetchNextPageError: postsQuery.isFetchNextPageError,
+    refreshFirstPageError: postsQuery.refreshFirstPageError,
+  });
+  const retryActions = createNoticeFeedRetryActions(postsQuery);
 
   const realRows = useMemo<NoticeRowModel[]>(() => {
     return postsQuery.items.map((post) => ({
@@ -121,7 +130,7 @@ function NoticesContent() {
     }));
   }, [boardById, postsQuery.items]);
 
-  const isOfflinePreview = boardsError || postsQuery.isError || (!boardsLoading && noticeBoards.length === 0);
+  const isOfflinePreview = boardsError || feedFailures.initial || (!boardsLoading && noticeBoards.length === 0);
   const isLoading = boardsLoading || postsQuery.isLoading;
   const visibleRows = realRows;
 
@@ -155,8 +164,10 @@ function NoticesContent() {
               onPress={() => {
                 void selectNoticeFilterAndRefresh(
                   item.key,
+                  selectedFilter,
                   setSelectedFilter,
                   refetchBoards,
+                  postsQuery.refreshFirstPage,
                 );
               }}
               style={[styles.filterChip, active ? styles.filterChipActive : null]}
@@ -171,7 +182,7 @@ function NoticesContent() {
         <Pressable
           onPress={() => {
             void refetchBoards();
-            void postsQuery.refetch();
+            void retryActions.retryInitial();
           }}
           style={styles.connectionStrip}
         >
@@ -179,6 +190,13 @@ function NoticesContent() {
           <Text numberOfLines={1} style={styles.connectionText}>
             데이터 서버 연결 필요 · 탭하면 다시 시도
           </Text>
+        </Pressable>
+      ) : null}
+
+      {feedFailures.refresh ? (
+        <Pressable onPress={() => void retryActions.retryRefresh()} style={styles.refreshErrorStrip}>
+          <Ionicons name="refresh-outline" size={16} color={COLORS.danger} />
+          <Text style={styles.refreshErrorText}>새로고침하지 못했습니다. 탭해서 다시 시도하세요.</Text>
         </Pressable>
       ) : null}
 
@@ -205,12 +223,20 @@ function NoticesContent() {
         }}
         onEndReached={() => {
           if (canLoadNextNoticePage(postsQuery)) {
-            void postsQuery.fetchNextPage();
+            void retryActions.retryNextPage();
           }
         }}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
-          postsQuery.isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} /> : null
+          postsQuery.isFetchingNextPage ? (
+            <View style={styles.feedFooter}>
+              <ActivityIndicator color={COLORS.primary} />
+            </View>
+          ) : feedFailures.nextPage ? (
+            <Pressable onPress={() => void retryActions.retryNextPage()} style={styles.feedFooter}>
+              <Text style={styles.feedFooterRetry}>다음 공지를 불러오지 못했습니다. 탭해서 다시 시도하세요.</Text>
+            </Pressable>
+          ) : null
         }
         ListEmptyComponent={
           isLoading ? (
@@ -298,6 +324,35 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
     fontSize: 12,
     fontWeight: "800",
+  },
+  refreshErrorStrip: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FECACA",
+    backgroundColor: COLORS.danger50,
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+  },
+  refreshErrorText: {
+    flex: 1,
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  feedFooter: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  feedFooterRetry: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
   },
   listContent: {
     paddingHorizontal: 16,

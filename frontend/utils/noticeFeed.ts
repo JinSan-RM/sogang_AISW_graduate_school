@@ -31,6 +31,38 @@ export function canLoadNextNoticePage({
   return hasNextPage === true && !isFetchingNextPage && !isRefreshingFirstPage;
 }
 
+export function noticeFeedFailureState({
+  hasData,
+  isError,
+  isFetchNextPageError,
+  refreshFirstPageError,
+}: {
+  hasData: boolean;
+  isError: boolean;
+  isFetchNextPageError: boolean;
+  refreshFirstPageError: Error | null;
+}) {
+  return {
+    initial: isError && !hasData && !isFetchNextPageError,
+    nextPage: isFetchNextPageError,
+    refresh: refreshFirstPageError !== null,
+  };
+}
+
+type NoticeFeedRetryControls = {
+  refetch: () => unknown;
+  loadNextPage: () => unknown;
+  refreshFirstPage: () => unknown;
+};
+
+export function createNoticeFeedRetryActions(controls: NoticeFeedRetryControls) {
+  return {
+    retryInitial: () => controls.refetch(),
+    retryNextPage: () => controls.loadNextPage(),
+    retryRefresh: () => controls.refreshFirstPage(),
+  };
+}
+
 export function isNoticeContentBoard(board: Board) {
   return board.is_active !== false && board.board_type === "notice";
 }
@@ -115,8 +147,15 @@ export type HomeNoticePreviewLoader = (params: {
   page: 1;
   size: 2;
   sort: "latest";
+  pin_priority: false;
 }) => Promise<ApiSuccess<PostListItem[]>>;
 
 export function loadHomeNoticePreview(loadFeed: HomeNoticePreviewLoader) {
-  return loadFeed({ scope: "notices", page: 1, size: 2, sort: "latest" });
+  return loadFeed({
+    scope: "notices",
+    page: 1,
+    size: 2,
+    sort: "latest",
+    pin_priority: false,
+  });
 }

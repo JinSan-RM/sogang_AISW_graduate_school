@@ -62,30 +62,46 @@ test("공지 초기 로딩 중에는 pull indicator를 LoadingRows와 함께 표
   }), true);
 });
 
-test("공지 필터 선택은 선택값과 쿼리 키를 바꾸고 이전 공지 쿼리는 재조회하지 않는다", async () => {
-  for (const filter of ["all", "academic", "event", "other"] satisfies NoticeFilter[]) {
-    let selected: NoticeFilter = "all";
-    const calls: string[] = [];
+test("현재 공지 필터 재선택은 게시판과 현재 첫 페이지를 함께 새로고침한다", async () => {
+  let selected: NoticeFilter = "academic";
+  const calls: string[] = [];
 
-    await (selectNoticeFilterAndRefresh as (
-      filter: NoticeFilter,
-      selectFilter: (filter: NoticeFilter) => void,
-      refetchBoards: () => Promise<unknown>,
-      oldPostRefetch: () => Promise<unknown>,
-    ) => Promise<void>)(
-      filter,
-      (nextFilter) => {
-        selected = nextFilter;
-      },
-      async () => {
-        calls.push("boards");
-      },
-      async () => {
-        calls.push("posts");
-      },
-    );
+  await selectNoticeFilterAndRefresh(
+    "academic",
+    selected,
+    (nextFilter) => {
+      selected = nextFilter;
+    },
+    async () => {
+      calls.push("boards");
+    },
+    async () => {
+      calls.push("current-feed");
+    },
+  );
 
-    assert.equal(selected, filter);
-    assert.deepEqual(calls, ["boards"]);
-  }
+  assert.equal(selected, "academic");
+  assert.deepEqual(calls, ["boards", "current-feed"]);
+});
+
+test("다른 공지 필터 선택은 새 키로 전환하고 이전 피드는 새로고침하지 않는다", async () => {
+  let selected: NoticeFilter = "academic";
+  const calls: string[] = [];
+
+  await selectNoticeFilterAndRefresh(
+    "event",
+    selected,
+    (nextFilter) => {
+      selected = nextFilter;
+    },
+    async () => {
+      calls.push("boards");
+    },
+    async () => {
+      calls.push("old-feed");
+    },
+  );
+
+  assert.equal(selected, "event");
+  assert.deepEqual(calls, ["boards"]);
 });

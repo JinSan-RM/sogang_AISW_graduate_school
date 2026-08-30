@@ -155,6 +155,180 @@ def test_notice_feed_filters_academic_event_and_other(api) -> None:
         assert expected["calendar"] not in {item["id"] for item in response.json()["data"]}
 
 
+def test_notice_other_filter_uses_explicit_category_before_board_fallback(api) -> None:
+    with api.session() as db:
+        all_notices = _board(
+            name="Other Classifier All Notices",
+            slug="all-notices",
+            category="notices",
+            board_type="notice",
+        )
+        academic_notices = _board(
+            name="Other Classifier Academic Notices",
+            slug="academic-notices",
+            category="notices",
+            board_type="notice",
+        )
+        db.add_all([all_notices, academic_notices])
+        db.flush()
+        cases = {
+            "all_alias": Post(
+                board_id=academic_notices.id,
+                author_id=3,
+                title="Explicit all alias",
+                content="Other classifier",
+                category="all",
+            ),
+            "general_alias": Post(
+                board_id=academic_notices.id,
+                author_id=3,
+                title="Explicit general alias",
+                content="Other classifier",
+                category="GENERAL",
+            ),
+            "other_alias": Post(
+                board_id=academic_notices.id,
+                author_id=3,
+                title="Explicit other alias",
+                content="Other classifier",
+                category="other-notice",
+            ),
+            "korean_all": Post(
+                board_id=academic_notices.id,
+                author_id=3,
+                title="Korean all alias",
+                content="Other classifier",
+                category="전체 안내",
+            ),
+            "korean_other": Post(
+                board_id=academic_notices.id,
+                author_id=3,
+                title="Korean other alias",
+                content="Other classifier",
+                category="기타 공지",
+            ),
+            "blank_fallback": Post(
+                board_id=all_notices.id,
+                author_id=3,
+                title="Blank category fallback",
+                content="Other classifier",
+                category="   ",
+            ),
+            "null_fallback": Post(
+                board_id=all_notices.id,
+                author_id=3,
+                title="Null category fallback",
+                content="Other classifier",
+                category=None,
+            ),
+            "conflicting_explicit": Post(
+                board_id=all_notices.id,
+                author_id=3,
+                title="Explicit academic conflict",
+                content="Other classifier",
+                category="academic",
+            ),
+            "blank_non_other_board": Post(
+                board_id=academic_notices.id,
+                author_id=3,
+                title="Blank academic fallback",
+                content="Other classifier",
+                category="",
+            ),
+        }
+        db.add_all(cases.values())
+        db.flush()
+        expected_ids = {
+            post.id
+            for name, post in cases.items()
+            if name not in {"conflicting_explicit", "blank_non_other_board"}
+        }
+        excluded_ids = {
+            cases["conflicting_explicit"].id,
+            cases["blank_non_other_board"].id,
+        }
+        db.commit()
+
+    response = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "notices", "notice_category": "other", "size": 100},
+        headers=api.headers["owner"],
+    )
+
+    assert response.status_code == 200
+    returned_ids = {item["id"] for item in response.json()["data"]}
+    assert expected_ids <= returned_ids
+    assert returned_ids.isdisjoint(excluded_ids)
+
+
+def test_notice_feed_can_disable_pin_priority_for_home_preview(api) -> None:
+    with api.session() as db:
+        notice = _board(
+            name="Home Notice Ordering Feed",
+            slug="home-notice-ordering-feed",
+            category="notices",
+            board_type="notice",
+        )
+        db.add(notice)
+        db.flush()
+        old_pinned = Post(
+            board_id=notice.id,
+            author_id=3,
+            title="Old pinned notice",
+            content="Home ordering",
+            is_pinned=True,
+            created_at=datetime(2026, 8, 1, 9, 0),
+        )
+        newer = Post(
+            board_id=notice.id,
+            author_id=3,
+            title="New notice",
+            content="Home ordering",
+            created_at=datetime(2026, 8, 3, 9, 0),
+        )
+        newest = Post(
+            board_id=notice.id,
+            author_id=3,
+            title="Newest notice",
+            content="Home ordering",
+            created_at=datetime(2026, 8, 4, 9, 0),
+        )
+        db.add_all([old_pinned, newer, newest])
+        db.flush()
+        expected_home = [newest.id, newer.id]
+        pinned_id = old_pinned.id
+        db.commit()
+
+    home = api.client.get(
+        "/api/posts/feed",
+        params={
+            "scope": "notices",
+            "page": 1,
+            "size": 2,
+            "sort": "latest",
+            "pin_priority": False,
+            "q": "Home ordering",
+        },
+        headers=api.headers["owner"],
+    )
+    regular = api.client.get(
+        "/api/posts/feed",
+        params={
+            "scope": "notices",
+            "page": 1,
+            "size": 100,
+            "sort": "latest",
+            "q": "Home ordering",
+        },
+        headers=api.headers["owner"],
+    )
+
+    assert home.status_code == 200
+    assert [item["id"] for item in home.json()["data"]] == expected_home
+    assert regular.status_code == 200
+    assert [item["id"] for item in regular.json()["data"]].index(pinned_id) == 0
+
+
 def test_council_activity_feed_includes_linked_notices_and_legacy_activity_posts(api) -> None:
     with api.session() as db:
         notice = _board(

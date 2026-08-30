@@ -12,6 +12,7 @@ type HomeNoticePreviewLoader = (params: {
   page: 1;
   size: 2;
   sort: "latest";
+  pin_priority: false;
 }) => Promise<ApiSuccess<PostListItem[]>>;
 
 async function loadHomeNoticePreview(loadFeed: HomeNoticePreviewLoader) {
@@ -31,7 +32,13 @@ test("홈 공지 미리보기는 최신 두 개를 한 번의 집계 요청으�
     return response;
   });
 
-  assert.deepEqual(calls, [{ scope: "notices", page: 1, size: 2, sort: "latest" }]);
+  assert.deepEqual(calls, [{
+    scope: "notices",
+    page: 1,
+    size: 2,
+    sort: "latest",
+    pin_priority: false,
+  }]);
   assert.strictEqual(result, response);
 });
 

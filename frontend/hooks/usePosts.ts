@@ -39,6 +39,7 @@ export type AggregatePostFilters = {
   q?: string;
   notice_category?: "academic" | "event" | "other";
   sort?: "latest" | "popular" | "views";
+  pin_priority?: boolean;
 };
 
 type PostInfiniteData = InfiniteData<PostPage, number>;
@@ -54,6 +55,8 @@ export type InfinitePostQuery = UseInfiniteQueryResult<PostInfiniteData, Error> 
   items: PostListItem[];
   refreshFirstPage: () => Promise<void>;
   isRefreshingFirstPage: boolean;
+  refreshFirstPageError: Error | null;
+  loadNextPage: () => Promise<unknown> | undefined;
 };
 
 export function boardPostInfiniteQueryOptions(
@@ -102,11 +105,82 @@ export function refreshPostQueryFirstPage(
 export function createPostFirstPageRefreshCoordinator(
   onRefreshingChange: () => void,
 ) {
-  const states = new Map<string, { activeCount: number; latestRequestId: number }>();
+  type FeedRequestState = {
+    activeRefreshCount: number;
+    latestRefreshRequestId: number;
+    loadMoreActive: boolean;
+    loadMorePromise?: Promise<unknown>;
+    refreshError: Error | null;
+  };
+  const states = new Map<string, FeedRequestState>();
+  let activeQueryHash: string | null = null;
+
+  const stateFor = (queryHash: string) => {
+    const state = states.get(queryHash) ?? {
+      activeRefreshCount: 0,
+      latestRefreshRequestId: 0,
+      loadMoreActive: false,
+      refreshError: null,
+    };
+    states.set(queryHash, state);
+    return state;
+  };
+
+  const removeIdleState = (queryHash: string, state: FeedRequestState) => {
+    if (
+      state.activeRefreshCount === 0
+      && !state.loadMoreActive
+      && state.refreshError === null
+    ) {
+      states.delete(queryHash);
+    }
+  };
 
   return {
+    activate(queryKey: QueryKey): void {
+      const nextQueryHash = hashKey(queryKey);
+      if (activeQueryHash === nextQueryHash) return;
+      activeQueryHash = nextQueryHash;
+      for (const [queryHash, state] of states) {
+        state.refreshError = null;
+        removeIdleState(queryHash, state);
+      }
+    },
+
     isRefreshing(queryKey: QueryKey): boolean {
-      return (states.get(hashKey(queryKey))?.activeCount ?? 0) > 0;
+      return (states.get(hashKey(queryKey))?.activeRefreshCount ?? 0) > 0;
+    },
+
+    refreshError(queryKey: QueryKey): Error | null {
+      return states.get(hashKey(queryKey))?.refreshError ?? null;
+    },
+
+    runLoadMore(
+      queryKey: QueryKey,
+      task: () => Promise<unknown>,
+    ): Promise<unknown> | undefined {
+      const queryHash = hashKey(queryKey);
+      const state = stateFor(queryHash);
+      if (state.activeRefreshCount > 0 || state.loadMoreActive) {
+        return undefined;
+      }
+
+      state.loadMoreActive = true;
+      let taskPromise: Promise<unknown>;
+      try {
+        taskPromise = Promise.resolve(task());
+      } catch (error) {
+        taskPromise = Promise.reject(error);
+      }
+      const trackedPromise = taskPromise
+        .catch(() => undefined)
+        .finally(() => {
+          state.loadMoreActive = false;
+          state.loadMorePromise = undefined;
+          removeIdleState(queryHash, state);
+        });
+      state.loadMorePromise = trackedPromise;
+      return trackedPromise;
     },
 
     async run(
@@ -114,20 +188,25 @@ export function createPostFirstPageRefreshCoordinator(
       task: (isLatest: () => boolean) => Promise<void>,
     ): Promise<void> {
       const queryHash = hashKey(queryKey);
-      const state = states.get(queryHash) ?? { activeCount: 0, latestRequestId: 0 };
-      states.set(queryHash, state);
-      const requestId = ++state.latestRequestId;
-      state.activeCount += 1;
-      if (state.activeCount === 1) {
+      const state = stateFor(queryHash);
+      const requestId = ++state.latestRefreshRequestId;
+      state.refreshError = null;
+      state.activeRefreshCount += 1;
+      if (state.activeRefreshCount === 1) {
         onRefreshingChange();
       }
 
       try {
-        await task(() => requestId === state.latestRequestId);
+        await state.loadMorePromise;
+        await task(() => requestId === state.latestRefreshRequestId);
+      } catch (error) {
+        if (requestId === state.latestRefreshRequestId) {
+          state.refreshError = error instanceof Error ? error : new Error("Failed to refresh feed.");
+        }
       } finally {
-        state.activeCount -= 1;
-        if (state.activeCount === 0) {
-          states.delete(queryHash);
+        state.activeRefreshCount -= 1;
+        if (state.activeRefreshCount === 0) {
+          removeIdleState(queryHash, state);
           onRefreshingChange();
         }
       }
@@ -153,12 +232,18 @@ function usePostInfiniteQuery(
     });
   }
   const refreshCoordinator = refreshCoordinatorRef.current;
+  refreshCoordinator.activate(options.queryKey);
   const isRefreshingFirstPage = refreshCoordinator.isRefreshing(options.queryKey);
+  const refreshFirstPageError = refreshCoordinator.refreshError(options.queryKey);
   const items = useMemo(() => postInfiniteItems(query.data), [query.data]);
   const refreshFirstPage = useCallback(
     () => refreshCoordinator.run(options.queryKey, (isLatest) =>
       refreshPostQueryFirstPage(queryClient, options.queryKey, loadFirstPage, isLatest)),
     [loadFirstPage, options.queryKey, queryClient, refreshCoordinator],
+  );
+  const loadNextPage = useCallback(
+    () => refreshCoordinator.runLoadMore(options.queryKey, () => query.fetchNextPage()),
+    [options.queryKey, query, refreshCoordinator],
   );
 
   return {
@@ -166,6 +251,8 @@ function usePostInfiniteQuery(
     items,
     refreshFirstPage,
     isRefreshingFirstPage,
+    refreshFirstPageError,
+    loadNextPage,
   };
 }
 

@@ -537,7 +537,7 @@ git commit -m "feat(frontend): paginate aggregate board feeds"
 - Modify: `frontend/tests/noticeFeed.test.ts`
 
 **Interfaces:**
-- Consumes: `postApi.getFeed({scope:"notices", page:1, size:2, sort:"latest"})`.
+- Consumes: `postApi.getFeed({scope:"notices", page:1, size:2, sort:"latest", pin_priority:false})`.
 - Produces: exactly one two-row request for the Home notice preview.
 
 - [ ] **Step 1: Change the Home test to require a bounded aggregate request**
@@ -562,7 +562,13 @@ Use a normal bounded query:
 ```ts
 const noticesQuery = useQuery({
   queryKey: ["home", "notices"],
-  queryFn: () => postApi.getFeed({ scope: "notices", page: 1, size: 2, sort: "latest" }),
+  queryFn: () => postApi.getFeed({
+    scope: "notices",
+    page: 1,
+    size: 2,
+    sort: "latest",
+    pin_priority: false,
+  }),
 });
 ```
 

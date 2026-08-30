@@ -812,10 +812,11 @@ Query:
 - `q`: optional non-empty search keyword
 - `notice_category`: optional; `academic`, `event`, or `other`, valid only when `scope=notices`
 - `sort`: `latest` (default), `popular`, or `views`
+- `pin_priority`: boolean, default `true`; set `false` only when a caller needs pure sort-field order such as the Home two-row preview
 
 Scope rules:
 
-- `notices` combines active boards whose `board_type` is `notice`. Calendar boards are excluded. `notice_category` uses the same academic, event/webinar, and other mapping as notice search.
+- `notices` combines active boards whose `board_type` is `notice`. Calendar boards are excluded. `notice_category` uses the client-visible academic, event/webinar, and other classifier. An explicit post category takes precedence over the board slug; blank or null categories fall back to the board slug. The `other` classifier recognizes `all`, `general`, `other`, and values containing `전체` or `기타`.
 - `resources` combines active boards whose category is `resources`.
 - `council_activity` combines legacy `council-activity` and `gsa-activity` board posts with notice posts whose `metadata.show_in_council_activity` value is `true`.
 
@@ -826,6 +827,8 @@ Ordering is deterministic across all selected boards:
 - `latest`: `is_pinned DESC, created_at DESC, id DESC`
 - `popular`: `is_pinned DESC, like_count DESC, comment_count DESC, created_at DESC, id DESC`
 - `views`: `is_pinned DESC, view_count DESC, created_at DESC, id DESC`
+
+When `pin_priority=false`, only the leading `is_pinned DESC` term is omitted; the remaining sort and ID tie-break rules are unchanged. The Home notice preview requests `scope=notices&page=1&size=2&sort=latest&pin_priority=false`. Notice and board list feeds retain the default pinned-first order.
 
 Supplying `notice_category` for a non-notice scope returns normalized `422 VALIDATION_ERROR`.
 
