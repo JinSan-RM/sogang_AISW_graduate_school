@@ -39,7 +39,7 @@ import {
   boardFeedMode,
   boardFeedQueryEnabled,
   canLoadNextBoardFeedPage,
-  selectActiveBoardFeed,
+  createBoardFeedController,
 } from "../../../utils/aggregateBoardFeeds";
 import {
   RESOURCE_FILTERS,
@@ -932,6 +932,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const [selectedFilter, setSelectedFilter] = useState("전체");
   const [resourceSort, setResourceSort] = useState<"latest" | "popular">("latest");
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [filterOwnerBoardId, setFilterOwnerBoardId] = useState<number | null>(null);
   const requestedBoardFilterRef = useRef<ResourceFilter | undefined>(undefined);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const user = useUserStore((state) => state.user);
@@ -957,13 +958,18 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit");
   const isResourceBoard = board?.board_type === "resource";
   const feedMode = boardFeedMode({
-    boardType: board?.board_type,
-    boardSlug: board?.slug,
+    activeBoardId: boardId,
+    resolvedBoard: board ? {
+      id: board.id,
+      boardType: board.board_type,
+      boardSlug: board.slug,
+    } : null,
+    filterOwnerBoardId,
     selectedFilter,
   });
-  const isResourceAll = feedMode === "resources";
-  const isCouncilActivityHistory = feedMode === "council_activity";
   const queryEnabled = boardFeedQueryEnabled(feedMode);
+  const isResourceAll = queryEnabled.resources;
+  const isCouncilActivityHistory = queryEnabled.councilActivity;
   const boardPostsQuery = useBoardPosts(boardId, {
     q: query || undefined,
     category: categoryForFilter(selectedFilter, board),
@@ -976,22 +982,20 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const councilActivityQuery = useAggregatePosts("council_activity", {
     sort: "latest",
   }, isCouncilActivityHistory);
-  const activePostsQuery = selectActiveBoardFeed(feedMode, {
+  const feedController = createBoardFeedController(feedMode, {
     board: boardPostsQuery,
     resources: resourceAllQuery,
     councilActivity: councilActivityQuery,
   });
-  const posts = activePostsQuery.items;
-  const isLoading = activePostsQuery.isLoading;
-  const isError = activePostsQuery.isError;
-  const refetch = activePostsQuery.refetch;
-  const refreshFirstPage = activePostsQuery.refreshFirstPage;
-  const isRefreshingFirstPage = activePostsQuery.isRefreshingFirstPage;
-  const fetchNextPage = activePostsQuery.fetchNextPage;
-  const hasNextPage = activePostsQuery.hasNextPage;
-  const isFetchingNextPage = activePostsQuery.isFetchingNextPage;
-  const isFetchNextPageError = activePostsQuery.isFetchNextPageError;
-  const feedFooterState = boardFeedFooterState(activePostsQuery);
+  const activePostsQuery = feedController.query;
+  const posts = activePostsQuery?.items ?? [];
+  const isLoading = feedMode === "pending" || activePostsQuery?.isLoading === true;
+  const isError = activePostsQuery?.isError === true;
+  const isRefreshingFirstPage = activePostsQuery?.isRefreshingFirstPage === true;
+  const hasNextPage = activePostsQuery?.hasNextPage === true;
+  const isFetchingNextPage = activePostsQuery?.isFetchingNextPage === true;
+  const isFetchNextPageError = activePostsQuery?.isFetchNextPageError === true;
+  const feedFooterState = activePostsQuery ? boardFeedFooterState(activePostsQuery) : "idle";
 
   useEffect(() => {
     if (initialBoardId) {
@@ -1004,6 +1008,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
     const requestedFilter = requestedBoardFilterRef.current;
     requestedBoardFilterRef.current = undefined;
     setSelectedFilter(defaultFilterForBoard(board, requestedFilter));
+    setFilterOwnerBoardId(board.id);
   }, [board]);
 
   const navigateToBoard = (target?: Board, requestedFilter?: ResourceFilter) => {
@@ -1085,8 +1090,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         isLoading={isLoading}
         isError={isError}
         refreshing={isRefreshingFirstPage}
-        onRefresh={() => void refreshFirstPage()}
-        onRetry={() => void refetch()}
+        onRefresh={() => void feedController.refreshFirstPage()}
+        onRetry={() => void feedController.retry()}
         topInset={insets.top}
         onBack={exitBoardDepth}
       />
@@ -1104,12 +1109,12 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         isLoading={isLoading}
         isError={isError}
         refreshing={isRefreshingFirstPage}
-        onRefresh={() => void refreshFirstPage()}
-        onRetry={() => void refetch()}
+        onRefresh={() => void feedController.refreshFirstPage()}
+        onRetry={() => void feedController.retry()}
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         isFetchNextPageError={isFetchNextPageError}
-        onLoadMore={() => void fetchNextPage()}
+        onLoadMore={() => void feedController.loadMore()}
         originBoardId={boardId}
         detailReturnRoute={detailReturnRoute}
         topInset={insets.top}
@@ -1237,7 +1242,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           data={posts}
           keyExtractor={(item) => String(item.id)}
           refreshing={isRefreshingFirstPage}
-          onRefresh={() => void refreshFirstPage()}
+          onRefresh={() => void feedController.refreshFirstPage()}
           contentContainerStyle={[
             isAlbum ? styles.albumContent : isParticipationGuideCards ? styles.guideContent : isActivityCards ? styles.cardContent : styles.listContent,
             posts.length === 0 ? styles.emptyContent : null,
@@ -1245,7 +1250,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           columnWrapperStyle={isAlbum ? styles.albumRow : undefined}
           ListEmptyComponent={
             isError ? (
-              <Pressable onPress={() => void refetch()} style={styles.errorBox}>
+              <Pressable onPress={() => void feedController.retry()} style={styles.errorBox}>
                 <Text style={styles.errorTitle}>게시글을 불러오지 못했습니다.</Text>
                 <Text style={styles.errorText}>탭해서 다시 시도하세요.</Text>
               </Pressable>
@@ -1274,12 +1279,10 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
             );
           }}
           onEndReached={() => {
-            if (canLoadNextBoardFeedPage(activePostsQuery)) {
-              void fetchNextPage();
-            }
+            void feedController.loadMore();
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={<BoardFeedFooter state={feedFooterState} onRetry={() => void fetchNextPage()} />}
+          ListFooterComponent={<BoardFeedFooter state={feedFooterState} onRetry={() => void feedController.loadMore()} />}
         />
       )}
 

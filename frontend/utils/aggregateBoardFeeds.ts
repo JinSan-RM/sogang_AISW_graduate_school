@@ -1,20 +1,33 @@
-export type BoardFeedMode = "board" | "resources" | "council_activity";
+export type BoardFeedMode = "pending" | "board" | "resources" | "council_activity";
 
 type BoardFeedModeInput = {
-  boardType?: string | null;
-  boardSlug?: string | null;
+  activeBoardId: number;
+  resolvedBoard?: {
+    id: number;
+    boardType?: string | null;
+    boardSlug?: string | null;
+  } | null;
+  filterOwnerBoardId?: number | null;
   selectedFilter: string;
 };
 
 export function boardFeedMode({
-  boardType,
-  boardSlug,
+  activeBoardId,
+  resolvedBoard,
+  filterOwnerBoardId,
   selectedFilter,
 }: BoardFeedModeInput): BoardFeedMode {
-  if (boardSlug === "council-activity" || boardSlug === "gsa-activity") {
+  if (
+    !resolvedBoard
+    || resolvedBoard.id !== activeBoardId
+    || filterOwnerBoardId !== activeBoardId
+  ) {
+    return "pending";
+  }
+  if (resolvedBoard.boardSlug === "council-activity" || resolvedBoard.boardSlug === "gsa-activity") {
     return "council_activity";
   }
-  if (boardType === "resource" && selectedFilter === "전체") {
+  if (resolvedBoard.boardType === "resource" && selectedFilter === "전체") {
     return "resources";
   }
   return "board";
@@ -34,7 +47,8 @@ type BoardFeeds<T> = {
   councilActivity: T;
 };
 
-export function selectActiveBoardFeed<T>(mode: BoardFeedMode, feeds: BoardFeeds<T>): T {
+export function selectActiveBoardFeed<T>(mode: BoardFeedMode, feeds: BoardFeeds<T>): T | null {
+  if (mode === "pending") return null;
   if (mode === "resources") return feeds.resources;
   if (mode === "council_activity") return feeds.councilActivity;
   return feeds.board;
@@ -45,6 +59,33 @@ export function canLoadNextBoardFeedPage(query: {
   isFetchingNextPage: boolean;
 }): boolean {
   return query.hasNextPage && !query.isFetchingNextPage;
+}
+
+type BoardFeedControl = {
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  refreshFirstPage: () => unknown;
+  fetchNextPage: () => unknown;
+  refetch: () => unknown;
+};
+
+export function createBoardFeedController<T extends BoardFeedControl>(
+  mode: BoardFeedMode,
+  feeds: BoardFeeds<T>,
+) {
+  const query = selectActiveBoardFeed(mode, feeds);
+
+  return {
+    query,
+    refreshFirstPage: () => query?.refreshFirstPage(),
+    loadMore: () => {
+      if (query && canLoadNextBoardFeedPage(query)) {
+        return query.fetchNextPage();
+      }
+      return undefined;
+    },
+    retry: () => query?.refetch(),
+  };
 }
 
 export function boardFeedFooterState(query: {
