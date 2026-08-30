@@ -10,7 +10,7 @@ import { EmptyCalendarIcon, LedgerIcon, PersonAvatarIcon, SearchBackIcon, Search
 import LoadingState from "../../../components/LoadingState";
 import PostCard from "../../../components/PostCard";
 import { useBoardsQuery } from "../../../hooks/useApi";
-import { useBoardPosts, useMultiBoardPosts } from "../../../hooks/usePosts";
+import { useAggregatePosts, useBoardPosts } from "../../../hooks/usePosts";
 import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
@@ -34,9 +34,14 @@ import {
 } from "../../../utils/councilIntroductions";
 import { toAbsoluteMediaUrl } from "../../../utils/mediaAccess";
 import { pastCouncilActivitiesFromMetadata } from "../../../utils/pastCouncil";
-import { enabledRefetch, refreshQueries } from "../../../utils/pullToRefresh";
 import {
-  RESOURCE_ALL_SLUGS,
+  boardFeedFooterState,
+  boardFeedMode,
+  boardFeedQueryEnabled,
+  canLoadNextBoardFeedPage,
+  selectActiveBoardFeed,
+} from "../../../utils/aggregateBoardFeeds";
+import {
   RESOURCE_FILTERS,
   RESOURCE_FILTER_SLUGS,
   resourceFilterAfterNavigation,
@@ -654,6 +659,28 @@ function ExecutiveIntroScreen({ board, topInset, onBack }: { board?: Board | nul
   );
 }
 
+function BoardFeedFooter({
+  state,
+  onRetry,
+}: {
+  state: "loading" | "retry" | "idle";
+  onRetry: () => void;
+}) {
+  if (state === "idle") return null;
+  if (state === "loading") {
+    return (
+      <View style={styles.feedFooter}>
+        <ActivityIndicator color={COLORS.primary} />
+      </View>
+    );
+  }
+  return (
+    <Pressable onPress={onRetry} style={styles.feedFooter}>
+      <Text style={styles.feedFooterRetry}>다음 게시글을 불러오지 못했습니다. 탭해서 다시 시도하세요.</Text>
+    </Pressable>
+  );
+}
+
 function CouncilActivityHistoryScreen({
   posts,
   isLoading,
@@ -661,6 +688,10 @@ function CouncilActivityHistoryScreen({
   refreshing,
   onRefresh,
   onRetry,
+  hasNextPage,
+  isFetchingNextPage,
+  isFetchNextPageError,
+  onLoadMore,
   onBack,
   originBoardId,
   detailReturnRoute,
@@ -672,6 +703,10 @@ function CouncilActivityHistoryScreen({
   refreshing: boolean;
   onRefresh: () => void;
   onRetry: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  isFetchNextPageError: boolean;
+  onLoadMore: () => void;
   onBack: () => void;
   originBoardId: number;
   detailReturnRoute: PostDetailReturnRoute;
@@ -693,6 +728,18 @@ function CouncilActivityHistoryScreen({
           refreshing={refreshing}
           onRefresh={onRefresh}
           contentContainerStyle={[styles.councilActivityContent, posts.length === 0 ? styles.emptyContent : null]}
+          onEndReached={() => {
+            if (canLoadNextBoardFeedPage({ hasNextPage, isFetchingNextPage })) {
+              onLoadMore();
+            }
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            <BoardFeedFooter
+              state={boardFeedFooterState({ isFetchingNextPage, isFetchNextPageError })}
+              onRetry={onLoadMore}
+            />
+          }
           ListEmptyComponent={
             isError ? (
               <Pressable onPress={onRetry} style={styles.errorBox}>
@@ -908,47 +955,43 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const tabs = sectionTabs(board, boards);
   const canWriteBoard = !board || board.write_permission !== "admin" || user?.role === "admin";
   const canShowCreateButton = canWriteBoard && board?.board_type !== "notice" && board?.board_type !== "album" && (!isParticipationGuideCards || board?.slug === "study-recruit");
-  const isResourceAll = board?.board_type === "resource" && selectedFilter === "전체";
-  const isCouncilActivityHistory = board?.slug === "council-activity" || board?.slug === "gsa-activity";
-  const resourceBoardIds = useMemo(
-    () => RESOURCE_ALL_SLUGS.map((slug) => findBoardBySlug(boards, slug)?.id).filter((id): id is number => typeof id === "number"),
-    [boards]
-  );
-  const noticeBoardIds = useMemo(
-    () => isCouncilActivityHistory ? boards.filter((item) => item.board_type === "notice").map((item) => item.id) : [],
-    [boards, isCouncilActivityHistory]
-  );
-
   const isResourceBoard = board?.board_type === "resource";
+  const feedMode = boardFeedMode({
+    boardType: board?.board_type,
+    boardSlug: board?.slug,
+    selectedFilter,
+  });
+  const isResourceAll = feedMode === "resources";
+  const isCouncilActivityHistory = feedMode === "council_activity";
+  const queryEnabled = boardFeedQueryEnabled(feedMode);
   const boardPostsQuery = useBoardPosts(boardId, {
     q: query || undefined,
     category: categoryForFilter(selectedFilter, board),
     sort: isResourceBoard ? resourceSort : "latest",
-  });
-  const resourceAllQuery = useMultiBoardPosts(resourceBoardIds, {
+  }, queryEnabled.board);
+  const resourceAllQuery = useAggregatePosts("resources", {
     q: query || undefined,
-    sort: isResourceBoard ? resourceSort : "latest",
+    sort: resourceSort,
+  }, isResourceAll);
+  const councilActivityQuery = useAggregatePosts("council_activity", {
+    sort: "latest",
+  }, isCouncilActivityHistory);
+  const activePostsQuery = selectActiveBoardFeed(feedMode, {
+    board: boardPostsQuery,
+    resources: resourceAllQuery,
+    councilActivity: councilActivityQuery,
   });
-  const councilNoticeQuery = useMultiBoardPosts(noticeBoardIds, { sort: "latest" });
-
-  const data = boardPostsQuery.data;
-  const isLoading = isResourceAll ? resourceAllQuery.isLoading : boardPostsQuery.isLoading;
-  const isError = isResourceAll ? resourceAllQuery.isError : boardPostsQuery.isError;
-  const refetch = isResourceAll ? resourceAllQuery.refetch : boardPostsQuery.refetch;
-  const isRefetching = isResourceAll ? resourceAllQuery.isRefetching : boardPostsQuery.isRefetching;
-  const fetchNextPage = boardPostsQuery.fetchNextPage;
-  const hasNextPage = isResourceAll ? false : boardPostsQuery.hasNextPage;
-  const isFetchingNextPage = isResourceAll ? false : boardPostsQuery.isFetchingNextPage;
-  const posts = isResourceAll
-    ? [...(resourceAllQuery.data ?? [])].sort((a, b) =>
-        resourceSort === "popular"
-          ? b.like_count - a.like_count || new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
-    : data?.pages.flatMap((page) => page.data) ?? [];
-  const linkedCouncilNotices = (councilNoticeQuery.data ?? []).filter((item) => item.metadata?.show_in_council_activity === true);
-  const councilActivityPosts = [...new Map([...linkedCouncilNotices, ...posts].map((item) => [item.id, item])).values()]
-    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+  const posts = activePostsQuery.items;
+  const isLoading = activePostsQuery.isLoading;
+  const isError = activePostsQuery.isError;
+  const refetch = activePostsQuery.refetch;
+  const refreshFirstPage = activePostsQuery.refreshFirstPage;
+  const isRefreshingFirstPage = activePostsQuery.isRefreshingFirstPage;
+  const fetchNextPage = activePostsQuery.fetchNextPage;
+  const hasNextPage = activePostsQuery.hasNextPage;
+  const isFetchingNextPage = activePostsQuery.isFetchingNextPage;
+  const isFetchNextPageError = activePostsQuery.isFetchNextPageError;
+  const feedFooterState = boardFeedFooterState(activePostsQuery);
 
   useEffect(() => {
     if (initialBoardId) {
@@ -1041,8 +1084,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         posts={posts}
         isLoading={isLoading}
         isError={isError}
-        refreshing={isRefetching}
-        onRefresh={() => void refetch()}
+        refreshing={isRefreshingFirstPage}
+        onRefresh={() => void refreshFirstPage()}
         onRetry={() => void refetch()}
         topInset={insets.top}
         onBack={exitBoardDepth}
@@ -1057,12 +1100,16 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   if (board?.slug === "council-activity" || board?.slug === "gsa-activity") {
     return (
       <CouncilActivityHistoryScreen
-        posts={councilActivityPosts}
-        isLoading={isLoading || councilNoticeQuery.isLoading}
-        isError={isError || councilNoticeQuery.isError}
-        refreshing={isRefetching || councilNoticeQuery.isRefetching}
-        onRefresh={() => void refreshQueries([refetch, enabledRefetch(noticeBoardIds.length > 0, councilNoticeQuery.refetch)])}
-        onRetry={() => void Promise.all([refetch(), councilNoticeQuery.refetch()])}
+        posts={posts}
+        isLoading={isLoading}
+        isError={isError}
+        refreshing={isRefreshingFirstPage}
+        onRefresh={() => void refreshFirstPage()}
+        onRetry={() => void refetch()}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        isFetchNextPageError={isFetchNextPageError}
+        onLoadMore={() => void fetchNextPage()}
         originBoardId={boardId}
         detailReturnRoute={detailReturnRoute}
         topInset={insets.top}
@@ -1189,8 +1236,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           numColumns={isAlbum ? 2 : 1}
           data={posts}
           keyExtractor={(item) => String(item.id)}
-          refreshing={isRefetching}
-          onRefresh={() => void refetch()}
+          refreshing={isRefreshingFirstPage}
+          onRefresh={() => void refreshFirstPage()}
           contentContainerStyle={[
             isAlbum ? styles.albumContent : isParticipationGuideCards ? styles.guideContent : isActivityCards ? styles.cardContent : styles.listContent,
             posts.length === 0 ? styles.emptyContent : null,
@@ -1227,12 +1274,12 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
             );
           }}
           onEndReached={() => {
-            if (hasNextPage) {
-              fetchNextPage();
+            if (canLoadNextBoardFeedPage(activePostsQuery)) {
+              void fetchNextPage();
             }
           }}
           onEndReachedThreshold={0.5}
-          ListFooterComponent={isFetchingNextPage ? <ActivityIndicator color={COLORS.primary} /> : null}
+          ListFooterComponent={<BoardFeedFooter state={feedFooterState} onRetry={() => void fetchNextPage()} />}
         />
       )}
 
@@ -1420,6 +1467,18 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 92,
+  },
+  feedFooter: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  feedFooterRetry: {
+    color: COLORS.danger,
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
   },
   albumContent: {
     paddingHorizontal: 16,
