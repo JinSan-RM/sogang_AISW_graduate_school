@@ -1665,7 +1665,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF2F7",
   },
   visualHeroAlbum: {
-    height: 240, // Figma: 사진첩 큰사진·활동 인증 슬라이더 240h
+    height: 240, // Figma: 사진첩 큰사진 슬라이더 240h
   },
   visualHeroNatural: {
     position: "relative",
