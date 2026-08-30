@@ -69,6 +69,33 @@ export function NoticeTabIcon({ size = 22, color = TAB_INACTIVE }: IconProps) {
   );
 }
 
+// 참여활동 상세 대표 이미지 플레이스홀더 — 디자인 icon/image 36px, stroke 1.7 #999999.
+export function ImagePlaceholderIcon({ size = 36, color = "#999999" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <Rect x={4.5} y={6} width={27} height={24} rx={3} stroke={color} strokeWidth={1.7} />
+      <Circle cx={12.8} cy={14.2} r={2.4} stroke={color} strokeWidth={1.5} />
+      <Path d="M4.5 25.5L13 18L20 24L25 19.5L31.5 25.5" stroke={color} strokeWidth={1.7} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 원우회 답변 타이틀 아이콘 — 💬 이모지(말풍선+점 3개) 모양을 벡터로 그렸다.
+// (이모지는 윈도우 등 일부 환경에서 렌더링되지 않아 SVG로 대체)
+export function CouncilReplyIcon({ size = 15, color = "#2761FF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M8 1.5C3.86 1.5 0.5 4.28 0.5 7.7C0.5 9.6 1.54 11.29 3.17 12.42C3.05 13.22 2.7 14.13 2 14.83C1.83 15 1.95 15.29 2.19 15.27C3.83 15.12 5.17 14.42 6.02 13.75C6.66 13.88 7.32 13.95 8 13.95C12.14 13.95 15.5 11.12 15.5 7.7C15.5 4.28 12.14 1.5 8 1.5Z"
+        fill={color}
+      />
+      <Circle cx={4.9} cy={7.8} r={1.05} fill="#FFFFFF" />
+      <Circle cx={8} cy={7.8} r={1.05} fill="#FFFFFF" />
+      <Circle cx={11.1} cy={7.8} r={1.05} fill="#FFFFFF" />
+    </Svg>
+  );
+}
+
 export function CommunityTabIcon({ size = 22, color = TAB_INACTIVE }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">

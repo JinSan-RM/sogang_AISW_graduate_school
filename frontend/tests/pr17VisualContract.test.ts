@@ -35,3 +35,28 @@ test("활동 인증 폼은 PR 스타일과 이름·학번 검색 기능을 함�
   assert.match(create, /attachExtensionHint:[\s\S]*fontSize: 12[\s\S]*lineHeight: 15/);
   assert.match(create, /input:[\s\S]*fontSize: 14[\s\S]*lineHeight: 17/);
 });
+
+const detail = readFileSync("app/(tabs)/board/post/[postId].tsx", "utf8");
+
+test("참여활동 상세는 PR 순서와 main 이미지 정책을 혼합한다", () => {
+  assert.match(detail, /const visualHeroSection =/);
+  assert.match(detail, /\{!isAdminParticipationGuide \? visualHeroSection : null\}/);
+  assert.match(detail, /\{isAdminParticipationGuide \? visualHeroSection : null\}/);
+  assert.match(detail, /const hasExpandableHero = isAdminParticipationGuide;/);
+  assert.match(detail, /isPhotoAlbum \? styles\.visualHeroAlbum : null/);
+  assert.doesNotMatch(detail, /function ParticipationHeroImage/);
+  assert.doesNotMatch(detail, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
+});
+
+test("공지 이미지 전체보기와 PR 첨부 타이포를 함께 유지한다", () => {
+  assert.match(detail, /사진 전체보기/);
+  assert.match(detail, /noticeImageAttachment:[\s\S]*height: 360/);
+  assert.match(detail, /attachmentsList:[\s\S]*gap: 12/);
+  assert.match(detail, /fileName:[\s\S]*fontSize: 13[\s\S]*lineHeight: 16/);
+});
+
+test("공식 답변과 빈 대표 이미지는 벡터 아이콘을 사용한다", () => {
+  assert.match(detail, /<ImagePlaceholderIcon size=\{36\}/);
+  assert.match(detail, /<CouncilReplyIcon/);
+  assert.doesNotMatch(detail, /council-reply\.png/);
+});
