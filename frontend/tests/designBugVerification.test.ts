@@ -62,11 +62,11 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 공지 상세 세로 이미지는 기존 360px 프레임으로 잘라서 보여준다", () => {
+test("#41·45 공지 상세 세로 이미지는 PR의 4:5(400px) 프레임으로 잘라서 보여준다", () => {
   // 세로로 긴 이미지(비율 임계값 미만)는 4:5 프레임으로 잘라서만 보여준다 (전체보기 없음)
   assert.match(postDetailSource, /attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT/);
   assert.match(postDetailSource, /collapseNoticeImage \? styles\.noticeImageAttachment : null/);
-  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 360/);
+  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 400/);
   assert.doesNotMatch(postDetailSource, /noticeImageExpandButton/);
   assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
 });
@@ -111,10 +111,9 @@ test("활동 인증 목록 이미지는 이전의 가로형 고정 비율을 사
   assert.match(boardSource, /activityThumb:[\s\S]*aspectRatio: 2\.05/);
 });
 
-test("활동 인증 상세 이미지는 240px 고정·접기 없이 원본 비율의 자연 높이를 사용한다", () => {
-  assert.match(postDetailSource, /const hasExpandableHero = isAdminParticipationGuide;/);
-  assert.match(postDetailSource, /isPhotoAlbum \? styles\.visualHeroAlbum : null/);
-  assert.doesNotMatch(postDetailSource, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
+test("활동 인증 상세 이미지는 PR의 240px 프레임과 전체보기 동작을 사용한다", () => {
+  assert.match(postDetailSource, /const hasExpandableHero = isActivityCertification;/);
+  assert.match(postDetailSource, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
   assert.match(postDetailSource, /visualHeroAlbum:[\s\S]*height: 240/);
 });
 

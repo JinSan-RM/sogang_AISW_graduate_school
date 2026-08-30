@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
+import { Alert, BackHandler, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../../components/CommentItem";
@@ -10,9 +10,10 @@ import ExpandableNaturalAspectMediaImage from "../../../../components/Expandable
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
-import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, CouncilReplyIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
-import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
+import { resolveMediaAccessUrl, useMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
+import type { MediaReference } from "../../../../utils/mediaAccess";
 import {
   useCreateComment,
   useDeleteComment,
@@ -145,6 +146,35 @@ function IconButton({ icon, onPress, label, size = 24, color = COLORS.text }: { 
     </Pressable>
   );
 }
+
+// Figma Detail-Image(Horizontal|Vertical)-Reordered: 참여활동 대표 이미지는
+// 가로형이면 320x240(4:3), 세로형이면 320x400(4:5) 고정 박스에 cover로 채운다.
+function ParticipationHeroImage({ media }: { media: MediaReference }) {
+  const [aspect, setAspect] = useState<number | null>(null);
+  const { uri } = useMediaAccessUrl(media);
+
+  useEffect(() => {
+    if (!uri) return;
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (!cancelled && width > 0 && height > 0) setAspect(width / height);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
+
+  return (
+    <View style={[styles.participationHeroBox, { aspectRatio: aspect !== null && aspect < 1 ? 4 / 5 : 4 / 3 }]}>
+      <MediaImage media={media} resizeMode="cover" style={styles.participationHeroImage} />
+    </View>
+  );
+}
+
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; fromBoardId?: string; returnTo?: string }>();
   const insets = useSafeAreaInsets();
@@ -190,7 +220,7 @@ export default function PostDetailScreen() {
   const [mutualAidStatus, setMutualAidStatus] = useState<MutualAidStatus>("processing");
   const [mutualAidRejectionReason, setMutualAidRejectionReason] = useState("");
   const [showPostMenu, setShowPostMenu] = useState(false);
-  // 공지 세로 이미지: 360px 박스로 접어두고 "사진 전체보기"로 펼친다 (Figma Detail-ImageVertical)
+  // 공지 세로 이미지: PR의 4:5(400px) 박스로 접어두고 "사진 전체보기"로 펼친다 (Figma Detail-ImageVertical)
   // 이미지가 박스보다 작으면(가로형 등) 버튼 없이 원본 비율 그대로 보여준다 (Detail-ImageWithAttachments)
   const [imageAspects, setImageAspects] = useState<Record<number, number>>({});
   const NOTICE_IMAGE_COLLAPSE_ASPECT = 320 / 400; // Figma Notice Detail-ImageVertical-4x5: 4:5보다 세로로 길면 접는다
@@ -384,7 +414,7 @@ export default function PostDetailScreen() {
     boardSlug: board?.slug,
   });
   const hasNaturalHero = heroImagePresentation === "natural";
-  const hasExpandableHero = isAdminParticipationGuide;
+  const hasExpandableHero = isActivityCertification;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -569,10 +599,12 @@ export default function PostDetailScreen() {
     ]}>
       <View style={[
         hasNaturalHero ? styles.visualHeroNatural : styles.visualHero,
-        isPhotoAlbum ? styles.visualHeroAlbum : null,
+        isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null,
       ]}>
         {heroAttachment ? (
-          hasNaturalHero ? (
+          isAdminParticipationGuide ? (
+            <ParticipationHeroImage key={heroAttachment.id} media={heroAttachment} />
+          ) : hasNaturalHero ? (
             hasExpandableHero ? (
               <ExpandableNaturalAspectMediaImage
                 key={heroAttachment.id}
@@ -878,7 +910,7 @@ export default function PostDetailScreen() {
         {post.suggestion?.admin_reply ? (
           <View style={styles.officialReplyBox}>
             <View style={styles.officialReplyTitleRow}>
-              <CouncilReplyIcon />
+              <Image source={require("../../../../assets/images/council-reply.png")} style={styles.officialReplyIcon} />
               <Text style={styles.officialReplyTitle}>원우회 답변</Text>
             </View>
             <Text style={styles.officialReplyBody}>{post.suggestion.admin_reply}</Text>
@@ -1655,9 +1687,20 @@ const styles = StyleSheet.create({
   participationHeroPlaceholder: {
     width: "100%",
     aspectRatio: 4 / 3,
+    borderRadius: 12,
     backgroundColor: "#F1F0E8",
     alignItems: "center",
     justifyContent: "center",
+  },
+  participationHeroBox: {
+    width: "100%",
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#F1F0E8",
+  },
+  participationHeroImage: {
+    width: "100%",
+    height: "100%",
   },
   galleryArrow: {
     // Figma: 배경 원 없이 흰 화살표만, 좌우 8 여백, 세로 중앙
@@ -1947,7 +1990,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   noticeImageAttachment: {
-    height: 360, // Figma 이미지첨부 360h
+    height: 400, // Figma 이미지첨부 320x400 (4:5)
     backgroundColor: "#F1F0E8",
   },
   noticeImageRadius: {
@@ -1992,6 +2035,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+  },
+  officialReplyIcon: {
+    width: 16,
+    height: 16,
   },
   officialReplyTitle: {
     color: "#2761FF",

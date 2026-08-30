@@ -6,8 +6,8 @@ const notification = readFileSync("components/NotificationBootstrap.tsx", "utf8"
 const board = readFileSync("app/(tabs)/board/[boardId].tsx", "utf8");
 const create = readFileSync("app/(tabs)/board/post/create.tsx", "utf8");
 
-test("공지 토스트 디자인은 공지에만 적용되고 닫기와 safe area를 보존한다", () => {
-  assert.match(notification, /notificationToastKind\(visibleNotification\.notification_type\)/);
+test("모든 알림은 PR 토스트 디자인을 사용하고 닫기와 safe area를 보존한다", () => {
+  assert.doesNotMatch(notification, /notificationToastKind\(visibleNotification\.notification_type\)/);
   assert.match(notification, /notificationToastTop\(insets\.top\)/);
   assert.match(notification, /<NoticeToastIcon size=\{32\}/);
   assert.match(notification, /<Pressable\s+accessibilityRole="button"\s+onPress=\{openVisibleNotification\}/);
@@ -17,11 +17,11 @@ test("공지 토스트 디자인은 공지에만 적용되고 닫기와 safe are
   assert.match(notification, /onPress=\{openVisibleNotification\}/);
 });
 
-test("공지 토스트만 2px 텍스트 간격과 muted 한 줄 메시지를 사용하고 일반 토스트는 기존 레이아웃을 보존한다", () => {
-  assert.match(notification, /<View style=\{\{ flex: 1, gap: isNotice \? 2 : 0 \}\}>/);
-  assert.match(notification, /isNotice \? \(\s*<Text numberOfLines=\{1\} style=\{\{ color: "#6B7280", fontSize: 13, lineHeight: 16, fontWeight: "400" \}\}>/);
-  assert.match(notification, /:\s*\(\s*<Text style=\{\{ color: "#111827", marginTop: 4, fontSize: 13, lineHeight: 16, fontWeight: "700" \}\}>/);
-  assert.doesNotMatch(notification, /:\s*\(\s*<Text numberOfLines=/);
+test("모든 알림 토스트는 PR의 2px 텍스트 간격과 muted 한 줄 메시지를 사용한다", () => {
+  assert.match(notification, /<View style=\{\{ flex: 1, gap: 2 \}\}>/);
+  assert.match(notification, /<Text style=\{\{ color: "#15171C", fontSize: 13, lineHeight: 16, fontWeight: "500" \}\}>/);
+  assert.match(notification, /<Text numberOfLines=\{1\} style=\{\{ color: "#6B7280", fontSize: 13, lineHeight: 16, fontWeight: "400" \}\}>/);
+  assert.doesNotMatch(notification, /const isNotice =/);
 });
 
 test("활동 카드 디자인을 적용해도 참여활동 검색은 남는다", () => {
@@ -62,25 +62,25 @@ test("공지 목록 정리 후에도 검색과 네 필터 새로고침이 남는
   assert.match(notices, /selectNoticeFilterAndRefresh/);
 });
 
-test("참여활동 상세는 PR 순서와 main 이미지 정책을 혼합한다", () => {
+test("참여활동 상세는 PR 순서와 고정 이미지 프레임을 사용한다", () => {
   assert.match(detail, /const visualHeroSection =/);
   assert.match(detail, /\{!isAdminParticipationGuide \? visualHeroSection : null\}/);
   assert.match(detail, /\{isAdminParticipationGuide \? visualHeroSection : null\}/);
-  assert.match(detail, /const hasExpandableHero = isAdminParticipationGuide;/);
-  assert.match(detail, /isPhotoAlbum \? styles\.visualHeroAlbum : null/);
-  assert.doesNotMatch(detail, /function ParticipationHeroImage/);
-  assert.doesNotMatch(detail, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
+  assert.match(detail, /const hasExpandableHero = isActivityCertification;/);
+  assert.match(detail, /function ParticipationHeroImage/);
+  assert.match(detail, /aspectRatio: aspect !== null && aspect < 1 \? 4 \/ 5 : 4 \/ 3/);
+  assert.match(detail, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
 });
 
 test("공지 이미지 전체보기와 PR 첨부 타이포를 함께 유지한다", () => {
   assert.match(detail, /사진 전체보기/);
-  assert.match(detail, /noticeImageAttachment:[\s\S]*height: 360/);
+  assert.match(detail, /noticeImageAttachment:[\s\S]*height: 400/);
   assert.match(detail, /attachmentsList:[\s\S]*gap: 12/);
   assert.match(detail, /fileName:[\s\S]*fontSize: 13[\s\S]*lineHeight: 16/);
 });
 
-test("공식 답변과 빈 대표 이미지는 벡터 아이콘을 사용한다", () => {
+test("공식 답변은 PR 전용 이미지, 빈 대표 이미지는 벡터 아이콘을 사용한다", () => {
   assert.match(detail, /<ImagePlaceholderIcon size=\{36\}/);
-  assert.match(detail, /<CouncilReplyIcon/);
-  assert.doesNotMatch(detail, /council-reply\.png/);
+  assert.match(detail, /<Image source=\{require\("\.\.\/\.\.\/\.\.\/\.\.\/assets\/images\/council-reply\.png"\)\}/);
+  assert.doesNotMatch(detail, /<CouncilReplyIcon/);
 });
