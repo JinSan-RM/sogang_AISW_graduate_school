@@ -261,6 +261,106 @@ def test_notice_other_filter_uses_explicit_category_before_board_fallback(api) -
     assert returned_ids.isdisjoint(excluded_ids)
 
 
+def test_notice_filters_share_explicit_category_precedence_and_board_fallback(api) -> None:
+    with api.session() as db:
+        boards = {
+            "academic": _board(
+                name="Canonical Academic Notices",
+                slug="academic-notices",
+                category="notices",
+                board_type="notice",
+            ),
+            "event": _board(
+                name="Canonical Event Notices",
+                slug="event-notices",
+                category="notices",
+                board_type="notice",
+            ),
+            "webinar": _board(
+                name="Canonical Webinar Notices",
+                slug="webinar-notices",
+                category="notices",
+                board_type="notice",
+            ),
+            "other": _board(
+                name="Canonical All Notices",
+                slug="all-notices",
+                category="notices",
+                board_type="notice",
+            ),
+        }
+        db.add_all(boards.values())
+        db.flush()
+        cases = [
+            ("event_on_academic", "academic", "event briefing", "event"),
+            ("korean_event", "other", "행사 안내", "event"),
+            ("webinar_alias", "other", "webinar session", "event"),
+            ("special_lecture_alias", "academic", "특강 공지", "event"),
+            ("academic_on_event", "event", "academic update", "academic"),
+            ("korean_academic", "other", "학사 안내", "academic"),
+            ("calendar_alias", "event", "calendar update", "academic"),
+            ("all_alias", "academic", "all", "other"),
+            ("korean_all_alias", "event", "전체 안내", "other"),
+            ("other_alias", "academic", "other-notice", "other"),
+            ("general_alias", "event", "GENERAL", "other"),
+            ("korean_other_alias", "academic", "기타 공지", "other"),
+            ("event_precedes_academic", "other", "academic event", "event"),
+            ("webinar_precedes_academic", "other", "calendar webinar", "event"),
+            ("academic_precedes_other", "event", "other academic", "academic"),
+            ("blank_academic_fallback", "academic", "", "academic"),
+            ("null_event_fallback", "event", None, "event"),
+            ("whitespace_webinar_fallback", "webinar", "   ", "event"),
+            ("null_other_fallback", "other", None, "other"),
+            ("explicit_unknown_no_fallback", "other", "scholarship", None),
+        ]
+        posts_by_name = {}
+        for name, board_key, category, _expected_filter in cases:
+            post = Post(
+                board_id=boards[board_key].id,
+                author_id=3,
+                title=f"Canonical classifier {name}",
+                content="Canonical classifier body",
+                category=category,
+            )
+            db.add(post)
+            posts_by_name[name] = post
+        db.flush()
+        ids_by_name = {name: post.id for name, post in posts_by_name.items()}
+        expected_by_filter = {
+            notice_filter: {
+                ids_by_name[name]
+                for name, _board_key, _category, expected_filter in cases
+                if expected_filter == notice_filter
+            }
+            for notice_filter in ("academic", "event", "other")
+        }
+        all_case_ids = set(ids_by_name.values())
+        db.commit()
+
+    unfiltered = api.client.get(
+        "/api/posts/feed",
+        params={"scope": "notices", "q": "Canonical classifier", "size": 100},
+        headers=api.headers["owner"],
+    )
+    assert unfiltered.status_code == 200
+    assert {item["id"] for item in unfiltered.json()["data"]} == all_case_ids
+
+    for notice_filter, expected_ids in expected_by_filter.items():
+        response = api.client.get(
+            "/api/posts/feed",
+            params={
+                "scope": "notices",
+                "notice_category": notice_filter,
+                "q": "Canonical classifier",
+                "size": 100,
+            },
+            headers=api.headers["owner"],
+        )
+
+        assert response.status_code == 200
+        assert {item["id"] for item in response.json()["data"]} == expected_ids
+
+
 def test_notice_feed_can_disable_pin_priority_for_home_preview(api) -> None:
     with api.session() as db:
         notice = _board(

@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.author_snapshots import resolve_author_display
@@ -317,6 +317,41 @@ def _post_feed_scope_filter(scope: str):
     )
 
 
+def _post_feed_notice_category_expression():
+    post_category = func.trim(func.coalesce(Post.category, ""))
+    board_category = func.trim(func.coalesce(Board.slug, ""))
+    normalized = func.lower(
+        case(
+            (post_category != "", post_category),
+            else_=board_category,
+        )
+    )
+    event_match = or_(
+        normalized.contains("event"),
+        normalized.contains("행사"),
+        normalized.contains("webinar"),
+        normalized.contains("특강"),
+    )
+    academic_match = or_(
+        normalized.contains("academic"),
+        normalized.contains("학사"),
+        normalized.contains("calendar"),
+    )
+    other_match = or_(
+        normalized.contains("all"),
+        normalized.contains("전체"),
+        normalized.contains("other"),
+        normalized.contains("general"),
+        normalized.contains("기타"),
+    )
+    return case(
+        (event_match, "event"),
+        (academic_match, "academic"),
+        (other_match, "other"),
+        else_=None,
+    )
+
+
 def _post_feed_notice_filters(scope: str, notice_category: str | None):
     if notice_category is None:
         return []
@@ -326,40 +361,7 @@ def _post_feed_notice_filters(scope: str, notice_category: str | None):
             message="Request validation failed.",
             code="VALIDATION_ERROR",
         )
-    if notice_category == "academic":
-        return [
-            or_(
-                Board.slug.in_(["academic-notices", "academic-calendar"]),
-                func.lower(func.coalesce(Post.category, "")).in_(["academic", "academic-notice"]),
-                Post.category.ilike("%학사%"),
-            )
-        ]
-    if notice_category == "event":
-        return [
-            or_(
-                Board.slug.in_(["event-notices", "webinar-notices"]),
-                func.lower(func.coalesce(Post.category, "")).in_(["event", "webinar", "event-notice"]),
-                Post.category.ilike("%행사%"),
-                Post.category.ilike("%특강%"),
-            )
-        ]
-    trimmed_category = func.trim(func.coalesce(Post.category, ""))
-    normalized_category = func.lower(trimmed_category)
-    return [
-        or_(
-            and_(
-                trimmed_category != "",
-                or_(
-                    normalized_category.contains("all"),
-                    normalized_category.contains("general"),
-                    normalized_category.contains("other"),
-                    Post.category.contains("전체"),
-                    Post.category.contains("기타"),
-                ),
-            ),
-            and_(trimmed_category == "", Board.slug == "all-notices"),
-        ),
-    ]
+    return [_post_feed_notice_category_expression() == notice_category]
 
 
 def _post_feed_search_filter(q: str | None, current_user: User):
