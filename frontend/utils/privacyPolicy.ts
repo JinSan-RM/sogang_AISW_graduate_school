@@ -5,9 +5,9 @@ export const PRIVACY_POLICY_OPERATOR_NAME =
 export const PRIVACY_POLICY_SUPPORT_EMAIL =
   process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || "지원 이메일 설정 필요";
 export const PRIVACY_POLICY_EFFECTIVE_DATE =
-  process.env.EXPO_PUBLIC_PRIVACY_EFFECTIVE_DATE?.trim() || "2026-07-12";
+  process.env.EXPO_PUBLIC_PRIVACY_EFFECTIVE_DATE?.trim() || "2026-09-01";
 export const PRIVACY_POLICY_VERSION =
-  process.env.EXPO_PUBLIC_PRIVACY_POLICY_VERSION?.trim() || "2026-07-12";
+  process.env.EXPO_PUBLIC_PRIVACY_POLICY_VERSION?.trim() || "2026-09-01";
 
 export function resolvePrivacyPolicyMetadata(policy?: {
   version?: string | null;
