@@ -1181,9 +1181,14 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
               <IconButton icon="chevron-back" label="뒤로" onPress={exitBoardDepth} />
             )}
             <Text style={styles.appBarTitle}>{display.name}</Text>
-            <Pressable accessibilityLabel="검색" onPress={() => setShowSearch(true)} style={styles.iconButton}>
-              <SearchIcon size={20} />
-            </Pressable>
+            {/* 참여활동(동아리·스터디·네트워킹) 화면에는 검색이 없다 (Figma) */}
+            {isActivityCards || isParticipationGuideCards || isStudyRecruit ? (
+              <View style={styles.iconButton} />
+            ) : (
+              <Pressable accessibilityLabel="검색" onPress={() => setShowSearch(true)} style={styles.iconButton}>
+                <SearchIcon size={20} />
+              </Pressable>
+            )}
           </>
         )}
       </View>

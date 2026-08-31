@@ -18,12 +18,11 @@ test("일정 사용자 화면은 공통 한글 presentation을 사용하고 raw 
   assert.match(detail, /eventCategoryTone\(event\.category,\s*"detail"\)/);
 });
 
-test("관리자 일정은 3개 옵션과 레거시 원본값 보존 submit을 사용한다", () => {
+test("관리자 일정은 PR 3개 옵션만 저장한다", () => {
   assert.match(admin, /EVENT_CATEGORY_OPTIONS\.map/);
-  assert.match(admin, /eventOriginalCategoryRef/);
-  assert.match(admin, /eventCategoryExplicitlySelectedRef/);
+  assert.doesNotMatch(admin, /eventOriginalCategoryRef/);
+  assert.doesNotMatch(admin, /eventCategoryExplicitlySelectedRef/);
   assert.match(admin, /category:\s*eventDisplayCategory\(event\.category\)/);
   assert.match(admin, /category:\s*eventCategoryValueForSubmit\(/);
-  assert.match(admin, /eventCategoryExplicitlySelectedRef\.current = true/);
   assert.doesNotMatch(admin, /EVENT_CATEGORY_LABELS\[event\.category\]\s*\?\?\s*event\.category/);
 });

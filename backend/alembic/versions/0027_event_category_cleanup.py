@@ -1,15 +1,14 @@
-"""retain the 0027 revision without rewriting event categories
+"""collapse event categories to academic/event/other
 
 Revision ID: 0027_event_category_cleanup
 Revises: 0026_dues_payers
 Create Date: 2026-08-24
 
-This revision may already be recorded in deployed databases. Keeping the
-revision makes those databases compatible with the migration graph, while the
-no-op upgrade preserves all legacy event category values.
 """
 
 from typing import Sequence, Union
+
+from alembic import op
 
 
 revision: str = "0027_event_category_cleanup"
@@ -19,8 +18,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    pass
+    # 일정 카테고리는 학사일정/행사일정/기타일정 3종만 쓴다. 나머지는 기타로 흡수.
+    op.execute("UPDATE events SET category = 'other' WHERE category NOT IN ('academic', 'event', 'other')")
 
 
 def downgrade() -> None:
+    # 원본 구분은 복원할 수 없다 — 데이터 정리 마이그레이션.
     pass

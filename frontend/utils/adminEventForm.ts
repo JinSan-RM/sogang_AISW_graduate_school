@@ -4,7 +4,5 @@ export function adminEventFormRouteTransition(input: {
 }) {
   return {
     shouldResetForm: input.previousEditEventId !== null && input.nextEditEventId === null,
-    originalCategory: null,
-    explicitlySelected: false,
   };
 }

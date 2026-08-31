@@ -1,7 +1,8 @@
 import pytest
 
 
-CATEGORIES = ("academic", "event", "exam", "council", "external", "other")
+CANONICAL_CATEGORIES = ("academic", "event", "other")
+LEGACY_CATEGORIES = ("exam", "council", "external")
 
 
 def _payload(category: str, title: str) -> dict:
@@ -16,8 +17,8 @@ def _payload(category: str, title: str) -> dict:
     }
 
 
-@pytest.mark.parametrize("category", CATEGORIES)
-def test_existing_event_categories_create_update_and_read_without_422(api, category: str) -> None:
+@pytest.mark.parametrize("category", CANONICAL_CATEGORIES)
+def test_canonical_event_categories_create_update_and_read(api, category: str) -> None:
     created = api.client.post(
         "/api/events",
         headers=api.headers["admin"],
@@ -38,3 +39,32 @@ def test_existing_event_categories_create_update_and_read_without_422(api, categ
     detail = api.client.get(f"/api/events/{event_id}", headers=api.headers["owner"])
     assert detail.status_code == 200
     assert detail.json()["data"]["category"] == category
+
+
+@pytest.mark.parametrize("category", LEGACY_CATEGORIES)
+def test_legacy_event_categories_are_rejected_on_create(api, category: str) -> None:
+    response = api.client.post(
+        "/api/events",
+        headers=api.headers["admin"],
+        json=_payload(category, "레거시 일정"),
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("category", LEGACY_CATEGORIES)
+def test_legacy_event_categories_are_rejected_on_update(api, category: str) -> None:
+    created = api.client.post(
+        "/api/events",
+        headers=api.headers["admin"],
+        json=_payload("academic", "기존 일정"),
+    )
+    event_id = created.json()["data"]["id"]
+
+    response = api.client.put(
+        f"/api/events/{event_id}",
+        headers=api.headers["admin"],
+        json=_payload(category, "레거시 분류로 수정"),
+    )
+
+    assert response.status_code == 422

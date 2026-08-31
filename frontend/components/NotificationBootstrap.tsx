@@ -1,16 +1,13 @@
 import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import type { NotificationItem } from "../types";
 import { setStoredPushToken } from "../utils/pushTokenStorage";
 import { showWebNotification } from "../utils/webNotifications";
-import { notificationToastTop } from "../utils/notificationToastPresentation";
 import { NoticeToastIcon } from "./icons";
 
 declare const require: any;
@@ -109,7 +106,6 @@ async function registerPushToken() {
 }
 
 export default function NotificationBootstrap() {
-  const insets = useSafeAreaInsets();
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const latestSeenIdRef = useRef(getStoredLatestId());
   const initializedRef = useRef(false);
@@ -201,15 +197,13 @@ export default function NotificationBootstrap() {
     return null;
   }
 
-  const top = notificationToastTop(insets.top);
-
   return (
     <Pressable
       accessibilityRole="button"
       onPress={openVisibleNotification}
       style={{
         position: "absolute",
-        top,
+        top: 8,
         left: 12,
         right: 12,
         zIndex: 9999,
@@ -222,7 +216,7 @@ export default function NotificationBootstrap() {
         backgroundColor: "#FFFFFF",
         paddingHorizontal: 14,
         paddingVertical: 12,
-        shadowColor: "#000000",
+        shadowColor: "#000",
         shadowOpacity: 0.12,
         shadowRadius: 20,
         shadowOffset: { width: 0, height: 6 },
@@ -238,17 +232,6 @@ export default function NotificationBootstrap() {
           {visibleNotification.message}
         </Text>
       </View>
-      <Pressable
-        accessibilityLabel="알림 닫기"
-        accessibilityRole="button"
-        hitSlop={10}
-        onPress={(event) => {
-          event.stopPropagation();
-          setVisibleNotification(null);
-        }}
-      >
-        <Ionicons name="close" size={18} color="#6B7280" />
-      </Pressable>
     </Pressable>
   );
 }

@@ -1552,8 +1552,6 @@ export default function AdminScreen() {
   const boardSettingsSavingRef = useRef(false);
   const handledLegacySection = useRef<string | null>(null);
   const deferredEventNavigationRef = useRef(adminDeferredEventGateInitialState(rawAdminLinkKey));
-  const eventOriginalCategoryRef = useRef<string | null>(null);
-  const eventCategoryExplicitlySelectedRef = useRef(false);
   const eventFormEditIdRef = useRef(editEventId);
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
@@ -1906,8 +1904,6 @@ export default function AdminScreen() {
     });
     eventFormEditIdRef.current = editEventId;
     if (!transition.shouldResetForm) return;
-    eventOriginalCategoryRef.current = transition.originalCategory;
-    eventCategoryExplicitlySelectedRef.current = transition.explicitlySelected;
     reset(emptyEvent);
   }, [editEventId, reset]);
 
@@ -1949,8 +1945,6 @@ export default function AdminScreen() {
     setBoardManagementScope(destination.scope);
     setBoardManagementBoardId(destination.boardId);
     setBoardManagementTab(destination.tab);
-    eventOriginalCategoryRef.current = null;
-    eventCategoryExplicitlySelectedRef.current = false;
     reset(emptyEvent);
     router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
   }, [boards, editEventMissing, rawAdminLinkKey, reset]);
@@ -1972,8 +1966,6 @@ export default function AdminScreen() {
     setBoardManagementScope(destination.scope);
     setBoardManagementBoardId(destination.boardId);
     setBoardManagementTab(destination.tab);
-    eventOriginalCategoryRef.current = event.category;
-    eventCategoryExplicitlySelectedRef.current = false;
     reset({
       title: event.title,
       category: eventDisplayCategory(event.category),
@@ -3247,8 +3239,6 @@ export default function AdminScreen() {
     if (editEventId && !eventUpdateId) {
       Alert.alert("일정 확인", "이미 삭제되었거나 없는 일정입니다. 목록에서 다시 선택해주세요.");
       openManagedBoard("academic-calendar");
-      eventOriginalCategoryRef.current = null;
-      eventCategoryExplicitlySelectedRef.current = false;
       reset(emptyEvent);
       router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       return;
@@ -3263,11 +3253,7 @@ export default function AdminScreen() {
 
     const payload = {
       title: values.title,
-      category: eventCategoryValueForSubmit({
-        originalCategory: eventOriginalCategoryRef.current,
-        selectedCategory: eventDisplayCategory(values.category),
-        explicitlySelected: eventCategoryExplicitlySelectedRef.current,
-      }),
+      category: eventCategoryValueForSubmit(eventDisplayCategory(values.category)),
       start_at: startAt,
       end_at: endAt ?? undefined,
       location: cleanOptional(values.location ?? ""),
@@ -3281,8 +3267,6 @@ export default function AdminScreen() {
       } else {
         await eventApi.createEvent(payload);
       }
-      eventOriginalCategoryRef.current = null;
-      eventCategoryExplicitlySelectedRef.current = false;
       reset(emptyEvent);
       queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -3301,8 +3285,6 @@ export default function AdminScreen() {
     try {
       await eventApi.deleteEvent(event.id);
       if (editEventId === event.id) {
-        eventOriginalCategoryRef.current = null;
-        eventCategoryExplicitlySelectedRef.current = false;
         reset(emptyEvent);
         router.replace({ pathname: "/admin", params: { section: "boardManagement" } } as never);
       }
@@ -3860,10 +3842,7 @@ export default function AdminScreen() {
                     key={option.value}
                     active={eventDisplayCategory(field.value) === option.value}
                     label={option.label}
-                    onPress={() => {
-                      eventCategoryExplicitlySelectedRef.current = true;
-                      field.onChange(option.value);
-                    }}
+                    onPress={() => field.onChange(option.value)}
                   />
                 ))}
               </View>

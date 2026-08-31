@@ -979,8 +979,7 @@ export default function PostCreateScreen() {
                           onBlur={() => setParticipantSearchFocused(false)}
                           onChangeText={setParticipantQuery}
                           onFocus={() => setParticipantSearchFocused(true)}
-                          accessibilityLabel="이름 또는 학번으로 검색"
-                          placeholder="이름 또는 학번으로 검색"
+                          placeholder="이름으로 검색"
                           placeholderTextColor="#A6ACB7"
                           style={[styles.activityInlineInput, { outlineStyle: "none" } as never]}
                           value={participantQuery}

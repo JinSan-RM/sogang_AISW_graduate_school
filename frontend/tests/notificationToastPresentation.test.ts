@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { notificationToastTop } from "../utils/notificationToastPresentation";
+const notification = readFileSync("components/NotificationBootstrap.tsx", "utf8");
 
-test("토스트는 safe area 아래 8px에 배치된다", () => {
-  assert.equal(notificationToastTop(0), 8);
-  assert.equal(notificationToastTop(24), 32);
-  assert.equal(notificationToastTop(-10), 8);
+test("토스트는 PR 원본처럼 화면 상단 8px에 고정된다", () => {
+  assert.match(notification, /position: "absolute",\s*top: 8,/);
+  assert.doesNotMatch(notification, /useSafeAreaInsets|notificationToastTop/);
 });

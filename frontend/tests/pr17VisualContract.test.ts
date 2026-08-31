@@ -6,14 +6,13 @@ const notification = readFileSync("components/NotificationBootstrap.tsx", "utf8"
 const board = readFileSync("app/(tabs)/board/[boardId].tsx", "utf8");
 const create = readFileSync("app/(tabs)/board/post/create.tsx", "utf8");
 
-test("모든 알림은 PR 토스트 디자인을 사용하고 닫기와 safe area를 보존한다", () => {
+test("모든 알림은 PR 원본 토스트 디자인과 고정 위치를 사용한다", () => {
   assert.doesNotMatch(notification, /notificationToastKind\(visibleNotification\.notification_type\)/);
-  assert.match(notification, /notificationToastTop\(insets\.top\)/);
+  assert.match(notification, /position: "absolute",\s*top: 8,/);
+  assert.doesNotMatch(notification, /useSafeAreaInsets|notificationToastTop/);
   assert.match(notification, /<NoticeToastIcon size=\{32\}/);
   assert.match(notification, /<Pressable\s+accessibilityRole="button"\s+onPress=\{openVisibleNotification\}/);
-  assert.match(notification, /accessibilityLabel="알림 닫기"/);
-  const closeHandler = notification.match(/accessibilityLabel="알림 닫기"[\s\S]*?onPress=\{\(event\) => \{([\s\S]*?)\n        \}\}/)?.[1] ?? "";
-  assert.match(closeHandler, /^\s*event\.stopPropagation\(\);\s*setVisibleNotification\(null\);\s*$/);
+  assert.doesNotMatch(notification, /accessibilityLabel="알림 닫기"|stopPropagation\(\)/);
   assert.match(notification, /onPress=\{openVisibleNotification\}/);
 });
 
@@ -24,20 +23,19 @@ test("모든 알림 토스트는 PR의 2px 텍스트 간격과 muted 한 줄 메
   assert.doesNotMatch(notification, /const isNotice =/);
 });
 
-test("활동 카드 디자인을 적용해도 참여활동 검색은 남는다", () => {
+test("참여활동 화면은 PR 원본처럼 검색 진입점을 숨긴다", () => {
   assert.match(board, /function ActivityTile[\s\S]*?<Pressable onPress=\{\(\) => onPress\(post\.id\)\} style=\{\[styles\.activityCard, isLast \? styles\.activityCardLast : null\]\}>/);
   assert.match(board, /<ActivityTile post=\{item\} boardSlug=\{itemBoard\?\.slug \?\? board\?\.slug\} index=\{index\} isLast=\{index === posts\.length - 1\} onPress=/);
   assert.match(board, /activityCardLast:[\s\S]*borderBottomWidth: 0/);
-  assert.match(board, /accessibilityLabel="검색"[\s\S]*setShowSearch\(true\)/);
-  assert.doesNotMatch(board, /isActivityCards \|\| isParticipationGuideCards \|\| isStudyRecruit[\s\S]*?<View style=\{styles\.iconButton\}/);
+  assert.match(board, /isActivityCards \|\| isParticipationGuideCards \|\| isStudyRecruit[\s\S]*?<View style=\{styles\.iconButton\}/);
 });
 
-test("활동 인증 폼은 PR 스타일과 이름·학번 검색 기능을 함께 표시한다", () => {
+test("활동 인증 폼은 PR 원본 문구를 표시한다", () => {
   assert.match(create, /isActivity \? styles\.appBarNoDivider : null/);
   assert.match(create, /appBarNoDivider:[\s\S]*borderBottomWidth: 0/);
   assert.match(create, /appBarTitle:[\s\S]*fontSize: 18,[\s\S]*fontWeight: "500",[\s\S]*lineHeight: 22/);
-  assert.match(create, /placeholder="이름 또는 학번으로 검색"/);
-  assert.match(create, /accessibilityLabel="이름 또는 학번으로 검색"/);
+  assert.match(create, /placeholder="이름으로 검색"/);
+  assert.doesNotMatch(create, /이름 또는 학번으로 검색/);
   assert.match(create, /attachExtensionHint:[\s\S]*fontSize: 12[\s\S]*lineHeight: 15/);
   assert.match(create, /<Text style=\{styles\.activityPhotoText\}>\s*\{isUploading \? "업로드 중" : "활동 사진을 추가해주세요"\}\s*<\/Text>/);
   assert.match(create, /activityPhotoText:[\s\S]*color: "#A6ACB7",[\s\S]*fontSize: 13,[\s\S]*fontWeight: "400",[\s\S]*lineHeight: 16/);

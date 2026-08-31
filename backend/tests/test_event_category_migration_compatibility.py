@@ -22,7 +22,7 @@ def _load_migration():
     return module
 
 
-def test_0027_compatibility_upgrade_preserves_existing_event_categories() -> None:
+def test_0027_upgrade_collapses_legacy_event_categories_to_other() -> None:
     migration = _load_migration()
     engine = sa.create_engine("sqlite://")
 
@@ -53,11 +53,4 @@ def test_0027_compatibility_upgrade_preserves_existing_event_categories() -> Non
 
     assert migration.revision == "0027_event_category_cleanup"
     assert migration.down_revision == "0026_dues_payers"
-    assert categories == [
-        "academic",
-        "event",
-        "exam",
-        "council",
-        "external",
-        "other",
-    ]
+    assert categories == ["academic", "event", "other", "other", "other", "other"]

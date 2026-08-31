@@ -28,8 +28,8 @@ const TONES: Record<EventToneSurface, Record<EventDisplayCategory, EventCategory
 };
 
 export function eventDisplayCategory(raw: string | null | undefined): EventDisplayCategory {
-  if (raw === "academic" || raw === "exam") return "academic";
-  if (raw === "event" || raw === "council" || raw === "external") return "event";
+  if (raw === "academic") return "academic";
+  if (raw === "event") return "event";
   return "other";
 }
 
@@ -44,11 +44,6 @@ export function eventCategoryTone(
   return TONES[surface][eventDisplayCategory(raw)];
 }
 
-export function eventCategoryValueForSubmit(input: {
-  originalCategory: string | null;
-  selectedCategory: EventDisplayCategory;
-  explicitlySelected: boolean;
-}): string {
-  if (!input.explicitlySelected && input.originalCategory) return input.originalCategory;
-  return input.selectedCategory;
+export function eventCategoryValueForSubmit(selectedCategory: EventDisplayCategory): string {
+  return selectedCategory;
 }
