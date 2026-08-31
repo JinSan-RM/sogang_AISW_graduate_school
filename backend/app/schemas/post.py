@@ -31,6 +31,10 @@ class PostUpdate(PostMutationBase):
     deadline_at: datetime | None = None
 
 
+class PostRepresentativeImageUpdate(BaseModel):
+    media_id: int = Field(ge=1)
+
+
 class SuggestionUpdate(BaseModel):
     status: str = Field(pattern="^(received|answered)$")
     admin_reply: str | None = None

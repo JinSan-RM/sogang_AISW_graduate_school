@@ -49,7 +49,6 @@ import {
   adminDeferredEventGateTransition,
   adminCalendarQueryEnabled,
   adminFaqQueryEnabled,
-  representativeImageUpdatePayload,
   type AdminBoardContentKind,
   type AdminBoardDestination,
   type AdminBoardManagementTab,
@@ -3096,11 +3095,10 @@ export default function AdminScreen() {
 
     try {
       setReplacingRepresentativeImagePostId(item.id);
-      const detailResponse = await postApi.getPostDetail(item.id);
       const replacement = await pickAndUploadContentImage();
       if (!replacement) return;
 
-      await postApi.updatePost(item.id, representativeImageUpdatePayload(detailResponse.data, replacement));
+      await postApi.replaceRepresentativeImage(item.id, replacement.id);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
         invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, itemBoard)),

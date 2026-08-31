@@ -961,7 +961,7 @@ Rules:
 - For anonymous or forced-anonymous posts, non-admin readers other than the author receive `author_id: null`, `author_nickname: "Anonymous"`, and no cohort. Author-name search and block-based filtering do not act as identity side channels; anonymous content remains reportable.
 - `club-promo` and `networking-programs` posts are admin-only even if a stale board configuration says otherwise.
 - These administrator-managed participation guide posts require at least one ready image attachment.
-- Their metadata requires an HTTP(S) `application_url`; the mobile detail CTA opens this administrator-managed URL.
+- Their metadata requires an HTTP(S) `application_url`; the mobile detail CTA opens this administrator-managed URL. A legacy body line formatted as `참여 링크`, `가입 링크`, or `신청 링크` followed by an HTTP(S) URL is exposed only through `metadata.application_url` and is omitted from member-facing content. Create/edit canonicalizes the same duplicate line out of stored content, so the URL is rendered only by the CTA.
 - `study-recruit` remains user-writable, so every authenticated member may create and manage their own study recruitment post.
 - Club, study, and networking activity certification boards keep `write_permission = user`, so every authenticated member may submit an activity certification.
 - Activity certifications require at least one ready image and reject non-image attachments.
@@ -1012,6 +1012,29 @@ Members may update their own mutual-aid request only while its workflow status i
 For activity certifications, authors can update `metadata.activity_date`, `metadata.participant_dues_payer_ids`, and `metadata.activity_source_post_id`; the server regenerates `metadata.participants` from the roster. For `club-activity`, a changed source must satisfy the current published-source rule above, while an unchanged hidden or soft-deleted historical source remains editable and re-canonicalizes the stored category from its last title. An unchanged historical record without dues-payer IDs may retain its old participant snapshot while other fields are edited, but changing that legacy participant list requires complete reselection from the current roster. If the member-facing edit payload omits the hidden `metadata.bank_account`, the stored value is preserved; explicitly providing the key updates it.
 
 Existing `club-activity` rows can be audited without writes using `python scripts/normalize_club_activity_sources.py` from `backend/`. The command accepts an optional exact-match alias JSON file and changes data only with `--apply`; source-list problems or unmatched rows prevent guessed mappings and are reported for operator review.
+
+### PUT `/posts/{post_id}/representative-image`
+
+Auth: admin
+
+Request:
+
+```json
+{
+  "media_id": 42
+}
+```
+
+Response:
+
+```json
+{
+  "post_id": 10,
+  "media_id": 42
+}
+```
+
+This endpoint is limited to `club-promo` and `networking-programs`. The media must be a ready, public image. It replaces the first image attachment while preserving the post title, body, metadata, anonymity, deadline, and every other attachment. It intentionally does not run the full post-update validation, so an administrator can repair the representative image of a readable legacy guide whose stored metadata predates `application_url`.
 
 ### PUT `/posts/{post_id}/mutual-aid`
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Board, MediaAsset, PostDetail } from "../types";
+import type { Board } from "../types";
 import {
   adminActivityCertificationBankAccount,
   adminDeferredEventGateInitialState,
@@ -18,8 +18,6 @@ import {
   adminContentBoards,
   nextAdminBoardSelection,
   nextAdminContentSelection,
-  replaceRepresentativeImage,
-  representativeImageUpdatePayload,
 } from "../utils/adminContentManagement";
 
 function board(overrides: Partial<Board> & Pick<Board, "id" | "name" | "slug" | "category" | "board_type">): Board {
@@ -29,16 +27,6 @@ function board(overrides: Partial<Board> & Pick<Board, "id" | "name" | "slug" | 
     read_permission: "public",
     write_permission: "user",
     ...overrides,
-  };
-}
-
-function media(id: number, contentType: string, filename = `media-${id}`): MediaAsset {
-  return {
-    id,
-    original_filename: filename,
-    content_type: contentType,
-    file_size: 1024,
-    url: `/media/${id}`,
   };
 }
 
@@ -479,56 +467,4 @@ test("그룹 전환은 유효한 현재 게시판을 유지하고 아니면 첫 
   assert.equal(nextAdminContentSelection(boards, 1, "participation"), 5);
   assert.equal(nextAdminContentSelection(boards, 6, "all"), null);
   assert.equal(nextAdminContentSelection([], 6, "participation"), null);
-});
-
-test("대표 이미지 교체는 첫 이미지만 바꾸고 나머지 첨부 순서를 보존한다", () => {
-  const document = media(1, "application/pdf", "guide.pdf");
-  const oldHero = media(2, "image/jpeg", "old-hero.jpg");
-  const gallery = media(3, "image/png", "gallery.png");
-  const replacement = media(4, "image/webp", "new-hero.webp");
-
-  assert.deepEqual(
-    replaceRepresentativeImage([document, oldHero, gallery], replacement).map((item) => item.id),
-    [document.id, replacement.id, gallery.id],
-  );
-  assert.deepEqual(
-    replaceRepresentativeImage([document], replacement).map((item) => item.id),
-    [replacement.id, document.id],
-  );
-});
-
-test("대표 이미지 수정 payload는 이미지 외 게시글 필드를 그대로 보존한다", () => {
-  const detail: PostDetail = {
-    id: 99,
-    board_id: 6,
-    title: "SG_LLM",
-    content: "동아리 소개",
-    author_id: 1,
-    author_nickname: "관리자",
-    is_anonymous: false,
-    is_pinned: true,
-    is_notice: false,
-    status: "published",
-    category: "학술",
-    metadata: { application_url: "https://example.com/apply", retained: true },
-    attachments: [media(1, "application/pdf"), media(2, "image/jpeg")],
-    view_count: 10,
-    like_count: 2,
-    comment_count: 1,
-    is_liked: false,
-    is_bookmarked: false,
-    created_at: "2026-08-01T00:00:00Z",
-    updated_at: "2026-08-02T00:00:00Z",
-    deadline_at: "2026-09-01T00:00:00Z",
-  };
-
-  assert.deepEqual(representativeImageUpdatePayload(detail, media(3, "image/png")), {
-    title: "SG_LLM",
-    content: "동아리 소개",
-    category: "학술",
-    is_anonymous: false,
-    metadata: { application_url: "https://example.com/apply", retained: true },
-    attachment_ids: [1, 3],
-    deadline_at: "2026-09-01T00:00:00Z",
-  });
 });

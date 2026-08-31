@@ -416,6 +416,13 @@ export const postApi = {
     const response = await api.put<ApiSuccess<{ id: number }>>(`/posts/${postId}`, payload);
     return response.data;
   },
+  replaceRepresentativeImage: async (postId: number, mediaId: number) => {
+    const response = await api.put<ApiSuccess<{ post_id: number; media_id: number }>>(
+      `/posts/${postId}/representative-image`,
+      { media_id: mediaId },
+    );
+    return response.data;
+  },
   updateSuggestion: async (postId: number, payload: { status: string; admin_reply?: string }) => {
     const response = await api.put<ApiSuccess<{ post_id: number; status: string; suggestion: PostDetail["suggestion"] }>>(
       `/posts/${postId}/suggestion`,

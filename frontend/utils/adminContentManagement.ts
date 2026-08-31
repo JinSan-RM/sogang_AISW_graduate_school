@@ -1,4 +1,4 @@
-import type { Board, MediaAsset, PostDetail } from "../types";
+import type { Board } from "../types";
 
 export type AdminContentScope = "all" | "notices" | "participation" | "community" | "council";
 
@@ -402,7 +402,6 @@ export function nextAdminContentSelection(
   if (visibleBoards.some((board) => board.id === currentBoardId)) return currentBoardId;
   return visibleBoards[0]?.id ?? null;
 }
-
 export function nextAdminBoardSelection(
   boards: Board[],
   currentBoardId: number | null,
@@ -412,22 +411,4 @@ export function nextAdminBoardSelection(
   const visibleBoards = adminBoardsForScope(boards, nextScope);
   if (visibleBoards.some((board) => board.id === currentBoardId)) return currentBoardId;
   return visibleBoards[0]?.id ?? null;
-}
-
-export function replaceRepresentativeImage(attachments: MediaAsset[], replacement: MediaAsset): MediaAsset[] {
-  const currentIndex = attachments.findIndex((attachment) => attachment.content_type.startsWith("image/"));
-  if (currentIndex < 0) return [replacement, ...attachments];
-  return attachments.map((attachment, index) => index === currentIndex ? replacement : attachment);
-}
-
-export function representativeImageUpdatePayload(detail: PostDetail, replacement: MediaAsset) {
-  return {
-    title: detail.title,
-    content: detail.content,
-    category: detail.category,
-    is_anonymous: detail.is_anonymous,
-    metadata: detail.metadata,
-    attachment_ids: replaceRepresentativeImage(detail.attachments, replacement).map((attachment) => attachment.id),
-    deadline_at: detail.deadline_at,
-  };
 }

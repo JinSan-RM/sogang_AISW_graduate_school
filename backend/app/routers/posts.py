@@ -30,23 +30,24 @@ from app.notifications import (
 from app.post_access import post_status_read_filter, require_post_read
 from app.response import success_response
 from app.rate_limit import enforce_rate_limit
-from app.schemas.post import MutualAidUpdate, PostCreate, PostUpdate, SuggestionUpdate
+from app.schemas.post import MutualAidUpdate, PostCreate, PostRepresentativeImageUpdate, PostUpdate, SuggestionUpdate
 from app.security import utc_now
 from app.study_activity_cleanup import post_content_preview
 from app.audit import log_admin_action
+from app.participation_guides import ADMIN_PARTICIPATION_BOARD_SLUGS, normalize_participation_guide
 
 router = APIRouter()
 
-ADMIN_PARTICIPATION_BOARD_SLUGS = frozenset({"club-promo", "networking-programs"})
 COUNCIL_MEMBER_WRITABLE_TYPES = frozenset({"suggestion", "mutual_aid"})
 MUTUAL_AID_MIN_LEAD_DAYS = 0
 SEOUL_TIME_ZONE = ZoneInfo("Asia/Seoul")
 
 
 def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False) -> dict | None:
-    if not post.metadata_json:
+    _, normalized = normalize_participation_guide(board.slug, post.content, post.metadata_json)
+    if not normalized:
         return None
-    metadata = dict(post.metadata_json)
+    metadata = dict(normalized)
     if board.board_type == "activity_certification" and not include_sensitive:
         metadata.pop("bank_account", None)
     if board.slug == "study-activity" and not include_sensitive:
@@ -54,6 +55,11 @@ def _safe_metadata(post: Post, board: Board, *, include_sensitive: bool = False)
     if board.board_type == "mutual_aid" and not include_sensitive:
         metadata.pop("proof_url", None)
     return metadata
+
+
+def _visible_post_content(post: Post, board: Board) -> str:
+    content, _ = normalize_participation_guide(board.slug, post.content, post.metadata_json)
+    return content
 
 
 def _participant_label(payer: DuesPayer) -> str:
@@ -451,7 +457,7 @@ def _serialize_post_list_item(
     q: str | None,
     activity_source_title: str | None = None,
 ) -> dict:
-    content_preview = post_content_preview(post.content, board.slug)
+    content_preview = post_content_preview(_visible_post_content(post, board), board.slug)
     hide_mutual_aid_media = board.board_type == "mutual_aid" and current_user.role != "admin"
     return {
         "id": post.id,
@@ -1192,7 +1198,7 @@ def get_post_detail(
             "id": post.id,
             "board_id": post.board_id,
             "title": post.title,
-            "content": post.content,
+            "content": _visible_post_content(post, board),
             "author_id": _visible_post_author_id(post, board, current_user),
             "author_nickname": _post_author_nickname(post, board, current_user, nickname),
             "author_cohort": _post_author_cohort(post, board, current_user, nickname, cohort),
@@ -1233,14 +1239,19 @@ def create_post(
     _enforce_council_management_policy(board, current_user)
     if not can_write_board(current_user, board.write_permission):
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
-    _validate_post_content(board, payload.content)
-    _validate_admin_participation_post(board, payload.metadata, current_user)
-    _reject_closed_study_recruit(board, payload.category, payload.metadata)
+    normalized_content, normalized_metadata = normalize_participation_guide(
+        board.slug,
+        payload.content,
+        payload.metadata,
+    )
+    _validate_post_content(board, normalized_content)
+    _validate_admin_participation_post(board, normalized_metadata, current_user)
+    _reject_closed_study_recruit(board, payload.category, normalized_metadata)
     if payload.is_anonymous and not board.allow_anonymous and board.board_type != "suggestion":
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
 
     is_anonymous = True if board.board_type == "suggestion" else payload.is_anonymous
-    post_metadata = _canonical_activity_metadata(db, board, payload.metadata)
+    post_metadata = _canonical_activity_metadata(db, board, normalized_metadata)
     post_metadata, activity_source_title = _canonical_club_activity_source(db, board, post_metadata)
     post = Post(
         board_id=board_id,
@@ -1248,7 +1259,7 @@ def create_post(
         author_nickname_snapshot=current_user.nickname,
         author_cohort_snapshot=current_user.cohort,
         title=payload.title,
-        content="" if board.board_type == "album" else payload.content,
+        content="" if board.board_type == "album" else normalized_content,
         is_anonymous=is_anonymous,
         is_notice=board.board_type == "notice",
         category=activity_source_title or canonical_post_category(board, payload.category),
@@ -1258,8 +1269,8 @@ def create_post(
     db.add(post)
     db.flush()
     _upsert_suggestion_extension(db, post, board, payload.category)
-    _upsert_mutual_aid_extension(db, post, board, payload.category, payload.metadata)
-    _replace_attachments(db, post.id, payload.attachment_ids or [], current_user, _evidence_link(payload.metadata))
+    _upsert_mutual_aid_extension(db, post, board, payload.category, normalized_metadata)
+    _replace_attachments(db, post.id, payload.attachment_ids or [], current_user, _evidence_link(normalized_metadata))
     if post.is_notice:
         active_user_ids = db.scalars(select(User.id).where(User.is_active.is_(True))).all()
         for user_id in active_user_ids:
@@ -1292,9 +1303,14 @@ def update_post(
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
     board = require_post_read(db, post, current_user)
+    normalized_content, normalized_metadata = normalize_participation_guide(
+        board.slug,
+        payload.content,
+        payload.metadata,
+    )
     if board is not None:
         _enforce_council_management_policy(board, current_user)
-        _validate_admin_participation_post(board, payload.metadata, current_user)
+        _validate_admin_participation_post(board, normalized_metadata, current_user)
     if post.author_id != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
     target_board = board
@@ -1321,7 +1337,7 @@ def update_post(
             raise AppException(status_code=403, message="Forbidden.", code="FORBIDDEN")
 
     if target_board is not None:
-        _validate_post_content(target_board, payload.content)
+        _validate_post_content(target_board, normalized_content)
     if board is not None and board.board_type == "suggestion" and current_user.role != "admin":
         if _suggestion_has_admin_reply(db, post.id):
             raise AppException(status_code=403, message="Answered suggestions cannot be edited.", code="FORBIDDEN")
@@ -1336,13 +1352,13 @@ def update_post(
     if target_board is not None:
         post.board_id = target_board.id
     post.title = payload.title
-    post.content = "" if target_board is not None and target_board.board_type == "album" else payload.content
+    post.content = "" if target_board is not None and target_board.board_type == "album" else normalized_content
     post.is_anonymous = is_anonymous
     existing_metadata = dict(post.metadata_json or {})
     merged_metadata = _metadata_for_update(
         post,
         target_board,
-        payload.metadata,
+        normalized_metadata,
         has_new_attachments=bool(payload.attachment_ids),
     )
     canonical_metadata = _canonical_activity_metadata(
@@ -1362,9 +1378,9 @@ def update_post(
     post.deadline_at = payload.deadline_at if target_board is not None and target_board.board_type == "notice" else None
     if target_board is not None:
         _upsert_suggestion_extension(db, post, target_board, payload.category)
-        _upsert_mutual_aid_extension(db, post, target_board, payload.category, payload.metadata)
+        _upsert_mutual_aid_extension(db, post, target_board, payload.category, normalized_metadata)
     if payload.attachment_ids is not None:
-        incoming_evidence_link = _evidence_link(payload.metadata)
+        incoming_evidence_link = _evidence_link(normalized_metadata)
         _replace_attachments(
             db,
             post.id,
@@ -1385,6 +1401,62 @@ def update_post(
     db.refresh(post)
 
     return success_response({"id": post.id})
+
+
+@router.put("/posts/{post_id}/representative-image")
+def update_post_representative_image(
+    post_id: int,
+    payload: PostRepresentativeImageUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    post = db.get(Post, post_id)
+    if post is None or post.deleted_at is not None:
+        raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
+    board = db.get(Board, post.board_id)
+    if board is None or board.slug not in ADMIN_PARTICIPATION_BOARD_SLUGS:
+        raise AppException(
+            status_code=400,
+            message="Representative images can only be changed for participation guides.",
+            code="BAD_REQUEST",
+        )
+
+    replacement = db.get(MediaAsset, payload.media_id)
+    if replacement is None or replacement.status != "ready":
+        raise AppException(status_code=400, message="Invalid attachment.", code="BAD_REQUEST")
+    if replacement.is_private:
+        raise AppException(status_code=400, message="Private media cannot be attached to this board.", code="BAD_REQUEST")
+    if not replacement.content_type.lower().startswith("image/"):
+        raise AppException(status_code=400, message="Representative media must be an image.", code="IMAGE_ONLY")
+
+    rows = db.execute(
+        select(PostAttachment, MediaAsset)
+        .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
+        .where(PostAttachment.post_id == post.id)
+        .order_by(PostAttachment.sort_order.asc(), PostAttachment.id.asc())
+    ).all()
+    existing_replacement = next((link for link, media in rows if media.id == replacement.id), None)
+    hero_link = next((link for link, media in rows if media.content_type.lower().startswith("image/")), None)
+
+    if existing_replacement is not None and existing_replacement is not hero_link:
+        raise AppException(status_code=400, message="Media is already attached to this post.", code="BAD_REQUEST")
+    if hero_link is None:
+        next_order = max((link.sort_order for link, _ in rows), default=-1) + 1
+        db.add(PostAttachment(post_id=post.id, media_id=replacement.id, sort_order=next_order))
+    else:
+        hero_link.media_id = replacement.id
+
+    post.updated_at = utc_now()
+    log_admin_action(
+        db,
+        actor_id=current_user.id,
+        action="post.representative_image.update",
+        target_type="post",
+        target_id=post.id,
+    )
+    db.commit()
+
+    return success_response({"post_id": post.id, "media_id": replacement.id})
 
 
 @router.delete("/posts/{post_id}")
