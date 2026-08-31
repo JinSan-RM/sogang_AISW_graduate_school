@@ -757,6 +757,65 @@ Response:
 }
 ```
 
+### POST `/boards/admin` and PUT `/boards/admin/{board_id}`
+
+Auth: admin
+
+Activity-certification boards may store an optional image-layout contract in
+`metadata.activity_image_layout`:
+
+```json
+{
+  "version": 1,
+  "default": {
+    "max_width": null,
+    "height": 400,
+    "max_height": null,
+    "fit": "contain",
+    "expandable": true
+  },
+  "landscape": {
+    "max_width": null,
+    "height": 240,
+    "max_height": null,
+    "fit": "contain",
+    "expandable": true
+  },
+  "portrait": {
+    "max_width": null,
+    "height": 400,
+    "max_height": null,
+    "fit": "contain",
+    "expandable": true
+  }
+}
+```
+
+`default` is required. `landscape` and `portrait` are either the same rule
+shape or `null`. Rule fields are required; `fit` is `contain` or `cover`,
+`max_width` and `height` are nullable integers from 120 through 1600, and
+`max_height` is a nullable integer from 120 through 2000. A non-null `height`
+requires `max_height: null`. Unknown keys inside the layout or a rule are
+rejected. The metadata key is accepted only when the board's final
+`board_type` is `activity_certification`; malformed values and use on another
+board type return `422 INVALID_ACTIVITY_IMAGE_LAYOUT`.
+
+`max_width: null` means the available width, `height: null` means the source
+aspect-ratio height, and `max_height: null` means no height cap. A matching
+landscape or portrait rule wins over `default`; square images and unreadable
+source dimensions use `default`. `fit` controls how the image is placed inside
+the resulting frame. When `expandable` is true, a fixed-height or
+maximum-height-clipped frame exposes the complete image in the full-view
+viewer.
+
+The key may be omitted. The app fallback is exactly the example above: full
+available width, a fixed 400px default/portrait frame, a fixed 240px landscape
+frame, `contain`, and full-view. Square images and images whose dimensions
+cannot be read use the 400px default frame. Other board metadata keys remain
+unrestricted. PUT retains its existing whole-metadata replacement semantics:
+when `metadata` is present, callers must include every metadata key they intend
+to preserve.
+
 ## 5. Posts
 
 ### GET `/boards/{board_id}/posts`

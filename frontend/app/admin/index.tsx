@@ -2468,7 +2468,7 @@ export default function AdminScreen() {
     const targetBoardId = selectedManagedBoard.id;
     let payload: ReturnType<typeof adminBoardSettingsPayload>;
     try {
-      payload = adminBoardSettingsPayload(boardSettingsDraft);
+      payload = adminBoardSettingsPayload(boardSettingsDraft, selectedManagedBoard);
     } catch {
       Alert.alert("저장 실패", "게시판 설정 입력값을 확인하세요.");
       return;

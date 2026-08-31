@@ -57,8 +57,8 @@ export default function LegalDocumentScreen({
             <Text style={styles.consentText}>{consentLabel} 동의 완료</Text>
           </View>
         ) : null}
-        {sections.map((section) => (
-          <View key={section.title} style={styles.section}>
+        {sections.map((section, index) => (
+          <View key={`${section.title}-${index}`} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <Text style={styles.body}>{section.body}</Text>
           </View>

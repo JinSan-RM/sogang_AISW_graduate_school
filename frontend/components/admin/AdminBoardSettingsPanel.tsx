@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import type { AdminBoardSettingsDraft } from "../../utils/adminBoardSettings";
 import type { AdminBoardLockedPolicy, AdminBoardSettingKey } from "../../utils/adminContentManagement";
 import type { Board } from "../../types";
+import type { ActivityImageRule } from "../../utils/activityImageLayout";
 
 export type AdminBoardSettingsPanelProps = {
   board: Board;
@@ -21,6 +22,10 @@ const settingKey: Record<AdminBoardSettingKey, keyof AdminBoardSettingsDraft> = 
 
 const READ_PERMISSION_OPTIONS = ["guest", "user", "admin"] as const;
 const WRITE_PERMISSION_OPTIONS = ["user", "admin"] as const;
+const ORIENTATIONS: { key: "landscape" | "portrait"; label: string }[] = [
+  { key: "landscape", label: "가로형" },
+  { key: "portrait", label: "세로형" },
+];
 
 export function adminBoardPermissionOptions(kind: "read" | "write") {
   return kind === "read" ? [...READ_PERMISSION_OPTIONS] : [...WRITE_PERMISSION_OPTIONS];
@@ -82,6 +87,31 @@ function Choice({ label, selected, disabled, onPress }: { label: string; selecte
     >
       <Text style={{ color: selected ? "#2761FF" : "#374151", fontSize: 12, fontWeight: "900" }}>{label}</Text>
     </Pressable>
+  );
+}
+
+function ActivityRuleEditor({ label, rule, disabled, onChange }: { label: string; rule: ActivityImageRule; disabled?: boolean; onChange: (rule: ActivityImageRule) => void }) {
+  const updateNumber = (key: "max_width" | "height" | "max_height", value: string) => {
+    const digits = value.replace(/[^0-9]/g, "");
+    const next = digits ? Number(digits) : null;
+    onChange(key === "height" && next !== null ? { ...rule, height: next, max_height: null } : { ...rule, [key]: next });
+  };
+  return (
+    <View style={{ gap: 8, borderRadius: 8, borderWidth: 1, borderColor: "#E1E4E9", padding: 10 }}>
+      <Text style={{ color: "#374151", fontSize: 12, fontWeight: "900" }}>{label}</Text>
+      <Text style={{ color: "#6B7280", fontSize: 11 }}>최대 가로 px (120–1600, 빈 값은 화면 너비)</Text>
+      <TextInput editable={!disabled} value={rule.max_width === null ? "" : String(rule.max_width)} onChangeText={(value) => updateNumber("max_width", value)} keyboardType="number-pad" style={{ minHeight: 40, borderWidth: 1, borderColor: "#E1E4E9", borderRadius: 6, paddingHorizontal: 10 }} />
+      <Text style={{ color: "#6B7280", fontSize: 11 }}>세로 px (빈 값은 원본 비율, 고정 시 120–1600)</Text>
+      <TextInput editable={!disabled} value={rule.height === null ? "" : String(rule.height)} onChangeText={(value) => updateNumber("height", value)} keyboardType="number-pad" style={{ minHeight: 40, borderWidth: 1, borderColor: "#E1E4E9", borderRadius: 6, paddingHorizontal: 10 }} />
+      <Text style={{ color: "#6B7280", fontSize: 11 }}>최대 세로 px (120–2000, 고정 세로 사용 시 자동 제거)</Text>
+      <TextInput editable={!disabled && rule.height === null} value={rule.height !== null || rule.max_height === null ? "" : String(rule.max_height)} onChangeText={(value) => updateNumber("max_height", value)} keyboardType="number-pad" style={{ minHeight: 40, borderWidth: 1, borderColor: "#E1E4E9", borderRadius: 6, paddingHorizontal: 10, backgroundColor: rule.height !== null ? "#F8FAFC" : "#FFFFFF" }} />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Choice label="contain" selected={rule.fit === "contain"} disabled={disabled} onPress={() => onChange({ ...rule, fit: "contain" })} />
+        <Choice label="cover" selected={rule.fit === "cover"} disabled={disabled} onPress={() => onChange({ ...rule, fit: "cover" })} />
+        <Choice label="제한 시 전체보기" selected={rule.expandable} disabled={disabled} onPress={() => onChange({ ...rule, expandable: !rule.expandable })} />
+      </View>
+      <Text style={{ color: "#6B7280", fontSize: 11 }}>고정 세로 또는 최대 세로로 제한된 사진에 전체보기 버튼을 표시합니다.</Text>
+    </View>
   );
 }
 
@@ -149,6 +179,22 @@ export default function AdminBoardSettingsPanel({ board, draft, lockedPolicies, 
         />
         <Choice label={draft.isActive ? "활성" : "숨김"} selected={draft.isActive} disabled={saving} onPress={() => update("isActive", !draft.isActive)} />
       </View>
+
+      {board.board_type === "activity_certification" && draft.activityImageLayout ? (
+        <View style={{ gap: 10 }}>
+          <Text style={{ color: "#0B1F56", fontWeight: "900" }}>활동 인증 이미지 표시</Text>
+          <ActivityRuleEditor label="기본 규칙" rule={draft.activityImageLayout.default} disabled={saving} onChange={(rule) => onChange({ ...draft, activityImageLayout: { ...draft.activityImageLayout!, default: rule } })} />
+          {ORIENTATIONS.map(({ key, label }) => {
+            const rule = draft.activityImageLayout?.[key];
+            return (
+              <View key={key} style={{ gap: 8 }}>
+                <Choice label={`${label} 예외 사용`} selected={Boolean(rule)} disabled={saving} onPress={() => onChange({ ...draft, activityImageLayout: { ...draft.activityImageLayout!, [key]: rule ? null : { ...draft.activityImageLayout!.default } } })} />
+                {rule ? <ActivityRuleEditor label={`${label} 규칙`} rule={rule} disabled={saving} onChange={(next) => onChange({ ...draft, activityImageLayout: { ...draft.activityImageLayout!, [key]: next } })} /> : null}
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       <Text style={{ color: "#6B7280", fontSize: 12, lineHeight: 18 }}>
         게시판을 숨겨도 기존 게시글과 첨부파일은 삭제되지 않습니다.

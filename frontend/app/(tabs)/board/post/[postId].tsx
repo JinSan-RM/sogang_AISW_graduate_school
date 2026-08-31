@@ -6,7 +6,7 @@ import { Alert, BackHandler, Image, Linking, Platform, Pressable, ScrollView, St
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../../components/CommentItem";
-import ExpandableNaturalAspectMediaImage from "../../../../components/ExpandableNaturalAspectMediaImage";
+import ActivityCertificationMediaImage from "../../../../components/ActivityCertificationMediaImage";
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
@@ -39,6 +39,7 @@ import { isAdminUser } from "../../../../utils/permissions";
 import { formatCohortName } from "../../../../utils/userLabel";
 import { activityCertificationBadgeLabel } from "../../../../utils/activityCertification";
 import { activityCertificationDetailHeading } from "../../../../utils/activityDetailPresentation";
+import { activityImageLayoutFromMetadata } from "../../../../utils/activityImageLayout";
 import { COMMENT_DELETE_COPY } from "../../../../utils/commentPresentation";
 import { postDetailImagePresentation } from "../../../../utils/postDetailImagePresentation";
 import { postDetailFocusDecision } from "../../../../utils/postDetailCache";
@@ -390,6 +391,7 @@ export default function PostDetailScreen() {
   const imageAttachments = post.attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
   const normalizedGalleryIndex = Math.min(galleryIndex, Math.max(imageAttachments.length - 1, 0));
   const isActivityCertification = board?.board_type === "activity_certification";
+  const activityImageLayout = activityImageLayoutFromMetadata(board?.metadata?.activity_image_layout);
   const isStudyRecruit = board?.slug === "study-recruit";
   const activityDetailHeading = isActivityCertification
     ? activityCertificationDetailHeading(board?.slug, post.title, label)
@@ -414,7 +416,6 @@ export default function PostDetailScreen() {
     boardSlug: board?.slug,
   });
   const hasNaturalHero = heroImagePresentation === "natural";
-  const hasExpandableHero = isActivityCertification;
   const visibleAttachments = isPhotoAlbum
     ? []
     : hasVisualHero
@@ -599,23 +600,21 @@ export default function PostDetailScreen() {
     ]}>
       <View style={[
         hasNaturalHero ? styles.visualHeroNatural : styles.visualHero,
-        isPhotoAlbum || isActivityCertification ? styles.visualHeroAlbum : null,
+        isPhotoAlbum ? styles.visualHeroAlbum : null,
       ]}>
         {heroAttachment ? (
           isAdminParticipationGuide ? (
             <ParticipationHeroImage key={heroAttachment.id} media={heroAttachment} />
+          ) : isActivityCertification ? (
+            <ActivityCertificationMediaImage
+              key={heroAttachment.id}
+              layout={activityImageLayout}
+              media={heroAttachment}
+            />
           ) : hasNaturalHero ? (
-            hasExpandableHero ? (
-              <ExpandableNaturalAspectMediaImage
-                key={heroAttachment.id}
-                media={heroAttachment}
-                style={styles.visualHeroNaturalImage}
-              />
-            ) : (
-              <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment}
-                style={styles.visualHeroNaturalImage}
-              />
-            )
+            <NaturalAspectMediaImage key={heroAttachment.id} media={heroAttachment}
+              style={styles.visualHeroNaturalImage}
+            />
           ) : (
             <MediaImage
               media={heroAttachment}

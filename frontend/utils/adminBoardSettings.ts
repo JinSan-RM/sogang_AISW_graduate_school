@@ -1,4 +1,5 @@
 import type { Board } from "../types";
+import { activityImageLayoutFromMetadata, isValidActivityImageLayout, type ActivityImageLayout } from "./activityImageLayout";
 
 export type AdminBoardSettingsDraft = {
   name: string;
@@ -8,6 +9,7 @@ export type AdminBoardSettingsDraft = {
   readPermission: string;
   writePermission: string;
   isActive: boolean;
+  activityImageLayout?: ActivityImageLayout;
 };
 
 export type AdminBoardSettingsPayload = {
@@ -18,10 +20,11 @@ export type AdminBoardSettingsPayload = {
   read_permission: string;
   write_permission: string;
   is_active: boolean;
+  metadata?: Record<string, unknown>;
 };
 
 export function adminBoardSettingsDraft(board: Board): AdminBoardSettingsDraft {
-  return {
+  const draft: AdminBoardSettingsDraft = {
     name: board.name,
     description: board.description ?? "",
     sortOrder: String(board.sort_order),
@@ -30,15 +33,19 @@ export function adminBoardSettingsDraft(board: Board): AdminBoardSettingsDraft {
     writePermission: board.write_permission,
     isActive: board.is_active ?? true,
   };
+  if (board.board_type === "activity_certification") {
+    draft.activityImageLayout = activityImageLayoutFromMetadata(board.metadata?.activity_image_layout);
+  }
+  return draft;
 }
 
-export function adminBoardSettingsPayload(draft: AdminBoardSettingsDraft): AdminBoardSettingsPayload {
+export function adminBoardSettingsPayload(draft: AdminBoardSettingsDraft, board?: Pick<Board, "board_type" | "metadata">): AdminBoardSettingsPayload {
   const sortOrder = Number.parseInt(draft.sortOrder, 10);
   if (!draft.name.trim() || !Number.isFinite(sortOrder)) {
     throw new Error("INVALID_BOARD_SETTINGS");
   }
 
-  return {
+  const payload: AdminBoardSettingsPayload = {
     name: draft.name.trim(),
     description: draft.description.trim() || null,
     sort_order: sortOrder,
@@ -47,6 +54,11 @@ export function adminBoardSettingsPayload(draft: AdminBoardSettingsDraft): Admin
     write_permission: draft.writePermission,
     is_active: draft.isActive,
   };
+  if (board?.board_type === "activity_certification" && draft.activityImageLayout) {
+    if (!isValidActivityImageLayout(draft.activityImageLayout)) throw new Error("INVALID_ACTIVITY_IMAGE_LAYOUT");
+    payload.metadata = { ...(board.metadata ?? {}), activity_image_layout: draft.activityImageLayout };
+  }
+  return payload;
 }
 
 const EXTERNAL_LINK_KEYS = ["notion_url", "external_url", "url", "link"] as const;

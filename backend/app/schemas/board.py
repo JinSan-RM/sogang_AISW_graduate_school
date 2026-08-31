@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 BoardType = Literal[
@@ -19,6 +19,39 @@ BoardType = Literal[
     "mutual_aid",
 ]
 Permission = Literal["guest", "user", "admin"]
+ACTIVITY_IMAGE_LAYOUT_KEY = "activity_image_layout"
+
+
+class ActivityImageLayoutRule(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    max_width: int | None = Field(ge=120, le=1600)
+    height: int | None = Field(ge=120, le=1600)
+    max_height: int | None = Field(ge=120, le=2000)
+    fit: Literal["contain", "cover"]
+    expandable: bool
+
+    @model_validator(mode="after")
+    def validate_height_limit(self) -> "ActivityImageLayoutRule":
+        if self.height is not None and self.max_height is not None:
+            raise ValueError("max_height must be null when height is set")
+        return self
+
+
+class ActivityImageLayout(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    version: Literal[1]
+    default: ActivityImageLayoutRule
+    landscape: ActivityImageLayoutRule | None
+    portrait: ActivityImageLayoutRule | None
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def validate_version_type(cls, value: object) -> object:
+        if type(value) is not int or value != 1:
+            raise ValueError("version must be the integer 1")
+        return value
 
 
 class BoardAdminCreate(BaseModel):
@@ -46,3 +79,10 @@ class BoardAdminUpdate(BaseModel):
     write_permission: Permission | None = None
     metadata: dict | None = None
     is_active: bool | None = None
+
+    @field_validator("board_type")
+    @classmethod
+    def validate_board_type_is_not_null(cls, value: BoardType | None) -> BoardType:
+        if value is None:
+            raise ValueError("board_type cannot be null")
+        return value

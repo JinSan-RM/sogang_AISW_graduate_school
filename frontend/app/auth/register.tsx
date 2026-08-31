@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import SchoolEmailInput from "../../components/SchoolEmailInput";
-import { authApi, registrationApi } from "../../services/api";
+import { useRegistrationOptionsQuery } from "../../hooks/useApi";
+import { authApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import type { AuthSession } from "../../types";
 import {
@@ -24,7 +24,11 @@ import {
   verificationFailureStateFromErrorCode,
   verificationHasExpired,
 } from "../../utils/authVerificationUi";
-import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_SUPPORT_EMAIL } from "../../utils/privacyPolicy";
+import {
+  CONSENT_DOCUMENT_SECTIONS,
+  PRIVACY_POLICY_SUPPORT_EMAIL,
+  resolvePrivacyPolicyMetadata,
+} from "../../utils/privacyPolicy";
 import {
   registrationVerificationFailure,
   resendAvailableAt,
@@ -97,13 +101,10 @@ export default function RegisterScreen() {
   const [createdSession, setCreatedSession] = useState<AuthSession | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const registrationOptionsQuery = useQuery({
-    queryKey: ["registration-options"],
-    queryFn: registrationApi.getOptions,
-    staleTime: 60_000,
-  });
+  const registrationOptionsQuery = useRegistrationOptionsQuery();
   const majorOptions = registrationOptionsQuery.data?.data.majors ?? [];
   const privacyPolicy = registrationOptionsQuery.data?.data.privacy_policy;
+  const privacyPolicyDisplay = resolvePrivacyPolicyMetadata(privacyPolicy);
 
   const email = composeSchoolEmail(emailId);
 
@@ -561,11 +562,11 @@ export default function RegisterScreen() {
             </View>
             <ScrollView contentContainerStyle={styles.privacyModalContent} style={styles.privacyModalScroll}>
               <View style={styles.privacyPolicyMeta}>
-                <Text style={styles.privacyPolicyMetaText}>버전: {privacyPolicy?.version ?? "-"}</Text>
-                <Text style={styles.privacyPolicyMetaText}>시행일: {privacyPolicy?.effective_at?.slice(0, 10) ?? "-"}</Text>
+                <Text style={styles.privacyPolicyMetaText}>버전: {privacyPolicyDisplay.version}</Text>
+                <Text style={styles.privacyPolicyMetaText}>시행일: {privacyPolicyDisplay.effectiveDate}</Text>
               </View>
-              {PRIVACY_POLICY_SECTIONS.map((section) => (
-                <View key={section.title} style={styles.privacyPolicySection}>
+              {CONSENT_DOCUMENT_SECTIONS.map((section, index) => (
+                <View key={`${section.title}-${index}`} style={styles.privacyPolicySection}>
                   <Text style={styles.privacyPolicySectionTitle}>{section.title}</Text>
                   <Text style={styles.privacyPolicyBody}>{section.body}</Text>
                 </View>

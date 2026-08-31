@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { boardApi, userApi } from "../services/api";
+import { boardApi, registrationApi, userApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 
 export function useBoardsQuery() {
@@ -18,5 +18,13 @@ export function useMeQuery() {
     queryFn: userApi.getMe,
     enabled: isAuthenticated,
     retry: false,
+  });
+}
+
+export function useRegistrationOptionsQuery() {
+  return useQuery({
+    queryKey: ["registration-options"],
+    queryFn: registrationApi.getOptions,
+    staleTime: 60_000,
   });
 }

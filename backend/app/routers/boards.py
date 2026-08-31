@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,10 +10,34 @@ from app.errors import AppException
 from app.models.board import Board
 from app.models.user import User
 from app.response import success_response
-from app.schemas.board import BoardAdminCreate, BoardAdminUpdate
+from app.schemas.board import (
+    ACTIVITY_IMAGE_LAYOUT_KEY,
+    ActivityImageLayout,
+    BoardAdminCreate,
+    BoardAdminUpdate,
+)
 from app.audit import log_admin_action
 
 router = APIRouter()
+
+
+def _validate_activity_image_layout(board_type: str, metadata: dict | None) -> None:
+    if metadata is None or ACTIVITY_IMAGE_LAYOUT_KEY not in metadata:
+        return
+    if board_type != "activity_certification":
+        raise AppException(
+            status_code=422,
+            message="Activity image layout is only allowed for activity certification boards.",
+            code="INVALID_ACTIVITY_IMAGE_LAYOUT",
+        )
+    try:
+        ActivityImageLayout.model_validate(metadata[ACTIVITY_IMAGE_LAYOUT_KEY])
+    except ValidationError as exc:
+        raise AppException(
+            status_code=422,
+            message="Invalid activity image layout.",
+            code="INVALID_ACTIVITY_IMAGE_LAYOUT",
+        ) from exc
 
 
 def _board_payload(board: Board) -> dict:
@@ -63,6 +88,7 @@ def create_admin_board(payload: BoardAdminCreate, db: Session = Depends(get_db),
 
     data = payload.model_dump()
     metadata = data.pop("metadata", None)
+    _validate_activity_image_layout(data["board_type"], metadata)
     board = Board(**data, metadata_json=metadata)
     db.add(board)
     db.flush()
@@ -84,6 +110,9 @@ def update_admin_board(
         raise AppException(status_code=404, message="Board not found.", code="NOT_FOUND")
 
     data = payload.model_dump(exclude_unset=True)
+    final_board_type = data.get("board_type", board.board_type)
+    final_metadata = data["metadata"] if "metadata" in data else board.metadata_json
+    _validate_activity_image_layout(final_board_type, final_metadata)
     if "metadata" in data:
         board.metadata_json = data.pop("metadata")
     for key, value in data.items():

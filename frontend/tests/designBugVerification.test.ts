@@ -111,9 +111,11 @@ test("활동 인증 목록 이미지는 이전의 가로형 고정 비율을 사
   assert.match(boardSource, /activityThumb:[\s\S]*aspectRatio: 2\.05/);
 });
 
-test("활동 인증 상세 이미지는 PR의 240px 프레임과 전체보기 동작을 사용한다", () => {
-  assert.match(postDetailSource, /const hasExpandableHero = isActivityCertification;/);
-  assert.match(postDetailSource, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
+test("활동 인증 상세 이미지는 게시판별 관리자 규칙을 사용하고 사진첩만 240px 프레임을 유지한다", () => {
+  assert.match(postDetailSource, /activityImageLayoutFromMetadata\(board\?\.metadata\?\.activity_image_layout\)/);
+  assert.match(postDetailSource, /<ActivityCertificationMediaImage[\s\S]*?layout=\{activityImageLayout\}/);
+  assert.match(postDetailSource, /isPhotoAlbum \? styles\.visualHeroAlbum : null/);
+  assert.doesNotMatch(postDetailSource, /isPhotoAlbum \|\| isActivityCertification \? styles\.visualHeroAlbum : null/);
   assert.match(postDetailSource, /visualHeroAlbum:[\s\S]*height: 240/);
 });
 

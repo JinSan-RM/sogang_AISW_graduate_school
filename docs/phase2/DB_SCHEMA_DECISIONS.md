@@ -123,6 +123,16 @@ Phase 2 changes:
 - Add `write_permission VARCHAR(20) NOT NULL DEFAULT 'user'`
 - Add `metadata JSONB NULL`
 
+Activity-certification image presentation is an optional board-level concern
+stored under `boards.metadata.activity_image_layout`; it does not add a column
+or table. The version-1 object contains required `default` and nullable
+`landscape`/`portrait` rules. Each rule stores nullable `max_width`, `height`,
+and `max_height`, plus `fit` (`contain` or `cover`) and `expandable`. The board
+admin API validates the complete object and allows the key only for a final
+`board_type = activity_certification`. Missing keys use the frontend default,
+so this additive JSONB contract requires neither an Alembic schema migration
+nor a seed/data backfill.
+
 Allowed `board_type`:
 
 - `notice`

@@ -43,6 +43,44 @@ test("기존 게시판 설정 payload는 slug category board_type metadata를 �
   assert.equal("metadata" in payload, false);
 });
 
+test("활동인증 게시판은 이미지 레이아웃 설정을 metadata에 저장하고 기존 metadata를 보존한다", () => {
+  const activityBoard = { ...board, board_type: "activity_certification", metadata: { legacy: "keep" } };
+  const draft = adminBoardSettingsDraft(activityBoard);
+  const payload = adminBoardSettingsPayload({
+    ...draft,
+    activityImageLayout: {
+      version: 1,
+      default: { max_width: null, height: null, max_height: 600, fit: "contain", expandable: true },
+      landscape: null,
+      portrait: null,
+    },
+  }, activityBoard);
+  assert.deepEqual(payload.metadata, {
+    legacy: "keep",
+    activity_image_layout: {
+      version: 1,
+      default: { max_width: null, height: null, max_height: 600, fit: "contain", expandable: true },
+      landscape: null,
+      portrait: null,
+    },
+  });
+});
+
+test("비활동 게시판 payload에는 activity image metadata를 추가하지 않는다", () => {
+  const draft = adminBoardSettingsDraft(board);
+  const payload = adminBoardSettingsPayload(draft);
+  assert.equal("metadata" in payload, false);
+});
+
+test("활동인증 이미지 레이아웃의 범위를 벗어난 값은 payload에서 거절한다", () => {
+  const activityBoard = { ...board, board_type: "activity_certification" };
+  const draft = adminBoardSettingsDraft(activityBoard);
+  assert.throws(
+    () => adminBoardSettingsPayload({ ...draft, activityImageLayout: { ...draft.activityImageLayout!, default: { ...draft.activityImageLayout!.default, max_width: 119 } } }, activityBoard),
+    (error: unknown) => error instanceof Error && error.message === "INVALID_ACTIVITY_IMAGE_LAYOUT",
+  );
+});
+
 test("게시판 이름과 정렬 순서는 비어 있거나 숫자가 아니면 거절한다", () => {
   const draft = adminBoardSettingsDraft(board);
 
