@@ -43,6 +43,7 @@ import { activityImageLayoutFromMetadata } from "../../../../utils/activityImage
 import { COMMENT_DELETE_COPY } from "../../../../utils/commentPresentation";
 import { postDetailImagePresentation } from "../../../../utils/postDetailImagePresentation";
 import { postDetailFocusDecision } from "../../../../utils/postDetailCache";
+import { participationApplicationUrl } from "../../../../utils/participationGuide";
 import { shouldShowPostAuthorBlock } from "../../../../utils/postMenu";
 import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../../utils/reportForm";
 import { createReplyTarget, getReplyComposerState, type ReplyTarget } from "../../../../utils/replyComposer";
@@ -322,7 +323,7 @@ export default function PostDetailScreen() {
           : "진행중"
       : categoryLabel(post.category, isAdminParticipationGuide ? "모집중" : board?.board_type === "notice" ? "공지" : board?.name ?? "게시글");
   const tone = categoryTone(label);
-  const applicationUrl = (typeof metadata.application_url === "string" ? metadata.application_url : undefined) ?? firstUrlFromText(post.content);
+  const applicationUrl = participationApplicationUrl(metadata);
   const contentUrl = firstUrlFromText(post.content);
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
   const canEditOwn =

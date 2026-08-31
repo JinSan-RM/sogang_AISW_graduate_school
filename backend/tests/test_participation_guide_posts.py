@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.models.board import Board
 from app.models.media import MediaAsset, PostAttachment
 from app.models.post import Post
+from app.participation_guides import normalize_participation_guide
 
 
 def _ready_media(*, owner_id: int, filename: str, content_type: str) -> MediaAsset:
@@ -115,6 +116,27 @@ def test_new_participation_post_stores_labeled_link_only_as_cta_metadata(api) ->
         assert stored is not None
         assert stored.content == "소개\n\n마무리"
         assert stored.metadata_json == {"application_url": "https://example.com/join"}
+
+
+def test_participation_body_without_a_labeled_cta_line_keeps_exact_formatting() -> None:
+    content = "\n동아리 소개\n\n\n참고 자료: https://example.com/reference\n\n"
+    metadata = {"application_url": "https://example.com/join"}
+
+    assert normalize_participation_guide("club-promo", content, metadata) == (content, metadata)
+
+
+def test_removing_a_labeled_cta_line_preserves_unrelated_body_spacing() -> None:
+    content = (
+        "동아리 소개\n\n"
+        "참여 링크: https://example.com/join\n\n"
+        "첫 번째 문단\n\n\n"
+        "두 번째 문단"
+    )
+
+    visible, metadata = normalize_participation_guide("club-promo", content, None)
+
+    assert visible == "동아리 소개\n\n첫 번째 문단\n\n\n두 번째 문단"
+    assert metadata == {"application_url": "https://example.com/join"}
 
 
 def test_admin_replaces_participation_hero_without_revalidating_legacy_cta(api) -> None:
