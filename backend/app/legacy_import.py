@@ -1056,7 +1056,7 @@ def import_articles_and_specials(
                 existing_entry = existing_entries.get(str(entry["legacy_write_id"]))
                 if existing_entry is None:
                     continue
-                for field in ("banner_image_url", "attachment_urls"):
+                for field in ("banner_image_url", "photo_urls", "attachment_urls"):
                     if existing_entry.get(field):
                         entry[field] = copy.deepcopy(existing_entry[field])
             metadata[metadata_key] = special_rows
@@ -1378,7 +1378,10 @@ def _attach_media_to_special_entry(
     collection_key: str,
     article_id: str,
     media_url: str,
+    content_type: str,
 ) -> bool:
+    if not content_type.startswith("image/"):
+        return False
     metadata = copy.deepcopy(board.metadata_json or {})
     entries = list(metadata.get(collection_key) or [])
     changed = False
@@ -1388,10 +1391,17 @@ def _attach_media_to_special_entry(
         attachment_urls = list(entry.get("attachment_urls") or [])
         if media_url not in attachment_urls:
             attachment_urls.append(media_url)
+        if entry.get("attachment_urls") != attachment_urls:
             entry["attachment_urls"] = attachment_urls
             changed = True
-        if not entry.get("banner_image_url"):
-            entry["banner_image_url"] = media_url
+        photo_urls = list(entry.get("photo_urls") or [])
+        if media_url not in photo_urls:
+            photo_urls.append(media_url)
+        if entry.get("photo_urls") != photo_urls:
+            entry["photo_urls"] = photo_urls
+            changed = True
+        if photo_urls and entry.get("banner_image_url") != photo_urls[0]:
+            entry["banner_image_url"] = photo_urls[0]
             changed = True
         break
     if changed:
@@ -1797,6 +1807,7 @@ def import_attachments(
                         collection_key=collection_key,
                         article_id=article_id,
                         media_url=media_access_reference(media.id),
+                        content_type=content_type,
                     )
             elif special_record and special_record.entity_type == "faq":
                 faq = db.get(FAQ, special_record.target_id or 0)

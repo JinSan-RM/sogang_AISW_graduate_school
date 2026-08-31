@@ -89,7 +89,41 @@ export type PastCouncilFormData = {
 
 function photoUrlsFromValue(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((url): url is string => typeof url === "string" && url.trim().length > 0);
+  const seen = new Set<string>();
+  return value.flatMap((url) => {
+    if (typeof url !== "string") return [];
+    const normalized = url.trim();
+    if (!normalized || seen.has(normalized)) return [];
+    seen.add(normalized);
+    return [normalized];
+  });
+}
+
+export function councilGalleryFields({
+  photoUrls,
+  attachmentUrls,
+  bannerImageUrl,
+}: {
+  photoUrls?: unknown;
+  attachmentUrls?: unknown;
+  bannerImageUrl?: unknown;
+}) {
+  const photos = photoUrlsFromValue(photoUrls);
+  const legacyAttachments = photoUrlsFromValue(attachmentUrls);
+  const banner = typeof bannerImageUrl === "string" ? bannerImageUrl.trim() : "";
+  const gallery = photos.length > 0
+    ? photos
+    : legacyAttachments.length > 0
+      ? legacyAttachments
+      : banner
+        ? [banner]
+        : [];
+
+  return {
+    photo_urls: gallery,
+    attachment_urls: [...gallery],
+    banner_image_url: gallery[0] ?? "",
+  };
 }
 
 function hasCompleteCouncilMembers(members: CouncilMemberFormData[]): boolean {
@@ -229,12 +263,17 @@ export function currentCouncilFormsFromMetadata(metadata: Metadata): CurrentCoun
       const members = configuredMembers.length > 0 ? configuredMembers : legacyMembers;
       const title = stringValue(record, "title");
       if (!title && members.length === 0) return [];
+      const gallery = councilGalleryFields({
+        photoUrls: record.photo_urls,
+        attachmentUrls: record.attachment_urls,
+        bannerImageUrl: record.banner_image_url,
+      });
       return [{
         title: title || "현재 원우회",
         greeting: stringValue(record, "greeting"),
         intro: stringValue(record, "intro"),
-        banner_image_url: stringValue(record, "banner_image_url"),
-      photo_urls: photoUrlsFromValue(record.photo_urls),
+        banner_image_url: gallery.banner_image_url,
+        photo_urls: gallery.photo_urls,
         members,
       }];
     });
@@ -271,12 +310,17 @@ export function cohortLeaderFormsFromMetadata(metadata: Metadata): CohortLeaderF
       ];
     }
     if (!cohort && members.length === 0) return [];
+    const gallery = councilGalleryFields({
+      photoUrls: record.photo_urls,
+      attachmentUrls: record.attachment_urls,
+      bannerImageUrl: record.banner_image_url,
+    });
     return [{
       cohort,
       greeting: stringValue(record, "greeting"),
       intro: stringValue(record, "intro"),
-      banner_image_url: stringValue(record, "banner_image_url"),
-      photo_urls: photoUrlsFromValue(record.photo_urls),
+      banner_image_url: gallery.banner_image_url,
+      photo_urls: gallery.photo_urls,
       members,
     }];
   });
@@ -297,12 +341,17 @@ export function pastCouncilFormsFromMetadata(metadata: Metadata): PastCouncilFor
       ];
     }
     if (!cohort && members.length === 0) return [];
+    const gallery = councilGalleryFields({
+      photoUrls: record.photo_urls,
+      attachmentUrls: record.attachment_urls,
+      bannerImageUrl: record.banner_image_url,
+    });
     return [{
       cohort,
       greeting: stringValue(record, "greeting"),
       intro: stringValue(record, "intro"),
-      banner_image_url: stringValue(record, "banner_image_url"),
-      photo_urls: photoUrlsFromValue(record.photo_urls),
+      banner_image_url: gallery.banner_image_url,
+      photo_urls: gallery.photo_urls,
       activities: Array.isArray(record.activities) ? record.activities : [],
       members,
     }];
@@ -310,7 +359,13 @@ export function pastCouncilFormsFromMetadata(metadata: Metadata): PastCouncilFor
 }
 
 export function withCurrentCouncilMetadata(metadata: Metadata, cards: CurrentCouncilFormData[]) {
-  const current = cards.slice(0, 1);
+  const current = cards.slice(0, 1).map((card) => ({
+    ...card,
+    ...councilGalleryFields({
+      photoUrls: card.photo_urls,
+      bannerImageUrl: card.banner_image_url,
+    }),
+  }));
   return {
     ...(metadata ?? {}),
     council_introductions: current,
@@ -324,12 +379,15 @@ export function withCohortLeaderMetadata(metadata: Metadata, cards: CohortLeader
     cohort_leaders: cards.map((card) => {
       const captain = card.members.find((member) => member.role.trim() === "기장") ?? card.members[0];
       const viceCaptain = card.members.find((member) => member.role.trim() === "부기장");
+      const gallery = councilGalleryFields({
+        photoUrls: card.photo_urls,
+        bannerImageUrl: card.banner_image_url,
+      });
       return {
         cohort: withoutCohortSuffix(card.cohort),
         greeting: card.greeting,
         intro: card.intro,
-        banner_image_url: card.banner_image_url,
-        photo_urls: card.photo_urls ?? [],
+        ...gallery,
         members: card.members,
         captain_name: captain?.name ?? "",
         vice_captain_name: viceCaptain?.name ?? "",
@@ -346,12 +404,15 @@ export function withPastCouncilMetadata(metadata: Metadata, cards: PastCouncilFo
     past_councils: cards.map((card) => {
       const president = card.members.find((member) => member.role.trim() === "회장") ?? card.members[0];
       const vicePresident = card.members.find((member) => member.role.trim() === "부회장");
+      const gallery = councilGalleryFields({
+        photoUrls: card.photo_urls,
+        bannerImageUrl: card.banner_image_url,
+      });
       return {
         cohort: withoutCouncilSuffix(card.cohort),
         greeting: card.greeting,
         intro: card.intro,
-        banner_image_url: card.banner_image_url,
-        photo_urls: card.photo_urls ?? [],
+        ...gallery,
         activities: card.activities,
         members: card.members,
         president_name: president?.name ?? "",

@@ -74,13 +74,14 @@ import {
   validateExternalHttpUrl,
   type AdminBoardSettingsDraft,
 } from "../../utils/adminBoardSettings";
-import { pickAndUploadBannerImage, pickAndUploadContentImage } from "../../utils/mediaPicker";
+import { pickAndUploadBannerImage, pickAndUploadContentImage, pickAndUploadImages } from "../../utils/mediaPicker";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { formatPastCouncilActivitiesForEditing, parsePastCouncilActivitiesForStorage } from "../../utils/pastCouncil";
 import {
   canSaveCohortLeaderCards,
   canSaveCurrentCouncilCards,
   canSavePastCouncilCards,
+  councilGalleryFields,
   cohortLeaderFormsFromMetadata,
   currentCouncilFormsFromMetadata,
   moveCouncilIntroductionItem,
@@ -277,6 +278,7 @@ const emptyCurrentCouncil: CurrentCouncilFormData = {
   greeting: "",
   intro: "",
   banner_image_url: "",
+  photo_urls: [],
   members: [],
 };
 
@@ -285,6 +287,7 @@ const emptyCohortLeader: CohortLeaderForm = {
   greeting: "",
   intro: "",
   banner_image_url: "",
+  photo_urls: [],
   members: [],
 };
 
@@ -294,6 +297,7 @@ const emptyPastCouncil: PastCouncilForm = {
   intro: "",
   activities_text: "",
   banner_image_url: "",
+  photo_urls: [],
   members: [],
 };
 
@@ -455,6 +459,24 @@ function bannerFormFromItem(item: BannerItem): BannerForm {
 
 function mediaUrl(value?: string | null) {
   return toAbsoluteMediaUrl(value, API_ORIGIN);
+}
+
+type IntroGalleryForm = { photo_urls?: string[]; banner_image_url: string };
+
+function introGalleryPatch(photoUrls: readonly string[]) {
+  const gallery = councilGalleryFields({ photoUrls });
+  return {
+    photo_urls: gallery.photo_urls,
+    banner_image_url: gallery.banner_image_url,
+  };
+}
+
+function appendedIntroGalleryPatch(card: IntroGalleryForm, addedUrls: readonly string[]) {
+  const current = councilGalleryFields({
+    photoUrls: card.photo_urls,
+    bannerImageUrl: card.banner_image_url,
+  });
+  return introGalleryPatch([...current.photo_urls, ...addedUrls]);
 }
 
 function parseSort(value: string) {
@@ -832,30 +854,46 @@ function ActionButton({
   );
 }
 
-function IntroBannerEditor({
-  value,
+function IntroPhotoGalleryEditor({
+  values,
   uploading,
+  disabled,
   onUpload,
   onRemove,
+  onMove,
 }: {
-  value: string;
+  values: string[];
   uploading: boolean;
+  disabled: boolean;
   onUpload: () => void;
-  onRemove: () => void;
+  onRemove: (index: number) => void;
+  onMove: (fromIndex: number, toIndex: number) => void;
 }) {
-  const previewUrl = mediaUrl(value);
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: COLORS.muted, fontSize: 12, fontWeight: "900" }}>대표 이미지</Text>
-      {previewUrl ? (
-        <MediaImage media={{ url: value }} style={{ width: "100%", aspectRatio: 2.2, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
-      ) : null}
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <View style={{ flex: 1 }}>
-          <ActionButton icon="image-outline" label={uploading ? "업로드 중" : "대표 이미지 등록"} onPress={onUpload} disabled={uploading} tone="outline" />
+      <Text style={{ color: COLORS.primary900, fontSize: 14, fontWeight: "900" }}>소개 사진</Text>
+      <Text style={{ color: COLORS.muted, fontSize: 12, lineHeight: 18 }}>첫 번째 사진이 대표 이미지로 표시됩니다. 사진을 추가한 뒤 위·아래로 순서를 바꿀 수 있습니다.</Text>
+      {values.length === 0 ? (
+        <View style={{ alignItems: "center", justifyContent: "center", minHeight: 96, borderRadius: 8, borderWidth: 1, borderStyle: "dashed", borderColor: COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 12 }}>
+          <Ionicons name="images-outline" size={28} color={COLORS.muted} />
+          <Text style={{ color: COLORS.muted, fontSize: 12, marginTop: 6 }}>등록된 소개 사진이 없습니다.</Text>
         </View>
-        {value ? <View style={{ flex: 1 }}><ActionButton label="대표 이미지 삭제" onPress={onRemove} tone="danger" /></View> : null}
-      </View>
+      ) : values.map((value, index) => (
+        <View key={`${value}-${index}`} style={{ gap: 8, borderRadius: RADIUS.card, borderWidth: 1, borderColor: index === 0 ? COLORS.primary : COLORS.border, backgroundColor: COLORS.surfaceAlt, padding: 10 }}>
+          <Text style={{ color: index === 0 ? COLORS.primary : COLORS.primary900, fontSize: 12, fontWeight: "900" }}>
+            {index === 0 ? "대표 이미지" : `사진 ${index + 1}`}
+          </Text>
+          {mediaUrl(value) ? (
+            <MediaImage media={{ url: value }} style={{ width: "100%", aspectRatio: 2.2, borderRadius: 8, backgroundColor: COLORS.primary50 }} />
+          ) : null}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><ActionButton icon="chevron-up-outline" label="위로" onPress={() => onMove(index, index - 1)} disabled={disabled || index === 0} tone="outline" /></View>
+            <View style={{ flex: 1 }}><ActionButton icon="chevron-down-outline" label="아래로" onPress={() => onMove(index, index + 1)} disabled={disabled || index === values.length - 1} tone="outline" /></View>
+            <View style={{ flex: 1 }}><ActionButton icon="trash-outline" label="삭제" onPress={() => onRemove(index)} disabled={disabled} tone="danger" /></View>
+          </View>
+        </View>
+      ))}
+      <ActionButton icon="images-outline" label={uploading ? "업로드 중" : "사진 여러 장 추가"} onPress={onUpload} disabled={disabled} tone="outline" />
     </View>
   );
 }
@@ -2794,10 +2832,17 @@ export default function AdminScreen() {
     if (currentCouncilUploading) return;
     try {
       setCurrentCouncilUploading({ cardIndex, memberIndex });
-      const uploaded = await pickAndUploadContentImage();
-      if (uploaded?.url) {
-        if (memberIndex === undefined) updateCurrentCouncil(cardIndex, { banner_image_url: uploaded.url });
-        else updateCurrentCouncilMember(cardIndex, memberIndex, { image_url: uploaded.url });
+      if (memberIndex === undefined) {
+        const uploaded = await pickAndUploadImages();
+        const addedUrls = uploaded.flatMap((item) => item.url ? [item.url] : []);
+        if (addedUrls.length > 0) {
+          setCurrentCouncils((current) => current.map((card, index) => index === cardIndex
+            ? { ...card, ...appendedIntroGalleryPatch(card, addedUrls) }
+            : card));
+        }
+      } else {
+        const uploaded = await pickAndUploadContentImage();
+        if (uploaded?.url) updateCurrentCouncilMember(cardIndex, memberIndex, { image_url: uploaded.url });
       }
     } catch {
       Alert.alert("사진 업로드 실패", "원우회 소개 이미지를 다시 선택해주세요.");
@@ -2811,16 +2856,20 @@ export default function AdminScreen() {
       Alert.alert("임원진 저장", "gsa-executives 게시판을 찾을 수 없습니다.");
       return;
     }
-    const normalized = currentCouncils.slice(0, 1).map((card) => ({
-      title: card.title.trim(),
-      greeting: card.greeting.trim(),
-      intro: card.intro.trim(),
-      banner_image_url: card.banner_image_url.trim(),
-      members: card.members.map((member) => ({
-        name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
-        image_url: member.image_url.trim(), intro: member.intro.trim(),
-      })),
-    }));
+    const normalized = currentCouncils.slice(0, 1).map((card) => {
+      const gallery = councilGalleryFields({ photoUrls: card.photo_urls, bannerImageUrl: card.banner_image_url });
+      return {
+        title: card.title.trim(),
+        greeting: card.greeting.trim(),
+        intro: card.intro.trim(),
+        banner_image_url: gallery.banner_image_url,
+        photo_urls: gallery.photo_urls,
+        members: card.members.map((member) => ({
+          name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
+          image_url: member.image_url.trim(), intro: member.intro.trim(),
+        })),
+      };
+    });
     if (!canSaveCurrentCouncilCards(normalized)) {
       Alert.alert("원우회 소개 저장", "원우회 이름·소개글과 모든 임원의 이름·기수·직책을 입력하세요.");
       return;
@@ -2856,10 +2905,17 @@ export default function AdminScreen() {
     if (cohortLeaderUploading) return;
     try {
       setCohortLeaderUploading({ cardIndex, memberIndex });
-      const uploaded = await pickAndUploadContentImage();
-      if (uploaded?.url) {
-        if (memberIndex === undefined) updateCohortLeader(cardIndex, { banner_image_url: uploaded.url });
-        else updateCohortLeaderMember(cardIndex, memberIndex, { image_url: uploaded.url });
+      if (memberIndex === undefined) {
+        const uploaded = await pickAndUploadImages();
+        const addedUrls = uploaded.flatMap((item) => item.url ? [item.url] : []);
+        if (addedUrls.length > 0) {
+          setCohortLeaders((current) => current.map((card, index) => index === cardIndex
+            ? { ...card, ...appendedIntroGalleryPatch(card, addedUrls) }
+            : card));
+        }
+      } else {
+        const uploaded = await pickAndUploadContentImage();
+        if (uploaded?.url) updateCohortLeaderMember(cardIndex, memberIndex, { image_url: uploaded.url });
       }
     } catch {
       Alert.alert("사진 업로드 실패", "기장단 이미지를 다시 선택해주세요.");
@@ -2873,16 +2929,20 @@ export default function AdminScreen() {
       Alert.alert("기장단 저장", "gsa-cohort-leaders 게시판을 찾을 수 없습니다.");
       return;
     }
-    const normalized = cohortLeaders.map((item) => ({
-      cohort: item.cohort.trim().replace(/기$/, ""),
-      greeting: item.greeting.trim(),
-      intro: item.intro.trim(),
-      banner_image_url: item.banner_image_url.trim(),
-      members: item.members.map((member) => ({
-        name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
-        image_url: member.image_url.trim(), intro: member.intro.trim(),
-      })),
-    }));
+    const normalized = cohortLeaders.map((item) => {
+      const gallery = councilGalleryFields({ photoUrls: item.photo_urls, bannerImageUrl: item.banner_image_url });
+      return {
+        cohort: item.cohort.trim().replace(/기$/, ""),
+        greeting: item.greeting.trim(),
+        intro: item.intro.trim(),
+        banner_image_url: gallery.banner_image_url,
+        photo_urls: gallery.photo_urls,
+        members: item.members.map((member) => ({
+          name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
+          image_url: member.image_url.trim(), intro: member.intro.trim(),
+        })),
+      };
+    });
     if (!canSaveCohortLeaderCards(normalized)) {
       Alert.alert("기장단 저장", "각 기수의 기수·소개글과 모든 임원의 이름·기수·직책을 입력하세요.");
       return;
@@ -2918,10 +2978,17 @@ export default function AdminScreen() {
     if (pastCouncilUploading) return;
     try {
       setPastCouncilUploading({ cardIndex, memberIndex });
-      const uploaded = await pickAndUploadContentImage();
-      if (uploaded?.url) {
-        if (memberIndex === undefined) updatePastCouncil(cardIndex, { banner_image_url: uploaded.url });
-        else updatePastCouncilMember(cardIndex, memberIndex, { image_url: uploaded.url });
+      if (memberIndex === undefined) {
+        const uploaded = await pickAndUploadImages();
+        const addedUrls = uploaded.flatMap((item) => item.url ? [item.url] : []);
+        if (addedUrls.length > 0) {
+          setPastCouncils((current) => current.map((card, index) => index === cardIndex
+            ? { ...card, ...appendedIntroGalleryPatch(card, addedUrls) }
+            : card));
+        }
+      } else {
+        const uploaded = await pickAndUploadContentImage();
+        if (uploaded?.url) updatePastCouncilMember(cardIndex, memberIndex, { image_url: uploaded.url });
       }
     } catch {
       Alert.alert("사진 업로드 실패", "역대 원우회 이미지를 다시 선택해주세요.");
@@ -2934,17 +3001,21 @@ export default function AdminScreen() {
       Alert.alert("역대 원우회 저장", "gsa-past-councils 게시판을 찾을 수 없습니다.");
       return;
     }
-    const normalized = pastCouncils.map((item) => ({
-      cohort: item.cohort.trim().replace(/기$/, ""),
-      greeting: item.greeting.trim(),
-      intro: item.intro.trim(),
-      activities: parsePastCouncilActivitiesForStorage(item.activities_text),
-      banner_image_url: item.banner_image_url.trim(),
-      members: item.members.map((member) => ({
-        name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
-        image_url: member.image_url.trim(), intro: member.intro.trim(),
-      })),
-    }));
+    const normalized = pastCouncils.map((item) => {
+      const gallery = councilGalleryFields({ photoUrls: item.photo_urls, bannerImageUrl: item.banner_image_url });
+      return {
+        cohort: item.cohort.trim().replace(/기$/, ""),
+        greeting: item.greeting.trim(),
+        intro: item.intro.trim(),
+        activities: parsePastCouncilActivitiesForStorage(item.activities_text),
+        banner_image_url: gallery.banner_image_url,
+        photo_urls: gallery.photo_urls,
+        members: item.members.map((member) => ({
+          name: member.name.trim(), cohort: member.cohort.trim(), role: member.role.trim(),
+          image_url: member.image_url.trim(), intro: member.intro.trim(),
+        })),
+      };
+    });
     if (!canSavePastCouncilCards(normalized)) {
       Alert.alert("역대 원우회 저장", "각 원우회의 대수·소개글과 모든 임원의 이름·기수·직책을 입력하세요.");
       return;
@@ -3657,7 +3728,7 @@ export default function AdminScreen() {
         <View style={{ gap: 10 }}>
           <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>원우회 소개 관리</Text>
           <Text style={{ color: COLORS.muted, lineHeight: 20 }}>
-            현재 원우회의 대표 이미지, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
+            현재 원우회의 소개 사진 여러 장, 인사말, 소개글과 임원 카드를 등록하면 원우회 소개 화면에 바로 반영됩니다.
           </Text>
         </View>
       </Panel>
@@ -3669,11 +3740,13 @@ export default function AdminScreen() {
             <Field value={council.title} onChangeText={(value) => updateCurrentCouncil(cardIndex, { title: value })} placeholder="원우회 이름 예: 제30대 원우회" />
             <Field value={council.greeting} onChangeText={(value) => updateCurrentCouncil(cardIndex, { greeting: value })} placeholder="인사말" multiline />
             <Field value={council.intro} onChangeText={(value) => updateCurrentCouncil(cardIndex, { intro: value })} placeholder="원우회 소개글" multiline />
-            <IntroBannerEditor
-              value={council.banner_image_url}
+            <IntroPhotoGalleryEditor
+              values={council.photo_urls ?? []}
               uploading={currentCouncilUploading?.cardIndex === cardIndex && currentCouncilUploading.memberIndex === undefined}
+              disabled={Boolean(currentCouncilUploading)}
               onUpload={() => void handleUploadCurrentCouncilImage(cardIndex)}
-              onRemove={() => updateCurrentCouncil(cardIndex, { banner_image_url: "" })}
+              onRemove={(photoIndex) => updateCurrentCouncil(cardIndex, introGalleryPatch((council.photo_urls ?? []).filter((_, index) => index !== photoIndex)))}
+              onMove={(fromIndex, toIndex) => updateCurrentCouncil(cardIndex, introGalleryPatch(moveCouncilIntroductionItem(council.photo_urls ?? [], fromIndex, toIndex)))}
             />
             {council.members.map((member, memberIndex) => (
               <IntroMemberEditor
@@ -3704,7 +3777,7 @@ export default function AdminScreen() {
       <Panel>
         <View style={{ gap: 10 }}>
           <Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>기수별 기장단 소개 관리</Text>
-          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>기수별 대표 이미지, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.</Text>
+          <Text style={{ color: COLORS.muted, lineHeight: 20 }}>기수별 소개 사진 여러 장, 인사말, 소개글과 필요한 만큼의 임원 카드를 등록할 수 있습니다.</Text>
         </View>
       </Panel>
       {!cohortLeadersBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-cohort-leaders 게시판을 찾을 수 없습니다.</Text></Panel> : null}
@@ -3715,11 +3788,13 @@ export default function AdminScreen() {
             <Field value={leader.cohort} onChangeText={(value) => updateCohortLeader(index, { cohort: value })} placeholder="기수 예: 75" />
             <Field value={leader.greeting} onChangeText={(value) => updateCohortLeader(index, { greeting: value })} placeholder="인사말 예: 안녕하세요, 75기 기장 홍길동입니다!" />
             <Field value={leader.intro} onChangeText={(value) => updateCohortLeader(index, { intro: value })} placeholder="기장단 소개글" multiline />
-            <IntroBannerEditor
-              value={leader.banner_image_url}
+            <IntroPhotoGalleryEditor
+              values={leader.photo_urls ?? []}
               uploading={cohortLeaderUploading?.cardIndex === index && cohortLeaderUploading.memberIndex === undefined}
+              disabled={Boolean(cohortLeaderUploading)}
               onUpload={() => void handleUploadCohortLeaderImage(index)}
-              onRemove={() => updateCohortLeader(index, { banner_image_url: "" })}
+              onRemove={(photoIndex) => updateCohortLeader(index, introGalleryPatch((leader.photo_urls ?? []).filter((_, itemIndex) => itemIndex !== photoIndex)))}
+              onMove={(fromIndex, toIndex) => updateCohortLeader(index, introGalleryPatch(moveCouncilIntroductionItem(leader.photo_urls ?? [], fromIndex, toIndex)))}
             />
             {leader.members.map((member, memberIndex) => (
               <IntroMemberEditor
@@ -3752,7 +3827,7 @@ export default function AdminScreen() {
 
   const renderPastCouncilsContent = () => (
     <View style={{ gap: 12 }}>
-      <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 대표 이미지, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
+      <Panel><View style={{ gap: 8 }}><Text style={{ color: COLORS.primary900, fontSize: 18, fontWeight: "900" }}>역대 원우회 관리</Text><Text style={{ color: COLORS.muted, lineHeight: 20 }}>대수별 소개 사진 여러 장, 인사말, 소개글, 활동내역과 필요한 만큼의 임원 카드를 등록합니다.</Text></View></Panel>
       {!pastCouncilsBoard ? <Panel><Text style={{ color: COLORS.error, fontWeight: "800" }}>gsa-past-councils 게시판을 찾을 수 없습니다. 게시판 목록을 다시 불러와주세요.</Text></Panel> : null}
       {pastCouncils.map((council, index) => (
         <Panel key={`past-council-${index}`}>
@@ -3762,7 +3837,14 @@ export default function AdminScreen() {
             <Field value={council.greeting} onChangeText={(value) => updatePastCouncil(index, { greeting: value })} placeholder="인사말" multiline />
             <Field value={council.intro} onChangeText={(value) => updatePastCouncil(index, { intro: value })} placeholder="원우회 소개글" multiline />
             <Field value={council.activities_text} onChangeText={(value) => updatePastCouncil(index, { activities_text: value })} placeholder={'활동내역을 한 줄에 하나씩 입력\n예: 25.05.05 기말 세미나 개최'} multiline />
-            <IntroBannerEditor value={council.banner_image_url} uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined} onUpload={() => void handleUploadPastCouncilImage(index)} onRemove={() => updatePastCouncil(index, { banner_image_url: "" })} />
+            <IntroPhotoGalleryEditor
+              values={council.photo_urls ?? []}
+              uploading={pastCouncilUploading?.cardIndex === index && pastCouncilUploading.memberIndex === undefined}
+              disabled={Boolean(pastCouncilUploading)}
+              onUpload={() => void handleUploadPastCouncilImage(index)}
+              onRemove={(photoIndex) => updatePastCouncil(index, introGalleryPatch((council.photo_urls ?? []).filter((_, itemIndex) => itemIndex !== photoIndex)))}
+              onMove={(fromIndex, toIndex) => updatePastCouncil(index, introGalleryPatch(moveCouncilIntroductionItem(council.photo_urls ?? [], fromIndex, toIndex)))}
+            />
             {council.members.map((member, memberIndex) => (
               <IntroMemberEditor
                 key={`past-council-${index}-member-${memberIndex}`}

@@ -128,7 +128,7 @@ def test_attachment_type_distinguishes_hwp_from_legacy_word_ole_container(tmp_pa
     assert _detected_content_type(path, "application/msword") == "application/x-hwp"
 
 
-def test_special_entry_keeps_banner_and_all_attachments() -> None:
+def test_special_entry_mirrors_ordered_attachments_to_canonical_photo_urls() -> None:
     board = Board(
         name="Past councils",
         slug="gsa-past-councils",
@@ -148,16 +148,52 @@ def test_special_entry_keeps_banner_and_all_attachments() -> None:
         collection_key="past_councils",
         article_id="4313487",
         media_url="/api/media/1",
+        content_type="image/png",
     )
     assert _attach_media_to_special_entry(
         board,
         collection_key="past_councils",
         article_id="4313487",
         media_url="/api/media/2",
+        content_type="image/jpeg",
     )
     entry = board.metadata_json["past_councils"][0]
     assert entry["banner_image_url"] == "/api/media/1"
+    assert entry["photo_urls"] == ["/api/media/1", "/api/media/2"]
     assert entry["attachment_urls"] == ["/api/media/1", "/api/media/2"]
+
+
+def test_special_entry_keeps_non_image_attachments_out_of_photo_gallery() -> None:
+    board = Board(
+        name="Past councils",
+        slug="gsa-past-councils",
+        category="student-council",
+        board_type="content",
+        metadata_json={
+            "past_councils": [
+                {"legacy_write_id": "4313487", "banner_image_url": "", "intro": "24대"}
+            ]
+        },
+    )
+
+    assert _attach_media_to_special_entry(
+        board,
+        collection_key="past_councils",
+        article_id="4313487",
+        media_url="/api/media/1",
+        content_type="image/png",
+    )
+    assert not _attach_media_to_special_entry(
+        board,
+        collection_key="past_councils",
+        article_id="4313487",
+        media_url="/api/media/2",
+        content_type="application/pdf",
+    )
+    entry = board.metadata_json["past_councils"][0]
+    assert entry["banner_image_url"] == "/api/media/1"
+    assert entry["photo_urls"] == ["/api/media/1"]
+    assert entry["attachment_urls"] == ["/api/media/1"]
 
 
 def test_activity_certification_extracts_historical_date_and_participants() -> None:
@@ -994,6 +1030,7 @@ def test_special_metadata_rerun_preserves_imported_attachment_references(api) ->
         entries[0] = {
             **entries[0],
             "banner_image_url": "/api/media/11",
+            "photo_urls": ["/api/media/11", "/api/media/12"],
             "attachment_urls": ["/api/media/11", "/api/media/12"],
         }
         metadata["cohort_leaders"] = entries
@@ -1005,6 +1042,7 @@ def test_special_metadata_rerun_preserves_imported_attachment_references(api) ->
         db.refresh(board)
         entry = board.metadata_json["cohort_leaders"][0]
         assert entry["banner_image_url"] == "/api/media/11"
+        assert entry["photo_urls"] == ["/api/media/11", "/api/media/12"]
         assert entry["attachment_urls"] == ["/api/media/11", "/api/media/12"]
 
 

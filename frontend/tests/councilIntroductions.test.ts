@@ -57,6 +57,132 @@ test("등록된 대표 이미지와 설명이 없으면 임시 상세 영역을 
   );
 });
 
+test("소개 사진은 새 배열, 레거시 배열, 단일 대표 이미지 순서로 복원한다", async () => {
+  const introUtils = await introUtilsPromise;
+  assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");
+
+  assert.deepEqual(
+    introUtils.councilGalleryFields({
+      photoUrls: [" /media/first.jpg ", "", "/media/second.jpg", "/media/first.jpg"],
+      attachmentUrls: ["/media/legacy.jpg"],
+      bannerImageUrl: "/media/banner.jpg",
+    }),
+    {
+      photo_urls: ["/media/first.jpg", "/media/second.jpg"],
+      attachment_urls: ["/media/first.jpg", "/media/second.jpg"],
+      banner_image_url: "/media/first.jpg",
+    },
+  );
+  assert.deepEqual(
+    introUtils.councilGalleryFields({
+      photoUrls: [],
+      attachmentUrls: [" /media/legacy-first.jpg ", "/media/legacy-second.jpg"],
+      bannerImageUrl: "/media/banner.jpg",
+    }),
+    {
+      photo_urls: ["/media/legacy-first.jpg", "/media/legacy-second.jpg"],
+      attachment_urls: ["/media/legacy-first.jpg", "/media/legacy-second.jpg"],
+      banner_image_url: "/media/legacy-first.jpg",
+    },
+  );
+  assert.deepEqual(
+    introUtils.councilGalleryFields({ bannerImageUrl: " /media/banner-only.jpg " }),
+    {
+      photo_urls: ["/media/banner-only.jpg"],
+      attachment_urls: ["/media/banner-only.jpg"],
+      banner_image_url: "/media/banner-only.jpg",
+    },
+  );
+});
+
+test("세 원우회 소개 형식은 레거시 사진도 같은 다중 사진 폼으로 복원한다", async () => {
+  const introUtils = await introUtilsPromise;
+  assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");
+
+  const members = [{ name: "김대표", cohort: "75기", role: "대표", image_url: "", intro: "" }];
+  const attachment_urls = ["/media/legacy-first.jpg", "/media/legacy-second.jpg"];
+
+  assert.deepEqual(
+    introUtils.currentCouncilFormsFromMetadata({
+      council_introductions: [{ title: "제30대 원우회", intro: "소개", attachment_urls, members }],
+    })[0].photo_urls,
+    attachment_urls,
+  );
+  assert.deepEqual(
+    introUtils.cohortLeaderFormsFromMetadata({
+      cohort_leaders: [{ cohort: "75", intro: "소개", attachment_urls, members }],
+    })[0].photo_urls,
+    attachment_urls,
+  );
+  assert.deepEqual(
+    introUtils.pastCouncilFormsFromMetadata({
+      past_councils: [{ cohort: "29", intro: "소개", attachment_urls, members }],
+    })[0].photo_urls,
+    attachment_urls,
+  );
+});
+
+test("저장할 때 첫 번째 소개 사진을 대표 이미지로 미러링하고 순서를 보존한다", async () => {
+  const introUtils = await introUtilsPromise;
+  assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");
+
+  const photos = [" /media/first.jpg ", "/media/second.jpg", "/media/first.jpg"];
+  const member = { name: "김대표", cohort: "75기", role: "대표", image_url: "", intro: "" };
+  const current = introUtils.withCurrentCouncilMetadata({}, [{
+    title: "제30대 원우회",
+    greeting: "",
+    intro: "소개",
+    banner_image_url: "/media/stale.jpg",
+    photo_urls: photos,
+    members: [member],
+  }]);
+  const cohort = introUtils.withCohortLeaderMetadata({}, [{
+    cohort: "75",
+    greeting: "",
+    intro: "소개",
+    banner_image_url: "/media/stale.jpg",
+    photo_urls: photos,
+    members: [member],
+  }]);
+  const past = introUtils.withPastCouncilMetadata({}, [{
+    cohort: "29",
+    greeting: "",
+    intro: "소개",
+    banner_image_url: "/media/stale.jpg",
+    photo_urls: photos,
+    activities: [],
+    members: [member],
+  }]);
+
+  for (const card of [current.council_introductions[0], cohort.cohort_leaders[0], past.past_councils[0]]) {
+    assert.deepEqual(card.photo_urls, ["/media/first.jpg", "/media/second.jpg"]);
+    assert.deepEqual(card.attachment_urls, ["/media/first.jpg", "/media/second.jpg"]);
+    assert.equal(card.banner_image_url, "/media/first.jpg");
+  }
+});
+
+test("소개 사진을 이동하거나 삭제하면 새 첫 사진이 즉시 대표 이미지가 된다", async () => {
+  const introUtils = await introUtilsPromise;
+  assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");
+
+  const moved = introUtils.moveCouncilIntroductionItem(
+    ["/media/first.jpg", "/media/second.jpg", "/media/third.jpg"],
+    1,
+    0,
+  );
+  assert.deepEqual(introUtils.councilGalleryFields({ photoUrls: moved }), {
+    photo_urls: ["/media/second.jpg", "/media/first.jpg", "/media/third.jpg"],
+    attachment_urls: ["/media/second.jpg", "/media/first.jpg", "/media/third.jpg"],
+    banner_image_url: "/media/second.jpg",
+  });
+
+  assert.deepEqual(introUtils.councilGalleryFields({ photoUrls: moved.slice(1) }), {
+    photo_urls: ["/media/first.jpg", "/media/third.jpg"],
+    attachment_urls: ["/media/first.jpg", "/media/third.jpg"],
+    banner_image_url: "/media/first.jpg",
+  });
+});
+
 test("현재 원우회 소개는 대표 정보와 가변 임원 카드를 그대로 복원한다", async () => {
   const introUtils = await introUtilsPromise;
   assert.ok(introUtils, "원우회 소개 메타데이터 변환기가 필요합니다.");
@@ -83,7 +209,7 @@ test("현재 원우회 소개는 대표 정보와 가변 임원 카드를 그대
         greeting: "안녕하세요, 제30대 원우회입니다.",
         intro: "원우의 연결과 성장을 돕겠습니다.",
         banner_image_url: "/media/council-banner.jpg",
-        photo_urls: [],
+        photo_urls: ["/media/council-banner.jpg"],
         members: [
           { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "함께 만들겠습니다." },
           { name: "이국장", cohort: "74기", role: "기획국장", image_url: "", intro: "" },
@@ -127,7 +253,7 @@ test("현재 원우회 화면은 목록 선택 없이 첫 소개를 상세로 �
         greeting: "안녕하세요, 제30대 원우회입니다.",
         intro: "원우의 연결과 성장을 돕겠습니다.",
         banner_image_url: "/media/current.jpg",
-        photo_urls: [],
+        photo_urls: ["/media/current.jpg"],
         members: [
           { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "" },
         ],
@@ -187,7 +313,12 @@ test("현재 원우회 저장은 한 건만 유지하고 해당 임원만 이전
 
   assert.deepEqual(introUtils.withCurrentCouncilMetadata({ untouched: true }, [current, stale]), {
     untouched: true,
-    council_introductions: [current],
+    council_introductions: [{
+      ...current,
+      banner_image_url: "/media/current.jpg",
+      photo_urls: ["/media/current.jpg"],
+      attachment_urls: ["/media/current.jpg"],
+    }],
     executives: current.members,
   });
 });
@@ -240,7 +371,7 @@ test("새 현재 원우회 카드의 임원이 비어 있으면 기존 임원진
       greeting: "안녕하세요.",
       intro: "함께하겠습니다.",
       banner_image_url: "/media/current.jpg",
-      photo_urls: [],
+      photo_urls: ["/media/current.jpg"],
       members: [
         { name: "김회장", cohort: "75기", role: "회장", image_url: "/media/president.jpg", intro: "" },
       ],
@@ -325,7 +456,7 @@ test("기장단은 새 임원 배열을 우선하고 기존 기장·부기장 �
         greeting: "75기입니다.",
         intro: "함께해요.",
         banner_image_url: "/media/75.jpg",
-        photo_urls: [],
+        photo_urls: ["/media/75.jpg"],
         members: [
           { name: "정기장", cohort: "75기", role: "기장", image_url: "/media/captain.jpg", intro: "" },
           { name: "김총무", cohort: "75기", role: "총무", image_url: "", intro: "" },
@@ -383,7 +514,7 @@ test("역대 원우회는 인사말과 가변 임원을 복원하고 기존 회�
         greeting: "제29대 원우회입니다.",
         intro: "함께한 기록입니다.",
         banner_image_url: "/media/29.jpg",
-        photo_urls: [],
+        photo_urls: ["/media/29.jpg"],
         activities: [{ date: "25.05.05", title: "이임식" }],
         members: [
           { name: "박회장", cohort: "70기", role: "회장", image_url: "/media/past-president.jpg", intro: "" },
@@ -455,7 +586,11 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
 
   assert.deepEqual(introUtils.withCurrentCouncilMetadata({ untouched: true }, currentCards), {
     untouched: true,
-    council_introductions: currentCards,
+    council_introductions: [{
+      ...currentCards[0],
+      photo_urls: ["/media/current.jpg"],
+      attachment_urls: ["/media/current.jpg"],
+    }],
     executives: currentCards[0].members,
   });
   assert.deepEqual(introUtils.withCohortLeaderMetadata({ untouched: true }, cohortCards), {
@@ -466,7 +601,8 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
         greeting: "안녕하세요.",
         intro: "소개입니다.",
         banner_image_url: "/media/75.jpg",
-        photo_urls: [],
+        photo_urls: ["/media/75.jpg"],
+        attachment_urls: ["/media/75.jpg"],
         members: cohortCards[0].members,
         captain_name: "정기장",
         vice_captain_name: "이부기장",
@@ -483,7 +619,8 @@ test("저장 메타데이터는 새 가변 임원과 이전 앱용 고정 필드
         greeting: "제29대입니다.",
         intro: "소개입니다.",
         banner_image_url: "/media/29.jpg",
-        photo_urls: [],
+        photo_urls: ["/media/29.jpg"],
+        attachment_urls: ["/media/29.jpg"],
         activities: [{ date: "25.05.05", title: "이임식" }],
         members: pastCards[0].members,
         president_name: "박회장",
