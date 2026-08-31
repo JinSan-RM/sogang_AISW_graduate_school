@@ -85,6 +85,21 @@ export type AdminBoardContentControl = {
   canReplaceRepresentativeImage: boolean;
 };
 
+export function adminActivityCertificationBankAccount({
+  allowDisplay,
+  boardType,
+  metadata,
+}: {
+  allowDisplay: boolean;
+  boardType?: string;
+  metadata?: Record<string, unknown>;
+}): string | null {
+  if (!allowDisplay || boardType !== "activity_certification") return null;
+  const bankAccount = metadata?.bank_account;
+  if (typeof bankAccount !== "string") return null;
+  return bankAccount.trim() || null;
+}
+
 const ADMIN_CONTENT_BOARD_TYPES = new Set([
   "notice",
   "album",
@@ -337,7 +352,7 @@ export function adminBoardContentControl(board?: Board): AdminBoardContentContro
     return {
       kind: "album",
       description: "행사 사진을 이미지 중심 게시글로 관리합니다.",
-      createLabel: board.write_permission === "admin" ? `${board.name} 등록` : null,
+      createLabel: `${board.name} 등록`,
       canReplaceRepresentativeImage: false,
     };
   }

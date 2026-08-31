@@ -1040,7 +1040,7 @@ Rules:
 
 - `rejection_reason` is required when status is `rejected`.
 - A status change creates a council notification for the applicant.
-- Activity-certification bank-account metadata is omitted from member-facing post list/detail responses; it is available only to admin detail reads.
+- Activity-certification bank-account metadata is omitted from member-facing post list/detail responses. It is available only through the protected admin post list and admin detail reads; the admin UI renders it only in the selected activity-certification board's content-management list.
 
 ### DELETE `/posts/{post_id}`
 

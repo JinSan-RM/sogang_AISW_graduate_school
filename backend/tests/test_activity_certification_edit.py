@@ -65,6 +65,16 @@ def test_activity_certification_owner_updates_date_and_participants_without_losi
     member_list = api.client.get(f"/api/boards/{board_id}/posts", headers=api.headers["owner"])
     member_detail = api.client.get(f"/api/posts/{post_id}", headers=api.headers["owner"])
     admin_detail = api.client.get(f"/api/posts/{post_id}", headers=api.headers["admin"])
+    admin_list = api.client.get(
+        "/api/posts/admin/all",
+        params={"board_id": board_id},
+        headers=api.headers["admin"],
+    )
+    forbidden_admin_list = api.client.get(
+        "/api/posts/admin/all",
+        params={"board_id": board_id},
+        headers=api.headers["owner"],
+    )
     forbidden = api.client.put(
         f"/api/posts/{post_id}",
         json=_update_payload(),
@@ -77,6 +87,9 @@ def test_activity_certification_owner_updates_date_and_participants_without_losi
     assert "bank_account" not in member_detail.json()["data"]["metadata"]
     assert admin_detail.status_code == 200
     assert admin_detail.json()["data"]["metadata"]["bank_account"] == "Sogang Bank 123-456"
+    assert admin_list.status_code == 200
+    assert admin_list.json()["data"][0]["metadata"]["bank_account"] == "Sogang Bank 123-456"
+    assert forbidden_admin_list.status_code == 403
     assert forbidden.status_code == 403
 
     response = api.client.put(

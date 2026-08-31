@@ -39,6 +39,7 @@ import { invalidatePostMutationCaches, postMutationCacheTargets } from "../../ho
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
 import {
+  adminActivityCertificationBankAccount,
   adminBoardCapability,
   adminBoardContentControl,
   adminBoardDestinationForLegacySection,
@@ -1269,6 +1270,7 @@ function AdminPostCard({
   onDelete,
   onRepresentativeImageChange,
   isReplacingRepresentativeImage = false,
+  showActivityCertificationBankAccount = false,
 }: {
   item: PostListItem;
   board?: Board;
@@ -1276,10 +1278,16 @@ function AdminPostCard({
   onDelete: (item: PostListItem) => void;
   onRepresentativeImageChange?: (item: PostListItem) => void;
   isReplacingRepresentativeImage?: boolean;
+  showActivityCertificationBankAccount?: boolean;
 }) {
   const contentControl = adminBoardContentControl(board);
   const canManageRepresentativeImage = contentControl.canReplaceRepresentativeImage && Boolean(onRepresentativeImageChange);
   const hasThumbnail = Boolean(item.thumbnail_media_id || item.thumbnail_url);
+  const bankAccount = adminActivityCertificationBankAccount({
+    allowDisplay: showActivityCertificationBankAccount,
+    boardType: board?.board_type,
+    metadata: item.metadata,
+  });
   return (
     <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, padding: 14, gap: 10 }}>
       <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
@@ -1300,6 +1308,12 @@ function AdminPostCard({
       <Text style={{ color: COLORS.muted, fontSize: 12 }}>
         작성자 {item.author_nickname} · 댓글 {item.comment_count} · 추천 {item.like_count} · 첨부 {item.attachment_count ?? 0}
       </Text>
+      {bankAccount ? (
+        <View style={{ borderRadius: RADIUS.button, backgroundColor: COLORS.primary50, padding: 12, gap: 4 }}>
+          <Text style={{ color: COLORS.primary900, fontSize: 12, fontWeight: "900" }}>계좌번호</Text>
+          <Text selectable style={{ color: COLORS.text, fontSize: 15, fontWeight: "800" }}>{bankAccount}</Text>
+        </View>
+      ) : null}
       {canManageRepresentativeImage ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12, borderRadius: RADIUS.button, backgroundColor: COLORS.surfaceAlt, padding: 10 }}>
           {hasThumbnail ? (
@@ -3629,6 +3643,7 @@ export default function AdminScreen() {
             onDelete={handleDeleteAdminPost}
             onRepresentativeImageChange={(post) => void handleReplacePostRepresentativeImage(post)}
             isReplacingRepresentativeImage={replacingRepresentativeImagePostId === item.id}
+            showActivityCertificationBankAccount={contentBoard?.board_type === "activity_certification"}
           />
         ))}
       </View>

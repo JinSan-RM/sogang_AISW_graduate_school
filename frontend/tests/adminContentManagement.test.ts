@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { Board, MediaAsset, PostDetail } from "../types";
 import {
+  adminActivityCertificationBankAccount,
   adminDeferredEventGateInitialState,
   adminDeferredEventGateTransition,
   adminBoardCapability,
@@ -435,6 +436,42 @@ test("게시판 종류에 맞는 관리자 전용 제어를 선택한다", () =>
   }
   assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "exam-archive")).kind, "resource");
   assert.equal(adminBoardContentControl(boards.find((item) => item.slug === "event-album")).kind, "album");
+});
+
+test("관리자는 사용자 쓰기 권한의 행사 사진첩에도 새 게시물을 등록할 수 있다", () => {
+  assert.equal(
+    adminBoardContentControl(boards.find((item) => item.slug === "event-album")).createLabel,
+    "행사 사진첩 등록",
+  );
+});
+
+test("관리자 활동인증 목록은 비어 있지 않은 계좌번호를 표시한다", () => {
+  assert.equal(
+    adminActivityCertificationBankAccount({
+      allowDisplay: true,
+      boardType: "activity_certification",
+      metadata: { bank_account: "  서강은행 123-456  " },
+    }),
+    "서강은행 123-456",
+  );
+});
+
+test("계좌번호는 활동인증 관리 목록 외에는 표시하지 않는다", () => {
+  assert.equal(adminActivityCertificationBankAccount({
+    allowDisplay: false,
+    boardType: "activity_certification",
+    metadata: { bank_account: "서강은행 123-456" },
+  }), null);
+  assert.equal(adminActivityCertificationBankAccount({
+    allowDisplay: true,
+    boardType: "post",
+    metadata: { bank_account: "서강은행 123-456" },
+  }), null);
+  assert.equal(adminActivityCertificationBankAccount({
+    allowDisplay: true,
+    boardType: "activity_certification",
+    metadata: { bank_account: "   " },
+  }), null);
 });
 
 test("그룹 전환은 유효한 현재 게시판을 유지하고 아니면 첫 게시판을 선택한다", () => {
