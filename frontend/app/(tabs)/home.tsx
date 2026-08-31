@@ -43,6 +43,7 @@ import {
 } from "../../utils/eventCalendar";
 import { toAbsoluteMediaUrl } from "../../utils/mediaAccess";
 import { homeAlumniDirectoryErrorMessage, homeAlumniDirectoryLink } from "../../utils/homeAlumniDirectory";
+import { homeNoticeDeadlineSuffix, homeScheduleDdayLabel } from "../../utils/homeNoticeDeadline";
 import { homeNoticeCategory, isNoticeContentBoard, loadHomeNoticePreview } from "../../utils/noticeFeed";
 import { enabledRefetch, refreshQueries } from "../../utils/pullToRefresh";
 
@@ -120,19 +121,6 @@ function noticeDotColor(value?: string | null) {
     return "#0C447C"; // Figma 학사공지
   }
   return "#6543A2"; // Figma 기타공지
-}
-
-function dDayLabel(value?: string | null) {
-  if (!value) return "";
-  const target = new Date(value);
-  if (Number.isNaN(target.getTime())) return "";
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-  const days = Math.round((targetDay.getTime() - today.getTime()) / 86_400_000);
-  if (days < 0) return "마감";
-  if (days === 0) return "D-day";
-  return `D-${days}`;
 }
 
 function flattenBoards(groups?: { boards: Board[] }[]) {
@@ -436,7 +424,7 @@ function NoticeList({
               </Text>
               <Text style={styles.noticeMeta} numberOfLines={1}>
                 {category} · {formatBoardDate(post.created_at)}
-                {post.deadline_at ? ` · 마감 ${dDayLabel(post.deadline_at)}` : ""}
+                {homeNoticeDeadlineSuffix(post.deadline_at)}
               </Text>
             </View>
           </Pressable>
@@ -501,7 +489,7 @@ function CalendarCard({ events, month, onChangeMonth }: { events: EventItem[]; m
               {`${formatHomeScheduleDate(nextEvent.start_at)} · ${nextEvent.title}`}
             </Text>
           </View>
-          <Text style={styles.nextEventDday}>{dDayLabel(nextEvent.end_at ?? nextEvent.start_at)}</Text>
+          <Text style={styles.nextEventDday}>{homeScheduleDdayLabel(nextEvent.end_at ?? nextEvent.start_at)}</Text>
         </Pressable>
       ) : (
         <View accessibilityLabel="예정된 일정이 없습니다" style={styles.nextEvent}>

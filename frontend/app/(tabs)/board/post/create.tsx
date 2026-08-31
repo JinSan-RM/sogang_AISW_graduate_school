@@ -30,7 +30,7 @@ import {
   loadPublishedActivitySourcePosts,
   type ActivityParticipant,
 } from "../../../../utils/activityCertification";
-import { postCreateCompletionRoute } from "../../../../utils/appRoutes";
+import { postCreateBackDecision, postCreateCompletionRoute } from "../../../../utils/appRoutes";
 import { formatBoardDate } from "../../../../utils/dateFormat";
 import {
   calendarMonthFromDotDate,
@@ -313,6 +313,7 @@ export default function PostCreateScreen() {
     title?: string;
     category?: string;
     content?: string;
+    returnTo?: string;
   }>();
 
   const parsedInitialBoardId = Number(params.boardId);
@@ -831,8 +832,10 @@ export default function PostCreateScreen() {
               router.replace(`/board/${boardId}` as never);
               return;
             }
-            if (router.canGoBack()) router.back();
-            else router.replace(`/board/${boardId}` as never);
+            const decision = postCreateBackDecision(params.returnTo, router.canGoBack(), boardId);
+            if (decision.action === "back") router.back();
+            else if (decision.action === "navigate") router.navigate(decision.route as never);
+            else router.replace(decision.route as never);
           }}
           style={styles.iconButton}
         >

@@ -8,8 +8,11 @@ import {
   PARTICIPATION_TAB_ROUTE,
   boardParentRoute,
   navigateFromPostDetail,
+  postCreateBackDecision,
   postDetailBackDecision,
   postCreateCompletionRoute,
+  postCreateRoute,
+  postCreateRouteFromBoardList,
   postDetailRoute,
   postDetailReturnRoute,
   routeBoardId,
@@ -48,6 +51,49 @@ test("활동 인증 작성 완료 상세는 참여활동 복귀 정보를 보존
 test("상조회와 건의 작성 완료는 기존 게시판 복귀 경로를 유지한다", () => {
   assert.equal(postCreateCompletionRoute("mutual_aid", 170, 12), "/board/12");
   assert.equal(postCreateCompletionRoute("suggestion", 170, 12), "/board/12");
+});
+
+test("자료공유 글쓰기는 기존 탐색 기록과 무관하게 커뮤니티로 복귀하도록 출발지를 기록한다", () => {
+  assert.equal(
+    postCreateRouteFromBoardList(7, "시험족보", true, false, COMMUNITY_TAB_ROUTE),
+    "/board/post/create?boardId=7&category=%EC%8B%9C%ED%97%98%EC%A1%B1%EB%B3%B4&returnTo=%2F(tabs)%2Fcommunity",
+  );
+  assert.deepEqual(
+    postCreateBackDecision(COMMUNITY_TAB_ROUTE, true, 7),
+    { action: "navigate", route: COMMUNITY_TAB_ROUTE },
+  );
+});
+
+test("스터디 모집 글쓰기는 기존 탐색 기록과 무관하게 참여활동으로 복귀한다", () => {
+  assert.equal(
+    postCreateRouteFromBoardList(25, "모집", true, false, PARTICIPATION_TAB_ROUTE),
+    "/board/post/create?boardId=25&category=%EB%AA%A8%EC%A7%91&returnTo=%2F(tabs)%2Fparticipation",
+  );
+  assert.deepEqual(
+    postCreateBackDecision(PARTICIPATION_TAB_ROUTE, true, 25),
+    { action: "navigate", route: PARTICIPATION_TAB_ROUTE },
+  );
+});
+
+test("상조회 등 독립 게시판 글쓰기는 기존 뒤로가기와 직접 진입 대체 경로를 유지한다", () => {
+  assert.equal(
+    postCreateRouteFromBoardList(18, "", false, false, "/board/18"),
+    "/board/post/create?boardId=18&category=",
+  );
+  assert.deepEqual(postCreateBackDecision(undefined, true, 18), { action: "back" });
+  assert.deepEqual(postCreateBackDecision(undefined, false, 18), { action: "replace", route: "/board/18" });
+});
+
+test("활동 인증 글쓰기는 기존 전용 목록 복귀 분기를 유지한다", () => {
+  assert.equal(
+    postCreateRouteFromBoardList(12, "활동 인증", true, true, PARTICIPATION_TAB_ROUTE),
+    postCreateRoute(12, "활동 인증"),
+  );
+});
+
+test("글쓰기 복귀 경로로 외부 주소나 상세 화면을 허용하지 않는다", () => {
+  assert.deepEqual(postCreateBackDecision("https://example.com", false, 18), { action: "replace", route: "/board/18" });
+  assert.deepEqual(postCreateBackDecision("/board/post/645", true, 18), { action: "back" });
 });
 
 test("상세 복귀 경로는 앱 내부 목록 화면만 허용한다", () => {

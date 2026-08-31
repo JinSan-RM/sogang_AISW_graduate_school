@@ -14,7 +14,7 @@ import { useAggregatePosts, useBoardPosts } from "../../../hooks/usePosts";
 import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
-import { boardParentRoute, boardRoute, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
+import { boardParentRoute, boardRoute, postCreateRouteFromBoardList, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
 import { tabNameFromRoute, useTabHighlightStore } from "../../../stores/tabHighlightStore";
 import {
   activityCertificationBadgeLabel,
@@ -1090,7 +1090,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
       router.push("/auth/login");
       return;
     }
-    router.push({ pathname: "/board/post/create", params: { boardId: String(boardId), category: selectedFilter !== "전체" ? selectedFilter : "" } });
+    const category = selectedFilter !== "전체" ? selectedFilter : "";
+    router.push(postCreateRouteFromBoardList(boardId, category, isTabRoot, isActivityCards, detailReturnRoute) as never);
   };
 
   if (board?.slug === "accounting") {

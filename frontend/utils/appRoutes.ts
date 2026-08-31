@@ -27,6 +27,11 @@ export type PostDetailBackDecision =
   | { action: "navigate"; route: PostDetailReturnRoute }
   | { action: "replace"; route: PostDetailFallbackRoute };
 
+export type PostCreateBackDecision =
+  | { action: "back" }
+  | { action: "navigate"; route: PostDetailReturnRoute }
+  | { action: "replace"; route: ReturnType<typeof boardRoute> };
+
 export type EventDayBackDecision =
   | { action: "back" }
   | { action: "navigate"; route: typeof HOME_TAB_ROUTE }
@@ -96,6 +101,34 @@ export function postDetailRoute(postId: number, fromBoardId?: number, returnTo?:
   const safeReturnTo = postDetailReturnRoute(returnTo);
   if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
   return params.length > 0 ? `${path}?${params.join("&")}` : path;
+}
+
+export function postCreateRoute(boardId: number, category = "", returnTo?: unknown) {
+  const params = [`boardId=${boardId}`, `category=${encodeURIComponent(category)}`];
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
+  return `/board/post/create?${params.join("&")}` as const;
+}
+
+export function postCreateRouteFromBoardList(
+  boardId: number,
+  category: string,
+  isTabRoot: boolean,
+  isActivityCertification: boolean,
+  returnTo: unknown,
+) {
+  return postCreateRoute(boardId, category, isTabRoot && !isActivityCertification ? returnTo : undefined);
+}
+
+export function postCreateBackDecision(
+  returnTo: unknown,
+  canGoBack: boolean,
+  boardId: number,
+): PostCreateBackDecision {
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) return { action: "navigate", route: safeReturnTo };
+  if (canGoBack) return { action: "back" };
+  return { action: "replace", route: boardRoute(boardId) };
 }
 
 export function postCreateCompletionRoute(boardType: string | undefined, createdPostId: number, boardId: number) {
