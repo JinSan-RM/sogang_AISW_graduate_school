@@ -49,24 +49,34 @@ test("스터디 활동 인증 카드의 빈 제목은 표시하지 않는다", (
   assert.equal(activityCertificationCardTitle({ title: "   " }, "study-activity"), null);
 });
 
-test("동아리 활동 인증 목록은 동아리명 입력 줄을 건너뛴다", () => {
+test("동아리 활동 인증 목록은 태그 아래에 첫 동아리명 입력 줄을 표시한다", () => {
   assert.equal(
     activityCertificationPreview(
       { title: "기존 제목", content_preview: "[동아리명] : 알바트로스냅\n즐겁게 촬영했습니다." },
       "club-activity",
     ),
-    "즐겁게 촬영했습니다.",
+    "[동아리명] : 알바트로스냅",
   );
   assert.equal(
     activityCertificationPreview(
       { title: "기존 제목", content_preview: "[동아리 명] : 서뽈링\n정기 활동을 진행했습니다." },
       "club-activity",
     ),
-    "정기 활동을 진행했습니다.",
+    "[동아리 명] : 서뽈링",
+  );
+  assert.equal(
+    activityCertificationPreview(
+      {
+        title: "[동아리명] : 서강의 봄",
+        content_preview: "[동아리명] : 서강의 봄\n봄꽃 촬영을 진행했습니다.",
+      },
+      "club-activity",
+    ),
+    "[동아리명] : 서강의 봄",
   );
 });
 
-test("동아리명 입력 줄 제외는 다른 활동 인증 목록에 적용하지 않는다", () => {
+test("네트워킹 활동 인증 목록의 기존 첫 줄 표시를 유지한다", () => {
   assert.equal(
     activityCertificationPreview(
       { title: "기존 제목", content_preview: "[동아리명] : 알바트로스냅\n즐겁게 촬영했습니다." },

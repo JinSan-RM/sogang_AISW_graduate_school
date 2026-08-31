@@ -169,30 +169,30 @@ export function activityCertificationCardTitle(
   return post.title.trim() || null;
 }
 
-const CLUB_ACTIVITY_NAME_LINE = /^\[\s*동아리\s*명\s*\]\s*:/;
-
 export function activityCertificationPreview(
   post: Pick<PostListItem, "title" | "content_preview">,
   boardSlug?: string,
 ): string {
   const title = post.title.trim();
   const contentPreview = post.content_preview.trim();
+  if (boardSlug === "club-activity") {
+    return contentPreview
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? title;
+  }
   const withoutDuplicateTitle = contentPreview.startsWith(title)
     ? contentPreview.slice(title.length).trim()
     : contentPreview;
   const lines = withoutDuplicateTitle
     .split(/\r?\n/)
     .map((line) => line.trim());
-  const isClubActivity = boardSlug === "club-activity";
-  const hasClubNameLine = isClubActivity && lines.some((line) => CLUB_ACTIVITY_NAME_LINE.test(line));
   const preview = lines.find((line) => (
     line
     && line !== title
-    && !(isClubActivity && CLUB_ACTIVITY_NAME_LINE.test(line))
   ));
 
   if (preview) return preview;
-  if (hasClubNameLine || (isClubActivity && CLUB_ACTIVITY_NAME_LINE.test(title))) return "";
   return contentPreview || title;
 }
 
