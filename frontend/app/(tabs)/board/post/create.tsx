@@ -30,7 +30,12 @@ import {
   loadPublishedActivitySourcePosts,
   type ActivityParticipant,
 } from "../../../../utils/activityCertification";
-import { postCreateBackDecision, postCreateCompletionRoute } from "../../../../utils/appRoutes";
+import {
+  postCreateBackDecision,
+  postCreateCompletionRoute,
+  postCreateFormInstanceKey,
+  postEditCompletionDecision,
+} from "../../../../utils/appRoutes";
 import { formatBoardDate } from "../../../../utils/dateFormat";
 import {
   calendarMonthFromDotDate,
@@ -305,16 +310,23 @@ function InlineCalendar({
   );
 }
 
+type PostCreateRouteParams = {
+  boardId?: string;
+  postId?: string;
+  title?: string;
+  category?: string;
+  content?: string;
+  returnTo?: string;
+  editOrigin?: string;
+};
+
 export default function PostCreateScreen() {
+  const params = useLocalSearchParams<PostCreateRouteParams>();
+  return <PostCreateForm key={postCreateFormInstanceKey(params)} params={params} />;
+}
+
+function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{
-    boardId?: string;
-    postId?: string;
-    title?: string;
-    category?: string;
-    content?: string;
-    returnTo?: string;
-  }>();
 
   const parsedInitialBoardId = Number(params.boardId);
   const [selectedBoardId, setBoardId] = useState(() =>
@@ -704,7 +716,16 @@ export default function PostCreateScreen() {
     };
     if (postId) {
       updateMutation.mutate(payload, {
-        onSuccess: () => router.replace(`/board/post/${postId}`),
+        onSuccess: () => {
+          const decision = postEditCompletionDecision(
+            boardType,
+            params.editOrigin,
+            router.canGoBack(),
+            postId,
+          );
+          if (decision.action === "back") router.back();
+          else router.replace(decision.route as never);
+        },
         onError: handleMutationError,
       });
       return;

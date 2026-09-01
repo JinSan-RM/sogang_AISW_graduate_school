@@ -18,7 +18,7 @@ import LoadingState from "../../components/LoadingState";
 import { notificationApi } from "../../services/api";
 import type { NotificationItem } from "../../types";
 import { formatKoreanTime, formatShortDate } from "../../utils/dateFormat";
-import { postDetailRoute } from "../../utils/appRoutes";
+import { eventDetailRoute, postDetailRoute } from "../../utils/appRoutes";
 
 const COLORS = {
   primary: "#2761FF",
@@ -125,7 +125,7 @@ export default function NotificationsScreen() {
     if (notification.post_id) {
       router.push(postDetailRoute(notification.post_id, undefined, "/(tabs)/notifications") as never);
     } else if (notification.event_id) {
-      router.push(`/events/${notification.event_id}` as never);
+      router.push(eventDetailRoute(notification.event_id, "/(tabs)/notifications") as never);
     }
   };
 

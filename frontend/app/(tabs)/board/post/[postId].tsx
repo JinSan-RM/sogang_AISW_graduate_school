@@ -30,7 +30,7 @@ import { reportApi, userApi } from "../../../../services/api";
 import { tabNameFromRoute, useTabHighlightStore } from "../../../../stores/tabHighlightStore";
 import { useUserStore } from "../../../../stores/userStore";
 import type { MutualAidStatus } from "../../../../types";
-import { boardParentRoute, navigateFromPostDetail } from "../../../../utils/appRoutes";
+import { activityPostEditRouteFromDetail, boardParentRoute, navigateFromPostDetail } from "../../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../../utils/dateFormat";
 import { openMediaUrl } from "../../../../utils/mediaOpener";
@@ -41,7 +41,12 @@ import { activityCertificationBadgeLabel } from "../../../../utils/activityCerti
 import { activityCertificationDetailHeading } from "../../../../utils/activityDetailPresentation";
 import { activityImageLayoutFromMetadata } from "../../../../utils/activityImageLayout";
 import { COMMENT_DELETE_COPY } from "../../../../utils/commentPresentation";
-import { postDetailImagePresentation } from "../../../../utils/postDetailImagePresentation";
+import {
+  noticeAttachmentFrameAspectRatio,
+  postDetailImagePresentation,
+  shouldOpenPostAttachment,
+} from "../../../../utils/postDetailImagePresentation";
+import { imageDimensionsFromLoadEvent } from "../../../../utils/imageDimensions";
 import { postDetailFocusDecision } from "../../../../utils/postDetailCache";
 import { participationApplicationUrl } from "../../../../utils/participationGuide";
 import { shouldShowPostAuthorBlock } from "../../../../utils/postMenu";
@@ -177,6 +182,47 @@ function ParticipationHeroImage({ media }: { media: MediaReference }) {
   );
 }
 
+function NoticeAttachmentImage({ media }: { media: MediaReference }) {
+  const [sourceAspectRatio, setSourceAspectRatio] = useState<number | null>(null);
+  const { uri } = useMediaAccessUrl(media);
+
+  useEffect(() => {
+    if (!uri) return;
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (!cancelled && width > 0 && height > 0) setSourceAspectRatio(width / height);
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
+
+  return (
+    <View
+      style={[
+        styles.imageAttachment,
+        styles.noticeImageAttachment,
+        styles.noticeImageRadius,
+        { aspectRatio: noticeAttachmentFrameAspectRatio(sourceAspectRatio) },
+      ]}
+    >
+      <MediaImage
+        media={media}
+        onLoad={(event) => {
+          const dimensions = imageDimensionsFromLoadEvent(event);
+          if (dimensions) setSourceAspectRatio(dimensions.width / dimensions.height);
+        }}
+        resizeMode="contain"
+        style={styles.noticeAttachmentImage}
+      />
+    </View>
+  );
+}
+
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; fromBoardId?: string; returnTo?: string }>();
   const insets = useSafeAreaInsets();
@@ -197,7 +243,7 @@ export default function PostDetailScreen() {
   }, [board, setHighlightTab]);
   const isMutualAidRequest = board?.board_type === "mutual_aid";
   const isSuggestionRequest = board?.board_type === "suggestion";
-  const isNotice = board?.board_type === "notice";
+  const isNotice = board?.board_type === "notice" || post?.is_notice === true;
   const isResource = board?.board_type === "resource";
   const commentsDisabled = isMutualAidRequest || isSuggestionRequest || isNotice || board?.board_type === "activity_certification" || board?.board_type === "activity_history" || Boolean(board?.slug && NO_COMMENT_RESOURCE_SLUGS.has(board.slug));
   const { data: commentRes } = usePostComments(postId, Boolean(board) && !commentsDisabled);
@@ -222,10 +268,6 @@ export default function PostDetailScreen() {
   const [mutualAidStatus, setMutualAidStatus] = useState<MutualAidStatus>("processing");
   const [mutualAidRejectionReason, setMutualAidRejectionReason] = useState("");
   const [showPostMenu, setShowPostMenu] = useState(false);
-  // 공지 세로 이미지: PR의 4:5(400px) 박스로 접어두고 "사진 전체보기"로 펼친다 (Figma Detail-ImageVertical)
-  // 이미지가 박스보다 작으면(가로형 등) 버튼 없이 원본 비율 그대로 보여준다 (Detail-ImageWithAttachments)
-  const [imageAspects, setImageAspects] = useState<Record<number, number>>({});
-  const NOTICE_IMAGE_COLLAPSE_ASPECT = 320 / 400; // Figma Notice Detail-ImageVertical-4x5: 4:5보다 세로로 길면 접는다
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteCommentId, setPendingDeleteCommentId] = useState<number | null>(null);
   const [commentDeleteError, setCommentDeleteError] = useState<string | null>(null);
@@ -410,11 +452,6 @@ export default function PostDetailScreen() {
     boardType: board?.board_type,
     boardSlug: board?.slug,
     isCouncilActivityEntry,
-  });
-  const attachmentImagePresentation = postDetailImagePresentation({
-    placement: "attachment",
-    boardType: board?.board_type,
-    boardSlug: board?.slug,
   });
   const hasNaturalHero = heroImagePresentation === "natural";
   const visibleAttachments = isPhotoAlbum
@@ -838,13 +875,13 @@ export default function PostDetailScreen() {
             {isMutualAidRequest ? <Text style={styles.mutualAidSectionLabel}>증빙서류</Text> : null}
             {visibleAttachments.map((attachment) => {
               const isImage = attachment.content_type.startsWith("image/");
-              const attachmentAspect = imageAspects[attachment.id];
-              const collapseNoticeImage =
-                isNotice &&
-                isImage &&
-                attachmentAspect !== undefined &&
-                attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT;
-              return (
+              const canOpenAttachment = shouldOpenPostAttachment({
+                isNotice,
+                contentType: attachment.content_type,
+              });
+              return !canOpenAttachment ? (
+                <NoticeAttachmentImage key={attachment.id} media={attachment} />
+              ) : (
                 <Pressable
                   key={attachment.id}
                   onPress={async () => {
@@ -861,20 +898,13 @@ export default function PostDetailScreen() {
                       Alert.alert("파일 열기 실패", "첨부 파일에 접근할 수 없습니다.");
                     }
                   }}
-                  style={isImage ? [styles.imageAttachment, collapseNoticeImage ? styles.noticeImageAttachment : null, isNotice ? styles.noticeImageRadius : null] : styles.fileAttachment}
+                  style={isImage ? styles.imageAttachment : styles.fileAttachment}
                 >
                   {isImage ? (
-                    <>
-                      <NaturalAspectMediaImage
-                        media={attachment}
-                        onAspectRatio={(nextAspect) => {
-                          setImageAspects((current) =>
-                            current[attachment.id] === nextAspect ? current : { ...current, [attachment.id]: nextAspect }
-                          );
-                        }}
-                        style={styles.attachmentImage}
-                      />
-                    </>
+                    <NaturalAspectMediaImage
+                      media={attachment}
+                      style={styles.attachmentImage}
+                    />
                   ) : null}
                   {!isImage ? (
                     <>
@@ -1129,7 +1159,9 @@ export default function PostDetailScreen() {
               <Pressable
                 onPress={() => {
                   setShowPostMenu(false);
-                  if (isActivityCertification || isMutualAidRequest) {
+                  if (isActivityCertification) {
+                    router.push(activityPostEditRouteFromDetail(post.board_id, post.id) as never);
+                  } else if (isMutualAidRequest) {
                     router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
                   } else {
                     router.push(`/board/post/edit/${post.id}`);
@@ -1990,7 +2022,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   noticeImageAttachment: {
-    height: 400, // Figma 이미지첨부 320x400 (4:5)
+    width: "100%",
     backgroundColor: "#F1F0E8",
   },
   noticeImageRadius: {

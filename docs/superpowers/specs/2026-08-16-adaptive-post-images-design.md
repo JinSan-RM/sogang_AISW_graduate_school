@@ -1,5 +1,7 @@
 # Adaptive Post Detail Images Design
 
+> Notice-specific rules in this document were superseded on 2026-09-01 by `docs/phase2/FRONTEND_ROUTE_SPEC.md`: notice images now use fixed `4:3` landscape or `4:5` portrait `contain` frames without a full-view or tap-to-open action. Later participation and activity-certification contracts remain authoritative for those surfaces.
+
 ## Goal
 
 공지사항과 참여활동 상세 이미지가 원본 방향과 비율에 맞는 높이를 사용하도록 변경한다. 가로 사진과 일반적인 세로 사진은 사용 가능한 가로폭과 원본 비율을 사용하고, 계산된 높이가 `500px`를 넘는 긴 사진은 제한된 미리보기와 인앱 전체보기를 제공한다.

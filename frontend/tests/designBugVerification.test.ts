@@ -62,12 +62,14 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 공지 상세 세로 이미지는 PR의 4:5(400px) 프레임으로 잘라서 보여준다", () => {
-  // 세로로 긴 이미지(비율 임계값 미만)는 4:5 프레임으로 잘라서만 보여준다 (전체보기 없음)
-  assert.match(postDetailSource, /attachmentAspect < NOTICE_IMAGE_COLLAPSE_ASPECT/);
-  assert.match(postDetailSource, /collapseNoticeImage \? styles\.noticeImageAttachment : null/);
-  assert.match(postDetailSource, /noticeImageAttachment:[\s\S]*height: 400/);
-  assert.doesNotMatch(postDetailSource, /noticeImageExpandButton/);
+test("#41·45 공지 상세 이미지는 가로 4:3·세로 4:5 고정 프레임이며 전체보기를 열지 않는다", () => {
+  assert.match(postDetailSource, /const isNotice = board\?\.board_type === "notice" \|\| post\?\.is_notice === true/);
+  assert.match(postDetailSource, /function NoticeAttachmentImage/);
+  assert.match(postDetailSource, /noticeAttachmentFrameAspectRatio\(sourceAspectRatio\)/);
+  assert.match(postDetailSource, /<MediaImage[\s\S]*resizeMode="contain"[\s\S]*style=\{styles\.noticeAttachmentImage\}/);
+  assert.match(postDetailSource, /shouldOpenPostAttachment\(\{[\s\S]*isNotice,[\s\S]*contentType: attachment\.content_type/);
+  assert.match(postDetailSource, /!canOpenAttachment \? \([\s\S]*<NoticeAttachmentImage key=\{attachment\.id\} media=\{attachment\} \/>/);
+  assert.doesNotMatch(postDetailSource, /NOTICE_IMAGE_COLLAPSE_ASPECT|collapseNoticeImage|사진 전체보기/);
   assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
 });
 

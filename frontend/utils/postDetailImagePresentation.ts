@@ -7,13 +7,32 @@ type PostDetailImagePresentationInput = {
   isCouncilActivityEntry?: boolean;
 };
 
+export function noticeAttachmentFrameAspectRatio(sourceAspectRatio?: number | null): number {
+  return typeof sourceAspectRatio === "number"
+    && Number.isFinite(sourceAspectRatio)
+    && sourceAspectRatio > 0
+    && sourceAspectRatio < 1
+    ? 4 / 5
+    : 4 / 3;
+}
+
+export function shouldOpenPostAttachment({
+  isNotice,
+  contentType,
+}: {
+  isNotice: boolean;
+  contentType: string;
+}): boolean {
+  return !isNotice || !contentType.startsWith("image/");
+}
+
 export function postDetailImagePresentation({
   placement,
   boardType,
   boardSlug,
   isCouncilActivityEntry = false,
 }: PostDetailImagePresentationInput): PostDetailImagePresentation {
-  if (placement === "attachment") return "natural";
+  if (placement === "attachment") return boardType === "notice" ? "fixed-contain" : "natural";
   if (boardType === "album") return "fixed-contain";
   if (boardType === "activity_certification") return "natural";
   if (

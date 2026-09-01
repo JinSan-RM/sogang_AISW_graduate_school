@@ -72,9 +72,10 @@ test("참여활동 상세는 PR 순서를 유지하고 활동 인증 이미지�
   assert.doesNotMatch(detail, /const hasExpandableHero = isActivityCertification/);
 });
 
-test("공지 이미지 전체보기와 PR 첨부 타이포를 함께 유지한다", () => {
-  assert.match(detail, /사진 전체보기/);
-  assert.match(detail, /noticeImageAttachment:[\s\S]*height: 400/);
+test("공지 이미지는 가로 4:3·세로 4:5 프레임만 사용하고 PR 첨부 타이포를 유지한다", () => {
+  assert.match(detail, /function NoticeAttachmentImage/);
+  assert.match(detail, /noticeAttachmentFrameAspectRatio\(sourceAspectRatio\)/);
+  assert.doesNotMatch(detail, /사진 전체보기/);
   assert.match(detail, /attachmentsList:[\s\S]*gap: 12/);
   assert.match(detail, /fileName:[\s\S]*fontSize: 13[\s\S]*lineHeight: 16/);
 });

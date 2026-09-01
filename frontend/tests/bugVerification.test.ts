@@ -63,3 +63,8 @@ test("#177 시험족보 목록은 작성자를 표시하고 기존 익명 게시
   assert.doesNotMatch(postCardSource, /isExamArchive/);
   assert.match(postCardSource, /const showAuthor = !isLectureReview && !isSuggestion;/);
 });
+
+test("#204 공통 글쓰기 화면은 라우트의 게시판·글·카테고리가 바뀌면 폼 전체를 새로 마운트한다", () => {
+  assert.match(postCreateSource, /<PostCreateForm key=\{postCreateFormInstanceKey\(params\)\} params=\{params\} \/>/);
+  assert.doesNotMatch(postCreateSource, /key=\{postCreateFormInstanceKey\(\{[\s\S]*selectedBoardId/);
+});

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../components/LoadingState";
 import { eventApi } from "../../../services/api";
+import { eventDetailBackDecision } from "../../../utils/appRoutes";
 import { eventCategoryLabel, eventCategoryTone } from "../../../utils/eventCategoryPresentation";
 import { formatBoardDateTime } from "../../../utils/dateFormat";
 
@@ -22,7 +23,7 @@ const COLORS = {
 };
 
 export default function EventDetailScreen() {
-  const params = useLocalSearchParams<{ eventId: string }>();
+  const params = useLocalSearchParams<{ eventId: string; returnTo?: string | string[] }>();
   const insets = useSafeAreaInsets();
   const eventId = Number(params.eventId);
   const { data, isError, isLoading, refetch } = useQuery({
@@ -56,8 +57,10 @@ export default function EventDetailScreen() {
         <Pressable
           accessibilityLabel="뒤로"
           onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace("/events/calendar");
+            const decision = eventDetailBackDecision(params.returnTo, router.canGoBack());
+            if (decision.action === "navigate") router.navigate(decision.route as never);
+            else if (decision.action === "back") router.back();
+            else router.replace(decision.route as never);
           }}
           style={styles.iconButton}
         >

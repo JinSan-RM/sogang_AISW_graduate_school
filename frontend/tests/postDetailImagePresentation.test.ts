@@ -1,10 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { postDetailImagePresentation } from "../utils/postDetailImagePresentation";
+import {
+  noticeAttachmentFrameAspectRatio,
+  postDetailImagePresentation,
+  shouldOpenPostAttachment,
+} from "../utils/postDetailImagePresentation";
 
-test("공지 첨부와 일반 첨부는 원본 비율을 사용한다", () => {
-  assert.equal(postDetailImagePresentation({ placement: "attachment", boardType: "notice" }), "natural");
+test("공지 첨부 이미지는 원본 방향에 따라 가로 4:3 또는 세로 4:5 프레임을 사용한다", () => {
+  assert.equal(noticeAttachmentFrameAspectRatio(16 / 9), 4 / 3);
+  assert.equal(noticeAttachmentFrameAspectRatio(1), 4 / 3);
+  assert.equal(noticeAttachmentFrameAspectRatio(3 / 4), 4 / 5);
+  assert.equal(noticeAttachmentFrameAspectRatio(null), 4 / 3);
+});
+
+test("공지 이미지만 탭 열기를 막고 파일과 다른 게시판 이미지는 계속 열 수 있다", () => {
+  assert.equal(shouldOpenPostAttachment({ isNotice: true, contentType: "image/png" }), false);
+  assert.equal(shouldOpenPostAttachment({ isNotice: true, contentType: "application/pdf" }), true);
+  assert.equal(shouldOpenPostAttachment({ isNotice: false, contentType: "image/jpeg" }), true);
+});
+
+test("공지 첨부는 고정 contain 프레임을 사용하고 일반 첨부는 원본 비율을 유지한다", () => {
+  assert.equal(postDetailImagePresentation({ placement: "attachment", boardType: "notice" }), "fixed-contain");
   assert.equal(postDetailImagePresentation({ placement: "attachment", boardType: "post" }), "natural");
 });
 

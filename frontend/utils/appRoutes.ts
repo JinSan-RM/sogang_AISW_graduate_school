@@ -37,6 +37,15 @@ export type EventDayBackDecision =
   | { action: "navigate"; route: typeof HOME_TAB_ROUTE }
   | { action: "replace"; route: typeof HOME_TAB_ROUTE };
 
+export type EventDetailBackDecision =
+  | { action: "back" }
+  | { action: "navigate"; route: "/(tabs)/notifications" }
+  | { action: "replace"; route: "/events/calendar" };
+
+export type PostEditCompletionDecision =
+  | { action: "back" }
+  | { action: "replace"; route: ReturnType<typeof postDetailRoute> };
+
 type PostDetailNavigator = {
   canGoBack: () => boolean;
   back: () => void;
@@ -70,6 +79,24 @@ export function eventDayBackDecision(returnTo: unknown, canGoBack: boolean): Eve
   if (eventDayReturnRoute(returnTo)) return { action: "navigate", route: HOME_TAB_ROUTE };
   if (canGoBack) return { action: "back" };
   return { action: "replace", route: HOME_TAB_ROUTE };
+}
+
+function eventDetailReturnRoute(value: unknown): "/(tabs)/notifications" | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate === "/(tabs)/notifications" ? candidate : null;
+}
+
+export function eventDetailRoute(eventId: number, returnTo?: unknown) {
+  const path = `/events/${eventId}`;
+  const safeReturnTo = eventDetailReturnRoute(returnTo);
+  return safeReturnTo ? `${path}?returnTo=${encodeURIComponent(safeReturnTo)}` : path;
+}
+
+export function eventDetailBackDecision(returnTo: unknown, canGoBack: boolean): EventDetailBackDecision {
+  const safeReturnTo = eventDetailReturnRoute(returnTo);
+  if (safeReturnTo) return { action: "navigate", route: safeReturnTo };
+  if (canGoBack) return { action: "back" };
+  return { action: "replace", route: "/events/calendar" };
 }
 
 export function postDetailReturnRoute(value: unknown): PostDetailReturnRoute | null {
@@ -108,6 +135,37 @@ export function postCreateRoute(boardId: number, category = "", returnTo?: unkno
   const safeReturnTo = postDetailReturnRoute(returnTo);
   if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
   return `/board/post/create?${params.join("&")}` as const;
+}
+
+export function postCreateFormInstanceKey(params: {
+  boardId?: unknown;
+  postId?: unknown;
+  category?: unknown;
+}) {
+  const categoryCandidate = Array.isArray(params.category) ? params.category[0] : params.category;
+  const category = typeof categoryCandidate === "string" ? categoryCandidate : "";
+  return JSON.stringify([
+    routeBoardId(params.boardId),
+    routeBoardId(params.postId),
+    category,
+  ]);
+}
+
+export function activityPostEditRouteFromDetail(boardId: number, postId: number) {
+  return `/board/post/create?boardId=${boardId}&postId=${postId}&editOrigin=post-detail` as const;
+}
+
+export function postEditCompletionDecision(
+  boardType: string | undefined,
+  editOrigin: unknown,
+  canGoBack: boolean,
+  postId: number,
+): PostEditCompletionDecision {
+  const originCandidate = Array.isArray(editOrigin) ? editOrigin[0] : editOrigin;
+  if (boardType === "activity_certification" && originCandidate === "post-detail" && canGoBack) {
+    return { action: "back" };
+  }
+  return { action: "replace", route: postDetailRoute(postId) };
 }
 
 export function postCreateRouteFromBoardList(

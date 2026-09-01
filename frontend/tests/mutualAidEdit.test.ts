@@ -32,7 +32,8 @@ test("상조회 수정 값은 API 형식을 신청 양식 표기로 복원한다
 });
 
 test("상조회 수정은 전용 신청 양식으로 이동하고 상태별 메뉴를 분리한다", () => {
-  assert.match(detailSource, /isActivityCertification \|\| isMutualAidRequest/);
+  assert.match(detailSource, /else if \(isMutualAidRequest\)/);
+  assert.match(detailSource, /\/board\/post\/create\?boardId=\$\{post\.board_id\}&postId=\$\{post\.id\}/);
   assert.match(detailSource, /canEditMutualAidRequest\(post\.mutual_aid\?\.status\)/);
   assert.match(detailSource, /canDeleteMutualAidRequest\(post\.mutual_aid\?\.status\)/);
 });
