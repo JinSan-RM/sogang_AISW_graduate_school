@@ -14,7 +14,7 @@ import { useAggregatePosts, useBoardPosts } from "../../../hooks/usePosts";
 import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
-import { boardParentRoute, boardRoute, postCreateRouteFromBoardList, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
+import { boardParentRoute, boardRoute, participationGroupDefaultSlug, postCreateRouteFromBoardList, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
 import { tabNameFromRoute, useTabHighlightStore } from "../../../stores/tabHighlightStore";
 import {
   activityCertificationBadgeLabel,
@@ -218,11 +218,10 @@ function sectionTabs(board: Board | undefined, boards: Board[]): SectionTab[] {
 
   const groupKey = participationGroupKey(board);
   if (groupKey) {
-    const isCertificationMode = board.board_type === "activity_certification";
     return PARTICIPATION_GROUPS.map((item) => ({
       label: item.label,
       active: item.key === groupKey,
-      target: findBoardBySlug(boards, isCertificationMode ? item.certificationSlug : item.guideSlug),
+      target: findBoardBySlug(boards, participationGroupDefaultSlug(item.key)),
     }));
   }
   return [];

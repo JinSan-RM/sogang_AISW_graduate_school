@@ -1160,7 +1160,14 @@ export default function PostDetailScreen() {
                 onPress={() => {
                   setShowPostMenu(false);
                   if (isActivityCertification) {
-                    router.push(activityPostEditRouteFromDetail(post.board_id, post.id) as never);
+                    router.push(
+                      activityPostEditRouteFromDetail(
+                        post.board_id,
+                        post.id,
+                        params.fromBoardId,
+                        params.returnTo,
+                      ) as never,
+                    );
                   } else if (isMutualAidRequest) {
                     router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
                   } else {

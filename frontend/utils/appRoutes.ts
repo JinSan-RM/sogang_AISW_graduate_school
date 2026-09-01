@@ -46,6 +46,10 @@ export type PostEditCompletionDecision =
   | { action: "back" }
   | { action: "replace"; route: ReturnType<typeof postDetailRoute> };
 
+export type ParticipationGroupKey = "club" | "study" | "networking";
+
+const ACTIVITY_POST_DETAIL_EDIT_ORIGIN = "activity-post-detail" as const;
+
 type PostDetailNavigator = {
   canGoBack: () => boolean;
   back: () => void;
@@ -151,21 +155,43 @@ export function postCreateFormInstanceKey(params: {
   ]);
 }
 
-export function activityPostEditRouteFromDetail(boardId: number, postId: number) {
-  return `/board/post/create?boardId=${boardId}&postId=${postId}&editOrigin=post-detail` as const;
+export function participationGroupDefaultSlug(group: ParticipationGroupKey) {
+  if (group === "club") return "club-promo" as const;
+  if (group === "study") return "study-recruit" as const;
+  return "networking-programs" as const;
+}
+
+export function activityPostEditRouteFromDetail(
+  boardId: number,
+  postId: number,
+  fromBoardId?: unknown,
+  returnTo?: unknown,
+) {
+  const params = [`boardId=${boardId}`, `postId=${postId}`, `editOrigin=${ACTIVITY_POST_DETAIL_EDIT_ORIGIN}`];
+  const sourceBoardId = routeBoardId(fromBoardId);
+  if (sourceBoardId) params.push(`fromBoardId=${sourceBoardId}`);
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
+  return `/board/post/create?${params.join("&")}` as const;
 }
 
 export function postEditCompletionDecision(
-  boardType: string | undefined,
+  _boardType: string | undefined,
   editOrigin: unknown,
   canGoBack: boolean,
   postId: number,
+  fromBoardId?: unknown,
+  returnTo?: unknown,
 ): PostEditCompletionDecision {
   const originCandidate = Array.isArray(editOrigin) ? editOrigin[0] : editOrigin;
-  if (boardType === "activity_certification" && originCandidate === "post-detail" && canGoBack) {
+  const isActivityDetailEdit = originCandidate === ACTIVITY_POST_DETAIL_EDIT_ORIGIN;
+  if (isActivityDetailEdit && canGoBack) {
     return { action: "back" };
   }
-  return { action: "replace", route: postDetailRoute(postId) };
+  return {
+    action: "replace",
+    route: postDetailRoute(postId, routeBoardId(fromBoardId) ?? undefined, returnTo),
+  };
 }
 
 export function postCreateRouteFromBoardList(
@@ -187,6 +213,30 @@ export function postCreateBackDecision(
   if (safeReturnTo) return { action: "navigate", route: safeReturnTo };
   if (canGoBack) return { action: "back" };
   return { action: "replace", route: boardRoute(boardId) };
+}
+
+export function postCreateFormBackDecision(params: {
+  boardType?: string;
+  editOrigin?: unknown;
+  postId?: unknown;
+  returnTo?: unknown;
+  canGoBack: boolean;
+  boardId: number;
+  fromBoardId?: unknown;
+}): PostCreateBackDecision | PostEditCompletionDecision {
+  const postId = routeBoardId(params.postId);
+  const originCandidate = Array.isArray(params.editOrigin) ? params.editOrigin[0] : params.editOrigin;
+  if (postId && originCandidate === ACTIVITY_POST_DETAIL_EDIT_ORIGIN) {
+    return postEditCompletionDecision(
+      params.boardType,
+      params.editOrigin,
+      params.canGoBack,
+      postId,
+      params.fromBoardId,
+      params.returnTo,
+    );
+  }
+  return postCreateBackDecision(params.returnTo, params.canGoBack, params.boardId);
 }
 
 export function postCreateCompletionRoute(boardType: string | undefined, createdPostId: number, boardId: number) {

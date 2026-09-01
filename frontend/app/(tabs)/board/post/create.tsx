@@ -31,7 +31,7 @@ import {
   type ActivityParticipant,
 } from "../../../../utils/activityCertification";
 import {
-  postCreateBackDecision,
+  postCreateFormBackDecision,
   postCreateCompletionRoute,
   postCreateFormInstanceKey,
   postEditCompletionDecision,
@@ -318,6 +318,7 @@ type PostCreateRouteParams = {
   content?: string;
   returnTo?: string;
   editOrigin?: string;
+  fromBoardId?: string;
 };
 
 export default function PostCreateScreen() {
@@ -722,6 +723,8 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
             params.editOrigin,
             router.canGoBack(),
             postId,
+            params.fromBoardId,
+            params.returnTo,
           );
           if (decision.action === "back") router.back();
           else router.replace(decision.route as never);
@@ -853,7 +856,15 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
               router.replace(`/board/${boardId}` as never);
               return;
             }
-            const decision = postCreateBackDecision(params.returnTo, router.canGoBack(), boardId);
+            const decision = postCreateFormBackDecision({
+              boardType,
+              editOrigin: params.editOrigin,
+              postId: params.postId,
+              returnTo: params.returnTo,
+              canGoBack: router.canGoBack(),
+              boardId,
+              fromBoardId: params.fromBoardId,
+            });
             if (decision.action === "back") router.back();
             else if (decision.action === "navigate") router.navigate(decision.route as never);
             else router.replace(decision.route as never);

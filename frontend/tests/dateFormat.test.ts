@@ -18,6 +18,10 @@ test("게시판 날짜를 한국 시간 기준 YY.MM.DD(요일)로 표시한다"
   assert.equal(formatBoardDate("2026-06-26T00:00:00"), "26.06.26(금)");
 });
 
+test("UTC로 저장된 751번 게시글의 작성 시각은 한국 날짜인 8월 13일로 표시한다", () => {
+  assert.equal(formatBoardDate("2026-08-12T23:52:40.186301"), "26.08.13(목)");
+});
+
 test("날짜 전용 API 값과 작성 폼 저장값은 날짜를 이동시키지 않는다", () => {
   assert.equal(formatBoardDate("2026-06-26"), "26.06.26(금)");
   assert.equal(formatBoardDate("2026.06.26"), "26.06.26(금)");

@@ -11,6 +11,7 @@ import { SearchIcon } from "../../components/icons";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 import type { Board } from "../../types";
+import { participationGroupDefaultSlug } from "../../utils/appRoutes";
 
 const COLORS = {
   primary: "#2761FF",
@@ -139,7 +140,7 @@ function ParticipationContent() {
     return targetGroup.guideSlugs.map((slug) => findBoard(boards, slug)).find(Boolean);
   };
   const handleGroupPress = (nextGroup: GroupKey) => {
-    const targetBoard = findGroupBoard(nextGroup, mode);
+    const targetBoard = findBoard(boards, participationGroupDefaultSlug(nextGroup));
     if (targetBoard) {
       openBoard(targetBoard);
       return;

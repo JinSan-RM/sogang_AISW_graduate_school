@@ -27,7 +27,9 @@ type PostCreateFormInstanceKey = (params: {
 
 type PostEditCompletionDecision =
   | { action: "back" }
-  | { action: "replace"; route: `/board/post/${number}` };
+  | { action: "replace"; route: string };
+
+type ParticipationGroupKey = "club" | "study" | "networking";
 
 function getPostCreateFormInstanceKey() {
   const helper = Reflect.get(appRoutes, "postCreateFormInstanceKey");
@@ -38,7 +40,7 @@ function getPostCreateFormInstanceKey() {
 function getActivityPostEditRouteFromDetail() {
   const helper = Reflect.get(appRoutes, "activityPostEditRouteFromDetail");
   assert.equal(typeof helper, "function", "활동인증 상세 전용 수정 경로 생성기가 필요합니다");
-  return helper as (boardId: number, postId: number) => string;
+  return helper as (boardId: number, postId: number, fromBoardId?: unknown, returnTo?: unknown) => string;
 }
 
 function getPostEditCompletionDecision() {
@@ -49,7 +51,32 @@ function getPostEditCompletionDecision() {
     editOrigin: unknown,
     canGoBack: boolean,
     postId: number,
+    fromBoardId?: unknown,
+    returnTo?: unknown,
   ) => PostEditCompletionDecision;
+}
+
+function getPostCreateFormBackDecision() {
+  const helper = Reflect.get(appRoutes, "postCreateFormBackDecision");
+  assert.equal(typeof helper, "function", "작성·수정 화면 전용 뒤로가기 판정기가 필요합니다");
+  return helper as (params: {
+    boardType?: string;
+    editOrigin?: unknown;
+    postId?: unknown;
+    returnTo?: unknown;
+    canGoBack: boolean;
+    boardId: number;
+    fromBoardId?: unknown;
+  }) =>
+    | { action: "back" }
+    | { action: "navigate"; route: string }
+    | { action: "replace"; route: string };
+}
+
+function getParticipationGroupDefaultSlug() {
+  const helper = Reflect.get(appRoutes, "participationGroupDefaultSlug");
+  assert.equal(typeof helper, "function", "참여활동 그룹별 첫 화면 경로 생성기가 필요합니다");
+  return helper as (group: ParticipationGroupKey) => string;
 }
 
 test("전공 커뮤니티 게시판의 상위 경로는 숨겨진 전체 보드가 아니라 홈이다", () => {
@@ -143,22 +170,103 @@ test("스터디와 동아리 활동인증 상세의 수정 경로는 상세 출�
   const editRoute = getActivityPostEditRouteFromDetail();
   assert.equal(
     editRoute(10, 204),
-    "/board/post/create?boardId=10&postId=204&editOrigin=post-detail",
+    "/board/post/create?boardId=10&postId=204&editOrigin=activity-post-detail",
   );
   assert.equal(
     editRoute(11, 205),
-    "/board/post/create?boardId=11&postId=205&editOrigin=post-detail",
+    "/board/post/create?boardId=11&postId=205&editOrigin=activity-post-detail",
+  );
+});
+
+test("활동인증에서 참여활동 그룹을 바꾸면 각 그룹의 첫 화면으로 이동한다", () => {
+  const defaultSlug = getParticipationGroupDefaultSlug();
+
+  assert.equal(defaultSlug("club"), "club-promo");
+  assert.equal(defaultSlug("study"), "study-recruit");
+  assert.equal(defaultSlug("networking"), "networking-programs");
+});
+
+test("활동인증 상세 수정 경로는 원래 목록 복귀 정보를 안전하게 전달한다", () => {
+  const editRoute = getActivityPostEditRouteFromDetail();
+
+  assert.equal(
+    editRoute(13, 205, "13", PARTICIPATION_TAB_ROUTE),
+    "/board/post/create?boardId=13&postId=205&editOrigin=activity-post-detail&fromBoardId=13&returnTo=%2F(tabs)%2Fparticipation",
+  );
+  assert.equal(
+    editRoute(13, 205, "13", "https://example.com"),
+    "/board/post/create?boardId=13&postId=205&editOrigin=activity-post-detail&fromBoardId=13",
   );
 });
 
 test("상세에서 수정한 활동인증만 저장 후 기존 상세 화면으로 돌아간다", () => {
   const completionDecision = getPostEditCompletionDecision();
   assert.deepEqual(
-    completionDecision("activity_certification", "post-detail", true, 204),
+    completionDecision("activity_certification", "activity-post-detail", true, 204),
     { action: "back" },
   );
   assert.deepEqual(
-    completionDecision("activity_certification", ["post-detail"], true, 205),
+    completionDecision("activity_certification", ["activity-post-detail"], true, 205),
+    { action: "back" },
+  );
+});
+
+test("활동인증 게시판 조회가 늦어도 상세에서 시작한 수정은 상세 스택으로 한 번만 돌아간다", () => {
+  const completionDecision = getPostEditCompletionDecision();
+
+  assert.deepEqual(
+    completionDecision(undefined, "activity-post-detail", true, 205, "13", PARTICIPATION_TAB_ROUTE),
+    { action: "back" },
+  );
+});
+
+test("활동인증 수정 화면을 새로 열어도 원래 목록 정보가 있는 상세로 교체한다", () => {
+  const completionDecision = getPostEditCompletionDecision();
+
+  assert.deepEqual(
+    completionDecision(undefined, "activity-post-detail", false, 205, "13", PARTICIPATION_TAB_ROUTE),
+    {
+      action: "replace",
+      route: "/board/post/205?fromBoardId=13&returnTo=%2F(tabs)%2Fparticipation",
+    },
+  );
+});
+
+test("활동인증 상세에서 연 수정 화면의 뒤로가기는 returnTo보다 기존 상세를 우선한다", () => {
+  const backDecision = getPostCreateFormBackDecision();
+
+  assert.deepEqual(
+    backDecision({
+      boardType: undefined,
+      editOrigin: "activity-post-detail",
+      postId: "205",
+      returnTo: PARTICIPATION_TAB_ROUTE,
+      canGoBack: true,
+      boardId: 13,
+      fromBoardId: "13",
+    }),
+    { action: "back" },
+  );
+});
+
+test("일반 글쓰기와 일반 수정 화면은 기존 공통 뒤로가기를 유지한다", () => {
+  const backDecision = getPostCreateFormBackDecision();
+
+  assert.deepEqual(
+    backDecision({
+      returnTo: COMMUNITY_TAB_ROUTE,
+      canGoBack: true,
+      boardId: 7,
+    }),
+    { action: "navigate", route: COMMUNITY_TAB_ROUTE },
+  );
+  assert.deepEqual(
+    backDecision({
+      boardType: "mutual_aid",
+      postId: "301",
+      canGoBack: true,
+      boardId: 18,
+    }),
     { action: "back" },
   );
 });
@@ -170,7 +278,7 @@ test("직접 진입한 활동인증 수정은 관계없는 탐색 기록으로 �
     { action: "replace", route: "/board/post/204" },
   );
   assert.deepEqual(
-    completionDecision("activity_certification", "post-detail", false, 204),
+    completionDecision("activity_certification", "activity-post-detail", false, 204),
     { action: "replace", route: "/board/post/204" },
   );
 });
