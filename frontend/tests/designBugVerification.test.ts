@@ -165,5 +165,5 @@ test("#187 홈 동문회 주소록은 디자인 기준의 조밀한 세로 간�
   assert.match(styleBlock(homeSource, "alumniDirectoryRow"), /paddingVertical: 12/);
   assert.match(styleBlock(homeSource, "alumniDirectoryTitle"), /lineHeight: 18/);
   assert.match(styleBlock(homeSource, "alumniDirectoryDescription"), /lineHeight: 16/);
-  assert.match(styleBlock(homeSource, "alumniDirectoryDescription"), /marginTop: 1/);
+  assert.match(styleBlock(homeSource, "alumniDirectoryDescription"), /marginTop: 4/);
 });
