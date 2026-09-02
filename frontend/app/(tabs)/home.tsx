@@ -775,9 +775,8 @@ export default function HomeScreen() {
         style={styles.alumniDirectoryRow}
       >
         <View style={styles.alumniDirectoryLeading}>
-          <Text style={styles.alumniDirectoryIcon}>📋</Text>
           <View style={styles.alumniDirectoryCopy}>
-            <Text style={styles.alumniDirectoryTitle}>동문회 주소록</Text>
+            <Text style={styles.alumniDirectoryTitle}>📋 동문회 주소록 &#x20;</Text>
             <Text style={styles.alumniDirectoryDescription}>선배 원우들의 연락처를 확인해보세요</Text>
           </View>
         </View>
@@ -1224,10 +1223,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 8,
-  },
-  alumniDirectoryIcon: {
-    fontSize: 18,
-    lineHeight: 15,
   },
   alumniDirectoryCopy: {
     flex: 1,

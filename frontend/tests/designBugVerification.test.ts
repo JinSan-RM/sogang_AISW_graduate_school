@@ -144,3 +144,11 @@ test("#73 운영진 화면은 임의 기본 프로필 없이 실제 데이터만
   assert.doesNotMatch(boardSource, /DEFAULT_EXECUTIVES/);
   assert.doesNotMatch(boardSource, /윤OO/);
 });
+
+test("#187 홈 동문회 주소록은 클립보드 아이콘과 제목을 한 줄 텍스트로 표시한다", () => {
+  assert.match(
+    homeSource,
+    /<Text style=\{styles\.alumniDirectoryTitle\}>📋 동문회 주소록 &#x20;<\/Text>/,
+  );
+  assert.doesNotMatch(homeSource, /<Text style=\{styles\.alumniDirectoryIcon\}>/);
+});
