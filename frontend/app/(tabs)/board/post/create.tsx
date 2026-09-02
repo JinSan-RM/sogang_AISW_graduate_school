@@ -1364,7 +1364,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
               <>
                 <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, styles.evidenceFileButton, isUploading ? styles.attachButtonDisabled : null]}>
                   <Ionicons name="document-outline" size={16} color={COLORS.muted} />
-                  <Text style={[styles.compactAttachText, styles.evidenceFileButtonText]}>{isUploading ? "업로드 중" : "파일 첨부 (청첩장, 부고장 등)"}</Text>
+                  <Text style={styles.evidenceFileButtonText}>{isUploading ? "업로드 중" : "청첩장, 부고장 파일을 첨부해주세요 (JPG, PNG)"}</Text>
                 </Pressable>
                 {attachments.length > 0 ? (
                   <View style={styles.compactAttachmentList}>
@@ -2409,14 +2409,19 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   evidenceFileButton: {
-    // Figma: 상조회 첨부버튼 36h, padding 10/12, 텍스트 12/15
+    // Figma baseline: 상조회 첨부버튼 36h, padding 10/12, 텍스트 12/15. Min-height and native line metrics stay adaptive for wrapping/accessibility.
     width: "100%",
-    height: 36,
+    minHeight: 36,
     paddingVertical: 10,
   },
   evidenceFileButtonText: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    flexWrap: "wrap",
+    color: COLORS.muted,
     fontSize: 12,
-    lineHeight: 15,
+    fontWeight: "400",
   },
   evidenceLinkField: {
     // Figma: 링크입력필드 40h, padding 12/14, gap 8
