@@ -2,28 +2,22 @@ import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import LegalDocumentScreen from "../../components/LegalDocumentScreen";
-import { useMeQuery, useRegistrationOptionsQuery } from "../../hooks/useApi";
+import { useMeQuery } from "../../hooks/useApi";
 import { useUserStore } from "../../stores/userStore";
 import {
-  PRIVACY_POLICY_ONLY_SECTIONS,
+  createPrivacyConsentScreenDocument,
   PRIVACY_POLICY_SUPPORT_EMAIL,
-  resolvePrivacyPolicyMetadata,
 } from "../../utils/privacyPolicy";
 
 export default function PrivacyScreen() {
   const { data } = useMeQuery();
-  const registrationOptionsQuery = useRegistrationOptionsQuery();
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
-  const policyMetadata = resolvePrivacyPolicyMetadata(
-    registrationOptionsQuery.data?.data.privacy_policy,
+  const document = createPrivacyConsentScreenDocument(
+    isAuthenticated && data ? data.data.privacy_consented_at ?? null : undefined,
   );
   return (
     <LegalDocumentScreen
-      title="개인정보 수집 및 이용 동의"
-      effectiveDate={policyMetadata.effectiveDate}
-      version={policyMetadata.version}
-      consentDate={isAuthenticated && data ? data.data.privacy_consented_at ?? null : undefined}
-      sections={PRIVACY_POLICY_ONLY_SECTIONS}
+      {...document}
       footer={
         <View style={styles.footer}>
           <Pressable

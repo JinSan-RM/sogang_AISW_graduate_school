@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   CONSENT_DOCUMENT_SECTIONS,
+  createPrivacyConsentScreenDocument,
   hasReachedPrivacyPolicyEnd,
   PRIVACY_POLICY_EFFECTIVE_DATE,
   PRIVACY_POLICY_ONLY_SECTIONS,
@@ -79,7 +80,7 @@ test("회원가입 전문은 전용 약관·개인정보 화면과 같은 정본
   assert.equal(PRIVACY_POLICY_SECTIONS, CONSENT_DOCUMENT_SECTIONS);
 });
 
-test("v3 최종본은 이용약관 19개 조항과 개인정보 처리방침 13개 번호 체계를 순서대로 제공한다", () => {
+test("현재 정본 후보는 이용약관 19개 조항과 개인정보 처리방침 13개 번호 체계를 순서대로 제공한다", () => {
   const privacyStart = PRIVACY_POLICY_SECTIONS.findIndex((section) => section.title === "개인정보 처리방침");
   assert.ok(privacyStart > 0, "개인정보 처리방침 시작점을 찾을 수 없습니다.");
 
@@ -96,7 +97,7 @@ test("v3 최종본은 이용약관 19개 조항과 개인정보 처리방침 13�
   assert.deepEqual(privacyTitles, PRIVACY_ARTICLE_TITLES);
 });
 
-test("v3 최종본의 모든 조항은 독립된 비어 있지 않은 본문을 가진다", () => {
+test("현재 정본 후보의 모든 조항은 독립된 비어 있지 않은 본문을 가진다", () => {
   const articleSections = PRIVACY_POLICY_SECTIONS.filter((section) => ARTICLE_TITLE_PATTERN.test(section.title));
 
   for (const section of articleSections) {
@@ -105,19 +106,38 @@ test("v3 최종본의 모든 조항은 독립된 비어 있지 않은 본문을 
   }
 });
 
-test("정책 화면의 운영 버전과 시행일은 현재 활성 값으로 기본 설정된다", () => {
-  assert.equal(PRIVACY_POLICY_VERSION, "2026-07-12");
-  assert.equal(PRIVACY_POLICY_EFFECTIVE_DATE, "2026-07-12");
+test("개인정보 동의 화면은 현재 정본 조항을 유지하고 시행일과 버전은 표시하지 않는다", () => {
+  const consentDate = "2026-03-02T09:00:00+09:00";
+  const document = createPrivacyConsentScreenDocument(consentDate);
+  const intro = document.sections.find((section) => section.title === "개인정보 처리방침");
+  const articleTitles = document.sections
+    .map((section) => section.title)
+    .filter((title) => ARTICLE_TITLE_PATTERN.test(title));
+
+  assert.equal(document.title, "개인정보 수집 및 이용 동의");
+  assert.equal(document.consentDate, consentDate);
+  assert.ok(!("effectiveDate" in document));
+  assert.ok(!("version" in document));
+  assert.deepEqual(articleTitles, PRIVACY_ARTICLE_TITLES);
+  assert.ok(intro, "개인정보 처리방침 안내문이 누락되었습니다.");
+  assert.match(intro.body, /AI·SW 캠퍼스/);
+  assert.doesNotMatch(intro.body, /개인정보 처리방침 버전:|시행일:/);
+  assert.deepEqual(document.sections.slice(1), PRIVACY_POLICY_ONLY_SECTIONS.slice(1));
 });
 
-test("서버의 활성 정책 메타데이터를 모든 정책 화면 표시값으로 우선한다", () => {
+test("정책 제출 메타데이터는 현재 운영 버전과 시행일을 기본값으로 사용한다", () => {
+  assert.equal(PRIVACY_POLICY_VERSION, "2026-09-01");
+  assert.equal(PRIVACY_POLICY_EFFECTIVE_DATE, "2026-09-01");
+});
+
+test("서버의 활성 정책 메타데이터를 제출 및 이용약관 표시값으로 우선한다", () => {
   assert.deepEqual(
     resolvePrivacyPolicyMetadata({ version: "2026-08-31", effective_at: "2026-08-31T09:00:00+09:00" }),
     { version: "2026-08-31", effectiveDate: "2026-08-31" },
   );
   assert.deepEqual(resolvePrivacyPolicyMetadata(), {
-    version: "2026-07-12",
-    effectiveDate: "2026-07-12",
+    version: "2026-09-01",
+    effectiveDate: "2026-09-01",
   });
 });
 

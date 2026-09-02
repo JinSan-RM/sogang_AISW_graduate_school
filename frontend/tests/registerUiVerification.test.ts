@@ -35,15 +35,15 @@ test("개인정보 동의 체크와 전문 열기는 독립적으로 동작한�
   assert.match(registerSource, /onRequestClose=\{\(\) => setPrivacyModalVisible\(false\)\}/);
   assert.doesNotMatch(registerSource, /privacyReviewed|privacyReadToEnd|hasReachedPrivacyPolicyEnd/);
   assert.doesNotMatch(registerSource, />전문보기<\/Text>/);
-  assert.match(privacyScreenSource, /sections=\{PRIVACY_POLICY_ONLY_SECTIONS\}/);
+  assert.match(privacyScreenSource, /createPrivacyConsentScreenDocument\(/);
   assert.match(termsScreenSource, /sections=\{TERMS_OF_SERVICE_SECTIONS\}/);
 });
 
-test("회원가입과 두 정책 화면은 같은 활성 정책 메타데이터 조회를 사용한다", () => {
+test("회원가입과 이용약관만 활성 정책 메타데이터를 표시한다", () => {
   assert.match(registerSource, /useRegistrationOptionsQuery\(\)/);
   assert.match(registerSource, /resolvePrivacyPolicyMetadata\(privacyPolicy\)/);
-  assert.match(privacyScreenSource, /useRegistrationOptionsQuery\(\)/);
-  assert.match(privacyScreenSource, /resolvePrivacyPolicyMetadata\(/);
   assert.match(termsScreenSource, /useRegistrationOptionsQuery\(\)/);
   assert.match(termsScreenSource, /resolvePrivacyPolicyMetadata\(/);
+  assert.doesNotMatch(privacyScreenSource, /useRegistrationOptionsQuery|resolvePrivacyPolicyMetadata/);
+  assert.doesNotMatch(privacyScreenSource, /effectiveDate=|version=/);
 });

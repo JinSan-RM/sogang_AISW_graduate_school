@@ -371,6 +371,30 @@ export const PRIVACY_POLICY_ONLY_SECTIONS: PrivacyPolicySection[] = [
   },
 ];
 
+const PRIVACY_CONSENT_HIDDEN_META_LINE = /^• (?:개인정보 처리방침 버전|시행일):/;
+
+function privacyConsentDisplaySections() {
+  return PRIVACY_POLICY_ONLY_SECTIONS.map((section) => {
+    if (section.title !== "개인정보 처리방침") return section;
+
+    return {
+      ...section,
+      body: section.body
+        .split("\n")
+        .filter((line) => !PRIVACY_CONSENT_HIDDEN_META_LINE.test(line.trim()))
+        .join("\n"),
+    };
+  });
+}
+
+export function createPrivacyConsentScreenDocument(consentDate?: string | null) {
+  return {
+    title: "개인정보 수집 및 이용 동의",
+    consentDate,
+    sections: privacyConsentDisplaySections(),
+  };
+}
+
 export const CONSENT_DOCUMENT_SECTIONS: PrivacyPolicySection[] = [
   ...TERMS_OF_SERVICE_SECTIONS,
   ...PRIVACY_POLICY_ONLY_SECTIONS,
