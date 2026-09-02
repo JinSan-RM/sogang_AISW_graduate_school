@@ -4,6 +4,12 @@ import test from "node:test";
 
 const source = (path: string) => readFileSync(path, "utf8");
 
+const styleBlock = (fileSource: string, styleName: string) => {
+  const match = fileSource.match(new RegExp(`${styleName}: \\{([\\s\\S]*?)\\n  \\},`));
+  assert.ok(match, `${styleName} 스타일을 찾을 수 없습니다.`);
+  return match[1];
+};
+
 const tabLayoutSource = source("app/(tabs)/_layout.tsx");
 const homeSource = source("app/(tabs)/home.tsx");
 const noticeListSource = source("app/(tabs)/notices.tsx");
@@ -151,4 +157,13 @@ test("#187 홈 동문회 주소록은 클립보드 아이콘과 제목을 한 �
     /<Text style=\{styles\.alumniDirectoryTitle\}>📋 동문회 주소록 &#x20;<\/Text>/,
   );
   assert.doesNotMatch(homeSource, /<Text style=\{styles\.alumniDirectoryIcon\}>/);
+});
+
+test("#187 홈 동문회 주소록은 디자인 기준의 조밀한 세로 간격을 유지한다", () => {
+  assert.match(styleBlock(homeSource, "content"), /paddingBottom: 16/);
+  assert.match(styleBlock(homeSource, "alumniDirectoryRow"), /marginTop: 24/);
+  assert.match(styleBlock(homeSource, "alumniDirectoryRow"), /paddingVertical: 12/);
+  assert.match(styleBlock(homeSource, "alumniDirectoryTitle"), /lineHeight: 18/);
+  assert.match(styleBlock(homeSource, "alumniDirectoryDescription"), /lineHeight: 16/);
+  assert.match(styleBlock(homeSource, "alumniDirectoryDescription"), /marginTop: 1/);
 });

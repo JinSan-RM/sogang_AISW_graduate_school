@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 21,
-    paddingBottom: 28,
+    paddingBottom: 16,
   },
   header: {
     height: 57,
@@ -1208,16 +1208,16 @@ const styles = StyleSheet.create({
   },
   alumniDirectoryRow: {
     minHeight: 50,
-    marginTop: 28,
+    marginTop: 24,
     borderTopWidth: 0.5,
     borderTopColor: COLORS.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    paddingVertical: 18,
+    paddingVertical: 12,
   },
-    alumniDirectoryLeading: {
+  alumniDirectoryLeading: {
     flex: 1,
     minWidth: 0,
     flexDirection: "row",
@@ -1232,13 +1232,13 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 16,
     fontWeight: "500",
-    lineHeight: 15,
+    lineHeight: 18,
   },
   alumniDirectoryDescription: {
     color: COLORS.subtle,
     fontSize: 13,
     fontWeight: "400",
-    lineHeight: 15,
-    marginTop: 2,
+    lineHeight: 16,
+    marginTop: 1,
   },
 });
