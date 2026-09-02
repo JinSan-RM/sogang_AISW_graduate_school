@@ -22,7 +22,7 @@ const TONES: Record<EventToneSurface, Record<EventDisplayCategory, EventCategory
   },
   detail: {
     academic: { backgroundColor: "#E6F1FB", color: "#0C447C" },
-    event: { backgroundColor: "#FFF0F4", color: "#D65B7C" },
+    event: { backgroundColor: "#FBEAF0", color: "#993556" },
     other: { backgroundColor: "#EDE8F6", color: "#4A2B7A" },
   },
 };
