@@ -1240,5 +1240,6 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     lineHeight: 16,
     marginTop: 4,
+    marginLeft: 4,
   },
 });
