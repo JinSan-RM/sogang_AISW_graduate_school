@@ -38,8 +38,8 @@ test("날짜별과 상세 화면은 PR 3종 tone만 사용한다", () => {
     color: "#993556",
   });
   assert.deepEqual(eventCategoryTone("event", "detail"), {
-    backgroundColor: "#FFF0F4",
-    color: "#D65B7C",
+    backgroundColor: "#FBEAF0",
+    color: "#993556",
   });
   assert.deepEqual(eventCategoryTone("anything", "detail"), {
     backgroundColor: "#EDE8F6",
