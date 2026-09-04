@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from dotenv import dotenv_values
+from pydantic import ValidationError
 import pytest
 from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session
@@ -65,6 +66,25 @@ def test_local_runtime_environments_keep_development_defaults(environment: str) 
 
 def test_complete_production_runtime_is_accepted() -> None:
     production_settings().validate_runtime()
+
+
+def test_file_upload_limit_is_fixed_at_ten_mib() -> None:
+    ten_mib = 10 * 1024 * 1024
+
+    assert Settings(_env_file=None).media_upload_max_bytes == ten_mib
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, media_upload_max_bytes=ten_mib + 1)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [".env.production.example", "backend/.env.example"],
+)
+def test_environment_examples_use_ten_mib_file_upload_limit(relative_path: str) -> None:
+    example_path = Path(__file__).resolve().parents[2] / relative_path
+    configured = dotenv_values(example_path)
+
+    assert configured.get("MEDIA_UPLOAD_MAX_BYTES") == str(10 * 1024 * 1024)
 
 
 def test_production_environment_example_keeps_archive_text_and_notebook_uploads() -> None:

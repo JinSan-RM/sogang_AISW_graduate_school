@@ -10,7 +10,7 @@ import ActivityCertificationMediaImage from "../../../../components/ActivityCert
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
-import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { AttachDocIcon, AttachLinkIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl, useMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import type { MediaReference } from "../../../../utils/mediaAccess";
@@ -26,11 +26,15 @@ import {
   useUpdateMutualAid,
   useUpdateSuggestion,
 } from "../../../../hooks/usePosts";
-import { reportApi, userApi } from "../../../../services/api";
+import { reportApi } from "../../../../services/api";
 import { tabNameFromRoute, useTabHighlightStore } from "../../../../stores/tabHighlightStore";
 import { useUserStore } from "../../../../stores/userStore";
 import type { MutualAidStatus } from "../../../../types";
-import { activityPostEditRouteFromDetail, boardParentRoute, navigateFromPostDetail } from "../../../../utils/appRoutes";
+import {
+  boardParentRoute,
+  navigateFromPostDetail,
+  postEditRouteForPostDetail,
+} from "../../../../utils/appRoutes";
 import { commentKeyAction, commentSubmissionValue } from "../../../../utils/commentKeyboard";
 import { formatBoardDate } from "../../../../utils/dateFormat";
 import { openMediaUrl } from "../../../../utils/mediaOpener";
@@ -48,6 +52,7 @@ import {
 } from "../../../../utils/postDetailImagePresentation";
 import { imageDimensionsFromLoadEvent } from "../../../../utils/imageDimensions";
 import { postDetailFocusDecision } from "../../../../utils/postDetailCache";
+import { participationGuideDetailAttachments } from "../../../../utils/postAttachments";
 import { participationApplicationUrl } from "../../../../utils/participationGuide";
 import { shouldShowPostAuthorBlock } from "../../../../utils/postMenu";
 import { REPORT_REASONS, getReportEntryState, getReportSubmission, type ReportReason } from "../../../../utils/reportForm";
@@ -446,7 +451,7 @@ export default function PostDetailScreen() {
       : imageAttachments[0];
   const galleryTotal = Math.max(imageAttachments.length, 1);
   const isPhotoAlbum = board?.board_type === "album";
-  const hasVisualHero = board?.board_type === "album" || isActivityCertification || isAdminParticipationGuide || isCouncilActivityEntry;
+  const hasVisualHero = board?.board_type === "album" || isActivityCertification || isCouncilActivityEntry;
   const heroImagePresentation = postDetailImagePresentation({
     placement: "hero",
     boardType: board?.board_type,
@@ -456,6 +461,8 @@ export default function PostDetailScreen() {
   const hasNaturalHero = heroImagePresentation === "natural";
   const visibleAttachments = isPhotoAlbum
     ? []
+    : isAdminParticipationGuide
+      ? participationGuideDetailAttachments(post.attachments)
     : hasVisualHero
       ? post.attachments.filter((attachment) => !attachment.content_type.startsWith("image/"))
       : post.attachments;
@@ -979,10 +986,10 @@ export default function PostDetailScreen() {
                       Alert.alert("답변 내용 필요", "답변완료 처리하려면 공식 답변을 입력해주세요.");
                       return;
                     }
-                    updateSuggestionMutation.mutate(
-                      { status: suggestionStatus, admin_reply: suggestionReply.trim() || undefined },
-                      { onSuccess: () => Alert.alert("답변 저장", "건의사항 답변이 저장되었습니다.") }
-                    );
+                    updateSuggestionMutation.mutate({
+                      status: suggestionStatus,
+                      admin_reply: suggestionReply.trim() || undefined,
+                    });
                   }}
                   style={styles.replySaveButton}
                 >
@@ -1159,20 +1166,15 @@ export default function PostDetailScreen() {
               <Pressable
                 onPress={() => {
                   setShowPostMenu(false);
-                  if (isActivityCertification) {
-                    router.push(
-                      activityPostEditRouteFromDetail(
-                        post.board_id,
-                        post.id,
-                        params.fromBoardId,
-                        params.returnTo,
-                      ) as never,
-                    );
-                  } else if (isMutualAidRequest) {
-                    router.push(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
-                  } else {
-                    router.push(`/board/post/edit/${post.id}`);
-                  }
+                  router.push(
+                    postEditRouteForPostDetail(
+                      board,
+                      post.board_id,
+                      post.id,
+                      params.fromBoardId,
+                      params.returnTo,
+                    ) as never,
+                  );
                 }}
                 style={[styles.sheetMenuItem, lastMenuItem === "edit" ? styles.sheetMenuItemLast : null]}
               >

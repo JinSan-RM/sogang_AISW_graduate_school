@@ -757,7 +757,13 @@ export default function HomeScreen() {
         />
       </HomeSectionGate>
 
-      <SectionHeader title="📸 행사 사진첩" onPress={() => router.push(COMMUNITY_TAB_ROUTE as never)} />
+      <SectionHeader
+        title="📸 행사 사진첩"
+        onPress={() => {
+          requestTabRootReset("community");
+          router.navigate(COMMUNITY_TAB_ROUTE as never);
+        }}
+      />
       {albumQuery.isLoading ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color={COLORS.primary} />

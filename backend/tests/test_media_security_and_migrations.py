@@ -12,6 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 from app import migrate
 from app.config import settings
+from app.errors import AppException
 from app.main import app
 from app.media_service import media_file_signature
 from app.models.banner import Banner
@@ -176,6 +177,128 @@ def _openxml_bytes(marker: str) -> bytes:
         archive.writestr("[Content_Types].xml", "<Types />")
         archive.writestr(marker, "<document />")
     return output.getvalue()
+
+
+def test_media_upload_rate_limit_applies_to_members_but_not_admins(
+    api,
+    media_storage,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject_existing_member_limit(
+        _request,
+        *,
+        action: str,
+        subject: str,
+        limit: int,
+        ip_limit: int,
+        window_seconds: int,
+    ) -> None:
+        assert action == "media.upload"
+        assert subject == "1"
+        assert limit == 20
+        assert ip_limit == 60
+        assert window_seconds == 3600
+        raise AppException(
+            status_code=429,
+            message="Too many requests.",
+            code="RATE_LIMITED",
+        )
+
+    monkeypatch.setattr(media_router, "enforce_rate_limit", reject_existing_member_limit)
+
+    member_response = _upload(api, actor="owner", filename="member-photo.png")
+    admin_response = _upload(api, actor="admin", filename="admin-photo.png")
+
+    assert member_response.status_code == 429
+    assert member_response.json()["code"] == "RATE_LIMITED"
+    assert admin_response.status_code == 200
+    assert admin_response.json()["data"]["original_filename"] == "admin-photo.png"
+
+
+def test_admin_photo_album_accepts_twenty_images_and_rejects_twenty_one(
+    api,
+    media_storage,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject_any_rate_limited_upload(*_args, **_kwargs) -> None:
+        raise AppException(
+            status_code=429,
+            message="Too many requests.",
+            code="RATE_LIMITED",
+        )
+
+    monkeypatch.setattr(media_router, "enforce_rate_limit", reject_any_rate_limited_upload)
+
+    with api.session() as db:
+        board = Board(
+            name="Photo album",
+            slug="photo-album-twenty-images",
+            category="community",
+            board_type="album",
+            read_permission="user",
+            write_permission="admin",
+        )
+        db.add(board)
+        db.commit()
+        db.refresh(board)
+        board_id = board.id
+
+    uploads = [
+        _upload(api, actor="admin", filename=f"album-{index:02d}.png")
+        for index in range(1, 22)
+    ]
+
+    assert [response.status_code for response in uploads] == [200] * 21
+    media_ids = [response.json()["data"]["id"] for response in uploads]
+
+    created = api.client.post(
+        f"/api/boards/{board_id}/posts",
+        headers=api.headers["admin"],
+        json={
+            "title": "관리자 사진첩 20장",
+            "content": "관리자 사진첩 20장",
+            "attachment_ids": media_ids[:20],
+            "is_anonymous": False,
+        },
+    )
+
+    assert created.status_code == 200
+    post_id = created.json()["data"]["id"]
+
+    rejected_create = api.client.post(
+        f"/api/boards/{board_id}/posts",
+        headers=api.headers["admin"],
+        json={
+            "title": "관리자 사진첩 21장",
+            "content": "관리자 사진첩 21장",
+            "attachment_ids": media_ids,
+            "is_anonymous": False,
+        },
+    )
+    rejected_update = api.client.put(
+        f"/api/posts/{post_id}",
+        headers=api.headers["admin"],
+        json={
+            "title": "관리자 사진첩 21번째 추가",
+            "content": "관리자 사진첩 21번째 추가",
+            "attachment_ids": media_ids,
+            "is_anonymous": False,
+        },
+    )
+
+    assert rejected_create.status_code == 400
+    assert rejected_create.json()["code"] == "ALBUM_IMAGE_LIMIT_EXCEEDED"
+    assert rejected_update.status_code == 400
+    assert rejected_update.json()["code"] == "ALBUM_IMAGE_LIMIT_EXCEEDED"
+
+    detail = api.client.get(f"/api/posts/{post_id}", headers=api.headers["admin"])
+
+    assert detail.status_code == 200
+    attachments = detail.json()["data"]["attachments"]
+    assert [attachment["id"] for attachment in attachments] == media_ids[:20]
+    assert [attachment["original_filename"] for attachment in attachments] == [
+        f"album-{index:02d}.png" for index in range(1, 21)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -355,6 +478,22 @@ def test_upload_stream_validation_and_cleanup(api, media_storage, monkeypatch: p
     assert too_large.status_code == 413
     assert too_large.json()["code"] == "FILE_TOO_LARGE"
     assert list(public_directory.glob("*")) == []
+
+
+def test_upload_accepts_exact_limit_and_rejects_one_byte_over_without_new_file(
+    api, media_storage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    public_directory, _ = media_storage
+    monkeypatch.setattr(settings, "media_upload_max_bytes", len(PNG_BYTES))
+
+    accepted = _upload(api, body=PNG_BYTES)
+    rejected = _upload(api, body=PNG_BYTES + b"x")
+
+    assert accepted.status_code == 200
+    assert rejected.status_code == 413
+    assert rejected.json()["code"] == "FILE_TOO_LARGE"
+    assert len(list(public_directory.glob("*.png"))) == 1
+    assert list(public_directory.glob("*.uploading")) == []
 
 
 def test_upload_returns_stable_reference_and_signed_file_needs_no_bearer(api, media_storage) -> None:

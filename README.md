@@ -117,7 +117,7 @@ Upload defaults:
 
 - `MEDIA_UPLOAD_DIR=uploads`
 - `MEDIA_PRIVATE_UPLOAD_DIR=private_uploads`
-- `MEDIA_UPLOAD_MAX_BYTES=20971520` (20 MiB)
+- `MEDIA_UPLOAD_MAX_BYTES=10485760` (10 MiB)
 - `MEDIA_UPLOAD_CHUNK_BYTES=1048576` (1 MiB streaming chunks)
 - `MEDIA_ACCESS_URL_EXPIRE_SECONDS=300`
 - `MEDIA_ALLOWED_EXTENSIONS` and `MEDIA_ALLOWED_MIME_TYPES` contain the explicit allowlists; copy the launch defaults from `backend/.env.example`.

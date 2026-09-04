@@ -139,6 +139,37 @@ def test_removing_a_labeled_cta_line_preserves_unrelated_body_spacing() -> None:
     assert metadata == {"application_url": "https://example.com/join"}
 
 
+def test_admin_updates_participation_guide_with_multiple_images(api) -> None:
+    fixture = _setup_participation_post(api)
+    image_ids = [fixture["old_hero_id"], fixture["gallery_id"]]
+
+    response = api.client.put(
+        f"/api/posts/{fixture['post_id']}",
+        headers=api.headers["admin"],
+        json={
+            "title": "SG_LLM 수정",
+            "content": "수정한 동아리 소개입니다.",
+            "metadata": {"application_url": "https://open.kakao.com/o/updated"},
+            "attachment_ids": image_ids,
+            "is_anonymous": False,
+        },
+    )
+
+    assert response.status_code == 200
+    with api.session() as db:
+        stored = db.get(Post, fixture["post_id"])
+        assert stored is not None
+        assert stored.title == "SG_LLM 수정"
+        assert stored.content == "수정한 동아리 소개입니다."
+        assert stored.metadata_json == {"application_url": "https://open.kakao.com/o/updated"}
+        attachment_ids = db.scalars(
+            select(PostAttachment.media_id)
+            .where(PostAttachment.post_id == fixture["post_id"])
+            .order_by(PostAttachment.sort_order.asc(), PostAttachment.id.asc())
+        ).all()
+    assert attachment_ids == image_ids
+
+
 def test_admin_replaces_participation_hero_without_revalidating_legacy_cta(api) -> None:
     fixture = _setup_participation_post(api)
 

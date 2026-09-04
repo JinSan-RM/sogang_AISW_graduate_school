@@ -12,7 +12,19 @@ import { usePostDetail, useUpdatePost } from "../../../../../hooks/usePosts";
 import LoadingState from "../../../../../components/LoadingState";
 import type { MediaAsset } from "../../../../../types";
 import { pickAndUploadImages } from "../../../../../utils/mediaPicker";
+import {
+  PHOTO_ALBUM_IMAGE_SELECTION_LIMIT,
+  participationGuideImageSections,
+  postImageSelectionLimit,
+  replaceParticipationGuideRepresentative,
+} from "../../../../../utils/postAttachments";
 import { resourceCategoryLabel, resourcePostEditBoards } from "../../../../../utils/resourceBoards";
+import {
+  navigateAfterPostEdit,
+  postCreateFormBackDecision,
+  postDetailRoute,
+  postEditCompletionDecision,
+} from "../../../../../utils/appRoutes";
 
 import { CloseIcon } from "../../../../../components/icons";
 const COLORS = {
@@ -38,7 +50,12 @@ type FormValues = z.infer<typeof schema>;
 
 export default function PostEditScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ postId: string }>();
+  const params = useLocalSearchParams<{
+    postId: string;
+    editOrigin?: string;
+    fromBoardId?: string;
+    returnTo?: string;
+  }>();
   const postId = Number(params.postId);
   const { data, isError, isLoading, refetch } = usePostDetail(postId);
   const post = data?.data;
@@ -58,6 +75,13 @@ export default function PostEditScreen() {
   const updateMutation = useUpdatePost(postId, post?.board_id ?? 0, board);
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const {
+    representativeImage: participationRepresentativeImage,
+    detailImages: participationDetailImages,
+  } = participationGuideImageSections(attachments);
+  const albumImageSelectionLimit = postImageSelectionLimit(board?.board_type, attachments.length);
+  const isAlbumImageLimitReached = isAlbum && albumImageSelectionLimit === 0;
 
   const { control, handleSubmit, reset, setError } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -83,8 +107,23 @@ export default function PostEditScreen() {
   }, [isActivityCertification, post]);
 
   const goBack = () => {
+    if (params.editOrigin) {
+      const decision = postCreateFormBackDecision({
+        boardType: board?.board_type,
+        editOrigin: params.editOrigin,
+        postId,
+        returnTo: params.returnTo,
+        canGoBack: router.canGoBack(),
+        boardId: post?.board_id ?? 0,
+        fromBoardId: params.fromBoardId,
+      });
+      if (decision.action === "back") router.back();
+      else if (decision.action === "navigate") router.navigate(decision.route as never);
+      else router.replace(decision.route as never);
+      return;
+    }
     if (router.canGoBack()) router.back();
-    else router.replace(`/board/post/${postId}`);
+    else router.replace(postDetailRoute(postId));
   };
 
   if (isLoading) {
@@ -108,6 +147,10 @@ export default function PostEditScreen() {
 
   const onSubmit = (values: FormValues) => {
     const content = values.content?.trim() ?? "";
+    if (isAlbum && attachments.length > PHOTO_ALBUM_IMAGE_SELECTION_LIMIT) {
+      setUploadNotice("사진첩은 게시글당 최대 20장까지 등록할 수 있어요. 사진을 20장 이하로 줄여주세요.");
+      return;
+    }
     if (!isAlbum && !isMutualAid && !content) {
       setError("content", { message: "내용을 입력해주세요" });
       return;
@@ -129,7 +172,7 @@ export default function PostEditScreen() {
         setError("applicationUrl", { message: "http:// 또는 https://로 시작하는 올바른 주소를 입력해주세요" });
         return;
       }
-      if (!attachments.some((attachment) => attachment.content_type.startsWith("image/"))) {
+      if (!participationRepresentativeImage) {
         Alert.alert("대표 사진", "동아리 게시글에는 사진을 1장 이상 첨부해야 합니다.");
         return;
       }
@@ -160,8 +203,22 @@ export default function PostEditScreen() {
       },
       {
         onSuccess: () => {
-          if (isResourceEdit && selectedBoardId !== post.board_id) {
-            router.replace(`/board/post/${postId}`);
+          if (params.editOrigin) {
+            const detailBoardId = isResourceEdit && selectedBoardId !== post.board_id
+              ? selectedBoardId
+              : params.fromBoardId;
+            const decision = postEditCompletionDecision(
+              board?.board_type,
+              params.editOrigin,
+              router.canGoBack(),
+              postId,
+              detailBoardId,
+              params.returnTo,
+            );
+            navigateAfterPostEdit(decision, {
+              back: () => router.back(),
+              replace: (route) => router.replace(route as never),
+            });
             return;
           }
           goBack();
@@ -172,14 +229,74 @@ export default function PostEditScreen() {
   };
 
   const selectImages = async () => {
+    if (isAlbumImageLimitReached) {
+      setUploadNotice("사진첩은 게시글당 최대 20장까지 등록할 수 있어요.");
+      return;
+    }
     try {
       setIsUploading(true);
-      const uploaded = await pickAndUploadImages();
+      setUploadNotice(null);
+      const uploaded = await pickAndUploadImages(
+        undefined,
+        isAlbum
+          ? {
+              maxSelection: albumImageSelectionLimit,
+              retainSuccessfulUploads: true,
+              onBatchIssue: ({ uploadedCount, failedCount, skippedCount }) => {
+                const messages = [
+                  skippedCount > 0 ? `게시글당 최대 20장까지 등록할 수 있어 ${skippedCount}장은 제외했어요.` : null,
+                  failedCount > 0 ? `${uploadedCount}장은 추가했고 ${failedCount}장은 업로드하지 못했어요.` : null,
+                ].filter((message): message is string => Boolean(message));
+                setUploadNotice(messages.join(" "));
+              },
+            }
+          : undefined,
+      );
       if (uploaded.length > 0) {
-        setAttachments((current) => [...current, ...uploaded]);
+        setAttachments((current) => {
+          const next = [...current, ...uploaded];
+          return isAlbum ? next.slice(0, PHOTO_ALBUM_IMAGE_SELECTION_LIMIT) : next;
+        });
       }
     } catch {
-      Alert.alert("업로드 실패", "사진 업로드를 다시 시도하세요.");
+      setUploadNotice("사진 업로드를 다시 시도하세요.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const selectParticipationImages = async (kind: "representative" | "detail") => {
+    if (kind === "detail" && !participationRepresentativeImage) {
+      setUploadNotice("대표 이미지를 먼저 등록해주세요.");
+      return;
+    }
+    try {
+      setIsUploading(true);
+      setUploadNotice(null);
+      const uploaded = await pickAndUploadImages(undefined, {
+        maxSelection: kind === "representative" ? 1 : undefined,
+        retainSuccessfulUploads: true,
+        onBatchIssue: ({ uploadedCount, failedCount, skippedCount }) => {
+          const messages = [
+            kind === "representative" && skippedCount > 0
+              ? "대표 이미지는 1장만 등록할 수 있어 첫 번째 사진만 사용했어요."
+              : null,
+            failedCount > 0
+              ? `${uploadedCount}장은 추가했고 ${failedCount}장은 업로드하지 못했어요.`
+              : null,
+          ].filter((message): message is string => Boolean(message));
+          setUploadNotice(messages.join(" "));
+        },
+      });
+      if (uploaded.length > 0) {
+        setAttachments((current) =>
+          kind === "representative"
+            ? replaceParticipationGuideRepresentative(current, uploaded[0])
+            : [...current, ...uploaded],
+        );
+      }
+    } catch {
+      setUploadNotice(`${kind === "representative" ? "대표" : "상세 글"} 이미지 업로드를 다시 시도하세요.`);
     } finally {
       setIsUploading(false);
     }
@@ -327,51 +444,113 @@ export default function PostEditScreen() {
           />
         ) : null}
 
-        {isAdminParticipationPost ? (
+        {isAdminParticipationPost || isAlbum ? (
           <>
-            <Controller
-              control={control}
-              name="applicationUrl"
-              render={({ field, fieldState }) => (
-                <View>
-                  <Text style={styles.fieldLabel}>참여 버튼 링크</Text>
-                  <TextInput
-                    accessibilityLabel="참여 버튼 링크"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="url"
-                    onBlur={field.onBlur}
-                    onChangeText={field.onChange}
-                    placeholder="https://forms.gle/..."
-                    placeholderTextColor={COLORS.subtle}
-                    style={[styles.input, fieldState.error ? styles.inputError : null]}
-                    value={field.value}
-                  />
-                  {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
-                </View>
-              )}
-            />
+            {isAdminParticipationPost ? (
+              <Controller
+                control={control}
+                name="applicationUrl"
+                render={({ field, fieldState }) => (
+                  <View>
+                    <Text style={styles.fieldLabel}>참여 버튼 링크</Text>
+                    <TextInput
+                      accessibilityLabel="참여 버튼 링크"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                      onBlur={field.onBlur}
+                      onChangeText={field.onChange}
+                      placeholder="https://forms.gle/..."
+                      placeholderTextColor={COLORS.subtle}
+                      style={[styles.input, fieldState.error ? styles.inputError : null]}
+                      value={field.value}
+                    />
+                    {fieldState.error ? <Text style={styles.errorText}>{fieldState.error.message}</Text> : null}
+                  </View>
+                )}
+              />
+            ) : null}
 
-            <View style={styles.photoBox}>
-              <View style={styles.photoHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.fieldLabel}>대표 사진</Text>
-                  <Text style={styles.helperText}>목록과 상세 상단에 표시할 사진을 1장 이상 첨부하세요.</Text>
-                </View>
-                <Pressable disabled={isUploading} onPress={selectImages} style={styles.photoAddButton}>
-                  <Ionicons name="image-outline" size={17} color={COLORS.primary} />
-                  <Text style={styles.photoAddText}>{isUploading ? "업로드 중" : "사진 추가"}</Text>
-                </Pressable>
-              </View>
-              {attachments.map((attachment) => (
-                <View key={attachment.id} style={styles.photoRow}>
-                  <Text numberOfLines={1} style={styles.photoName}>{attachment.original_filename}</Text>
-                  <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
-                    <Ionicons name="close-circle" size={19} color={COLORS.subtle} />
+            {isAlbum ? (
+              <View style={styles.photoBox}>
+                <View style={styles.photoHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>사진</Text>
+                    <Text style={styles.helperText}>{`행사 사진 ${attachments.length}/20 · 게시글당 최대 20장 · 장당 10MB 이하`}</Text>
+                  </View>
+                  <Pressable
+                    disabled={isUploading || isAlbumImageLimitReached}
+                    onPress={selectImages}
+                    style={[styles.photoAddButton, isUploading || isAlbumImageLimitReached ? styles.photoAddButtonDisabled : null]}
+                  >
+                    <Ionicons name="image-outline" size={17} color={COLORS.primary} />
+                    <Text style={styles.photoAddText}>{isUploading ? "업로드 중" : isAlbumImageLimitReached ? "20장 완료" : "사진 추가"}</Text>
                   </Pressable>
                 </View>
-              ))}
-            </View>
+                {attachments.map((attachment) => (
+                  <View key={attachment.id} style={styles.photoRow}>
+                    <Text numberOfLines={1} style={styles.photoName}>{attachment.original_filename}</Text>
+                    <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                      <Ionicons name="close-circle" size={19} color={COLORS.subtle} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <>
+                <View style={styles.photoBox}>
+                  <View style={styles.photoHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.fieldLabel}>대표 이미지</Text>
+                      <Text style={styles.helperText}>목록 썸네일에만 사용합니다. 이미지 1장 · 10MB 이하</Text>
+                    </View>
+                    <Pressable
+                      disabled={isUploading}
+                      onPress={() => void selectParticipationImages("representative")}
+                      style={[styles.photoAddButton, isUploading ? styles.photoAddButtonDisabled : null]}
+                    >
+                      <Ionicons name="image-outline" size={17} color={COLORS.primary} />
+                      <Text style={styles.photoAddText}>{isUploading ? "업로드 중" : participationRepresentativeImage ? "이미지 변경" : "이미지 등록"}</Text>
+                    </Pressable>
+                  </View>
+                  {participationRepresentativeImage ? (
+                    <View style={styles.photoRow}>
+                      <Text numberOfLines={1} style={styles.photoName}>{participationRepresentativeImage.original_filename}</Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={styles.photoBox}>
+                  <View style={styles.photoHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.fieldLabel}>상세 글 이미지</Text>
+                      <Text style={styles.helperText}>
+                        {participationRepresentativeImage
+                          ? "상세 본문 아래에 등록 순서대로 표시합니다. 각 이미지 10MB 이하"
+                          : "대표 이미지를 먼저 등록하면 상세 이미지를 추가할 수 있습니다."}
+                      </Text>
+                    </View>
+                    <Pressable
+                      disabled={isUploading || !participationRepresentativeImage}
+                      onPress={() => void selectParticipationImages("detail")}
+                      style={[styles.photoAddButton, isUploading || !participationRepresentativeImage ? styles.photoAddButtonDisabled : null]}
+                    >
+                      <Ionicons name="images-outline" size={17} color={COLORS.primary} />
+                      <Text style={styles.photoAddText}>{isUploading ? "업로드 중" : "이미지 추가"}</Text>
+                    </Pressable>
+                  </View>
+                  {participationDetailImages.map((attachment) => (
+                    <View key={attachment.id} style={styles.photoRow}>
+                      <Text numberOfLines={1} style={styles.photoName}>{attachment.original_filename}</Text>
+                      <Pressable hitSlop={8} onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>
+                        <Ionicons name="close-circle" size={19} color={COLORS.subtle} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+            {uploadNotice ? <Text style={styles.errorText}>{uploadNotice}</Text> : null}
           </>
         ) : null}
 
@@ -599,6 +778,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     borderRadius: 7,
     paddingHorizontal: 11,
+  },
+  photoAddButtonDisabled: {
+    opacity: 0.5,
   },
   photoAddText: {
     color: COLORS.primary,

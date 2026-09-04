@@ -99,6 +99,7 @@ def test_nginx_contract_preserves_acme_and_proxies_api_over_https() -> None:
     assert "proxy_pass http://frontend-web:8080" in https
     assert "proxy_set_header X-Forwarded-For $remote_addr" in https
     assert "proxy_set_header X-Forwarded-Proto https" in https
+    assert "client_max_body_size 11m;" in https
     assert "sha256sum" in watcher
     assert "nginx -s reload" in watcher
 

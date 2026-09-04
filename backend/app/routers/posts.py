@@ -39,6 +39,7 @@ from app.participation_guides import ADMIN_PARTICIPATION_BOARD_SLUGS, normalize_
 router = APIRouter()
 
 COUNCIL_MEMBER_WRITABLE_TYPES = frozenset({"suggestion", "mutual_aid"})
+PHOTO_ALBUM_ATTACHMENT_LIMIT = 20
 MUTUAL_AID_MIN_LEAD_DAYS = 0
 SEOUL_TIME_ZONE = ZoneInfo("Asia/Seoul")
 
@@ -787,6 +788,12 @@ def _replace_attachments(
     if (requires_album_images or requires_activity_images) and not attachment_ids:
         message = "Album posts require at least one image." if requires_album_images else "Activity certifications require at least one image."
         raise AppException(status_code=400, message=message, code="IMAGE_REQUIRED")
+    if requires_album_images and len(attachment_ids) > PHOTO_ALBUM_ATTACHMENT_LIMIT:
+        raise AppException(
+            status_code=400,
+            message="Album posts accept at most 20 images.",
+            code="ALBUM_IMAGE_LIMIT_EXCEEDED",
+        )
     media_assets: list[MediaAsset] = []
     for media_id in attachment_ids:
         media = db.get(MediaAsset, media_id)
@@ -1395,6 +1402,7 @@ def update_post(
                 and incoming_evidence_link is None
             ),
         )
+        db.flush()
     if target_board is not None:
         _ensure_admin_participation_image(db, post, target_board)
     db.commit()

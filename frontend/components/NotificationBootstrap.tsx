@@ -6,6 +6,7 @@ import { Platform, Pressable, Text, View } from "react-native";
 import { notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import type { NotificationItem } from "../types";
+import { notificationContentRoute } from "../utils/appRoutes";
 import { setStoredPushToken } from "../utils/pushTokenStorage";
 import { showWebNotification } from "../utils/webNotifications";
 import { NoticeToastIcon } from "./icons";
@@ -57,13 +58,7 @@ async function openNotification(notification: Pick<NotificationItem, "id" | "pos
     // The notification can still be opened even if read-state sync fails.
   }
 
-  if (notification.post_id) {
-    router.push(`/board/post/${notification.post_id}`);
-  } else if (notification.event_id) {
-    router.push("/events");
-  } else {
-    router.push("/notifications");
-  }
+  router.push(notificationContentRoute(notification) as never);
 }
 
 async function registerPushToken() {

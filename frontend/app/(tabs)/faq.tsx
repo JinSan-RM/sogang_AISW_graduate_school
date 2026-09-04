@@ -8,6 +8,11 @@ import LoadingState from "../../components/LoadingState";
 import NaturalAspectMediaImage from "../../components/NaturalAspectMediaImage";
 import { faqApi } from "../../services/api";
 import type { FAQItem } from "../../types";
+import {
+  createFaqAccordionState,
+  faqRowPresentation,
+  toggleFaqExpansion,
+} from "../../utils/faqAccordion";
 
 import { BackIcon, EmptyDocumentIcon } from "../../components/icons";
 const COLORS = {
@@ -25,6 +30,7 @@ export default function FAQScreen() {
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
+  const [expandedFaqIds, setExpandedFaqIds] = useState<Set<number>>(createFaqAccordionState);
 
   const loadFAQs = useCallback(async () => {
     setIsLoading(true);
@@ -44,6 +50,9 @@ export default function FAQScreen() {
   }, [loadFAQs]);
 
   const visibleFAQs = useMemo(() => faqs.filter((item) => item.is_active !== false), [faqs]);
+  const toggleFAQ = useCallback((faqId: number) => {
+    setExpandedFaqIds((current) => toggleFaqExpansion(current, faqId));
+  }, []);
 
   return (
     <View style={styles.screen}>
@@ -74,33 +83,44 @@ export default function FAQScreen() {
             </View>
           ) : null}
 
-          {visibleFAQs.map((item, index) => (
-            <View key={item.id} style={[styles.faqItem, index === visibleFAQs.length - 1 ? styles.faqItemLast : null]}>
-              <View style={styles.questionRow}>
-                <View style={styles.questionBadge}>
-                  <Text style={styles.questionBadgeText}>Q</Text>
-                </View>
-                <Text style={styles.questionText}>{item.question}</Text>
+          {visibleFAQs.map((item, index) => {
+            const presentation = faqRowPresentation(expandedFaqIds, item.id);
+            return (
+              <View key={item.id} style={[styles.faqItem, index === visibleFAQs.length - 1 ? styles.faqItemLast : null]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: presentation.expanded }}
+                  onPress={() => toggleFAQ(item.id)}
+                  style={styles.questionRow}
+                >
+                  <View style={styles.questionBadge}>
+                    <Text style={styles.questionBadgeText}>Q</Text>
+                  </View>
+                  <Text style={styles.questionText}>{item.question}</Text>
+                  <Ionicons name={presentation.chevron} size={18} color={COLORS.muted} />
+                </Pressable>
+                {presentation.showAnswer ? (
+                  <View style={styles.answerRow}>
+                    <View style={styles.answerBadge}>
+                      <Text style={styles.answerBadgeText}>A</Text>
+                    </View>
+                    <View style={styles.answerContent}>
+                      <Text style={styles.answerText}>{item.answer}</Text>
+                      {item.attachments
+                        .filter((attachment) => attachment.content_type.startsWith("image/"))
+                        .map((attachment) => (
+                          <NaturalAspectMediaImage
+                            key={attachment.id}
+                            media={attachment}
+                            style={styles.answerImage}
+                          />
+                        ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
-              <View style={styles.answerRow}>
-                <View style={styles.answerBadge}>
-                  <Text style={styles.answerBadgeText}>A</Text>
-                </View>
-                <View style={styles.answerContent}>
-                  <Text style={styles.answerText}>{item.answer}</Text>
-                  {item.attachments
-                    .filter((attachment) => attachment.content_type.startsWith("image/"))
-                    .map((attachment) => (
-                      <NaturalAspectMediaImage
-                        key={attachment.id}
-                        media={attachment}
-                        style={styles.answerImage}
-                      />
-                    ))}
-                </View>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </View>

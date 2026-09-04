@@ -85,6 +85,71 @@ export type AdminBoardContentControl = {
   canReplaceRepresentativeImage: boolean;
 };
 
+export type AdminPostMode = "all" | "notice" | "pinned";
+
+export type AdminPostPaginationState = {
+  contextKey: string;
+  page: number;
+};
+
+export function adminPostPageForContext(
+  state: AdminPostPaginationState,
+  contextKey: string,
+): number {
+  return state.contextKey === contextKey ? state.page : 1;
+}
+
+export function adminPostPageAfterDelete({
+  currentPage,
+  currentItemCount,
+}: {
+  currentPage: number;
+  currentItemCount: number;
+}): number {
+  return currentPage > 1 && currentItemCount === 1 ? currentPage - 1 : currentPage;
+}
+
+export async function runAdminPostDelete({
+  postId,
+  currentPage,
+  currentItemCount,
+  deletePost,
+  afterDelete,
+}: {
+  postId: number;
+  currentPage: number;
+  currentItemCount: number;
+  deletePost: (postId: number) => Promise<void>;
+  afterDelete: () => Promise<void>;
+}): Promise<number> {
+  await deletePost(postId);
+  await afterDelete();
+  return adminPostPageAfterDelete({ currentPage, currentItemCount });
+}
+
+export function adminPostListQueryParams({
+  isDashboard,
+  page,
+  search,
+  boardId,
+  mode,
+}: {
+  isDashboard: boolean;
+  page: number;
+  search: string;
+  boardId?: number;
+  mode: AdminPostMode;
+}) {
+  return {
+    page: isDashboard ? 1 : page,
+    size: 10,
+    q: isDashboard ? undefined : search.trim() || undefined,
+    board_id: isDashboard ? undefined : boardId,
+    is_notice: isDashboard ? undefined : mode === "notice" ? true : undefined,
+    is_pinned: isDashboard ? undefined : mode === "pinned" ? true : undefined,
+  };
+}
+
 export function adminActivityCertificationBankAccount({
   allowDisplay,
   boardType,

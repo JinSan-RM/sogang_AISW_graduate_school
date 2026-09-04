@@ -5,9 +5,22 @@ import { Platform } from "react-native";
 import { mediaApi } from "../services/api";
 import type { MediaAsset } from "../types";
 import { inferDocumentContentType } from "./documentFiles";
+import { nativeMultiImagePickerOptions, uploadAttachmentBatch } from "./postAttachments";
 import { selectAndUploadProfileImage } from "./profileImagePicker";
 
 type UploadProgress = (progress: number) => void;
+
+export type ImageUploadBatchIssue = {
+  uploadedCount: number;
+  failedCount: number;
+  skippedCount: number;
+};
+
+type PickAndUploadImagesOptions = {
+  maxSelection?: number;
+  retainSuccessfulUploads?: boolean;
+  onBatchIssue?: (issue: ImageUploadBatchIssue) => void;
+};
 
 function fileNameFromUri(uri: string, fallback: string) {
   const name = uri.split("/").pop()?.split("?")[0];
@@ -118,10 +131,45 @@ export async function pickAndUploadDocuments(onProgress?: UploadProgress, isPriv
   return uploaded;
 }
 
-export async function pickAndUploadImages(onProgress?: UploadProgress): Promise<MediaAsset[]> {
+async function uploadSelectedImages<T>(
+  items: readonly T[],
+  upload: (item: T) => Promise<MediaAsset>,
+  options?: PickAndUploadImagesOptions,
+) {
+  const maxSelection = options?.maxSelection;
+  const selectedItems = maxSelection === undefined
+    ? items
+    : items.slice(0, Math.max(0, Math.trunc(maxSelection)));
+
+  if (!options?.retainSuccessfulUploads) {
+    const skippedCount = Math.max(0, items.length - selectedItems.length);
+    if (skippedCount > 0) {
+      options?.onBatchIssue?.({ uploadedCount: selectedItems.length, failedCount: 0, skippedCount });
+    }
+    return Promise.all(selectedItems.map((item) => upload(item)));
+  }
+
+  const result = await uploadAttachmentBatch(items, upload, maxSelection);
+  if (result.failedCount > 0 || result.skippedCount > 0) {
+    options.onBatchIssue?.({
+      uploadedCount: result.uploaded.length,
+      failedCount: result.failedCount,
+      skippedCount: result.skippedCount,
+    });
+  }
+  if (result.failedCount > 0 && result.uploaded.length === 0) {
+    throw result.firstError instanceof Error ? result.firstError : new Error("IMAGE_UPLOAD_FAILED");
+  }
+  return result.uploaded;
+}
+
+export async function pickAndUploadImages(
+  onProgress?: UploadProgress,
+  options?: PickAndUploadImagesOptions,
+): Promise<MediaAsset[]> {
   if (Platform.OS === "web") {
     const files = await pickLocalFiles({ accept: "image/*", multiple: true });
-    return Promise.all(files.map((file) => uploadPickedFile(file, onProgress)));
+    return uploadSelectedImages(files, (file) => uploadPickedFile(file, onProgress), options);
   }
 
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -134,25 +182,24 @@ export async function pickAndUploadImages(onProgress?: UploadProgress): Promise<
     allowsMultipleSelection: true,
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     quality: 0.9,
+    ...nativeMultiImagePickerOptions(options?.maxSelection),
   });
   if (result.canceled) {
     return [];
   }
 
-  const uploaded: MediaAsset[] = [];
-  for (const asset of result.assets) {
-    uploaded.push(
-      await uploadPickedFile(
-        {
-          uri: asset.uri,
-          name: asset.fileName || fileNameFromUri(asset.uri, "album-image.jpg"),
-          type: asset.mimeType || "image/jpeg",
-        },
-        onProgress
-      )
-    );
-  }
-  return uploaded;
+  return uploadSelectedImages(
+    result.assets,
+    (asset) => uploadPickedFile(
+      {
+        uri: asset.uri,
+        name: asset.fileName || fileNameFromUri(asset.uri, "album-image.jpg"),
+        type: asset.mimeType || "image/jpeg",
+      },
+      onProgress,
+    ),
+    options,
+  );
 }
 
 export async function pickAndUploadImage(onProgress?: UploadProgress): Promise<MediaAsset | null> {

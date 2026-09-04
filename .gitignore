@@ -87,7 +87,14 @@ frontend/.git.backup-*/
 .codex-tmp/
 .worktrees/
 outputs/
+/artifacts/
+/.codex-backups/
+/.env.production.pre-*
 ~$*.xlsx
+
+# Local legal source references (runtime policy text lives in frontend source)
+/개인정보 이용약관.txt
+/이용약관 및 개인정보 처리방침 동의 _ v2.docx
 
 # User-managed/generated exports
 AISW_app_architecture_gap_analysis.html

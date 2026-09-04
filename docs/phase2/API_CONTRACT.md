@@ -76,7 +76,7 @@ List endpoints use:
 
 ### Date Format
 
-- Datetime fields use ISO 8601 UTC strings.
+- Datetime fields use unambiguous ISO 8601 UTC strings ending in `Z`; existing UTC instants are not shifted when serialized.
 - Date-only fields use `YYYY-MM-DD`.
 
 ## 2. Auth
@@ -597,7 +597,7 @@ Query: optional `q`, `page`, and `size` (max `100`). Returns the same items with
 
 Auth: admin. Multipart field: `file`, restricted to `.xlsx`.
 
-The first sheet is read without a header as `name`, `major`, `student_number`. A valid workbook is upserted atomically by normalized student number and returns `{created, updated, unchanged, total_rows}`. Any partial blank row, non-`A` plus five-digit student number, populated fourth column, duplicate normalized student number, empty workbook, malformed workbook, or oversized upload rejects the entire import. Validation codes are `DUES_IMPORT_EMPTY_VALUE`, `DUES_IMPORT_INVALID_STUDENT_NUMBER`, `DUES_IMPORT_DUPLICATE_STUDENT_NUMBER`, `INVALID_DUES_WORKBOOK`, and `PAYLOAD_TOO_LARGE`.
+The first sheet is read without a header as `name`, `major`, `student_number`. A valid workbook is upserted atomically by normalized student number and returns `{created, updated, unchanged, total_rows}`. The import shares the fixed global 10 MiB (`10485760` bytes) file limit used by media uploads. Any partial blank row, non-`A` plus five-digit student number, populated fourth column, duplicate normalized student number, empty workbook, malformed workbook, or oversized upload rejects the entire import. Validation codes are `DUES_IMPORT_EMPTY_VALUE`, `DUES_IMPORT_INVALID_STUDENT_NUMBER`, `DUES_IMPORT_DUPLICATE_STUDENT_NUMBER`, `INVALID_DUES_WORKBOOK`, and `PAYLOAD_TOO_LARGE`.
 
 ### POST `/dues-payers/admin/delete-all`
 
@@ -960,7 +960,7 @@ Rules:
 - Anonymous writing is allowed only when `boards.allow_anonymous = true`.
 - For anonymous or forced-anonymous posts, non-admin readers other than the author receive `author_id: null`, `author_nickname: "Anonymous"`, and no cohort. Author-name search and block-based filtering do not act as identity side channels; anonymous content remains reportable.
 - `club-promo` and `networking-programs` posts are admin-only even if a stale board configuration says otherwise.
-- These administrator-managed participation guide posts require at least one ready image attachment.
+- These administrator-managed participation guide posts require at least one ready image attachment. The first image is the list-only representative thumbnail; later images are ordered detail images returned in `attachments` for display below the body. Create/update preserves the submitted attachment order.
 - Their metadata requires an HTTP(S) `application_url`; the mobile detail CTA opens this administrator-managed URL. A legacy body line formatted as `참여 링크`, `가입 링크`, or `신청 링크` followed by an HTTP(S) URL is exposed only through `metadata.application_url` and is omitted from member-facing content. Create/edit canonicalizes the same duplicate line out of stored content, so the URL is rendered only by the CTA.
 - `study-recruit` remains user-writable, so every authenticated member may create and manage their own study recruitment post.
 - Club, study, and networking activity certification boards keep `write_permission = user`, so every authenticated member may submit an activity certification.
@@ -976,7 +976,7 @@ Rules:
 - Admin notice posts may set `metadata.show_in_council_activity = true`. Linked notices require an image in the admin UI and are reused as photo/text entries in the council activity history.
 - Organization-introduction boards use administrator-managed structured metadata. `gsa-executives` stores one active entry in `boards.metadata.council_introductions[]` with `title`, `greeting`, `intro`, ordered `photo_urls[]`, `banner_image_url`, and a variable-length `members[]`; `gsa-cohort-leaders` and `gsa-past-councils` use the same detail fields under `cohort_leaders[]` and `past_councils[]`, keyed by cohort/council number. The first `photo_urls[]` item is the representative image and is mirrored to `banner_image_url`. Readers resolve organization-introduction images in this order: `photo_urls[]`, legacy `attachment_urls[]`, then `banner_image_url`. Every member stores `name`, `cohort`, `role`, and optional `image_url`; legacy `intro` values remain readable but are not rendered in fixed profile cards. Admin saves also retain the legacy fixed executive/captain/president fields so older mobile clients remain readable during rollout.
 - Notice boards are admin-write only.
-- Album posts require at least one image attachment, reject non-image attachments, and store no body text.
+- Album posts require 1-20 image attachments, reject non-image attachments, and store no body text. Both create and update reject more than 20 attachments with HTTP `400` and error code `ALBUM_IMAGE_LIMIT_EXCEEDED`.
 
 ### PUT `/posts/{post_id}`
 
@@ -1034,7 +1034,7 @@ Response:
 }
 ```
 
-This endpoint is limited to `club-promo` and `networking-programs`. The media must be a ready, public image. It replaces the first image attachment while preserving the post title, body, metadata, anonymity, deadline, and every other attachment. It intentionally does not run the full post-update validation, so an administrator can repair the representative image of a readable legacy guide whose stored metadata predates `application_url`.
+This endpoint is limited to `club-promo` and `networking-programs`. The media must be a ready, public image. It replaces the first image attachment used by list thumbnails while preserving the post title, body, metadata, anonymity, deadline, ordered detail images, and every other attachment. The representative image is not rendered in guide detail. The endpoint intentionally does not run the full post-update validation, so an administrator can repair the representative image of a readable legacy guide whose stored metadata predates `application_url`.
 
 ### PUT `/posts/{post_id}/mutual-aid`
 
@@ -1278,7 +1278,8 @@ Form fields:
 Rules:
 
 - The server streams the upload to a temporary file in chunks and deletes partial files after every failure.
-- Default maximum size is 20 MiB and can be changed with `MEDIA_UPLOAD_MAX_BYTES`; streaming chunks default to 1 MiB via `MEDIA_UPLOAD_CHUNK_BYTES`.
+- The fixed maximum size is 10 MiB (`10485760` bytes). `MEDIA_UPLOAD_MAX_BYTES` defaults to 10 MiB and cannot exceed it; streaming chunks default to 1 MiB via `MEDIA_UPLOAD_CHUNK_BYTES`.
+- Non-admin uploads retain the production throttle of 20 requests per account and 60 requests per client IP in each 3600-second window. Admin-role uploads bypass this request-count throttle, but still pass every size, type, signature, privacy, storage, and attachment validation.
 - Allowed extensions and MIME pairs are defined by `MEDIA_ALLOWED_EXTENSIONS` and `MEDIA_ALLOWED_MIME_TYPES`. The launch defaults are `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, `.heif`, `.pdf`, `.doc`, `.xls`, `.ppt`, `.docx`, `.xlsx`, `.pptx`, `.hwp`, `.zip`, `.txt`, and `.ipynb`, paired with the MIME values in `backend/.env.example`.
 - Storage directories are configured with `MEDIA_UPLOAD_DIR` and `MEDIA_PRIVATE_UPLOAD_DIR` and must not be exposed by a web server.
 - Images, PDF, office/HWP documents, ZIP archives, plain text, and valid Jupyter notebooks are accepted. ZIP structure, notebook JSON shape, HWP's internal signature, and other supported file signatures are validated; empty, oversized, forbidden, or mismatched files are rejected.
@@ -1334,7 +1335,7 @@ Query:
 - `to_date`: required or default last day of current month
 - `category`: optional
 
-Date bounds use overlap semantics: an event is returned when it starts before the exclusive end of the requested range and its `end_at` (or `start_at` when no end exists) is on or after the range start. Date-only `to_date` values include that full calendar day, so month and single-day queries include multi-day events that began earlier and are still in progress.
+Date bounds use `Asia/Seoul` calendar boundaries with overlap semantics: an event is returned when it starts before the exclusive end of the requested range and its `end_at` (or `start_at` when no end exists) is on or after the range start. Date-only `to_date` values include that full Korean calendar day, so month and single-day queries include multi-day events that began earlier and are still in progress. Event writes normalize timezone-aware inputs to UTC before storing them, and D-day dispatch uses the same Korean calendar-day boundaries.
 
 Response item:
 

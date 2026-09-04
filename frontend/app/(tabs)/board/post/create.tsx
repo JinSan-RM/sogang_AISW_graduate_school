@@ -9,7 +9,7 @@ import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, Text
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { AttachFileIcon, AttachImageIcon, BackIcon, CalendarSmallIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
+import { AttachFileIcon, AttachImageIcon, AttachLinkIcon, BackIcon, CalendarSmallIcon, CameraAddIcon, CloseIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../../hooks/usePosts";
@@ -31,6 +31,7 @@ import {
   type ActivityParticipant,
 } from "../../../../utils/activityCertification";
 import {
+  navigateAfterPostEdit,
   postCreateFormBackDecision,
   postCreateCompletionRoute,
   postCreateFormInstanceKey,
@@ -57,7 +58,13 @@ import {
   mutualAidRelationLabel,
   normalizeMutualAidEventDate,
 } from "../../../../utils/mutualAid";
-import { writeAttachmentActions } from "../../../../utils/postAttachments";
+import {
+  PHOTO_ALBUM_IMAGE_SELECTION_LIMIT,
+  participationGuideImageSections,
+  postImageSelectionLimit,
+  replaceParticipationGuideRepresentative,
+  writeAttachmentActions,
+} from "../../../../utils/postAttachments";
 
 const COLORS = {
   primary: "#2761FF",
@@ -146,7 +153,7 @@ function clean(value?: string) {
 }
 
 const EVIDENCE_MODES = [
-  { key: "file" as const, label: "파일 첨부" },
+  { key: "file" as const, label: "이미지 첨부" },
   { key: "link" as const, label: "링크 첨부" },
 ];
 
@@ -484,6 +491,12 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   }, [isAdminParticipationPost, params.category, setValue]);
 
   const attachmentIds = attachments.map((attachment) => attachment.id);
+  const {
+    representativeImage: participationRepresentativeImage,
+    detailImages: participationDetailImages,
+  } = participationGuideImageSections(attachments);
+  const albumImageSelectionLimit = postImageSelectionLimit(boardType, attachmentIds.length);
+  const isAlbumImageLimitReached = isAlbum && albumImageSelectionLimit === 0;
   const hasStoredMutualAidEvidence = Boolean(postId && existingPost?.mutual_aid?.has_evidence);
   const syncParticipants = (items: ActivityParticipant[]) => {
     setSelectedParticipants(items);
@@ -527,7 +540,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
           ? "스터디 내용, 진행 요일/시간 등을 입력하세요"
           : "내용을 입력하세요",
     attachment: isAlbum ? "사진" : isMutualAid ? "증빙서류" : isActivity ? "활동 사진" : isAdminParticipationPost ? "대표 사진" : "첨부파일",
-    attachmentHelp: isAlbum ? "행사 사진 1장 이상 · 이미지 파일만 가능" : isMutualAid ? "청첩장, 부고장 등 증빙 파일" : isActivity ? "활동 사진 1장 이상" : isAdminParticipationPost ? "목록과 상세 상단에 표시할 사진을 1장 이상 첨부하세요." : "이미지, PDF, 문서 파일",
+    attachmentHelp: isAlbum ? `행사 사진 ${attachmentIds.length}/20 · 게시글당 최대 20장 · 장당 10MB 이하` : isMutualAid ? "청첩장, 부고장 등 증빙 파일" : isActivity ? "활동 사진 1장 이상" : isAdminParticipationPost ? "목록 썸네일에 사용할 대표 이미지를 1장 첨부하세요." : "이미지, PDF, 문서 파일",
   };
   const guide = isSuggestion
     ? {
@@ -545,7 +558,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       ? {
           icon: "people-outline" as const,
           title: `관리자 전용 ${isNetworkingProgram ? "네트워킹" : "동아리"} 게시글`,
-          body: `대표 사진과 참여 링크를 함께 등록하면 상세 화면의 ${isNetworkingProgram ? "참가 신청" : "가입 신청"} 버튼에 연결됩니다.`,
+          body: `목록 대표 이미지와 상세 글 이미지를 구분해 등록하고 ${isNetworkingProgram ? "참가 신청" : "가입 신청"} 링크를 연결할 수 있습니다.`,
         }
     : isActivity
       ? {
@@ -624,6 +637,10 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   };
 
   const onSubmit = (values: FormValues) => {
+    if (isAlbum && attachmentIds.length > PHOTO_ALBUM_IMAGE_SELECTION_LIMIT) {
+      setFormNotice(createFormNotice("사진 첨부", "사진첩은 게시글당 최대 20장까지 등록할 수 있어요. 사진을 20장 이하로 줄여주세요."));
+      return;
+    }
     if (!isActivity && !isMutualAid && requireValue(values.title, labels.title)) {
       return;
     }
@@ -698,7 +715,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       }
     } else if (
       requiresAttachment &&
-      (isAdminParticipationPost ? imageAttachments.length === 0 : attachmentIds.length === 0) &&
+      (isAdminParticipationPost ? !participationRepresentativeImage : attachmentIds.length === 0) &&
       !(isMutualAid && hasStoredMutualAidEvidence)
     ) {
       setFormNotice(createFormNotice(labels.attachment, `${labels.attachmentHelp}을 첨부하세요.`));
@@ -726,8 +743,10 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
             params.fromBoardId,
             params.returnTo,
           );
-          if (decision.action === "back") router.back();
-          else router.replace(decision.route as never);
+          navigateAfterPostEdit(decision, {
+            back: () => router.back(),
+            replace: (route) => router.replace(route as never),
+          });
         },
         onError: handleMutationError,
       });
@@ -736,12 +755,13 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
 
     createMutation.mutate(payload, {
       onSuccess: (res) => {
-        const target = `/board/post/${res.data.id}` as const;
         if (isActivity || isMutualAid || isSuggestion) {
           setCreatedPostId(res.data.id);
           return;
         }
-        router.replace(target);
+        router.replace(
+          postCreateCompletionRoute(boardType, res.data.id, boardId, params.returnTo) as never,
+        );
       },
       onError: handleMutationError,
     });
@@ -752,7 +772,10 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       setIsUploading(true);
       const uploaded = await pickAttachments();
       if (uploaded.length > 0) {
-        setAttachments((current) => [...current, ...uploaded]);
+        setAttachments((current) => {
+          const next = [...current, ...uploaded];
+          return isAlbum ? next.slice(0, PHOTO_ALBUM_IMAGE_SELECTION_LIMIT) : next;
+        });
       }
     } catch {
       setFormNotice(createFormNotice("업로드 실패", "파일 업로드를 다시 시도하세요."));
@@ -761,14 +784,79 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     }
   };
 
+  const pickPostImages = () => {
+    if (isAlbumImageLimitReached) {
+      setFormNotice(createFormNotice("사진 첨부", "사진첩은 게시글당 최대 20장까지 등록할 수 있어요."));
+      return Promise.resolve([]);
+    }
+    return pickAndUploadImages(
+      undefined,
+      isAlbum
+        ? {
+            maxSelection: albumImageSelectionLimit,
+            retainSuccessfulUploads: true,
+            onBatchIssue: ({ uploadedCount, failedCount, skippedCount }) => {
+              const messages = [
+                skippedCount > 0 ? `게시글당 최대 20장까지 등록할 수 있어 ${skippedCount}장은 제외했어요.` : null,
+                failedCount > 0 ? `${uploadedCount}장은 추가했고 ${failedCount}장은 업로드하지 못했어요.` : null,
+              ].filter((message): message is string => Boolean(message));
+              setFormNotice(createFormNotice("사진 업로드 안내", messages.join(" ")));
+            },
+          }
+        : undefined,
+    );
+  };
+
+  const selectParticipationRepresentativeImage = async () => {
+    try {
+      setIsUploading(true);
+      const uploaded = await pickAndUploadImages(undefined, {
+        maxSelection: 1,
+        retainSuccessfulUploads: true,
+        onBatchIssue: ({ failedCount, skippedCount }) => {
+          const messages = [
+            skippedCount > 0 ? "대표 이미지는 1장만 등록할 수 있어 첫 번째 사진만 사용했어요." : null,
+            failedCount > 0 ? "대표 이미지를 업로드하지 못했어요." : null,
+          ].filter((message): message is string => Boolean(message));
+          if (messages.length > 0) {
+            setFormNotice(createFormNotice("대표 이미지", messages.join(" ")));
+          }
+        },
+      });
+      if (uploaded[0]) {
+        setAttachments((current) =>
+          replaceParticipationGuideRepresentative(current, uploaded[0]),
+        );
+      }
+    } catch {
+      setFormNotice(createFormNotice("업로드 실패", "대표 이미지 업로드를 다시 시도하세요."));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const selectParticipationDetailImages = () => uploadAttachments(
+    () => pickAndUploadImages(undefined, {
+      retainSuccessfulUploads: true,
+      onBatchIssue: ({ uploadedCount, failedCount }) => {
+        if (failedCount > 0) {
+          setFormNotice(createFormNotice(
+            "상세 글 이미지",
+            `${uploadedCount}장은 추가했고 ${failedCount}장은 업로드하지 못했어요.`,
+          ));
+        }
+      },
+    }),
+  );
+
   const selectFile = () => uploadAttachments(
     (isAlbum || isActivity || isAdminParticipationPost)
-      ? () => pickAndUploadImages()
+      ? pickPostImages
       : () => pickAndUploadDocuments(undefined, isMutualAid)
   );
 
   const compactAttachmentActions = writeAttachmentActions({
-    images: () => void uploadAttachments(() => pickAndUploadImages()),
+    images: () => void uploadAttachments(pickPostImages),
     documents: () => void uploadAttachments(() => pickAndUploadDocuments()),
   });
 
@@ -839,7 +927,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     return (
       <CompletionState
         title={isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
-        onConfirm={() => router.replace(postCreateCompletionRoute(boardType, createdPostId, boardId) as never)}
+        onConfirm={() => router.replace(postCreateCompletionRoute(boardType, createdPostId, boardId, params.returnTo) as never)}
       />
     );
   }
@@ -851,11 +939,6 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
         <Pressable
           accessibilityLabel="닫기"
           onPress={() => {
-            // 활동 인증 작성 화면의 <는 스택 이전 화면(홈 등)이 아니라 인증 목록으로 돌아간다.
-            if (isActivity && !postId) {
-              router.replace(`/board/${boardId}` as never);
-              return;
-            }
             const decision = postCreateFormBackDecision({
               boardType,
               editOrigin: params.editOrigin,
@@ -1363,7 +1446,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
             {evidenceMode === "file" ? (
               <>
                 <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, styles.evidenceFileButton, isUploading ? styles.attachButtonDisabled : null]}>
-                  <Ionicons name="document-outline" size={16} color={COLORS.muted} />
+                  <Ionicons name="image-outline" size={16} color={COLORS.muted} />
                   <Text style={styles.evidenceFileButtonText}>{isUploading ? "업로드 중" : "청첩장, 부고장 파일을 첨부해주세요 (JPG, PNG)"}</Text>
                 </Pressable>
                 {attachments.length > 0 ? (
@@ -1393,7 +1476,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
               </>
             ) : (
               <View style={[styles.evidenceLinkField, evidenceLinkFocused ? styles.evidenceLinkFieldFocused : null]}>
-                <Ionicons name="link-outline" size={16} color={COLORS.muted} />
+                <AttachLinkIcon size={16} color={COLORS.muted} />
                 <TextInput
                   autoCapitalize="none"
                   keyboardType="url"
@@ -1495,23 +1578,15 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
 
       {isStudyRecruit || isSuggestion || isMutualAid ? null : compactCreate ? (
         <View style={styles.compactAttachWrap}>
-          {isAdminParticipationPost ? (
-            <View style={styles.labelRow}>
-              <Text style={styles.label}>{labels.attachment}</Text>
-              <View style={styles.requiredPill}>
-                <Text style={styles.requiredText}>필수</Text>
-              </View>
-            </View>
-          ) : null}
           {!isAdminParticipationPost ? (
             <>
               <View style={styles.compactAttachActions}>
                 {compactAttachmentActions.map((action) => (
                   <Pressable
-                    disabled={isUploading}
+                    disabled={isUploading || (isAlbum && action.picker === "images" && isAlbumImageLimitReached)}
                     key={action.picker}
                     onPress={action.onPress}
-                    style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
+                    style={[styles.compactAttachButton, isUploading || (isAlbum && action.picker === "images" && isAlbumImageLimitReached) ? styles.attachButtonDisabled : null]}
                   >
                     {action.picker === "images" ? (
                       <AttachImageIcon size={16} color={COLORS.muted} />
@@ -1519,42 +1594,103 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                       <AttachFileIcon size={16} color={COLORS.muted} />
                     )}
                     <Text style={styles.compactAttachText}>
-                      {isUploading ? "업로드 중" : action.label}
+                      {isUploading ? "업로드 중" : isAlbum && action.picker === "images" && isAlbumImageLimitReached ? "20장 완료" : action.label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
               <Text style={styles.attachExtensionHint}>이미지: JPG, PNG | 파일: PDF, DOCX</Text>
+              {isAlbum ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
+              {imageAttachments.length > 0 ? (
+                <View style={styles.writeImageGrid}>
+                  {imageAttachments.map((attachment) => (
+                    <MediaImageBackground
+                      key={attachment.id}
+                      media={attachment}
+                      imageStyle={styles.writeImageThumbImage}
+                      style={styles.writeImageThumb}
+                    >
+                      <Pressable
+                        hitSlop={6}
+                        onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                        style={styles.writeImageRemove}
+                      >
+                        <CloseIcon size={12} color="#FFFFFF" />
+                      </Pressable>
+                    </MediaImageBackground>
+                  ))}
+                </View>
+              ) : null}
             </>
           ) : (
-            <Pressable disabled={isUploading} onPress={selectFile} style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}>
-              <Ionicons name="image-outline" size={16} color={COLORS.muted} />
-              <Text style={styles.compactAttachText}>{isUploading ? "업로드 중" : "대표 사진 첨부"}</Text>
-            </Pressable>
+            <>
+              <View style={styles.participationImageSection}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>대표 이미지</Text>
+                  <View style={styles.requiredPill}>
+                    <Text style={styles.requiredText}>필수</Text>
+                  </View>
+                </View>
+                <Text style={styles.helperText}>목록 썸네일에만 사용합니다. 이미지 1장 · 10MB 이하</Text>
+                <Pressable
+                  disabled={isUploading}
+                  onPress={selectParticipationRepresentativeImage}
+                  style={[styles.compactAttachButton, isUploading ? styles.attachButtonDisabled : null]}
+                >
+                  <Ionicons name="image-outline" size={16} color={COLORS.muted} />
+                  <Text style={styles.compactAttachText}>
+                    {isUploading ? "업로드 중" : participationRepresentativeImage ? "대표 이미지 변경" : "대표 이미지 등록"}
+                  </Text>
+                </Pressable>
+                {participationRepresentativeImage ? (
+                  <View style={styles.writeImageGrid}>
+                    <MediaImageBackground
+                      media={participationRepresentativeImage}
+                      imageStyle={styles.writeImageThumbImage}
+                      style={styles.writeImageThumb}
+                    />
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.participationImageSection}>
+                <Text style={styles.label}>상세 글 이미지</Text>
+                <Text style={styles.helperText}>
+                  {participationRepresentativeImage
+                    ? "상세 본문 아래에 등록 순서대로 표시합니다. 각 이미지 10MB 이하"
+                    : "대표 이미지를 먼저 등록하면 상세 이미지를 추가할 수 있습니다."}
+                </Text>
+                <Pressable
+                  disabled={isUploading || !participationRepresentativeImage}
+                  onPress={selectParticipationDetailImages}
+                  style={[styles.compactAttachButton, isUploading || !participationRepresentativeImage ? styles.attachButtonDisabled : null]}
+                >
+                  <Ionicons name="images-outline" size={16} color={COLORS.muted} />
+                  <Text style={styles.compactAttachText}>{isUploading ? "업로드 중" : "상세 이미지 추가"}</Text>
+                </Pressable>
+                {participationDetailImages.length > 0 ? (
+                  <View style={styles.writeImageGrid}>
+                    {participationDetailImages.map((attachment) => (
+                      <MediaImageBackground
+                        key={attachment.id}
+                        media={attachment}
+                        imageStyle={styles.writeImageThumbImage}
+                        style={styles.writeImageThumb}
+                      >
+                        <Pressable
+                          hitSlop={6}
+                          onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                          style={styles.writeImageRemove}
+                        >
+                          <CloseIcon size={12} color="#FFFFFF" />
+                        </Pressable>
+                      </MediaImageBackground>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </>
           )}
-          {isAdminParticipationPost ? <Text style={styles.helperText}>{labels.attachmentHelp}</Text> : null}
-          {imageAttachments.length > 0 ? (
-            <View style={styles.writeImageGrid}>
-              {imageAttachments.map((attachment) => {
-                return (
-                  <MediaImageBackground
-                    key={attachment.id}
-                    media={attachment}
-                    imageStyle={styles.writeImageThumbImage}
-                    style={styles.writeImageThumb}
-                  >
-                    <Pressable
-                      hitSlop={6}
-                      onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                      style={styles.writeImageRemove}
-                    >
-                      <CloseIcon size={12} color="#FFFFFF" />
-                    </Pressable>
-                  </MediaImageBackground>
-                );
-              })}
-            </View>
-          ) : null}
           {attachments.some((item) => !item.content_type.startsWith("image/")) ? (
             <View style={styles.compactAttachmentList}>
               {attachments
@@ -2409,10 +2545,11 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   evidenceFileButton: {
-    // Figma baseline: 상조회 첨부버튼 36h, padding 10/12, 텍스트 12/15. Min-height and native line metrics stay adaptive for wrapping/accessibility.
+    // 파일·링크 증빙 입력 박스는 동일한 40px 규격을 사용한다.
     width: "100%",
-    minHeight: 36,
-    paddingVertical: 10,
+    height: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
   },
   evidenceFileButtonText: {
     flex: 1,
@@ -2422,6 +2559,7 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 12,
     fontWeight: "400",
+    lineHeight: 15,
   },
   evidenceLinkField: {
     // Figma: 링크입력필드 40h, padding 12/14, gap 8
@@ -2643,6 +2781,12 @@ const styles = StyleSheet.create({
   compactAttachWrap: {
     alignItems: "flex-start",
     gap: 8,
+  },
+  participationImageSection: {
+    width: "100%",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingVertical: 4,
   },
   compactAttachButton: {
     flexDirection: "row",

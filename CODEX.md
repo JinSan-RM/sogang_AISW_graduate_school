@@ -26,7 +26,8 @@ Already implemented or partially implemented:
 - User profile backend.
 - Search backend and global search screen.
 - Media upload backend/client foundation.
-- Events backend and list screen.
+- Completed issue #119: aligned the Figma attachment copy and enforced a global 10 MiB (`10485760` bytes) upload cap across backend configuration, environment examples, API contract, and the production Nginx multipart envelope.
+- Events backend, Home calendar, and day/detail screens.
 - FAQ backend and screen.
 - Notifications backend, settings API, notification settings screen.
 
@@ -45,7 +46,7 @@ Known gaps:
 - Mobile password reset screen exists.
 - Profile edit and account management screens exist; profile image selection, protected upload, display, replacement, and removal are implemented.
 - Post create/edit attachment linking and native document/image picking are implemented; upload-progress and physical-device edge cases remain Phase 5 QA.
-- Calendar/list/detail routes, admin event CRUD, and idempotent D-day/D-1 notification hooks exist; recurring events are deferred to v1.1 and physical-device QA remains.
+- Home calendar/day/detail routes, admin event CRUD, and idempotent D-day/D-1 notification hooks exist; recurring events are deferred to v1.1 and physical-device QA remains.
 - Expo push token/provider integration, ticket/receipt logging, retry, and invalid-token cleanup exist. Production FCM/APNs credentials and physical-device delivery QA remain.
 - Admin route now covers banners, launch-critical notice posts, board settings, accounts, the independent dues-payer roster, reports, FAQ, and events.
 - My activity screen exists; guide cards are not fully implemented.
@@ -89,6 +90,7 @@ P0 already covered:
 - Completed participation club alignment: only admins manage club guide posts, every club post requires a representative image, and admins configure the detail CTA through `metadata.application_url`.
 - Completed activity-certification alignment: all authenticated members can submit image-only certifications, receive a dedicated completion state, page through detail images, and only admins can read the stored bank-account metadata.
 - Completed P0 detail-return alignment (QA 140): post detail header back and Android hardware back now reactivate the validated originating list across study, club, networking, notices, community, search, notifications, and My Activity, preserving selected tabs, filters, search/sort state, and scroll position; direct links use navigation history, then an explicit source-board or product-hub fallback.
+- Completed QA 198 member-post return alignment: member-writable community, participation, suggestion, and mutual-aid edits opened from detail dismiss both edit and detail after save and restore the validated originating list. Create/detail Back keeps the same list target, push-notification post links now preserve Notifications as their origin, while unsaved edit Back, direct-entry fallbacks, administrator-authored boards, albums, and admin-console navigation remain unchanged.
 - Completed P0 activity-account edit alignment (QA 143): club, study, and networking certification edits expose an empty optional replacement field without returning the stored account to the client; blank submissions preserve the existing account and a new non-empty value replaces it.
 - Completed participation write-policy alignment: study recruitment and every activity certification are member-writable; club/networking guide posts, representative images, and application CTA links are admin-managed.
 - Completed P0 bug #26 alignment: the new club-certification picker loads every published `club-promo` page and shows only SG_LLM, 알바트로스냅, 서강의 봄, 서뽈링, 서강와인, 인간지능투자, and FC리턴윈 in that order, choosing the newest guide by `created_at` and ID rather than pin order. Existing club guide posts and legacy certification links remain readable and unchanged; study/networking source selection is unchanged. The API validates and canonicalizes the source, and guide renames update existing list/detail tags while retired guides retain their last official historical name.
@@ -103,7 +105,7 @@ P0 already covered:
 - Completed P0 comment/report UI alignment: root comments and two-depth replies match the approved divider, neutral reply-row, inline edit, action, and right-aligned report states; post and comment reports share the approved radio-reason bottom sheet with conditional `기타` detail; post/comment delete confirmations use the approved centered destructive treatment. Owner report attempts remain API-blocked and now show local explanatory feedback.
 - Completed P0 bug #92 alignment: comprehensive-exam and graduation-thesis post-detail menus omit the design-excluded author-block action while preserving report, owner actions, and global block semantics.
 - Completed bug #16 navigation alignment: post links opened from a board retain the originating board ID, direct post links fall back to the post's own board, header and Android hardware back share that behavior, and no user-facing fallback routes to the hidden all-boards tab.
-- Completed bug #12 schedule alignment: Home month arrows update the embedded calendar and its API range without navigating, empty upcoming-schedule rows are inert, and inclusive multi-day overlap rules are shared by the Home calendar, full calendar, and day API queries.
+- Completed bug #12 schedule alignment: Home month arrows update the embedded calendar and its API range without navigating, empty upcoming-schedule rows are inert, and inclusive multi-day overlap rules are shared by the Home calendar and day API queries.
 - Completed bug #51 navigation alignment: My Posts, My Comments, and Bookmarks return to My Page from both the header and Android hardware back instead of exposing the tab that happened to be behind the profile drawer.
 - Completed QA 145-147 navigation alignment: opening the My Page drawer records the mounted Home, Notices, Community, Participation, or Council origin; Profile, Notifications, and Account header Back and Android hardware Back explicitly reactivate that same mounted tab and reopen the drawer, ignoring unrelated settings history and using Home only when no valid origin exists. Repeated Back is guarded, and the mounted tab's filters, nested list state, and scroll state are not reset.
 - Completed P0 bugs #10, #12, #20, #24, #34, and #37 alignment: exam-archive tags are normalized to `시험족보`, duplicate cohort prefixes are removed from author labels, edit success no longer stacks duplicate detail routes, the activity account placeholder matches the approved copy, suggestion details omit author blocking, and mutual-aid detail labels use regular font weight.
@@ -132,10 +134,13 @@ P0 already covered:
 - Verified board-feed pagination on 2026-08-30 at final HEAD: backend compile and full pytest passed (`334 passed, 1 skipped`, one third-party deprecation warning); frontend `npm test` passed (`397 passed`), typecheck/export passed, and lint had `0` errors with `9` unrelated pre-existing warnings. The rebuilt isolated Docker QA stack was healthy, and mobile-sized Chrome flow checks observed exactly one page-2 request after scrolling for Notices, Community photo albums, Resource `전체`, lecture reviews, Participation guides, and activity certifications; filter requests restarted at page 1, detail header Back retained state, and tab reselection restored the existing defaults. Injected refresh and page-2 failures kept existing Notice rows, exposed the correct retry banner/footer, and recovered through the matching page-1/page-2 request. Native pull gestures still require iOS/Android device or emulator QA, and the QA database had zero Council activity rows, so its empty page-1 state was verified visually while its multi-page behavior remains covered by API/hook tests rather than this browser dataset.
 - Completed activity-certification image presentation controls: certification feeds keep the historical fixed `2.05:1` landscape thumbnail, while administrators can configure each activity-certification board's detail gallery with a default rule plus optional landscape/portrait overrides. Rules combine maximum width, natural or fixed height, optional maximum height, `contain`/`cover`, and full-view availability; square images use the default. The versioned contract is stored in existing board metadata with strict API validation and preserves unrelated metadata, so no Alembic migration or data backfill is required. Missing configuration follows the approved Figma baseline with full-width `contain` frames: default/portrait `400px`, landscape `240px`, and full-view enabled; photo albums alone retain their separate fixed `240px` hero frame. Club-activity feed previews omit the legacy `[동아리명] :` / `[동아리 명] :` template row. Notices, participation guides, and other activity text remain unchanged.
 - Completed notice-detail image frame alignment (2026-09-01): notice images use one of two responsive `contain` frames based on their source orientation—landscape, square, and unreadable images use `4:3` (`320x240` at the approved baseline), while portrait images use `4:5` (`320x400`). The full source remains visible and mismatched ratios use the frame background as letterboxing. Notice images no longer expose full-view or tap-to-open behavior; file and link attachments and every non-notice image flow retain their existing interaction.
-- Completed QA 180 safe representative-image alignment: the single `게시판 관리` entry gives 공지사항, 커뮤니티·자료, 참여활동, and 원우회 the same group → actual board → 콘텐츠/운영 설정 structure. At `참여활동 → 동아리 홍보/네트워킹 → 콘텐츠`, the administrator uploads a ready public image and sends only its media ID to the dedicated representative-image endpoint. The API replaces the first image attachment used by both the list thumbnail and detail hero while preserving every post field, metadata value, and remaining attachment; legacy posts without stored `application_url` no longer fail unrelated CTA validation. No database schema or Alembic migration is required.
+- Completed QA 180 safe representative/detail-image alignment: the single `게시판 관리` entry gives 공지사항, 커뮤니티·자료, 참여활동, and 원우회 the same group → actual board → 콘텐츠/운영 설정 structure. At `참여활동 → 동아리 홍보/네트워킹 → 콘텐츠`, the administrator manages the first image as the list-only representative thumbnail and manages later ordered images in a separate detail-image section. Club/networking detail omits the representative image and renders only detail images below the body. The dedicated representative-image endpoint replaces only the first image while preserving every post field, metadata value, detail image, and unrelated attachment; legacy posts without stored `application_url` no longer fail unrelated CTA validation. The full editor persists the ordered attachment set before rechecking the representative-image requirement. No database schema or Alembic migration is required.
 - Completed QA 109 participation-link alignment: every `club-promo` and `networking-programs` guide displays the administrator-managed participation URL only through the `가입 신청` or `참가 신청` CTA. Legacy body lines explicitly labeled `참여 링크`, `가입 링크`, or `신청 링크` are canonicalized into `metadata.application_url` for reads and omitted from visible content; create/edit stores the same labeled URL only as CTA metadata, while unrelated body URLs remain unchanged.
 - Completed QA 194/195 home-notice and member-write navigation alignment: Home builds the complete deadline suffix in one place so expired notices render `마감` once while current/upcoming notices retain `마감 D-day`/`마감 D-N`; the schedule card keeps its separate existing `마감`/`D-day`/`D-N` display. Resource sharing and study recruitment now carry a validated originating tab into the shared composer, so X returns to Community or Participation instead of following stale Home/Council history. Standalone mutual-aid and suggestion writes retain their existing back/board fallback, activity certification retains its dedicated board-list return, and bottom-tab reset, submit/completion, edit, admin-write, and API behavior are unchanged. Frontend verification passed all 463 tests, a fresh non-incremental typecheck, and web export; lint passed with 0 errors and 9 unrelated pre-existing warnings.
 - Completed QA 179 event-album admin creation alignment: `게시판 관리 → 커뮤니티 → 행사 사진첩 → 콘텐츠` always exposes the album registration action to administrators, including the seeded member-writable album policy. The public album feed keeps its existing hidden creation affordance, and the existing album composer and backend authorization remain unchanged.
+- Completed QA 179 event-album multi-upload hardening: photo-album create/edit keeps successful images when one selected upload fails and accepts at most 20 images per post on web and native. Each selection is capped to the remaining slots, the add action is disabled at 20, and the backend rejects create/update payloads above 20 with `ALBUM_IMAGE_LIMIT_EXCEEDED`; legacy posts above the limit must be reduced before an edit can be saved. Every image keeps the 10 MiB per-file boundary. Administrator media uploads bypass the request-count throttle so a valid album batch does not exhaust an hourly admin quota; non-admin media uploads retain the existing 20-per-account and 60-per-IP hourly limits. No database schema change or data backfill is required.
+- Completed QA 179 admin content paging and delete alignment: standard managed-board content, including the event album, uses the protected admin post endpoint in 10-row server pages with the same previous/current/next controls as other admin lists. Board, search, and status-filter changes restart at page 1; deleting the final row of a later page moves to the preceding page. Admin post deletion now uses an in-app confirmation card instead of a platform alert callback so the delete request works consistently on native and web, retains the modal on failure, and refreshes admin/member post caches after success.
+- Completed QA 199 UTC/KST alignment: success responses serialize every datetime as an explicit UTC ISO 8601 value ending in `Z` without changing date-only values or stored instants. Event create/update normalizes offset-aware inputs to UTC storage, event range queries and D-day dispatch share `Asia/Seoul` calendar boundaries, and the existing `개강` instant remains September 1 at 00:00 KST.
 - Completed QA 171 activity-certification account alignment: the protected admin post list exposes a non-empty bank-account value only inside `게시판 관리 → 참여활동 → 활동인증 게시판 → 콘텐츠`. Member-facing list/detail responses remain scrubbed, and the admin dashboard's aggregate recent-post cards do not render the account.
 - Completed QA 153 activity alignment: lecture-review bookmarks show only `YY.MM.DD(weekday)` in My Activity, without `Anonymous`, cohort, or a separator; other bookmark author/date metadata is unchanged.
 - Historical 2026-07-12 and early 2026-07-27 runs reached `0016` and `0019`. The current 2026-07-27 gate reaches `0021`; clean, legacy, downgrade/upgrade, failure-safety, API/media/worker/monitoring, backup/restore, and 104-test PostgreSQL checks pass.
@@ -176,11 +181,12 @@ P0 launch-candidate hardening:
 
 P1 strongly recommended:
 
+- Completed P1 bug #196 FAQ accordion alignment: the member FAQ route starts with every answer collapsed, renders the approved question-only rows with a right-side chevron, and independently toggles each answer and its protected image attachments without changing FAQ API or admin CRUD behavior.
 - Completed: Expo Push ticket/receipt logging, two-attempt transport retry, and invalid-token deactivation.
 - Completed: immediate notice notifications and idempotent event D-day/D-1 dispatch.
 - Completed: admin statistics dashboard and operational audit log.
 - Completed: signup display names allow duplicate real names while school email remains the unique account identity.
-- Completed QA 85: the v3 terms and privacy document is normalized into one canonical source; signup renders the combined document, the dedicated legal routes render their matching subset, and article order/non-empty content/version metadata are regression-tested. Approved unresolved source placeholders remain visible pending official values.
+- Completed QA 85 display alignment: the current terms/privacy draft remains one canonical source, while `/legal/privacy` presents its existing clauses with `제N조 (제목)` headings and the recorded consent date but without policy version/effective-date metadata. Signup submission, consent audit history, the admin version workflow, and the terms screen keep their existing metadata behavior. The legal text is not final and must be replaced after official approval.
 - Completed: pagination and empty/error/loading states for notifications, search, and activity lists.
 - Completed: Argon2id for new passwords with transparent PBKDF2 rehash on login.
 - Completed QA 144: mutual-aid event dates before KST today are disabled and revalidated in the mobile form, and the API rejects direct create/date-change bypasses while allowing today, future dates, and unchanged historical dates during other edits.
@@ -277,7 +283,9 @@ Source: Notion `Core feature A: boards/community`.
 Scope:
 
 - Completed (QA 204): isolate the shared create/edit form by route `boardId + postId + category`, reset every draft/attachment/local field state when the destination changes, preserve in-form board selection and existing `returnTo`/Back behavior, and cover resource-sharing ↔ study recruitment in both directions.
-- Completed: activity-certification edits launched from their detail carry an exact origin marker and return to the existing refreshed detail after save, eliminating the duplicate detail stack while preserving direct-entry fallback and every non-certification edit completion route.
+- Completed: activity-certification, mutual-aid, and moved resource-post edits launched from detail carry an exact origin marker and return to the existing refreshed detail after save, eliminating duplicate detail stacks while preserving contextual direct-entry fallback and all other edit completion routes.
+- Completed: ordinary post creation preserves the validated originating list and source board in the result detail, so a create→edit→detail flow returns to Community or Participation in one Back instead of falling through to Home.
+- Completed: Android hardware Back in cohort-leader and past-council boards uses the same child-first action as the header, closing an open in-screen profile before leaving the board.
 - Add post create/edit image/file picker and upload progress.
 - Polish pagination or infinite scroll.
 - Add report model/API hooks for later moderation.
@@ -303,7 +311,7 @@ Scope:
 - Completed: Expo provider adapter with disabled/local fallback, retry, and ticket/receipt logging.
 - Completed: in-app notification list/read state/settings UX.
 - Completed: notification categories and D-day/D-1 timing; physical-device delivery remains Phase 5 QA.
-- Completed: event notifications open event detail with a detail-specific, exact Notifications return target; event-detail Back prioritizes that mounted list while Home, list, calendar, day, admin, invalid-target, and direct-entry behavior remains unchanged.
+- Completed: event notifications open event detail with a detail-specific, exact Notifications return target; event-detail Back prioritizes that mounted list while Home, day, and admin history behavior remains unchanged and direct entry falls back to Home.
 
 Definition of done:
 
@@ -317,8 +325,9 @@ Source: Notion `Core feature C: schedule/events`.
 
 Scope:
 
-- Completed: calendar view route.
+- Completed: Home embedded calendar and date-specific day route.
 - Completed: event detail screen.
+- Completed QA 201: duplicate standalone event-list and full-calendar UIs are removed; `/events` redirects to Home, event notifications open their specific detail, and the unlinked all-boards and guide-placeholder routes are removed without changing Home schedule, day/detail, or admin management.
 - Completed: admin event create/update/delete UI.
 - Completed: event categories `academic`, `event`, `exam`, `council`, `external`, and `other`.
 - Decided: recurring events are deferred to v1.1.
@@ -326,7 +335,7 @@ Scope:
 
 Definition of done:
 
-- Authenticated members can browse list/calendar/detail views; guest requests return normalized `401`.
+- Authenticated members can browse the Home calendar and day/detail views; existing `/events` links resolve to Home and guest API requests return normalized `401`.
 - Admin users can manage events.
 - D-day notification behavior is documented and testable.
 

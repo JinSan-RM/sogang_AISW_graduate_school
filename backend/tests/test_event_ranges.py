@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
+
 from app.models.event import Event
+from app.models.notification import Notification
 
 
 def _kst(year: int, month: int, day: int, hour: int = 0, minute: int = 0) -> datetime:
@@ -69,3 +72,89 @@ def test_day_query_includes_multi_day_events_on_their_inclusive_end_date(api) ->
     assert response.status_code == 200
     titles = {item["title"] for item in response.json()["data"]}
     assert titles == {"spans selected day", "ends at selected day start", "single selected day"}
+
+
+def test_event_api_marks_utc_values_without_changing_the_korea_schedule(api) -> None:
+    with api.session() as db:
+        opening = _event("개강", _kst(2026, 9, 1, 0), _kst(2026, 9, 1, 1))
+        db.add(opening)
+        db.commit()
+        db.refresh(opening)
+        event_id = opening.id
+
+    response = api.client.get(f"/api/events/{event_id}", headers=api.headers["owner"])
+
+    assert response.status_code == 200
+    assert response.json()["data"]["start_at"] == "2026-08-31T15:00:00Z"
+    assert response.json()["data"]["end_at"] == "2026-08-31T16:00:00Z"
+
+
+def test_admin_event_create_normalizes_korea_offset_to_utc_storage(api) -> None:
+    response = api.client.post(
+        "/api/events",
+        json={
+            "title": "개강",
+            "category": "academic",
+            "start_at": "2026-09-01T00:00:00+09:00",
+            "end_at": None,
+        },
+        headers=api.headers["admin"],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["start_at"] == "2026-08-31T15:00:00Z"
+    event_id = response.json()["data"]["id"]
+    with api.session() as db:
+        assert db.get(Event, event_id).start_at == datetime(2026, 8, 31, 15, 0)
+
+
+def test_admin_event_update_normalizes_korea_offset_to_utc_storage(api) -> None:
+    with api.session() as db:
+        event = _event("변경 전 일정", _kst(2026, 8, 31, 9))
+        db.add(event)
+        db.commit()
+        event_id = event.id
+
+    response = api.client.put(
+        f"/api/events/{event_id}",
+        json={
+            "title": "개강",
+            "category": "academic",
+            "start_at": "2026-09-01T00:00:00+09:00",
+            "end_at": None,
+        },
+        headers=api.headers["admin"],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["start_at"] == "2026-08-31T15:00:00Z"
+    with api.session() as db:
+        assert db.get(Event, event_id).start_at == datetime(2026, 8, 31, 15, 0)
+
+
+def test_event_reminders_use_the_full_korea_calendar_day(api) -> None:
+    with api.session() as db:
+        previous_day = _event("전날 마지막 일정", _kst(2026, 8, 31, 23, 59))
+        opening = _event("개강", _kst(2026, 9, 1, 0))
+        final_minute = _event("9월 1일 마지막 일정", _kst(2026, 9, 1, 23, 59))
+        next_day = _event("다음 날 첫 일정", _kst(2026, 9, 2, 0))
+        db.add_all([previous_day, opening, final_minute, next_day])
+        db.commit()
+        expected_event_ids = {opening.id, final_minute.id}
+        excluded_event_ids = {previous_day.id, next_day.id}
+
+    response = api.client.post(
+        "/api/events/admin/dispatch-reminders",
+        params={"target_date": "2026-09-01"},
+        headers=api.headers["admin"],
+    )
+
+    assert response.status_code == 200
+    with api.session() as db:
+        notified_event_ids = set(
+            db.scalars(
+                select(Notification.event_id).where(Notification.notification_type == "event")
+            ).all()
+        )
+    assert expected_event_ids <= notified_event_ids
+    assert excluded_event_ids.isdisjoint(notified_event_ids)

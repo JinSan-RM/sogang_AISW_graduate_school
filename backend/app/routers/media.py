@@ -69,14 +69,15 @@ async def upload_media(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    enforce_rate_limit(
-        request,
-        action="media.upload",
-        subject=str(user.id),
-        limit=20,
-        ip_limit=60,
-        window_seconds=3600,
-    )
+    if user.role != "admin":
+        enforce_rate_limit(
+            request,
+            action="media.upload",
+            subject=str(user.id),
+            limit=20,
+            ip_limit=60,
+            window_seconds=3600,
+        )
 
     stored = None
     committed = False

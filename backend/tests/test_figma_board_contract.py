@@ -150,5 +150,5 @@ def test_bookmark_activity_uses_post_creation_time(api) -> None:
 
     assert response.status_code == 200
     item = next(item for item in response.json()["data"] if item["post_id"] == 3)
-    assert item["created_at"] == post_created_at.isoformat()
+    assert item["created_at"] == f"{post_created_at.isoformat()}Z"
     assert item["created_at"] != bookmark_created_at.isoformat()

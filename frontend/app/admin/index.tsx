@@ -34,6 +34,8 @@ import AdminBoardManagementNavigator, {
 } from "../../components/admin/AdminBoardManagementNavigator";
 import AdminBoardSettingsPanel, { adminBoardPermissionOptions } from "../../components/admin/AdminBoardSettingsPanel";
 import DuesPayerSection from "../../components/admin/DuesPayerSection";
+import AdminPostDeleteConfirm from "../../components/admin/AdminPostDeleteConfirm";
+import AdminSaveSuccessModal from "../../components/admin/AdminSaveSuccessModal";
 import MediaImage, { MediaImageBackground } from "../../components/MediaImage";
 import { invalidatePostMutationCaches, postMutationCacheTargets } from "../../hooks/usePosts";
 import { API_ORIGIN, adminApi, bannerApi, boardApi, commentApi, eventApi, faqApi, postApi, registrationApi, reportApi } from "../../services/api";
@@ -49,11 +51,15 @@ import {
   adminDeferredEventGateTransition,
   adminCalendarQueryEnabled,
   adminFaqQueryEnabled,
+  adminPostListQueryParams,
+  adminPostPageForContext,
+  runAdminPostDelete,
   type AdminBoardContentKind,
   type AdminBoardDestination,
   type AdminBoardManagementTab,
   type AdminContentScope,
 } from "../../utils/adminContentManagement";
+import { adminSaveFeedback, type AdminSaveFeedbackPresentation } from "../../utils/adminSaveFeedback";
 import { runAdminMutation } from "../../utils/adminMutationCoordinator";
 import { adminEventFormRouteTransition } from "../../utils/adminEventForm";
 import {
@@ -1607,6 +1613,22 @@ export default function AdminScreen() {
   const [postSearch, setPostSearch] = useState("");
   const [appliedPostSearch, setAppliedPostSearch] = useState("");
   const [postMode, setPostMode] = useState<AdminPostMode>("all");
+  const adminPostPaginationContextKey = [
+    section,
+    boardManagementScope,
+    boardManagementBoardId ?? "all",
+    appliedPostSearch.trim(),
+    postMode,
+  ].join("::");
+  const [adminPostPagination, setAdminPostPagination] = useState({
+    contextKey: adminPostPaginationContextKey,
+    page: 1,
+  });
+  const adminPostPage = adminPostPageForContext(adminPostPagination, adminPostPaginationContextKey);
+  const [pendingAdminPostDelete, setPendingAdminPostDelete] = useState<PostListItem | null>(null);
+  const [adminPostDeleting, setAdminPostDeleting] = useState(false);
+  const [adminPostDeleteError, setAdminPostDeleteError] = useState<string | null>(null);
+  const [saveSuccessFeedback, setSaveSuccessFeedback] = useState<AdminSaveFeedbackPresentation | null>(null);
   const [replacingRepresentativeImagePostId, setReplacingRepresentativeImagePostId] = useState<number | null>(null);
   const [mutualAidFilter, setMutualAidFilter] = useState<MutualAidStatus | "all">("processing");
   const [suggestionFilter, setSuggestionFilter] = useState<SuggestionAdminFilter>("received");
@@ -1655,6 +1677,12 @@ export default function AdminScreen() {
   const [newMajorOrder, setNewMajorOrder] = useState("50");
   const [policyVersion, setPolicyVersion] = useState("");
   const [policyEffectiveAt, setPolicyEffectiveAt] = useState("");
+
+  useEffect(() => {
+    setAdminPostPagination((current) => current.contextKey === adminPostPaginationContextKey
+      ? current
+      : { contextKey: adminPostPaginationContextKey, page: 1 });
+  }, [adminPostPaginationContextKey]);
 
   const isAdmin = user?.role === "admin";
 
@@ -1779,16 +1807,16 @@ export default function AdminScreen() {
       section === "dashboard" ? "dashboard" : appliedPostSearch,
       section === "dashboard" ? undefined : managedStandardPostsBoardId,
       section === "dashboard" ? "all" : postMode,
+      adminPostPage,
     ],
     queryFn: () =>
-      postApi.getAdminPosts({
-        page: 1,
-        size: 50,
-        q: section === "dashboard" ? undefined : appliedPostSearch.trim() || undefined,
-        board_id: section === "dashboard" ? undefined : managedStandardPostsBoardId,
-        is_notice: section === "dashboard" ? undefined : postMode === "notice" ? true : undefined,
-        is_pinned: section === "dashboard" ? undefined : postMode === "pinned" ? true : undefined,
-      }),
+      postApi.getAdminPosts(adminPostListQueryParams({
+        isDashboard: section === "dashboard",
+        page: adminPostPage,
+        search: appliedPostSearch,
+        boardId: managedStandardPostsBoardId,
+        mode: postMode,
+      })),
     enabled: isAdmin && (section === "dashboard" || showsStandardPosts),
   });
   const mutualAidPostsQuery = useQuery({
@@ -2101,6 +2129,7 @@ export default function AdminScreen() {
     : suggestionPosts.filter((item) => item.suggestion?.status === suggestionFilter);
   const pendingSuggestionCount = suggestionPosts.filter((item) => item.suggestion?.status !== "answered").length;
   const adminPostTotal = adminPostsQuery.data?.pagination?.total ?? adminPosts.length;
+  const adminPostTotalPages = adminPostsQuery.data?.pagination?.total_pages ?? 1;
   const stats = statsQuery.data?.data;
   const auditLogs: AdminAuditLog[] = auditLogsQuery.data?.data ?? [];
   const selectedNoticeBoard = noticeBoards.find((board) => board.id === selectedNoticeBoardId)
@@ -2788,7 +2817,7 @@ export default function AdminScreen() {
         if (outcome.status === "partial") {
           Alert.alert("부분 저장", "공지사항은 저장했지만 고정 상태를 변경하지 못했습니다.");
         } else {
-          Alert.alert("저장 완료", "공지사항이 저장되었습니다.");
+          setSaveSuccessFeedback(adminSaveFeedback("notice", operation.editingNoticeId ? "update" : "create"));
         }
       }
     } finally {
@@ -3127,26 +3156,44 @@ export default function AdminScreen() {
   };
 
   const handleDeleteAdminPost = (item: PostListItem) => {
-    Alert.alert("게시글 삭제", "이 게시글을 삭제할까요? 삭제 후 사용자 화면에서 보이지 않습니다.", [
-      { text: "취소", style: "cancel" },
-      {
-        text: "삭제",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await postApi.deletePost(item.id);
-            const board = boards.find((candidate) => candidate.id === item.board_id);
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
-              queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
-              invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, board)),
-            ]);
-          } catch {
-            Alert.alert("삭제 실패", "게시글을 삭제할 수 없습니다.");
-          }
+    if (adminPostDeleting) return;
+    setAdminPostDeleteError(null);
+    setPendingAdminPostDelete(item);
+  };
+
+  const closeAdminPostDeleteConfirm = () => {
+    if (adminPostDeleting) return;
+    setPendingAdminPostDelete(null);
+    setAdminPostDeleteError(null);
+  };
+
+  const confirmAdminPostDelete = async () => {
+    if (!pendingAdminPostDelete || adminPostDeleting) return;
+    const item = pendingAdminPostDelete;
+    setAdminPostDeleting(true);
+    setAdminPostDeleteError(null);
+    try {
+      const board = boards.find((candidate) => candidate.id === item.board_id);
+      const nextPage = await runAdminPostDelete({
+        postId: item.id,
+        currentPage: adminPostPage,
+        currentItemCount: adminPosts.length,
+        deletePost: async (postId) => { await postApi.deletePost(postId); },
+        afterDelete: async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
+            queryClient.invalidateQueries({ queryKey: ["admin-notices"] }),
+            invalidatePostMutationCaches(queryClient, postMutationCacheTargets(item.board_id, board)),
+          ]);
         },
-      },
-    ]);
+      });
+      setAdminPostPagination({ contextKey: adminPostPaginationContextKey, page: nextPage });
+      setPendingAdminPostDelete(null);
+    } catch {
+      setAdminPostDeleteError("게시글을 삭제할 수 없습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setAdminPostDeleting(false);
+    }
   };
 
   const handleReportStatus = async (report: AdminReportItem, status: ReportStatus) => {
@@ -3353,7 +3400,6 @@ export default function AdminScreen() {
       reset(emptyEvent);
       queryClient.invalidateQueries({ queryKey: ["admin-events"] });
       queryClient.invalidateQueries({ queryKey: ["events"] });
-      Alert.alert("저장 완료", "일정이 저장되었습니다.");
     } catch {
       Alert.alert("저장 실패", "일정 입력 정보를 확인하세요.");
     }
@@ -3615,11 +3661,26 @@ export default function AdminScreen() {
               </View>
             )}
             <Field value={postSearch} onChangeText={setPostSearch} placeholder="제목, 내용, 작성자, 게시판명 검색" />
-            <ActionButton icon="search-outline" label="검색" onPress={() => setAppliedPostSearch(postSearch)} />
+            <ActionButton
+              icon="search-outline"
+              label="검색"
+              onPress={() => {
+                setAdminPostPagination({ contextKey: adminPostPaginationContextKey, page: 1 });
+                setAppliedPostSearch(postSearch);
+              }}
+            />
             <Text style={{ color: COLORS.muted, fontWeight: "800" }}>상태 필터</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {ADMIN_POST_MODE_FILTERS.map((item) => (
-                <Chip key={item.key} active={postMode === item.key} label={item.label} onPress={() => setPostMode(item.key)} />
+                <Chip
+                  key={item.key}
+                  active={postMode === item.key}
+                  label={item.label}
+                  onPress={() => {
+                    setAdminPostPagination({ contextKey: adminPostPaginationContextKey, page: 1 });
+                    setPostMode(item.key);
+                  }}
+                />
               ))}
             </View>
             <Text style={{ color: COLORS.subtle, fontSize: 12, fontWeight: "800" }}>총 {adminPostTotal}개 게시글</Text>
@@ -3644,6 +3705,29 @@ export default function AdminScreen() {
             showActivityCertificationBankAccount={contentBoard?.board_type === "activity_certification"}
           />
         ))}
+        {adminPostTotalPages > 1 ? (
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <ActionButton
+              label="이전"
+              tone="outline"
+              disabled={adminPostPage <= 1 || adminPostsQuery.isFetching}
+              onPress={() => setAdminPostPagination({
+                contextKey: adminPostPaginationContextKey,
+                page: Math.max(1, adminPostPage - 1),
+              })}
+            />
+            <Text style={{ color: COLORS.text, fontWeight: "800" }}>{adminPostPage} / {adminPostTotalPages}</Text>
+            <ActionButton
+              label="다음"
+              tone="outline"
+              disabled={adminPostPage >= adminPostTotalPages || adminPostsQuery.isFetching}
+              onPress={() => setAdminPostPagination({
+                contextKey: adminPostPaginationContextKey,
+                page: Math.min(adminPostTotalPages, adminPostPage + 1),
+              })}
+            />
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -3995,8 +4079,9 @@ export default function AdminScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
-      <View style={{ gap: 14 }}>
+    <>
+      <ScrollView style={{ flex: 1, backgroundColor: COLORS.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+        <View style={{ gap: 14 }}>
         <BackButton fallback="/(tabs)/settings" />
         <View style={{ borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.primary700, backgroundColor: COLORS.primary900, padding: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -4568,8 +4653,21 @@ export default function AdminScreen() {
             ))}
           </View>
         ) : null}
-
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+      <AdminPostDeleteConfirm
+        visible={pendingAdminPostDelete !== null}
+        deleting={adminPostDeleting}
+        error={adminPostDeleteError}
+        onCancel={closeAdminPostDeleteConfirm}
+        onConfirm={() => void confirmAdminPostDelete()}
+      />
+      <AdminSaveSuccessModal
+        visible={saveSuccessFeedback !== null}
+        title={saveSuccessFeedback?.title ?? ""}
+        message={saveSuccessFeedback?.message ?? ""}
+        onConfirm={() => setSaveSuccessFeedback(null)}
+      />
+    </>
   );
 }

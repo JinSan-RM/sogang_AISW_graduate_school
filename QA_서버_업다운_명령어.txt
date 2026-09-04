@@ -1,0 +1,124 @@
+QA 서버 업·다운 및 업데이트 메모
+=================================
+
+1. 기존 실행 기록이 복잡했던 이유
+----------------------------------
+
+기존 기록에는 평소 서버 재시작뿐 아니라 아래 일회성 작업이 함께 포함되어 있었다.
+
+- DB 및 미디어 데이터 복원
+- 파일 해시와 개수 검증
+- Alembic 마이그레이션 및 데이터 건수 확인
+- 인증키 교체와 기존 로그인 토큰 삭제
+- 컨테이너·볼륨 장애 진단
+
+평소 코드 업데이트에는 위 작업을 반복할 필요가 없다.
+
+
+2. 반드시 동일하게 사용해야 하는 Compose 설정
+------------------------------------------------
+
+PowerShell에서 저장소 폴더로 이동한 다음 아래 변수를 먼저 선언한다.
+
+$composeArgs = @(
+  '--env-file', '.env.qa',
+  '-p', 'aisw_p0qa',
+  '-f', 'docker-compose.yml',
+  '-f', 'docker-compose.qa.yml',
+  '-f', 'docker-compose.public-qa.yml'
+)
+
+프로젝트명(-p)이나 Compose 파일(-f)이 다르면 다른 컨테이너 묶음을 대상으로
+명령이 실행될 수 있다. Up과 Down 모두 반드시 위의 동일한 $composeArgs를 사용한다.
+
+
+3. 평소 코드 업데이트: 권장 명령
+--------------------------------
+
+git pull --ff-only origin main
+
+docker compose @composeArgs config --quiet
+
+docker compose @composeArgs up -d --build --force-recreate --wait --wait-timeout 300 backend frontend-web notification-worker
+
+docker compose @composeArgs ps
+
+docker compose @composeArgs logs --tail=100 backend frontend-web notification-worker
+
+설명:
+
+- DB 컨테이너와 데이터 볼륨은 유지된다.
+- backend와 notification-worker는 새 코드로 빌드·재생성된다.
+- frontend-web은 재생성되면서 npm ci 및 Metro 캐시 초기화가 실행된다.
+- 일반적인 업데이트에는 --no-cache가 필요하지 않다.
+
+
+4. 서버를 완전히 내렸다가 다시 올리는 명령
+--------------------------------------------
+
+내리기:
+
+docker compose @composeArgs down --remove-orphans
+
+올리기:
+
+docker compose @composeArgs config --quiet
+docker compose @composeArgs up -d --build --wait --wait-timeout 300
+docker compose @composeArgs ps
+
+주의:
+
+down에 -v 또는 --volumes를 절대로 붙이지 않는다.
+해당 옵션을 붙이면 DB와 미디어의 Named Volume이 삭제될 수 있다.
+
+
+5. 애플리케이션만 잠시 중지/시작
+---------------------------------
+
+DB는 계속 실행하고 백엔드·프론트·워커만 중지:
+
+docker compose @composeArgs stop backend frontend-web notification-worker
+
+다시 시작:
+
+docker compose @composeArgs start backend frontend-web notification-worker
+
+
+6. 문제가 있을 때 확인
+----------------------
+
+상태 확인:
+
+docker compose @composeArgs ps
+
+최근 로그 확인:
+
+docker compose @composeArgs logs --tail=200 backend frontend-web notification-worker
+
+백엔드 상태 확인:
+
+Invoke-WebRequest http://127.0.0.1:58000/health
+
+프론트 상태 확인:
+
+Invoke-WebRequest http://127.0.0.1:58081/
+
+
+7. 캐시 없이 다시 빌드해야 할 때만 사용
+----------------------------------------
+
+Docker 캐시가 잘못되었다고 판단될 때만 아래 명령을 사용한다.
+
+docker compose @composeArgs build --no-cache backend notification-worker
+docker compose @composeArgs up -d --force-recreate --wait --wait-timeout 300 backend frontend-web notification-worker
+
+frontend-web은 QA 구성에서 소스가 Bind Mount되고 컨테이너 시작 시 npm ci가 실행되므로
+일반적인 Docker --no-cache 빌드 대상이 아니다.
+
+
+요약
+----
+
+평소 배포는 아래 순서만 기억하면 된다.
+
+git pull -> config 검사 -> up --build --force-recreate --wait -> ps와 logs 확인

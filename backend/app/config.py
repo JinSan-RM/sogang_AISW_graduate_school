@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     cloudflare_enabled: bool = False
     cloudflare_tunnel_subnet: IPv4Network = IPv4Network("172.30.250.0/28")
     cloudflare_tunnel_ip: IPv4Address = IPv4Address("172.30.250.14")
-    media_upload_max_bytes: int = Field(default=20 * 1024 * 1024, ge=1, le=100 * 1024 * 1024)
+    media_upload_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1, le=10 * 1024 * 1024)
     media_upload_chunk_bytes: int = Field(default=1024 * 1024, ge=4096, le=4 * 1024 * 1024)
     media_access_url_expire_seconds: int = Field(default=5 * 60, ge=30, le=15 * 60)
     media_upload_dir: Path = Path("uploads")

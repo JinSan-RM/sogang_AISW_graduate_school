@@ -4,6 +4,7 @@ import pytest
 from openpyxl import Workbook
 from sqlalchemy import select
 
+from app.config import settings
 from app.models.audit import OperationalAuditLog
 from app.models.dues_payer import DuesPayer
 
@@ -142,6 +143,32 @@ def test_invalid_or_empty_workbook_is_rejected_without_changes(api) -> None:
     assert empty.json()["code"] == "INVALID_DUES_WORKBOOK"
     with api.session() as db:
         assert db.scalar(select(DuesPayer)) is None
+
+
+def test_admin_import_accepts_exact_limit_and_rejects_one_byte_over_without_changes(
+    api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workbook = _workbook_bytes([("홍길동", "인공지능", "A74001")])
+    monkeypatch.setattr(settings, "media_upload_max_bytes", len(workbook))
+
+    accepted = api.client.post(
+        "/api/dues-payers/admin/import",
+        files={"file": ("dues.xlsx", workbook, XLSX_MIME)},
+        headers=api.headers["admin"],
+    )
+    rejected = api.client.post(
+        "/api/dues-payers/admin/import",
+        files={"file": ("dues.xlsx", workbook + b"x", XLSX_MIME)},
+        headers=api.headers["admin"],
+    )
+
+    assert accepted.status_code == 200
+    assert rejected.status_code == 413
+    assert rejected.json()["code"] == "PAYLOAD_TOO_LARGE"
+    with api.session() as db:
+        payers = db.scalars(select(DuesPayer)).all()
+        assert len(payers) == 1
+        assert payers[0].student_number == "A74001"
 
 
 def test_exact_confirmation_permanently_deletes_roster_and_audits_counts_without_pii(api) -> None:

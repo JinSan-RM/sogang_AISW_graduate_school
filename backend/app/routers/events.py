@@ -27,12 +27,25 @@ def _korea_date_boundary(value: date) -> datetime:
     )
 
 
+def _utc_naive(value: datetime | None) -> datetime | None:
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _event_write_payload(payload: EventCreate | EventUpdate) -> dict:
+    data = payload.model_dump()
+    data["start_at"] = _utc_naive(data["start_at"])
+    data["end_at"] = _utc_naive(data["end_at"])
+    return data
+
+
 def _dispatch_for_date(db: Session, target_date: date) -> dict:
     # 일정 알림은 당일(D-day)에만 보낸다. 공지 마감 알림은 보내지 않는다.
     created = 0
     active_user_ids = db.scalars(select(User.id).where(User.is_active.is_(True))).all()
-    window_start = datetime.combine(target_date, time.min)
-    window_end = window_start + timedelta(days=1)
+    window_start = _korea_date_boundary(target_date)
+    window_end = _korea_date_boundary(target_date + timedelta(days=1))
     events = db.scalars(
         select(Event).where(Event.start_at >= window_start, Event.start_at < window_end)
     ).all()
@@ -121,7 +134,7 @@ def get_event(event_id: int, db: Session = Depends(get_db), _: User = Depends(ge
 
 @router.post("")
 def create_event(payload: EventCreate, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
-    event = Event(**payload.model_dump(), created_by=admin.id)
+    event = Event(**_event_write_payload(payload), created_by=admin.id)
     db.add(event)
     db.flush()
     log_admin_action(db, actor_id=admin.id, action="event.create", target_type="event", target_id=event.id)
@@ -141,7 +154,7 @@ def update_event(
     if event is None:
         raise AppException(status_code=404, message="Event not found.", code="NOT_FOUND")
 
-    for key, value in payload.model_dump().items():
+    for key, value in _event_write_payload(payload).items():
         setattr(event, key, value)
     log_admin_action(db, actor_id=admin.id, action="event.update", target_type="event", target_id=event.id)
     db.commit()

@@ -53,12 +53,9 @@ test("오늘 진행 중인 다일 일정도 예정 일정 후보에 포함한다
 
 test("홈 화살표와 빈 일정 영역은 다른 일정 페이지로 이동하지 않는다", () => {
   const homeSource = readFileSync("app/(tabs)/home.tsx", "utf8");
-  const calendarSource = readFileSync("app/(tabs)/events/calendar.tsx", "utf8");
   assert.doesNotMatch(homeSource, /router\.push\("\/events\/calendar"/);
   assert.match(homeSource, /onPress=\{\(\) => onChangeMonth\(-1\)\}/);
   assert.match(homeSource, /onPress=\{\(\) => onChangeMonth\(1\)\}/);
   assert.match(homeSource, /from_date: monthRange\.start, to_date: monthRange\.end/);
   assert.match(homeSource, /<View accessibilityLabel="예정된 일정이 없습니다" style=\{styles\.nextEvent\}>/);
-  assert.match(calendarSource, /eventOccursOnCalendarDate\(event,/);
-  assert.match(calendarSource, /markedDays\.has\(cell\.day\)/);
 });

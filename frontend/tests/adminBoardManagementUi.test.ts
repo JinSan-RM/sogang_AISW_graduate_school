@@ -628,8 +628,8 @@ test("가이드는 읽기 전용 안내만 표시하고 metadata 저장값을 �
 test("숨겨진 게시판 콘텐츠 쿼리는 실행하지 않고 대시보드 집계는 유지한다", () => {
   assert.match(adminSource, /const isManagedContentActive = section === "boardManagement" && boardManagementTab === "content"/);
   assert.match(adminSource, /enabled: isAdmin && \(section === "dashboard" \|\| showsStandardPosts\)/);
-  assert.match(adminSource, /section === "dashboard" \? undefined : appliedPostSearch\.trim\(\) \|\| undefined/);
-  assert.match(adminSource, /section === "dashboard" \? undefined : managedStandardPostsBoardId/);
+  assert.match(adminSource, /adminPostListQueryParams\(\{/);
+  assert.match(adminSource, /boardId: managedStandardPostsBoardId/);
   assert.match(adminSource, /unifiedNoticePostsQuery[\s\S]*?postApi\.getAdminPosts/);
   assert.match(adminSource, /noticeQueryPolicy\.noticeSource === "admin"/);
 });

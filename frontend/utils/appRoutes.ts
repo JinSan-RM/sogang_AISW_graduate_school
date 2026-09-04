@@ -40,7 +40,7 @@ export type EventDayBackDecision =
 export type EventDetailBackDecision =
   | { action: "back" }
   | { action: "navigate"; route: "/(tabs)/notifications" }
-  | { action: "replace"; route: "/events/calendar" };
+  | { action: "replace"; route: typeof HOME_TAB_ROUTE };
 
 export type PostEditCompletionDecision =
   | { action: "back" }
@@ -49,6 +49,17 @@ export type PostEditCompletionDecision =
 export type ParticipationGroupKey = "club" | "study" | "networking";
 
 const ACTIVITY_POST_DETAIL_EDIT_ORIGIN = "activity-post-detail" as const;
+const POST_DETAIL_EDIT_ORIGIN = "post-detail" as const;
+
+type PostEditRouteBoardInfo = {
+  board_type: string;
+  write_permission: string;
+};
+
+function isPostDetailEditOrigin(value: unknown) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate === ACTIVITY_POST_DETAIL_EDIT_ORIGIN || candidate === POST_DETAIL_EDIT_ORIGIN;
+}
 
 type PostDetailNavigator = {
   canGoBack: () => boolean;
@@ -85,6 +96,10 @@ export function eventDayBackDecision(returnTo: unknown, canGoBack: boolean): Eve
   return { action: "replace", route: HOME_TAB_ROUTE };
 }
 
+export function eventRootRoute() {
+  return HOME_TAB_ROUTE;
+}
+
 function eventDetailReturnRoute(value: unknown): "/(tabs)/notifications" | null {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate === "/(tabs)/notifications" ? candidate : null;
@@ -100,7 +115,20 @@ export function eventDetailBackDecision(returnTo: unknown, canGoBack: boolean): 
   const safeReturnTo = eventDetailReturnRoute(returnTo);
   if (safeReturnTo) return { action: "navigate", route: safeReturnTo };
   if (canGoBack) return { action: "back" };
-  return { action: "replace", route: "/events/calendar" };
+  return { action: "replace", route: HOME_TAB_ROUTE };
+}
+
+export function notificationContentRoute(notification: {
+  post_id?: number | null;
+  event_id?: number | null;
+}) {
+  if (notification.post_id) {
+    return postDetailRoute(notification.post_id, undefined, "/(tabs)/notifications");
+  }
+  if (notification.event_id) {
+    return eventDetailRoute(notification.event_id, "/(tabs)/notifications");
+  }
+  return "/(tabs)/notifications" as const;
 }
 
 export function postDetailReturnRoute(value: unknown): PostDetailReturnRoute | null {
@@ -175,6 +203,52 @@ export function activityPostEditRouteFromDetail(
   return `/board/post/create?${params.join("&")}` as const;
 }
 
+export function postEditRouteFromDetail(
+  postId: number,
+  fromBoardId?: unknown,
+  returnTo?: unknown,
+) {
+  const params = [`editOrigin=${POST_DETAIL_EDIT_ORIGIN}`];
+  const sourceBoardId = routeBoardId(fromBoardId);
+  if (sourceBoardId) params.push(`fromBoardId=${sourceBoardId}`);
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
+  return `/board/post/edit/${postId}?${params.join("&")}` as const;
+}
+
+export function mutualAidPostEditRouteFromDetail(
+  boardId: number,
+  postId: number,
+  fromBoardId?: unknown,
+  returnTo?: unknown,
+) {
+  const params = [`boardId=${boardId}`, `postId=${postId}`, `editOrigin=${POST_DETAIL_EDIT_ORIGIN}`];
+  const sourceBoardId = routeBoardId(fromBoardId);
+  if (sourceBoardId) params.push(`fromBoardId=${sourceBoardId}`);
+  const safeReturnTo = postDetailReturnRoute(returnTo);
+  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
+  return `/board/post/create?${params.join("&")}` as const;
+}
+
+export function postEditRouteForPostDetail(
+  board: PostEditRouteBoardInfo | null | undefined,
+  boardId: number,
+  postId: number,
+  fromBoardId?: unknown,
+  returnTo?: unknown,
+) {
+  if (!board) return `/board/post/edit/${postId}` as const;
+  const usesMemberNavigation = board.write_permission !== "admin" && board.board_type !== "album";
+  if (!usesMemberNavigation) return `/board/post/edit/${postId}` as const;
+  if (board.board_type === "activity_certification") {
+    return activityPostEditRouteFromDetail(boardId, postId, fromBoardId, returnTo);
+  }
+  if (board.board_type === "mutual_aid") {
+    return mutualAidPostEditRouteFromDetail(boardId, postId, fromBoardId, returnTo);
+  }
+  return postEditRouteFromDetail(postId, fromBoardId, returnTo);
+}
+
 export function postEditCompletionDecision(
   _boardType: string | undefined,
   editOrigin: unknown,
@@ -183,9 +257,7 @@ export function postEditCompletionDecision(
   fromBoardId?: unknown,
   returnTo?: unknown,
 ): PostEditCompletionDecision {
-  const originCandidate = Array.isArray(editOrigin) ? editOrigin[0] : editOrigin;
-  const isActivityDetailEdit = originCandidate === ACTIVITY_POST_DETAIL_EDIT_ORIGIN;
-  if (isActivityDetailEdit && canGoBack) {
+  if (isPostDetailEditOrigin(editOrigin) && canGoBack) {
     return { action: "back" };
   }
   return {
@@ -198,10 +270,10 @@ export function postCreateRouteFromBoardList(
   boardId: number,
   category: string,
   isTabRoot: boolean,
-  isActivityCertification: boolean,
+  _isActivityCertification: boolean,
   returnTo: unknown,
 ) {
-  return postCreateRoute(boardId, category, isTabRoot && !isActivityCertification ? returnTo : undefined);
+  return postCreateRoute(boardId, category, isTabRoot ? returnTo : undefined);
 }
 
 export function postCreateBackDecision(
@@ -225,25 +297,51 @@ export function postCreateFormBackDecision(params: {
   fromBoardId?: unknown;
 }): PostCreateBackDecision | PostEditCompletionDecision {
   const postId = routeBoardId(params.postId);
-  const originCandidate = Array.isArray(params.editOrigin) ? params.editOrigin[0] : params.editOrigin;
-  if (postId && originCandidate === ACTIVITY_POST_DETAIL_EDIT_ORIGIN) {
-    return postEditCompletionDecision(
-      params.boardType,
-      params.editOrigin,
-      params.canGoBack,
-      postId,
-      params.fromBoardId,
-      params.returnTo,
-    );
+  if (postId && isPostDetailEditOrigin(params.editOrigin)) {
+    if (params.canGoBack) return { action: "back" };
+    return {
+      action: "replace",
+      route: postDetailRoute(postId, routeBoardId(params.fromBoardId) ?? undefined, params.returnTo),
+    };
   }
   return postCreateBackDecision(params.returnTo, params.canGoBack, params.boardId);
 }
 
-export function postCreateCompletionRoute(boardType: string | undefined, createdPostId: number, boardId: number) {
+export function navigateAfterPostEdit(
+  decision: PostEditCompletionDecision,
+  navigator: {
+    back: () => void;
+    replace: (route: ReturnType<typeof postDetailRoute>) => void;
+  },
+) {
+  if (decision.action === "back") {
+    navigator.back();
+    return;
+  }
+  navigator.replace(decision.route);
+}
+
+export function handleNestedBoardHardwareBack(
+  childBack: (() => void) | null,
+  exitBoard: () => void,
+) {
+  (childBack ?? exitBoard)();
+  return true;
+}
+
+export function postCreateCompletionRoute(
+  boardType: string | undefined,
+  createdPostId: number,
+  boardId: number,
+  returnTo?: unknown,
+) {
   if (boardType === "activity_certification") {
     return postDetailRoute(createdPostId, boardId, PARTICIPATION_TAB_ROUTE);
   }
-  return boardRoute(boardId);
+  if (boardType === "mutual_aid" || boardType === "suggestion") {
+    return boardRoute(boardId);
+  }
+  return postDetailRoute(createdPostId, boardId, returnTo);
 }
 
 export function postDetailBackDecision(

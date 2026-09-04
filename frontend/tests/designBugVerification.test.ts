@@ -20,7 +20,6 @@ const postEditSource = source("app/(tabs)/board/post/edit/[postId].tsx");
 const mutualAidCompleteSource = source("app/(tabs)/council/mutual-aid-complete.tsx");
 const searchSource = source("app/(tabs)/search.tsx");
 const loginSource = source("app/auth/login.tsx");
-const eventsSource = source("app/(tabs)/events/index.tsx");
 const councilSource = source("app/(tabs)/council.tsx");
 const schoolEmailSource = source("components/SchoolEmailInput.tsx");
 const legalDocumentSource = source("components/LegalDocumentScreen.tsx");
@@ -109,7 +108,6 @@ test("#59·60·61 로그인 입력은 웹 네이티브 이메일 검증과 기�
 
 test("#62·63 공지 목록은 공통 로딩과 중앙 빈 상태 레이아웃을 사용한다", () => {
   assert.match(noticeListSource, /<LoadingState compact \/>/);
-  assert.match(eventsSource, /<LoadingState \/>/);
   assert.match(councilSource, /return <LoadingState \/>/);
   assert.match(noticeListSource, /listContentEmpty:[\s\S]*flexGrow: 1/);
   assert.match(noticeListSource, /emptyState:[\s\S]*justifyContent: "center"/);

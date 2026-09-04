@@ -14,7 +14,7 @@ import { useAggregatePosts, useBoardPosts } from "../../../hooks/usePosts";
 import { API_ORIGIN } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
 import type { Board, PostListItem } from "../../../types";
-import { boardParentRoute, boardRoute, participationGroupDefaultSlug, postCreateRouteFromBoardList, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
+import { boardParentRoute, boardRoute, handleNestedBoardHardwareBack, participationGroupDefaultSlug, postCreateRouteFromBoardList, postDetailRoute, type PostDetailReturnRoute } from "../../../utils/appRoutes";
 import { tabNameFromRoute, useTabHighlightStore } from "../../../stores/tabHighlightStore";
 import {
   activityCertificationBadgeLabel,
@@ -402,6 +402,7 @@ function CohortLeaderScreen({
   onRefresh,
   onRetry,
   onBack,
+  onNestedBackHandlerChange,
   topInset,
 }: {
   board?: Board | null;
@@ -412,6 +413,7 @@ function CohortLeaderScreen({
   onRefresh: () => void;
   onRetry: () => void;
   onBack: () => void;
+  onNestedBackHandlerChange: (handler: (() => void) | null) => void;
   topInset: number;
 }) {
   const [selected, setSelected] = useState<CohortLeaderSummary | null>(null);
@@ -422,13 +424,18 @@ function CohortLeaderScreen({
   }, [posts]);
 
   const headerTitle = selected ? `${selected.cohort} 기장단` : "기수별 기장단 소개";
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (selected) {
       setSelected(null);
       return;
     }
     onBack();
-  };
+  }, [onBack, selected]);
+
+  useEffect(() => {
+    onNestedBackHandlerChange(handleBack);
+    return () => onNestedBackHandlerChange(null);
+  }, [handleBack, onNestedBackHandlerChange]);
 
   return (
     <View style={styles.screen}>
@@ -576,10 +583,24 @@ function CouncilIntroductionDetail({
   );
 }
 
-function PastCouncilScreen({ board, topInset, onBack }: { board?: Board | null; topInset: number; onBack: () => void }) {
+function PastCouncilScreen({
+  board,
+  topInset,
+  onBack,
+  onNestedBackHandlerChange,
+}: {
+  board?: Board | null;
+  topInset: number;
+  onBack: () => void;
+  onNestedBackHandlerChange: (handler: (() => void) | null) => void;
+}) {
   const councils = useMemo(() => pastCouncilsFromMetadata(board?.metadata), [board?.metadata]);
   const [selected, setSelected] = useState<PastCouncilSummary | null>(null);
-  const handleBack = () => selected ? setSelected(null) : onBack();
+  const handleBack = useCallback(() => selected ? setSelected(null) : onBack(), [onBack, selected]);
+  useEffect(() => {
+    onNestedBackHandlerChange(handleBack);
+    return () => onNestedBackHandlerChange(null);
+  }, [handleBack, onNestedBackHandlerChange]);
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(topInset, 10) }]}>
@@ -951,6 +972,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const [filterOwnerBoardId, setFilterOwnerBoardId] = useState<number | null>(null);
   const requestedBoardFilterRef = useRef<ResourceFilter | undefined>(undefined);
+  const nestedBackHandlerRef = useRef<(() => void) | null>(null);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const user = useUserStore((state) => state.user);
 
@@ -1052,12 +1074,15 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
     router.replace(boardParentRoute(board) as never);
   }, [board, isTabRoot]);
 
+  const registerNestedBackHandler = useCallback((handler: (() => void) | null) => {
+    nestedBackHandlerRef.current = handler;
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== "android" || isTabRoot) return undefined;
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-        exitBoardDepth();
-        return true;
+        return handleNestedBoardHardwareBack(nestedBackHandlerRef.current, exitBoardDepth);
       });
       return () => subscription.remove();
     }, [exitBoardDepth, isTabRoot])
@@ -1113,12 +1138,20 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
         onRetry={() => void feedController.retry()}
         topInset={insets.top}
         onBack={exitBoardDepth}
+        onNestedBackHandlerChange={registerNestedBackHandler}
       />
     );
   }
 
   if (board?.slug === "gsa-past-councils") {
-    return <PastCouncilScreen board={board} topInset={insets.top} onBack={exitBoardDepth} />;
+    return (
+      <PastCouncilScreen
+        board={board}
+        topInset={insets.top}
+        onBack={exitBoardDepth}
+        onNestedBackHandlerChange={registerNestedBackHandler}
+      />
+    );
   }
 
   if (board?.slug === "council-activity" || board?.slug === "gsa-activity") {

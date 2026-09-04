@@ -4,6 +4,7 @@ import test from "node:test";
 import * as appRoutes from "../utils/appRoutes";
 import {
   COMMUNITY_TAB_ROUTE,
+  COUNCIL_TAB_ROUTE,
   HOME_TAB_ROUTE,
   NOTICES_TAB_ROUTE,
   PARTICIPATION_TAB_ROUTE,
@@ -43,6 +44,30 @@ function getActivityPostEditRouteFromDetail() {
   return helper as (boardId: number, postId: number, fromBoardId?: unknown, returnTo?: unknown) => string;
 }
 
+function getPostEditRouteFromDetail() {
+  const helper = Reflect.get(appRoutes, "postEditRouteFromDetail");
+  assert.equal(typeof helper, "function", "일반 상세 전용 수정 경로 생성기가 필요합니다");
+  return helper as (postId: number, fromBoardId?: unknown, returnTo?: unknown) => string;
+}
+
+function getMutualAidPostEditRouteFromDetail() {
+  const helper = Reflect.get(appRoutes, "mutualAidPostEditRouteFromDetail");
+  assert.equal(typeof helper, "function", "상조회 상세 전용 수정 경로 생성기가 필요합니다");
+  return helper as (boardId: number, postId: number, fromBoardId?: unknown, returnTo?: unknown) => string;
+}
+
+function getPostEditRouteForPostDetail() {
+  const helper = Reflect.get(appRoutes, "postEditRouteForPostDetail");
+  assert.equal(typeof helper, "function", "상세 게시글의 회원·관리자 수정 경로 판정기가 필요합니다");
+  return helper as (
+    board: { board_type: string; write_permission: string },
+    boardId: number,
+    postId: number,
+    fromBoardId?: unknown,
+    returnTo?: unknown,
+  ) => string;
+}
+
 function getPostEditCompletionDecision() {
   const helper = Reflect.get(appRoutes, "postEditCompletionDecision");
   assert.equal(typeof helper, "function", "게시글 수정 완료 복귀 판정기가 필요합니다");
@@ -54,6 +79,18 @@ function getPostEditCompletionDecision() {
     fromBoardId?: unknown,
     returnTo?: unknown,
   ) => PostEditCompletionDecision;
+}
+
+function getNavigateAfterPostEdit() {
+  const helper = Reflect.get(appRoutes, "navigateAfterPostEdit");
+  assert.equal(typeof helper, "function", "수정 완료 복귀 실행기가 필요합니다");
+  return helper as (
+    decision: PostEditCompletionDecision,
+    navigator: {
+      back: () => void;
+      replace: (route: string) => void;
+    },
+  ) => void;
 }
 
 function getPostCreateFormBackDecision() {
@@ -77,6 +114,12 @@ function getParticipationGroupDefaultSlug() {
   const helper = Reflect.get(appRoutes, "participationGroupDefaultSlug");
   assert.equal(typeof helper, "function", "참여활동 그룹별 첫 화면 경로 생성기가 필요합니다");
   return helper as (group: ParticipationGroupKey) => string;
+}
+
+function getHandleNestedBoardHardwareBack() {
+  const helper = Reflect.get(appRoutes, "handleNestedBoardHardwareBack");
+  assert.equal(typeof helper, "function", "중첩 게시판의 Android 뒤로가기 실행기가 필요합니다");
+  return helper as (childBack: (() => void) | null, exitBoard: () => void) => boolean;
 }
 
 test("전공 커뮤니티 게시판의 상위 경로는 숨겨진 전체 보드가 아니라 홈이다", () => {
@@ -106,6 +149,20 @@ test("활동 인증 작성 완료 상세는 참여활동 복귀 정보를 보존
   assert.equal(
     postCreateCompletionRoute("activity_certification", 170, 12),
     "/board/post/170?fromBoardId=12&returnTo=%2F(tabs)%2Fparticipation",
+  );
+});
+
+test("자료공유 작성 완료 상세는 출발 게시판과 커뮤니티 복귀 정보를 보존한다", () => {
+  const completionRoute = postCreateCompletionRoute as unknown as (
+    boardType: string | undefined,
+    createdPostId: number,
+    boardId: number,
+    returnTo?: unknown,
+  ) => string;
+
+  assert.equal(
+    completionRoute("resource", 844, 8, COMMUNITY_TAB_ROUTE),
+    "/board/post/844?fromBoardId=8&returnTo=%2F(tabs)%2Fcommunity",
   );
 });
 
@@ -199,19 +256,68 @@ test("활동인증 상세 수정 경로는 원래 목록 복귀 정보를 안전
   );
 });
 
-test("상세에서 수정한 활동인증만 저장 후 기존 상세 화면으로 돌아간다", () => {
+test("자료글과 상조회 상세 수정 경로는 상세 출발 조건과 목록 복귀 정보를 전달한다", () => {
+  const postEditRoute = getPostEditRouteFromDetail();
+  const mutualAidEditRoute = getMutualAidPostEditRouteFromDetail();
+
+  assert.equal(
+    postEditRoute(302, "8", COMMUNITY_TAB_ROUTE),
+    "/board/post/edit/302?editOrigin=post-detail&fromBoardId=8&returnTo=%2F(tabs)%2Fcommunity",
+  );
+  assert.equal(
+    mutualAidEditRoute(18, 301, "18", "/(tabs)/council"),
+    "/board/post/create?boardId=18&postId=301&editOrigin=post-detail&fromBoardId=18&returnTo=%2F(tabs)%2Fcouncil",
+  );
+  assert.equal(postEditRoute(302, "bad", "https://example.com"), "/board/post/edit/302?editOrigin=post-detail");
+});
+
+test("회원 작성 게시글은 종류에 맞는 수정 화면으로 이동하면서 원래 목록을 보존한다", () => {
+  const editRoute = getPostEditRouteForPostDetail();
+
+  assert.equal(
+    editRoute({ board_type: "activity_certification", write_permission: "user" }, 10, 204, "10", PARTICIPATION_TAB_ROUTE),
+    "/board/post/create?boardId=10&postId=204&editOrigin=activity-post-detail&fromBoardId=10&returnTo=%2F(tabs)%2Fparticipation",
+  );
+  assert.equal(
+    editRoute({ board_type: "mutual_aid", write_permission: "user" }, 18, 301, "18", COUNCIL_TAB_ROUTE),
+    "/board/post/create?boardId=18&postId=301&editOrigin=post-detail&fromBoardId=18&returnTo=%2F(tabs)%2Fcouncil",
+  );
+  assert.equal(
+    editRoute({ board_type: "post", write_permission: "user" }, 25, 205, "25", PARTICIPATION_TAB_ROUTE),
+    "/board/post/edit/205?editOrigin=post-detail&fromBoardId=25&returnTo=%2F(tabs)%2Fparticipation",
+  );
+  assert.equal(
+    editRoute({ board_type: "suggestion", write_permission: "user" }, 17, 302, "17", COUNCIL_TAB_ROUTE),
+    "/board/post/edit/302?editOrigin=post-detail&fromBoardId=17&returnTo=%2F(tabs)%2Fcouncil",
+  );
+});
+
+test("관리자 작성 게시판과 사진첩은 회원 목록 복귀 규칙을 적용하지 않는다", () => {
+  const editRoute = getPostEditRouteForPostDetail();
+
+  assert.equal(
+    editRoute({ board_type: "post", write_permission: "admin" }, 22, 401, "22", PARTICIPATION_TAB_ROUTE),
+    "/board/post/edit/401",
+  );
+  assert.equal(
+    editRoute({ board_type: "album", write_permission: "user" }, 6, 402, "6", COMMUNITY_TAB_ROUTE),
+    "/board/post/edit/402",
+  );
+});
+
+test("상세에서 수정한 활동인증은 저장 후 기존 상세 한 장만 남긴다", () => {
   const completionDecision = getPostEditCompletionDecision();
   assert.deepEqual(
-    completionDecision("activity_certification", "activity-post-detail", true, 204),
+    completionDecision("activity_certification", "activity-post-detail", true, 204, "10", PARTICIPATION_TAB_ROUTE),
     { action: "back" },
   );
   assert.deepEqual(
-    completionDecision("activity_certification", ["activity-post-detail"], true, 205),
+    completionDecision("activity_certification", ["activity-post-detail"], true, 205, "11", PARTICIPATION_TAB_ROUTE),
     { action: "back" },
   );
 });
 
-test("활동인증 게시판 조회가 늦어도 상세에서 시작한 수정은 상세 스택으로 한 번만 돌아간다", () => {
+test("활동인증 게시판 조회가 늦어도 상세에서 시작한 수정은 기존 상세로 돌아간다", () => {
   const completionDecision = getPostEditCompletionDecision();
 
   assert.deepEqual(
@@ -283,15 +389,145 @@ test("직접 진입한 활동인증 수정은 관계없는 탐색 기록으로 �
   );
 });
 
-test("상조회와 일반 게시글 수정 완료의 기존 상세 교체 동작을 유지한다", () => {
+test("상세에서 시작한 모든 회원 작성 글은 저장 후 기존 상세로 돌아간다", () => {
   const completionDecision = getPostEditCompletionDecision();
   assert.deepEqual(
-    completionDecision("mutual_aid", "post-detail", true, 301),
-    { action: "replace", route: "/board/post/301" },
+    completionDecision("mutual_aid", "post-detail", true, 301, "18", COUNCIL_TAB_ROUTE),
+    { action: "back" },
   );
   assert.deepEqual(
-    completionDecision("resource", "post-detail", true, 302),
-    { action: "replace", route: "/board/post/302" },
+    completionDecision("resource", "post-detail", true, 302, "9", COMMUNITY_TAB_ROUTE),
+    { action: "back" },
+  );
+  assert.deepEqual(
+    completionDecision("post", "post-detail", true, 303, "25", PARTICIPATION_TAB_ROUTE),
+    { action: "back" },
+  );
+});
+
+test("상세 수정 완료는 진입 목록 종류와 무관하게 편집 화면만 제거한다", () => {
+  const completionDecision = getPostEditCompletionDecision();
+  const listRoutes = [
+    HOME_TAB_ROUTE,
+    NOTICES_TAB_ROUTE,
+    COMMUNITY_TAB_ROUTE,
+    PARTICIPATION_TAB_ROUTE,
+    COUNCIL_TAB_ROUTE,
+    "/(tabs)/search",
+    "/(tabs)/search?scope=resources",
+    "/(tabs)/notifications",
+    "/(tabs)/settings/activity",
+  ];
+
+  for (const route of listRoutes) {
+    assert.deepEqual(
+      completionDecision("post", "post-detail", true, 303, "25", route),
+      { action: "back" },
+    );
+  }
+});
+
+test("같은 보드 스택에서 수정해도 저장 후 목록까지 자르지 않고 상세를 남긴다", () => {
+  const completionDecision = getPostEditCompletionDecision();
+
+  assert.deepEqual(
+    completionDecision("post", "post-detail", true, 303, "25", "/board/25"),
+    { action: "back" },
+  );
+});
+
+test("수정 완료 복귀 실행기는 기존 상세 복원과 직접 진입 상세 대체를 구분한다", () => {
+  const navigateAfterPostEdit = getNavigateAfterPostEdit();
+  const calls: string[] = [];
+  const navigator = {
+    back: () => calls.push("back"),
+    replace: (route: string) => calls.push(`replace:${route}`),
+  };
+
+  navigateAfterPostEdit({ action: "back" }, navigator);
+  assert.deepEqual(calls, ["back"]);
+
+  calls.length = 0;
+  navigateAfterPostEdit({ action: "replace", route: "/board/post/204" }, navigator);
+  assert.deepEqual(calls, ["replace:/board/post/204"]);
+});
+
+test("직접 진입한 상조회와 자료글 수정은 관계없는 탐색 기록 대신 상세로 교체한다", () => {
+  const completionDecision = getPostEditCompletionDecision();
+  assert.deepEqual(
+    completionDecision("mutual_aid", undefined, true, 301, "18", "/(tabs)/council"),
+    { action: "replace", route: "/board/post/301?fromBoardId=18&returnTo=%2F(tabs)%2Fcouncil" },
+  );
+  assert.deepEqual(
+    completionDecision("resource", "post-detail", false, 302, "9", COMMUNITY_TAB_ROUTE),
+    { action: "replace", route: "/board/post/302?fromBoardId=9&returnTo=%2F(tabs)%2Fcommunity" },
+  );
+});
+
+test("상조회 상세에서 연 수정 화면의 닫기도 기존 상세를 우선한다", () => {
+  const backDecision = getPostCreateFormBackDecision();
+
+  assert.deepEqual(
+    backDecision({
+      boardType: "mutual_aid",
+      editOrigin: "post-detail",
+      postId: "301",
+      returnTo: "/(tabs)/council",
+      canGoBack: true,
+      boardId: 18,
+      fromBoardId: "18",
+    }),
+    { action: "back" },
+  );
+  assert.deepEqual(
+    backDecision({
+      boardType: "mutual_aid",
+      editOrigin: "post-detail",
+      postId: "301",
+      returnTo: "/(tabs)/council",
+      canGoBack: false,
+      boardId: 18,
+      fromBoardId: "18",
+    }),
+    { action: "replace", route: "/board/post/301?fromBoardId=18&returnTo=%2F(tabs)%2Fcouncil" },
+  );
+});
+
+test("일반 자료글 상세 수정의 닫기는 상세를 우선하고 직접 진입은 문맥이 보존된 상세로 교체한다", () => {
+  const backDecision = getPostCreateFormBackDecision();
+
+  assert.deepEqual(
+    backDecision({
+      boardType: "resource",
+      editOrigin: "post-detail",
+      postId: "848",
+      returnTo: COMMUNITY_TAB_ROUTE,
+      canGoBack: true,
+      boardId: 11,
+      fromBoardId: "11",
+    }),
+    { action: "back" },
+  );
+  assert.deepEqual(
+    backDecision({
+      boardType: "resource",
+      editOrigin: "post-detail",
+      postId: "848",
+      returnTo: COMMUNITY_TAB_ROUTE,
+      canGoBack: false,
+      boardId: 11,
+      fromBoardId: "11",
+    }),
+    { action: "replace", route: "/board/post/848?fromBoardId=11&returnTo=%2F(tabs)%2Fcommunity" },
+  );
+  assert.deepEqual(
+    backDecision({
+      boardType: "notice",
+      postId: "848",
+      canGoBack: true,
+      boardId: 1,
+    }),
+    { action: "back" },
   );
 });
 
@@ -304,10 +540,10 @@ test("상조회 등 독립 게시판 글쓰기는 기존 뒤로가기와 직접 
   assert.deepEqual(postCreateBackDecision(undefined, false, 18), { action: "replace", route: "/board/18" });
 });
 
-test("활동 인증 글쓰기는 기존 전용 목록 복귀 분기를 유지한다", () => {
+test("활동 인증 글쓰기도 다른 회원 작성 글처럼 원래 참여활동 목록을 보존한다", () => {
   assert.equal(
     postCreateRouteFromBoardList(12, "활동 인증", true, true, PARTICIPATION_TAB_ROUTE),
-    postCreateRoute(12, "활동 인증"),
+    postCreateRoute(12, "활동 인증", PARTICIPATION_TAB_ROUTE),
   );
 });
 
@@ -403,4 +639,42 @@ test("게시판 경로 파라미터는 양의 정수만 허용한다", () => {
   assert.equal(routeBoardId(["17", "18"]), 17);
   assert.equal(routeBoardId("0"), null);
   assert.equal(routeBoardId("1.5"), null);
+});
+
+test("수정 후 복원된 상세의 뒤로가기는 모든 진입 목록 스택을 정확히 복원한다", () => {
+  const board = { slug: "exam-archive", category: "resources", board_type: "resource" };
+  const listRoutes = [
+    HOME_TAB_ROUTE,
+    NOTICES_TAB_ROUTE,
+    COMMUNITY_TAB_ROUTE,
+    PARTICIPATION_TAB_ROUTE,
+    COUNCIL_TAB_ROUTE,
+    "/(tabs)/search",
+    "/(tabs)/search?scope=resources",
+    "/(tabs)/notifications",
+    "/(tabs)/settings/activity",
+    "/board/25",
+  ];
+
+  for (const route of listRoutes) {
+    assert.deepEqual(
+      postDetailBackDecision(board, true, "25", route),
+      { action: "navigate", route },
+    );
+  }
+});
+
+test("중첩 게시판 Android 뒤로가기는 열린 자식 상세를 먼저 닫는다", () => {
+  const handleHardwareBack = getHandleNestedBoardHardwareBack();
+  const calls: string[] = [];
+
+  assert.equal(
+    handleHardwareBack(() => calls.push("child"), () => calls.push("board")),
+    true,
+  );
+  assert.deepEqual(calls, ["child"]);
+
+  calls.length = 0;
+  assert.equal(handleHardwareBack(null, () => calls.push("board")), true);
+  assert.deepEqual(calls, ["board"]);
 });

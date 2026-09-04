@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Board } from "../types";
+import * as adminContentManagement from "../utils/adminContentManagement";
 import {
   adminActivityCertificationBankAccount,
   adminDeferredEventGateInitialState,
@@ -19,6 +20,32 @@ import {
   nextAdminBoardSelection,
   nextAdminContentSelection,
 } from "../utils/adminContentManagement";
+
+type AdminPostListQueryParams = (input: {
+  isDashboard: boolean;
+  page: number;
+  search: string;
+  boardId?: number;
+  mode: "all" | "notice" | "pinned";
+}) => Record<string, unknown>;
+
+type AdminPostPageForContext = (
+  state: { contextKey: string; page: number },
+  contextKey: string,
+) => number;
+
+type AdminPostPageAfterDelete = (input: {
+  currentPage: number;
+  currentItemCount: number;
+}) => number;
+
+type RunAdminPostDelete = (input: {
+  postId: number;
+  currentPage: number;
+  currentItemCount: number;
+  deletePost: (postId: number) => Promise<void>;
+  afterDelete: () => Promise<void>;
+}) => Promise<number>;
 
 function board(overrides: Partial<Board> & Pick<Board, "id" | "name" | "slug" | "category" | "board_type">): Board {
   return {
@@ -71,6 +98,59 @@ const boardBySlug = (slug: string): Board => {
   assert.ok(found, `missing board fixture: ${slug}`);
   return found;
 };
+
+test("관리자 게시글 목록은 선택한 서버 페이지를 10개 단위로 요청한다", () => {
+  const buildParams = (adminContentManagement as Record<string, unknown>)
+    .adminPostListQueryParams as AdminPostListQueryParams | undefined;
+  assert.equal(typeof buildParams, "function");
+  assert.deepEqual(buildParams?.({
+    isDashboard: false,
+    page: 3,
+    search: "  사진첩  ",
+    boardId: 10,
+    mode: "pinned",
+  }), {
+    page: 3,
+    size: 10,
+    q: "사진첩",
+    board_id: 10,
+    is_notice: undefined,
+    is_pinned: true,
+  });
+});
+
+test("관리자 게시글의 게시판·검색·필터 컨텍스트가 바뀌면 1페이지부터 조회한다", () => {
+  const pageForContext = (adminContentManagement as Record<string, unknown>)
+    .adminPostPageForContext as AdminPostPageForContext | undefined;
+  assert.equal(typeof pageForContext, "function");
+  assert.equal(pageForContext?.({ contextKey: "album::all::", page: 4 }, "album::all::"), 4);
+  assert.equal(pageForContext?.({ contextKey: "album::all::", page: 4 }, "album::pinned::"), 1);
+});
+
+test("관리자 게시글의 마지막 행을 삭제하면 비어 버릴 현재 페이지 대신 이전 페이지로 이동한다", () => {
+  const pageAfterDelete = (adminContentManagement as Record<string, unknown>)
+    .adminPostPageAfterDelete as AdminPostPageAfterDelete | undefined;
+  assert.equal(typeof pageAfterDelete, "function");
+  assert.equal(pageAfterDelete?.({ currentPage: 3, currentItemCount: 1 }), 2);
+  assert.equal(pageAfterDelete?.({ currentPage: 3, currentItemCount: 2 }), 3);
+  assert.equal(pageAfterDelete?.({ currentPage: 1, currentItemCount: 1 }), 1);
+});
+
+test("관리자 게시글 삭제는 API 성공 후 목록을 갱신하고 보정된 페이지를 반환한다", async () => {
+  const runDelete = (adminContentManagement as Record<string, unknown>)
+    .runAdminPostDelete as RunAdminPostDelete | undefined;
+  assert.equal(typeof runDelete, "function");
+  const trace: string[] = [];
+  const nextPage = await runDelete?.({
+    postId: 42,
+    currentPage: 3,
+    currentItemCount: 1,
+    deletePost: async (postId) => { trace.push(`delete:${postId}`); },
+    afterDelete: async () => { trace.push("invalidate"); },
+  });
+  assert.deepEqual(trace, ["delete:42", "invalidate"]);
+  assert.equal(nextPage, 2);
+});
 
 test("그룹은 표준 게시글이 없는 게시판까지 모두 포함한다", () => {
   assert.deepEqual(adminBoardsForScope(registryBoards, "notices").map((item) => item.slug), ["all-notices", "academic-calendar"]);
