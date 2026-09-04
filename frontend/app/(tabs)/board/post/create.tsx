@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -1491,7 +1492,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
               </View>
             )}
             <View style={styles.evidenceNotice}>
-              <Ionicons name="lock-closed" size={17} color="#0C447C" />
+              <Feather name="lock" size={14} color="#0C447C" />
               <Text style={styles.evidenceNoticeText}>증빙자료는 원우회 관리자만 확인하며, 앱 화면에는 표시되지 않아요.</Text>
             </View>
           </View>
