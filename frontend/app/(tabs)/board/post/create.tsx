@@ -1390,7 +1390,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                   <Text style={[styles.selectionValue, !field.value ? styles.selectionPlaceholder : null]}>
                     {field.value ? formatBoardDate(field.value) : "경조사 날짜를 선택하세요"}
                   </Text>
-                  <Ionicons name="calendar-outline" size={17} color={COLORS.subtle} />
+                  <Feather name="calendar" size={14} color={COLORS.subtle} />
                 </Pressable>
                 {datePickerOpen ? (
                   <InlineCalendar
