@@ -152,9 +152,10 @@ test("#73 운영진 화면은 임의 기본 프로필 없이 실제 데이터만
 test("#187 홈 동문회 주소록은 클립보드 아이콘과 제목을 한 줄 텍스트로 표시한다", () => {
   assert.match(
     homeSource,
-    /<Text style=\{styles\.alumniDirectoryTitle\}>📋 동문회 주소록 &#x20;<\/Text>/,
+    /<Image source=\{HOME_ICON_ALUMNI\} style=\{styles\.alumniDirectoryIcon\}[\s\S]*?\/>/,
   );
-  assert.doesNotMatch(homeSource, /<Text style=\{styles\.alumniDirectoryIcon\}>/);
+  assert.match(homeSource, /<Text style=\{styles\.alumniDirectoryTitle\}>동문회 주소록<\/Text>/);
+  assert.doesNotMatch(homeSource, /📋 동문회 주소록/);
 });
 
 test("#187 홈 동문회 주소록은 디자인 기준의 조밀한 세로 간격을 유지한다", () => {
