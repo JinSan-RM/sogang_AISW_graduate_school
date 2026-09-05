@@ -13,11 +13,11 @@ const loginSource = readFileSync("app/auth/login.tsx", "utf8");
 test("#14·15 행사 사진첩 더보기는 커뮤니티를 행사 사진첩 기본 상태로 다시 연다", () => {
   assert.match(
     homeSource,
-    /<SectionHeader\s+title="📸 행사 사진첩"[\s\S]*?requestTabRootReset\("community"\)[\s\S]*?router\.navigate\(COMMUNITY_TAB_ROUTE as never\)[\s\S]*?\/>/,
+    /<SectionHeader\s+title="행사 사진첩"[\s\S]*?requestTabRootReset\("community"\)[\s\S]*?router\.navigate\(COMMUNITY_TAB_ROUTE as never\)[\s\S]*?\/>/,
   );
   assert.doesNotMatch(
     homeSource,
-    /title="📸 행사 사진첩"\s+onPress=\{\(\) => router\.push\(COMMUNITY_TAB_ROUTE as never\)\}/,
+    /title="행사 사진첩"[\s\S]*?onPress=\{\(\) => router\.push\(COMMUNITY_TAB_ROUTE as never\)\}/,
   );
   assert.match(communitySource, /<BoardPostsScreen initialBoardId=\{initialBoard\.id\} isTabRoot \/>/);
 });
