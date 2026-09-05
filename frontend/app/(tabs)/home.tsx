@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  type ImageSourcePropType,
   Linking,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -185,10 +187,19 @@ function IconButton({ label, onPress, children }: { label: string; onPress: () =
   );
 }
 
-function SectionHeader({ title, actionLabel = "더보기", onPress }: { title: string; actionLabel?: string; onPress?: () => void }) {
+// 홈 섹션 아이콘. 행사 사진첩=카메라, 동문회 주소록=클립보드.
+const HOME_ICON_PHOTO_ALBUM: ImageSourcePropType = require("../../assets/images/home-icon-photo-album.png");
+const HOME_ICON_ALUMNI: ImageSourcePropType = require("../../assets/images/home-icon-alumni.png");
+// 홈 인사말 손 흔드는 아이콘.
+const HOME_ICON_GREETING: ImageSourcePropType = require("../../assets/images/home-icon-greeting.png");
+
+function SectionHeader({ title, icon, actionLabel = "더보기", onPress }: { title: string; icon?: ImageSourcePropType; actionLabel?: string; onPress?: () => void }) {
   return (
     <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionTitleRow}>
+        {icon ? <Image source={icon} style={styles.sectionTitleIcon} resizeMode="contain" /> : null}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
       {onPress ? (
         <Pressable onPress={onPress} style={styles.moreButton}>
           <Text style={styles.moreText}>{actionLabel}</Text>
@@ -694,9 +705,12 @@ export default function HomeScreen() {
     >
       <View style={styles.header}>
         <View style={styles.greetingWrap}>
-          <Text style={styles.greeting} numberOfLines={1}>
-            안녕하세요, {displayName}님 👋
-          </Text>
+          <View style={styles.greetingRow}>
+            <Text style={styles.greeting} numberOfLines={1}>
+              안녕하세요, {displayName}님
+            </Text>
+            <Image source={HOME_ICON_GREETING} style={styles.greetingIcon} resizeMode="contain" />
+          </View>
         </View>
         <View style={styles.headerActions}>
           <IconButton label="알림" onPress={() => router.push("/notifications" as never)}>
@@ -758,7 +772,8 @@ export default function HomeScreen() {
       </HomeSectionGate>
 
       <SectionHeader
-        title="📸 행사 사진첩"
+        title="행사 사진첩"
+        icon={HOME_ICON_PHOTO_ALBUM}
         onPress={() => {
           requestTabRootReset("community");
           router.navigate(COMMUNITY_TAB_ROUTE as never);
@@ -782,7 +797,10 @@ export default function HomeScreen() {
       >
         <View style={styles.alumniDirectoryLeading}>
           <View style={styles.alumniDirectoryCopy}>
-            <Text style={styles.alumniDirectoryTitle}>📋 동문회 주소록 &#x20;</Text>
+            <View style={styles.alumniDirectoryTitleRow}>
+              <Image source={HOME_ICON_ALUMNI} style={styles.alumniDirectoryIcon} resizeMode="contain" />
+              <Text style={styles.alumniDirectoryTitle}>동문회 주소록</Text>
+            </View>
             <Text style={styles.alumniDirectoryDescription}>선배 원우들의 연락처를 확인해보세요</Text>
           </View>
         </View>
@@ -816,11 +834,21 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
   },
+  greetingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  greetingIcon: {
+    width: 22,
+    height: 22,
+  },
   greeting: {
     color: COLORS.text,
     fontSize: 17,
     fontWeight: "500",
     lineHeight: 24,
+    flexShrink: 1,
   },
   headerActions: {
     position: "absolute",
@@ -880,6 +908,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sectionTitleIcon: {
+    width: 20,
+    height: 20,
   },
   sectionTitle: {
     color: COLORS.text,
@@ -1233,6 +1270,15 @@ const styles = StyleSheet.create({
   alumniDirectoryCopy: {
     flex: 1,
     minWidth: 0,
+  },
+  alumniDirectoryTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  alumniDirectoryIcon: {
+    width: 20,
+    height: 20,
   },
   alumniDirectoryTitle: {
     color: COLORS.text,

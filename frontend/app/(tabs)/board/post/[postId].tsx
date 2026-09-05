@@ -371,6 +371,9 @@ export default function PostDetailScreen() {
       : categoryLabel(post.category, isAdminParticipationGuide ? "모집중" : board?.board_type === "notice" ? "공지" : board?.name ?? "게시글");
   const tone = categoryTone(label);
   const applicationUrl = participationApplicationUrl(metadata);
+  const isRecruitmentClosed =
+    String(metadata.recruitment_status ?? post.category ?? "").toLowerCase().includes("closed") ||
+    Boolean(post.category?.includes("마감"));
   const contentUrl = firstUrlFromText(post.content);
   const canManagePost = (isMine || isAdmin) && !hasLockedSuggestion;
   const canEditOwn =
@@ -939,9 +942,15 @@ export default function PostDetailScreen() {
         ) : null}
 
         {isAdminParticipationGuide ? (
-          <Pressable onPress={handleParticipationApply} style={styles.joinButton}>
-            <Text style={styles.joinButtonText}>{applicationButtonLabel}</Text>
-          </Pressable>
+          isRecruitmentClosed ? (
+            <View style={[styles.joinButton, styles.joinButtonClosed]}>
+              <Text style={[styles.joinButtonText, styles.joinButtonClosedText]}>모집 마감</Text>
+            </View>
+          ) : (
+            <Pressable onPress={handleParticipationApply} style={styles.joinButton}>
+              <Text style={styles.joinButtonText}>{applicationButtonLabel}</Text>
+            </Pressable>
+          )
         ) : null}
 
         {post.suggestion?.admin_reply ? (
@@ -1957,6 +1966,12 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "500",
+  },
+  joinButtonClosed: {
+    backgroundColor: "#E4E6EA", // Figma: 마감 버튼 배경
+  },
+  joinButtonClosedText: {
+    color: "#999EA8", // Figma: 마감 버튼 텍스트
   },
   infoBox: {
     borderTopWidth: 1,
