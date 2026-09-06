@@ -2,7 +2,7 @@
   "expo": {
     "name": "AI·SW CAMPUS",
     "slug": "sogang-community",
-    "owner": "kimjinsan11",
+    "owner": "sogang30s@gmail.com",
     "scheme": "sogang-community",
     "version": "0.1.0",
     "splash": {
@@ -32,7 +32,7 @@
       ]
     ],
     "android": {
-      "package": "com.anonymous.sogangcommunity",
+      "package": "kr.ac.sogang.aisw.campus",
       "versionCode": 1,
       "blockedPermissions": [
         "android.permission.CAMERA",
@@ -42,7 +42,7 @@
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.sogangcommunity",
+      "bundleIdentifier": "kr.ac.sogang.aisw.campus",
       "buildNumber": "1",
       "privacyManifests": {
         "NSPrivacyTracking": false,
