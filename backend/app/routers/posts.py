@@ -4,8 +4,8 @@ from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import and_, case, func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy import String, and_, case, cast, func, or_, select, update
+from sqlalchemy.orm import Session, aliased
 
 from app.author_snapshots import resolve_author_display
 from app.board_policies import ANONYMOUS_BOARD_SLUGS, canonical_post_category, hides_author_identity
@@ -153,6 +153,40 @@ def _club_activity_source_titles(db: Session, board: Board | None, posts: list[P
         .where(Post.id.in_(source_ids), Board.slug == "club-promo")
     ).all()
     return {source_id: title for source_id, title in rows}
+
+
+def _activity_certification_search_filter(board: Board, keyword: str):
+    text_match = Post.title.ilike(keyword) | Post.content.ilike(keyword)
+    # Study cards display a title without an activity badge.
+    if board.slug == "study-activity":
+        return text_match
+
+    category = func.nullif(func.trim(Post.category), "")
+    if board.slug != "club-activity":
+        return text_match | func.coalesce(category, "활동 인증").ilike(keyword)
+
+    # Match the displayed club badge: current source title, category, legacy name.
+    # Compare IDs as text so malformed legacy metadata cannot cause a SQL cast error.
+    source = aliased(Post)
+    source_id = func.ltrim(
+        func.trim(cast(Post.metadata_json["activity_source_post_id"].as_string(), String)), "0",
+    )
+    source_title = (
+        select(func.nullif(func.trim(source.title), ""))
+        .join(Board, Board.id == source.board_id)
+        .where(cast(source.id, String) == source_id, Board.slug == "club-promo")
+        .correlate(Post)
+        .scalar_subquery()
+    )
+    generic_labels = ("동아리 활동 인증", "활동 인증", "안내")
+    legacy_name = func.nullif(func.trim(Post.metadata_json["legacy_activity_name"].as_string()), "")
+    badge = func.coalesce(
+        source_title,
+        case((category.not_in(generic_labels), category)),
+        case((legacy_name.not_in(generic_labels), legacy_name)),
+        "동아리 활동 인증",
+    )
+    return text_match | badge.ilike(keyword)
 
 
 def _canonical_activity_metadata(
@@ -621,9 +655,9 @@ def get_posts(
     filters.append(post_status_read_filter(current_user))
     if q:
         keyword = f"%{q}%"
-        if board.board_type == "activity_certification" or (
-            hides_author_identity(board) and current_user.role != "admin"
-        ):
+        if board.board_type == "activity_certification":
+            filters.append(_activity_certification_search_filter(board, keyword))
+        elif hides_author_identity(board) and current_user.role != "admin":
             filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword))
         else:
             author_match = or_(
