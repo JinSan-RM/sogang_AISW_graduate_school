@@ -287,6 +287,7 @@ Scope:
 - Completed: activity-certification, mutual-aid, and moved resource-post edits launched from detail carry an exact origin marker and return to the existing refreshed detail after save, eliminating duplicate detail stacks while preserving contextual direct-entry fallback and all other edit completion routes.
 - Completed: ordinary post creation preserves the validated originating list and source board in the result detail, so a create→edit→detail flow returns to Community or Participation in one Back instead of falling through to Home.
 - Completed: Android hardware Back in cohort-leader and past-council boards uses the same child-first action as the header, closing an open in-screen profile before leaving the board.
+- Completed participation search scope follow-up (2026-09-07, WP5 P0): activity-certification board searches match title and body only for members and admins, excluding current/historical author names and participant metadata; preserve Community search. API regression coverage includes all three participation boards and both roles. Verification: backend suite 387 passed, 1 skipped; backend import/OpenAPI and compile checks passed.
 - Add post create/edit image/file picker and upload progress.
 - Polish pagination or infinite scroll.
 - Add report model/API hooks for later moderation.

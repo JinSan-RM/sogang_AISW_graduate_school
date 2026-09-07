@@ -825,7 +825,7 @@ Auth: user
 Query:
 
 - `page`, `size`
-- `q`: optional search keyword
+- `q`: optional search keyword; activity-certification boards search only title and content for all roles, excluding author names and participant metadata. Other board search behavior is unchanged.
 - `category`: optional type-specific category
 - `status`: optional, used by suggestions
 - `from_date`, `to_date`: optional date filter

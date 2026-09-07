@@ -621,7 +621,9 @@ def get_posts(
     filters.append(post_status_read_filter(current_user))
     if q:
         keyword = f"%{q}%"
-        if hides_author_identity(board) and current_user.role != "admin":
+        if board.board_type == "activity_certification" or (
+            hides_author_identity(board) and current_user.role != "admin"
+        ):
             filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword))
         else:
             author_match = or_(
