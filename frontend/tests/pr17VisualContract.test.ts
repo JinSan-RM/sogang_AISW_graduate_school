@@ -23,11 +23,10 @@ test("모든 알림 토스트는 PR의 2px 텍스트 간격과 muted 한 줄 메
   assert.doesNotMatch(notification, /const isNotice =/);
 });
 
-test("참여활동 화면은 PR 원본처럼 검색 진입점을 숨긴다", () => {
+test("참여활동 카드는 PR 원본처럼 마지막 구분선을 숨긴다", () => {
   assert.match(board, /function ActivityTile[\s\S]*?<Pressable onPress=\{\(\) => onPress\(post\.id\)\} style=\{\[styles\.activityCard, isLast \? styles\.activityCardLast : null\]\}>/);
   assert.match(board, /<ActivityTile post=\{item\} boardSlug=\{itemBoard\?\.slug \?\? board\?\.slug\} index=\{index\} isLast=\{index === posts\.length - 1\} onPress=/);
   assert.match(board, /activityCardLast:[\s\S]*borderBottomWidth: 0/);
-  assert.match(board, /isActivityCards \|\| isParticipationGuideCards \|\| isStudyRecruit[\s\S]*?<View style=\{styles\.iconButton\}/);
 });
 
 test("활동 인증 폼은 PR 원본 문구를 표시한다", () => {

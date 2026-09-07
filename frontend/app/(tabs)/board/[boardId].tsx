@@ -1059,6 +1059,12 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
       return;
     }
 
+    if (participationGroupKey(board)) {
+      setShowSearch(false);
+      setQuery("");
+      setQueryInput("");
+    }
+
     requestedBoardFilterRef.current = requestedFilter;
     if (requestedFilter) setSelectedFilter(requestedFilter);
     if (isTabRoot) {
@@ -1214,8 +1220,8 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
               <IconButton icon="chevron-back" label="뒤로" onPress={exitBoardDepth} />
             )}
             <Text style={styles.appBarTitle}>{display.name}</Text>
-            {/* 참여활동(동아리·스터디·네트워킹) 화면에는 검색이 없다 (Figma) */}
-            {isActivityCards || isParticipationGuideCards || isStudyRecruit ? (
+            {/* 참여활동은 활동 인증에서만 검색을 제공한다. */}
+            {isParticipationGuideCards || isStudyRecruit ? (
               <View style={styles.iconButton} />
             ) : (
               <Pressable accessibilityLabel="검색" onPress={() => setShowSearch(true)} style={styles.iconButton}>

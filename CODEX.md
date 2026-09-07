@@ -282,6 +282,7 @@ Source: Notion `Core feature A: boards/community`.
 
 Scope:
 
+- Completed participation search alignment (2026-09-07, P0 board-scoped search): show search only for club/study/networking activity-certification lists, including empty lists; keep guide/recruitment and unavailable-board screens without search, clear search when changing participation boards, and preserve Community behavior. Verification: full frontend test suite and typecheck passed; lint returned 0 errors and 7 existing warnings outside the changed files. Phase 5 QA: verify activity search, empty results, closing search, and return to guide/recruitment on physical devices.
 - Completed (QA 204): isolate the shared create/edit form by route `boardId + postId + category`, reset every draft/attachment/local field state when the destination changes, preserve in-form board selection and existing `returnTo`/Back behavior, and cover resource-sharing ↔ study recruitment in both directions.
 - Completed: activity-certification, mutual-aid, and moved resource-post edits launched from detail carry an exact origin marker and return to the existing refreshed detail after save, eliminating duplicate detail stacks while preserving contextual direct-entry fallback and all other edit completion routes.
 - Completed: ordinary post creation preserves the validated originating list and source board in the result detail, so a create→edit→detail flow returns to Community or Participation in one Back instead of falling through to Home.

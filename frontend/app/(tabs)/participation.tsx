@@ -7,7 +7,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import BoardPostsScreen from "./board/[boardId]";
 import LoadingState from "../../components/LoadingState";
-import { SearchIcon } from "../../components/icons";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { useTabRootResetStore } from "../../stores/tabRootResetStore";
 import type { Board } from "../../types";
@@ -172,9 +171,7 @@ function ParticipationContent() {
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <View style={styles.iconButton} />
         <Text style={styles.appBarTitle}>참여활동</Text>
-        <Pressable accessibilityLabel="검색" onPress={() => router.push("/search" as never)} style={[styles.iconButton, styles.iconButtonPressable]}>
-          <SearchIcon size={20} />
-        </Pressable>
+        <View style={styles.iconButton} />
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
@@ -285,10 +282,6 @@ const styles = StyleSheet.create({
   iconButton: {
     width: 42,
     height: 42,
-  },
-  iconButtonPressable: {
-    alignItems: "center",
-    justifyContent: "center",
   },
   appBarTitle: {
     color: COLORS.text,
