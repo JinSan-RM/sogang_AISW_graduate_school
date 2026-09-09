@@ -1,6 +1,7 @@
 import { BottomTabBar, type BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { router, Tabs, usePathname } from "expo-router";
 import { useRef } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CommunityTabIcon, CouncilTabIcon, HomeTabIcon, NoticeTabIcon, ParticipationTabIcon } from "../../components/icons";
 import { MyPageDrawerProvider } from "../../components/MyPageDrawer";
@@ -56,8 +57,15 @@ function CategoryHighlightTabBar(props: BottomTabBarProps) {
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const hideTabBar = shouldHideTabBar(pathname);
+  // Keep the tab content height while reserving the system navigation area once.
+  const tabBarStyle = {
+    ...TAB_BAR_STYLE,
+    height: TAB_BAR_STYLE.height + insets.bottom,
+    paddingBottom: TAB_BAR_STYLE.paddingBottom + insets.bottom,
+  };
 
   return (
     <MyPageDrawerProvider>
@@ -70,7 +78,7 @@ export default function TabsLayout() {
           // Figma: 라벨 11/13 Regular (react-navigation 기본 fontWeight 500 오버라이드)
           tabBarLabelStyle: { fontSize: 11, fontFamily: "Pretendard_400Regular", fontWeight: "400", lineHeight: 13, marginTop: 3, marginBottom: 0 },
           tabBarItemStyle: { paddingVertical: 0 },
-          tabBarStyle: TAB_BAR_STYLE,
+          tabBarStyle,
           headerShown: false,
         }}
       >
@@ -129,7 +137,7 @@ export default function TabsLayout() {
           options={{
             title: "설정",
             href: null,
-            tabBarStyle: hideTabBar ? { display: "none" } : TAB_BAR_STYLE,
+            tabBarStyle: hideTabBar ? { display: "none" } : tabBarStyle,
           }}
         />
         {/* 탭바를 유지한 채 여는 화면들 — 탭 버튼으로는 노출하지 않는다.
