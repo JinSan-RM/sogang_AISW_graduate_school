@@ -1045,7 +1045,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                     style={styles.activityInputWithIcon}
                   >
                     <Text style={styles.activityDateValue}>{field.value ? formatBoardDate(field.value) : "활동일을 선택하세요"}</Text>
-                    <CalendarSmallIcon size={15} color="#6B7280" />
+                    <CalendarSmallIcon size={15} color="#A6ACB7" />
                   </Pressable>
                   {datePickerOpen ? (
                     <InlineCalendar
