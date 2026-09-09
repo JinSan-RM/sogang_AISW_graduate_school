@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../hooks/useApi";
+import { useAndroidTabBack } from "../hooks/useAndroidTabBack";
 import ProfileAvatar from "./ProfileAvatar";
 import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
@@ -27,6 +28,7 @@ import {
 import { clearStoredPushToken, getStoredPushToken } from "../utils/pushTokenStorage";
 
 import { BackIcon } from "./icons";
+import MyPageDrawerOverlay from "./MyPageDrawerOverlay";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -99,6 +101,8 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
       useNativeDriver: true,
     }).start(() => setIsVisible(false));
   }, [drawerWidth, translateX]);
+
+  useAndroidTabBack(isVisible, closeDrawer);
 
   const showDrawer = useCallback(() => {
     if (!isAuthenticated) {
@@ -202,60 +206,62 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
         {children}
         {!isVisible ? <View pointerEvents="box-only" style={styles.edgeSwipeArea} {...edgePanResponder.panHandlers} /> : null}
         {isVisible ? (
-          <View pointerEvents="box-none" style={styles.overlay}>
-            <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
-              <Pressable accessibilityLabel="마이페이지 닫기" onPress={closeDrawer} style={StyleSheet.absoluteFill} />
-            </Animated.View>
-            <Animated.View
-              style={[
-                styles.drawer,
-                {
-                  width: "100%",
-                  paddingTop: Math.max(insets.top, 10),
-                  transform: [{ translateX }],
-                },
-              ]}
-              {...drawerPanResponder.panHandlers}
-            >
-              <View style={styles.appBar}>
-                <Pressable accessibilityLabel="닫기" onPress={closeDrawer} style={styles.iconButton}>
-                  <BackIcon size={24} color={COLORS.text} />
-                </Pressable>
-                <Text style={styles.appBarTitle}>마이페이지</Text>
-                <View style={styles.iconButton} />
-              </View>
-
-              <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
-                <Pressable onPress={() => navigateTo("/settings/profile")} style={styles.profileRow}>
-                  <ProfileAvatar
-                    mediaId={me?.profile_image_media_id}
-                    mediaUrl={me?.profile_image_url}
-                    size={52}
-                  />
-                  <View style={styles.profileText}>
-                    <Text style={styles.profileName}>{me?.nickname ?? "로그인이 필요합니다"}</Text>
-                    <Text style={styles.profileMeta}>
-                      {[me?.major, me?.cohort ? `${me.cohort}기` : null].filter(Boolean).join(" · ") || me?.email || ""}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
-                </Pressable>
-
-                <View style={styles.menuList}>
-                  {MENU_ITEMS.map((item) => (
-                    <Pressable key={item.title} onPress={() => navigateTo(item.href)} style={styles.menuRow}>
-                      <Text style={styles.menuText}>{item.title}</Text>
-                      <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
-                    </Pressable>
-                  ))}
+          <MyPageDrawerOverlay onClose={closeDrawer}>
+            <View pointerEvents="box-none" style={styles.overlay}>
+              <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
+                <Pressable accessibilityLabel="마이페이지 닫기" onPress={closeDrawer} style={StyleSheet.absoluteFill} />
+              </Animated.View>
+              <Animated.View
+                style={[
+                  styles.drawer,
+                  {
+                    width: "100%",
+                    paddingTop: Math.max(insets.top, 10),
+                    transform: [{ translateX }],
+                  },
+                ]}
+                {...drawerPanResponder.panHandlers}
+              >
+                <View style={styles.appBar}>
+                  <Pressable accessibilityLabel="닫기" onPress={closeDrawer} style={styles.iconButton}>
+                    <BackIcon size={24} color={COLORS.text} />
+                  </Pressable>
+                  <Text style={styles.appBarTitle}>마이페이지</Text>
+                  <View style={styles.iconButton} />
                 </View>
 
-                <Pressable onPress={logout} style={styles.logoutRow}>
-                  <Text style={styles.logoutText}>로그아웃</Text>
-                </Pressable>
-              </ScrollView>
-            </Animated.View>
-          </View>
+                <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
+                  <Pressable onPress={() => navigateTo("/settings/profile")} style={styles.profileRow}>
+                    <ProfileAvatar
+                      mediaId={me?.profile_image_media_id}
+                      mediaUrl={me?.profile_image_url}
+                      size={52}
+                    />
+                    <View style={styles.profileText}>
+                      <Text style={styles.profileName}>{me?.nickname ?? "로그인이 필요합니다"}</Text>
+                      <Text style={styles.profileMeta}>
+                        {[me?.major, me?.cohort ? `${me.cohort}기` : null].filter(Boolean).join(" · ") || me?.email || ""}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
+                  </Pressable>
+
+                  <View style={styles.menuList}>
+                    {MENU_ITEMS.map((item) => (
+                      <Pressable key={item.title} onPress={() => navigateTo(item.href)} style={styles.menuRow}>
+                        <Text style={styles.menuText}>{item.title}</Text>
+                        <Ionicons name="chevron-forward" size={15} color={COLORS.subtle} />
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Pressable onPress={logout} style={styles.logoutRow}>
+                    <Text style={styles.logoutText}>로그아웃</Text>
+                  </Pressable>
+                </ScrollView>
+              </Animated.View>
+            </View>
+          </MyPageDrawerOverlay>
         ) : null}
       </View>
     </MyPageDrawerContext.Provider>

@@ -70,6 +70,8 @@ export default function TabsLayout() {
   return (
     <MyPageDrawerProvider>
       <Tabs
+        initialRouteName="home"
+        backBehavior="initialRoute"
         tabBar={(props) => <CategoryHighlightTabBar {...props} />}
         screenOptions={{
           tabBarActiveTintColor: "#2761FF",

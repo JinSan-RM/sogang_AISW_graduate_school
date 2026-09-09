@@ -17,6 +17,8 @@ The 2026-07-27 implementation baseline follows the current `AISW UI.pdf` and use
 
 My Page/Settings opens from the profile action rather than a sixth bottom tab. Do not collapse Notices into Home without a new product decision.
 
+2026-09-09 Android back policy: Home is the initial tab and the return target for hardware/system Back from Notices, Community, Participation, and Council roots, independent of tab history. An open My Page drawer closes first. Detail screens retain their existing back handlers when navigation history exists; a non-Home tab-area screen with no usable history returns Home instead of falling through to Android exit. Only the unobscured Home root delegates the no-history Back event to Android. The tab-area subscription is removed on blur/unmount and is Android-only; iOS gestures and browser history retain their existing handlers. This policy must be checked after backgrounding/reopening the app as well as on a cold start.
+
 ## 2. Route Map
 
 | Screen ID | Route | Purpose | Auth |

@@ -373,6 +373,7 @@ Scope:
 - Test all mobile routes from the target IA.
 - Run backend checks, frontend typecheck, and runtime API smoke test.
 - Verify iOS and Android builds or document blockers.
+- 2026-09-09 WP9 Android Back policy: non-Home primary tabs explicitly return Home regardless of history; non-Home tab-area screens without history also return Home. Existing detail handlers retain normal history handling. The visible My Page drawer uses Android native Modal Back handling before underlying listeners; subscriptions clean up on focus loss/unmount. All 532 frontend tests, typecheck, and changed-file lint passed; the drawer-priority review finding was corrected and re-reviewed. Physical-device reopen/back verification remains `Phase 5 QA`; see `docs/qa/ANDROID_BACK_NAVIGATION_2026-09-09.md`.
 - 2026-09-09 WP9 mobile safe-area fix: bottom tabs now add the live bottom inset to both the 74-point height and 8-point bottom padding, including Settings, preserving tab content height and account-deletion hiding. Typecheck, 523 tests, changed-file lint, strict release config, and layout checks for changing insets (0/16/34/48/24/0) passed. Direct-install test APK: `outputs/android/AI-SW-CAMPUS-0.1.0-2-safe-area-test.apk`; the existing native AAB was reused with a fresh production Hermes bundle after checking resource equivalence. Physical Android three-button/gesture and iPhone visual verification remain `Phase 5 QA` (no connected device).
 - Prepare Phase 5 QA issue list.
 - Implemented for the GCP rehearsal branch: a single-VM raw-public-IP HTTPS
