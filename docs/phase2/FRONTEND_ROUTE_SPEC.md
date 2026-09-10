@@ -115,6 +115,8 @@ Suggestion lists use `대기중` and `답변완료` status pills and preserve an
 The admin console has a cohort-leader section for managing multiple cohorts, captain/vice-captain names, greeting, introduction, representative image, and profile images. The member council screen reads this structured metadata and keeps legacy post parsing only as a fallback.
 Past councils and FAQ are separate admin sections. Past councils render a council-number list and member/activity detail tabs from `past_councils` metadata; FAQ renders from its dedicated API and table. Expanded FAQ answers render ordered protected image attachments at their natural aspect ratio.
 
+2026-09-10 council menu override (WP5/WP9 P0 IA): remove the `원우회 활동내역` entry from the shared web/mobile Council hub. Retain the Council bottom tab and its other seven menu items, including Past Councils and their activity detail. Existing activity-history boards, posts, notice linkage, direct routes, and administrator management remain available; this change removes the member hub entry, not stored content.
+
 Notification delivery surfaces:
 
 - iOS/Android register an Expo push token using the EAS project ID; Android creates the `default` notification channel before permission/token requests.

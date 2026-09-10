@@ -68,7 +68,7 @@ Target IA:
 - Community: event album, resource sharing.
 - Resource sharing: lecture reviews, exam archive, comprehensive exam.
 - Participation: clubs, study groups, mentor networking.
-- Student council: FAQ, council introduction, activity history, accounting link, suggestions, mutual aid, cohort representatives.
+- Student council: FAQ, council introduction, accounting link, suggestions, mutual aid, cohort representatives. Per the 2026-09-10 user decision, remove the activity-history menu from the shared web/mobile council hub; retain existing content and administrator management.
 - Settings.
 
 P0 features:

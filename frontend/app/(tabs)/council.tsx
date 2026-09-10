@@ -30,10 +30,6 @@ const MENU_ITEMS: MenuItem[] = [
     slugs: ["gsa-executives"],
   },
   {
-    title: "원우회 활동내역",
-    slugs: ["council-activity", "gsa-activity"],
-  },
-  {
     title: "회계장부",
     slugs: ["accounting"],
   },
