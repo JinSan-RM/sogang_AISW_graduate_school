@@ -363,6 +363,8 @@ Definition of done:
 
 ## Work Package 9: Phase 4 Full Frontend-Backend Integration
 
+- 2026-09-10 WP9 album-thumbnail fix: applied a constant transparent border to real photo-album thumbnails and change only the active border color, avoiding Android image clipping when deselecting. Original and fixed APKs were compared on the authenticated production album `제59회 학위수여식` in Android 16; forward/backward wraparound and direct thumbnail selection preserve all images. Full 532 tests, typecheck, changed-file lint, review, APK resource equivalence/signature/alignment, install, and screenshot pixel checks passed. Direct-install APK: `outputs/android/AI-SW-CAMPUS-0.1.0-3-album-thumbnail-fix-test.apk`. Evidence: `docs/qa/ALBUM_THUMBNAILS_ANDROID_2026-09-10.md`. Reporting physical-device verification remains `Phase 5 QA`; original APK/AAB artifacts are preserved.
+
 Source: Notion `Frontend-backend full integration`.
 
 Scope:

@@ -1799,11 +1799,13 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 6,
+    // Keep the width set when deselecting; Android can otherwise clip the image.
+    borderWidth: 2,
+    borderColor: "transparent",
     overflow: "hidden",
     backgroundColor: "#E5E7EB",
   },
   galleryThumbActive: {
-    borderWidth: 2,
     borderColor: COLORS.primary,
   },
   galleryThumbImage: {
