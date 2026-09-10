@@ -19,6 +19,7 @@ test("마이페이지 원본 탭은 Expo 경로 표기를 정규화하고 설정
 
 test("초기화된 설정 스택과 무관한 뒤로가기 기록이 있어도 Home 원본 탭을 명시적으로 재활성화한다", () => {
   const calls: string[] = [];
+  let shown: (() => void) | undefined;
   navigateBackToMyPageDrawer(
     "/(tabs)/home",
     {
@@ -26,13 +27,11 @@ test("초기화된 설정 스택과 무관한 뒤로가기 기록이 있어도 H
       back: () => calls.push("back"),
       navigate: (route) => calls.push(`navigate:${route}`),
     },
-    () => calls.push("open"),
-    (callback) => {
-      calls.push("schedule");
-      callback();
-    },
+    (callback) => { calls.push("open"); shown = callback; },
   );
-  assert.deepEqual(calls, ["navigate:/(tabs)/home", "schedule", "open"]);
+  assert.deepEqual(calls, ["open"]);
+  shown!();
+  assert.deepEqual(calls, ["open", "navigate:/(tabs)/home"]);
 });
 
 test("Participation 원본 탭은 설정 기록을 pop하지 않고 기존 탭 인스턴스를 재활성화한다", () => {
@@ -44,10 +43,9 @@ test("Participation 원본 탭은 설정 기록을 pop하지 않고 기존 탭 �
       back: () => calls.push("back"),
       navigate: (route) => calls.push(`navigate:${route}`),
     },
-    () => calls.push("open"),
-    (callback) => callback(),
+    (callback) => { calls.push("open"); callback(); },
   );
-  assert.deepEqual(calls, ["navigate:/(tabs)/participation", "open"]);
+  assert.deepEqual(calls, ["open", "navigate:/(tabs)/participation"]);
 });
 
 test("유효한 원본 탭이 없는 직접 진입만 Home으로 복귀한다", () => {
@@ -55,10 +53,9 @@ test("유효한 원본 탭이 없는 직접 진입만 Home으로 복귀한다", 
   navigateBackToMyPageDrawer(
     "/settings/profile",
     { navigate: (route) => calls.push(`navigate:${route}`) },
-    () => calls.push("open"),
-    (callback) => callback(),
+    (callback) => { calls.push("open"); callback(); },
   );
-  assert.deepEqual(calls, ["navigate:/(tabs)/home", "open"]);
+  assert.deepEqual(calls, ["open", "navigate:/(tabs)/home"]);
 });
 
 test("프로필·알림·계정 화면 계약은 모두 같은 마이페이지 복귀 동작을 실행한다", () => {

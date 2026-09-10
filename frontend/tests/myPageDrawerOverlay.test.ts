@@ -10,6 +10,7 @@ test("Android 패널은 네이티브 Modal의 닫기 요청으로 화면 BackHan
   }).outputText;
   for (const platform of ["android", "ios", "web"]) {
     let closed = 0;
+    let shown = 0;
     const exports: { default?: (props: object) => { type: string; props: Record<string, unknown> } } = {};
     const modules: Record<string, unknown> = {
       "react-native": { Modal: "Modal", Platform: { OS: platform } },
@@ -17,13 +18,15 @@ test("Android 패널은 네이티브 Modal의 닫기 요청으로 화면 BackHan
     };
     runInNewContext(code, { exports, require: (name: string) => modules[name] });
     const content = { type: "drawer", props: {} };
-    const rendered = exports.default!({ children: content, onClose: () => { closed++; } });
+    const rendered = exports.default!({ children: content, onClose: () => { closed++; }, onShow: () => { shown++; } });
     if (platform === "android") {
       assert.equal(rendered.type, "Modal");
       assert.equal(rendered.props.transparent, true);
       assert.equal(rendered.props.children, content);
       (rendered.props.onRequestClose as () => void)();
       assert.equal(closed, 1);
+      (rendered.props.onShow as () => void)();
+      assert.equal(shown, 1);
     } else {
       assert.equal(rendered, content);
       assert.equal(closed, 0);

@@ -15,10 +15,10 @@ const COLORS = {
 
 export default function AccountSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const returnToMyPageDrawer = useReturnToMyPageDrawer("/settings/account");
+  const { returnToMyPageDrawer, onLayout } = useReturnToMyPageDrawer("/settings/account");
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onLayout={onLayout}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"

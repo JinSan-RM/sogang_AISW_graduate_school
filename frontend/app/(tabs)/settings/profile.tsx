@@ -34,7 +34,7 @@ type FieldValues = {
 
 export default function ProfileSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const returnToMyPageDrawer = useReturnToMyPageDrawer("/settings/profile");
+  const { returnToMyPageDrawer, onLayout } = useReturnToMyPageDrawer("/settings/profile");
   const queryClient = useQueryClient();
   const registrationOptionsQuery = useQuery({
     queryKey: ["registration-options"],
@@ -142,7 +142,7 @@ export default function ProfileSettingsScreen() {
   const saveDisabled = isSubmitting || isUploadingImage;
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onLayout={onLayout}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"

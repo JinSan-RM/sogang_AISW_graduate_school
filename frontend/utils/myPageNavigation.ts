@@ -43,16 +43,13 @@ type MyPageReturnNavigator = {
   back?: () => void;
 };
 
-type ScheduleDrawerOpen = (callback: () => void) => void;
-
 export function navigateBackToMyPageDrawer(
   origin: unknown,
   navigator: MyPageReturnNavigator,
-  openDrawer: () => void,
-  schedule: ScheduleDrawerOpen = (callback) => setTimeout(callback, 0),
+  showDrawer: (onShown: () => void) => void,
 ) {
-  navigator.navigate(myPageOriginOrHome(origin));
-  schedule(openDrawer);
+  // Cover the settings screen before reactivating the underlying tab.
+  showDrawer(() => navigator.navigate(myPageOriginOrHome(origin)));
 }
 
 export function myPageSettingsBackHandler(

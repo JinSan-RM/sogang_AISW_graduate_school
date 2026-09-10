@@ -20,6 +20,8 @@ import ProfileAvatar from "./ProfileAvatar";
 import { authApi, notificationApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import {
+  MY_PAGE_DRAWER_SETTINGS_ROUTES,
+  type MyPageDrawerSettingsRoute,
   type MyPageOriginRoute,
   myPageOriginOrHome,
   myPageOriginRoute,
@@ -53,6 +55,7 @@ type MyPageDrawerContextValue = {
   openDrawer: () => void;
   closeDrawer: () => void;
   returnToDrawer: () => void;
+  settingsDidLayout: (route: MyPageDrawerSettingsRoute) => void;
 };
 
 const MyPageDrawerContext = createContext<MyPageDrawerContextValue | null>(null);
@@ -77,6 +80,8 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const drawerWidth = width;
   const translateX = useRef(new Animated.Value(-drawerWidth)).current;
   const returningToDrawerRef = useRef(false);
+  const pendingDrawerShownRef = useRef<(() => void) | null>(null);
+  const pendingSettingsRef = useRef<MyPageDrawerSettingsRoute | null>(null);
   const lastMountedOriginRef = useRef<MyPageOriginRoute | null>(null);
   const drawerOriginRef = useRef<MyPageOriginRoute | null>(null);
   const me = data?.data;
@@ -95,22 +100,27 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   }, [drawerWidth, isVisible, translateX]);
 
   const closeDrawer = useCallback(() => {
+    if (pendingSettingsRef.current || returningToDrawerRef.current) return;
     Animated.timing(translateX, {
       toValue: -drawerWidth,
       duration: 180,
       useNativeDriver: true,
-    }).start(() => setIsVisible(false));
+    }).start(({ finished }) => {
+      if (finished) setIsVisible(false);
+    });
   }, [drawerWidth, translateX]);
 
   useAndroidTabBack(isVisible, closeDrawer);
 
-  const showDrawer = useCallback(() => {
+  const showDrawer = useCallback((animate = true) => {
     if (!isAuthenticated) {
       router.push("/auth/login" as never);
       return;
     }
+    translateX.stopAnimation();
+    translateX.setValue(animate ? -drawerWidth : 0);
     setIsVisible(true);
-    translateX.setValue(-drawerWidth);
+    if (!animate) return;
     Animated.timing(translateX, {
       toValue: 0,
       duration: 210,
@@ -132,20 +142,49 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
       {
         navigate: (route) => router.navigate(route as never),
       },
-      () => {
+      (onShown) => {
         drawerOriginRef.current = returnOrigin;
-        showDrawer();
-        returningToDrawerRef.current = false;
+        pendingDrawerShownRef.current = () => {
+          onShown();
+          returningToDrawerRef.current = false;
+        };
+        showDrawer(false);
       },
     );
   }, [showDrawer]);
 
+  const drawerDidShow = useCallback(() => {
+    const onShown = pendingDrawerShownRef.current;
+    pendingDrawerShownRef.current = null;
+    onShown?.();
+  }, []);
+
+  const settingsDidLayout = useCallback((route: MyPageDrawerSettingsRoute) => {
+    if (pendingSettingsRef.current !== route) return;
+    pendingSettingsRef.current = null;
+    setIsVisible(false);
+  }, []);
+
   const navigateTo = (href: string) => {
+    if (pendingSettingsRef.current || returningToDrawerRef.current) return;
+    if (MY_PAGE_DRAWER_SETTINGS_ROUTES.includes(href as MyPageDrawerSettingsRoute)) {
+      // The edge gesture can open the drawer over this very settings screen.
+      if (href === pathname) {
+        setIsVisible(false);
+        return;
+      }
+      pendingSettingsRef.current = href as MyPageDrawerSettingsRoute;
+      translateX.stopAnimation();
+      translateX.setValue(0);
+      router.push(href as never);
+      return;
+    }
     closeDrawer();
     setTimeout(() => router.push(href as never), 170);
   };
 
   const logout = async () => {
+    if (pendingSettingsRef.current || returningToDrawerRef.current) return;
     closeDrawer();
     const pushToken = await getStoredPushToken().catch(() => null);
     if (pushToken) {
@@ -196,8 +235,8 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   });
 
   const contextValue = useMemo(
-    () => ({ openDrawer, closeDrawer, returnToDrawer }),
-    [closeDrawer, openDrawer, returnToDrawer],
+    () => ({ openDrawer, closeDrawer, returnToDrawer, settingsDidLayout }),
+    [closeDrawer, openDrawer, returnToDrawer, settingsDidLayout],
   );
 
   return (
@@ -206,8 +245,12 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
         {children}
         {!isVisible ? <View pointerEvents="box-only" style={styles.edgeSwipeArea} {...edgePanResponder.panHandlers} /> : null}
         {isVisible ? (
-          <MyPageDrawerOverlay onClose={closeDrawer}>
-            <View pointerEvents="box-none" style={styles.overlay}>
+          <MyPageDrawerOverlay onClose={closeDrawer} onShow={drawerDidShow}>
+            <View
+              pointerEvents="box-none"
+              style={styles.overlay}
+              onLayout={Platform.OS === "android" ? undefined : drawerDidShow}
+            >
               <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
                 <Pressable accessibilityLabel="마이페이지 닫기" onPress={closeDrawer} style={StyleSheet.absoluteFill} />
               </Animated.View>

@@ -51,7 +51,7 @@ const SETTING_ROWS: { key: keyof NotificationSettings; label: string }[] = [
 
 export default function NotificationSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const returnToMyPageDrawer = useReturnToMyPageDrawer("/settings/notifications");
+  const { returnToMyPageDrawer, onLayout } = useReturnToMyPageDrawer("/settings/notifications");
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
@@ -95,7 +95,7 @@ export default function NotificationSettingsScreen() {
   };
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onLayout={onLayout}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
