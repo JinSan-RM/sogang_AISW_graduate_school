@@ -3,10 +3,10 @@ import { Feather } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { BackHandler, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
@@ -890,6 +890,47 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const mutualAidRelationOptions: SelectionOption[] = ["본인", "배우자", "부모", "자녀", "형제/자매"].map((label) => ({ key: label, label }));
   const imageAttachments = attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
 
+  const handleCreateBack = useCallback(() => {
+    if (createdPostId) {
+      router.replace(postCreateCompletionRoute(boardType, createdPostId, boardId, params.returnTo) as never);
+      return;
+    }
+    if (selectionSheet) {
+      setSelectionSheet(null);
+      return;
+    }
+    if (datePickerOpen) {
+      setDatePickerOpen(false);
+      return;
+    }
+    const decision = postCreateFormBackDecision({
+      boardType,
+      editOrigin: params.editOrigin,
+      postId: params.postId,
+      returnTo: params.returnTo,
+      canGoBack: router.canGoBack(),
+      boardId,
+      fromBoardId: params.fromBoardId,
+    });
+    if (decision.action === "back") router.back();
+    else if (decision.action === "navigate") router.navigate(decision.route as never);
+    else router.replace(decision.route as never);
+  }, [boardId, boardType, createdPostId, datePickerOpen, params.editOrigin, params.fromBoardId, params.postId, params.returnTo, selectionSheet]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== "android") return undefined;
+      // The hidden board tab can have no list beneath this form. Use its origin
+      // just like the header, instead of letting the parent tab return to Home.
+      // Native Modal sheets retain their own onRequestClose handling.
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        handleCreateBack();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [handleCreateBack]),
+  );
+
   if (postId && (editPostQuery.isLoading || isBoardsLoading)) {
     return <LoadingState message="활동인증 정보를 불러오는 중이에요" />;
   }
@@ -928,7 +969,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     return (
       <CompletionState
         title={isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
-        onConfirm={() => router.replace(postCreateCompletionRoute(boardType, createdPostId, boardId, params.returnTo) as never)}
+        onConfirm={handleCreateBack}
       />
     );
   }
@@ -939,20 +980,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       <View style={[styles.appBar, isActivity ? styles.appBarNoDivider : null, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="닫기"
-          onPress={() => {
-            const decision = postCreateFormBackDecision({
-              boardType,
-              editOrigin: params.editOrigin,
-              postId: params.postId,
-              returnTo: params.returnTo,
-              canGoBack: router.canGoBack(),
-              boardId,
-              fromBoardId: params.fromBoardId,
-            });
-            if (decision.action === "back") router.back();
-            else if (decision.action === "navigate") router.navigate(decision.route as never);
-            else router.replace(decision.route as never);
-          }}
+          onPress={handleCreateBack}
           style={styles.iconButton}
         >
           <Ionicons name={isActivity ? "chevron-back" : "close"} size={24} color={COLORS.text} />

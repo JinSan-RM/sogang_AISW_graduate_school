@@ -182,6 +182,8 @@ Resource-board exceptions:
 
 ## 6. Create/Edit Requirements
 
+Android system Back and the create/edit header share the same origin-aware return decision. Creating from Community > Resources returns to the mounted Resources list with its selected category, without emitting a bottom-tab reset. Open board/date selectors close first; native Modal sheets retain their own close handlers. Registered completion takes precedence over retained form selector state and uses its existing confirmation destination. The Android listener is removed on blur. See `docs/qa/RESOURCE_CREATE_BACK_ANDROID_2026-09-10.md`.
+
 Required fields:
 
 - Title.
