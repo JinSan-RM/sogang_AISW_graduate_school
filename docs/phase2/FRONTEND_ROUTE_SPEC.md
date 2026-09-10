@@ -56,6 +56,8 @@ The root layout must guard all member routes and must guard `/admin` by role. Th
 
 2026-09-10 keyboard policy: the native root navigator reserves keyboard overlap so all input routes share the same available viewport. Android releases that space completely when the keyboard hides, and bottom tabs hide while typing. Long forms and report details remain scrollable within that viewport. A native Modal with text input uses its own keyboard viewport because it has a separate native window. Web retains browser layout behavior. See `docs/qa/KEYBOARD_AVOIDANCE_ANDROID_2026-09-10.md` for Android execution and remaining packaged/iOS QA.
 
+Long-post acceptance criterion: a vertical drag starting inside the multiline body must scroll the form far enough to expose the complete Register button above the open keyboard, without requiring the user to find the outside margin. Existing keyboard-viewport handling satisfies the observed Android case; the old APK exhausts its scroll range with Register still behind the keyboard. See `docs/qa/LONG_POST_SCROLL_ANDROID_2026-09-10.md` for the measured comparison and final packaged QA scope.
+
 ## 3. Home Screen Requirements
 
 Sections:
