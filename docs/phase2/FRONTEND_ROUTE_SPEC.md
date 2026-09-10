@@ -21,6 +21,8 @@ My Page/Settings opens from the profile action rather than a sixth bottom tab. D
 
 ## 2. Route Map
 
+2026-09-10 startup policy: native platforms keep the system splash until session hydration, fonts, and the existing 1,500 ms minimum duration are ready, then hide it when the navigator viewport lays out. Do not replay the same artwork in a React loading view on native, because its different scaling causes a visible size jump. Web retains its full-screen React splash and the same readiness gate. Packaged startup verification follows the final APK build; see `docs/qa/SPLASH_TRANSITION_ANDROID_2026-09-10.md`.
+
 | Screen ID | Route | Purpose | Auth |
 | --- | --- | --- | --- |
 | `S_017` | `/auth/login` | Login | guest |

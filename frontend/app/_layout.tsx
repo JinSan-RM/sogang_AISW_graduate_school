@@ -1,6 +1,7 @@
 import { useFonts } from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { Image, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
@@ -10,6 +11,11 @@ import { useUserStore } from "../stores/userStore";
 import { APP_FONTS, patchDefaultFontFamily } from "../utils/fonts";
 import { isAdminUser } from "../utils/permissions";
 import { MINIMUM_SPLASH_DURATION_MS, shouldShowSplash } from "../utils/splash";
+
+// Keep the native launch screen until the ready navigator has laid out.
+if (Platform.OS !== "web") {
+  void SplashScreen.preventAutoHideAsync();
+}
 
 // Route every <Text>/<TextInput> through the matching Pretendard face (design uses Inter + Korean fallback).
 patchDefaultFontFamily();
@@ -46,6 +52,9 @@ export default function RootLayout() {
       minimumDurationElapsed: minimumSplashDurationElapsed,
     })
   ) {
+    // Replaying the full-screen artwork changes the native logo's size on launch.
+    if (!isWeb) return null;
+
     return (
       <View style={styles.splash}>
         <Image source={require("../assets/splash-logo.png")} resizeMode="contain" style={styles.splashLogo} />
@@ -55,7 +64,10 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <View style={[styles.viewport, useWebFrame ? styles.webViewport : null]}>
+      <View
+        style={[styles.viewport, useWebFrame ? styles.webViewport : null]}
+        onLayout={isWeb ? undefined : SplashScreen.hide}
+      >
         <KeyboardViewport style={[styles.appShell, useWebFrame ? styles.webAppShell : null]}>
           <NotificationBootstrap />
           <Stack
