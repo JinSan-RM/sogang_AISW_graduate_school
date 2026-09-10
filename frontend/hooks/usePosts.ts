@@ -541,15 +541,27 @@ export function useToggleBookmark(postId: number) {
   });
 }
 
+async function invalidateCommentMutationCaches(queryClient: QueryClient, postId: number): Promise<void> {
+  // The previous screen stays mounted on Back, so refresh its cached rows too.
+  // Refetch keeps loaded pages and uses the server count, including deleted replies.
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["comments", postId] }),
+    queryClient.invalidateQueries({ queryKey: ["post", postId] }),
+    queryClient.invalidateQueries({ queryKey: ["posts"] }),
+    queryClient.invalidateQueries({ queryKey: ["multi-board-posts"] }),
+    queryClient.invalidateQueries({ queryKey: ["home", "popular"] }),
+    queryClient.invalidateQueries({ queryKey: ["activity"] }),
+    queryClient.invalidateQueries({ queryKey: ["admin-posts"] }),
+    queryClient.invalidateQueries({ queryKey: ["admin-stats"] }),
+  ]);
+}
+
 export function useCreateComment(postId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: { content: string; parent_id?: number | null }) =>
       commentApi.createComment(postId, payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comments", postId] });
-      queryClient.invalidateQueries({ queryKey: ["post", postId] });
-    },
+    onSuccess: () => invalidateCommentMutationCaches(queryClient, postId),
   });
 }
 
@@ -568,9 +580,6 @@ export function useDeleteComment(postId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (commentId: number) => commentApi.deleteComment(commentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comments", postId] });
-      queryClient.invalidateQueries({ queryKey: ["post", postId] });
-    },
+    onSuccess: () => invalidateCommentMutationCaches(queryClient, postId),
   });
 }
