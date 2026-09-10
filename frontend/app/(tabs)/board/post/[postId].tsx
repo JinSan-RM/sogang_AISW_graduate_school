@@ -313,6 +313,26 @@ export default function PostDetailScreen() {
   );
 
   const handlePostBack = useCallback(() => {
+    // These overlays are in-screen views, so consume Back before navigating.
+    if (pendingDeleteCommentId !== null) {
+      if (!deleteCommentMutation.isPending) {
+        setPendingDeleteCommentId(null);
+        setCommentDeleteError(null);
+      }
+      return;
+    }
+    if (showDeleteConfirm) {
+      if (!deletePostMutation.isPending) setShowDeleteConfirm(false);
+      return;
+    }
+    if (reportTarget) {
+      setReportTarget(null);
+      return;
+    }
+    if (showPostMenu) {
+      setShowPostMenu(false);
+      return;
+    }
     if (!post) return;
     navigateFromPostDetail(board, params.fromBoardId, params.returnTo, {
       canGoBack: () => router.canGoBack(),
@@ -320,7 +340,7 @@ export default function PostDetailScreen() {
       navigate: (route) => router.navigate(route as never),
       replace: (route) => router.replace(route as never),
     });
-  }, [board, params.fromBoardId, params.returnTo, post]);
+  }, [board, deleteCommentMutation.isPending, deletePostMutation.isPending, params.fromBoardId, params.returnTo, pendingDeleteCommentId, post, reportTarget, showDeleteConfirm, showPostMenu]);
 
   useFocusEffect(
     useCallback(() => {
