@@ -29,3 +29,19 @@ The installed React Navigation handler falls through to Android when `canGoBack(
 4. Open a post list, post detail, edit/create screen, and event detail. Back should first leave the current detail/close its overlay according to existing screen behavior, without exiting the app.
 5. Open My Page over Home and Participation. Back closes the drawer, preserving the underlying tab; the next Back follows that tab's policy.
 6. Check the same sequence with Android three-button and gesture navigation. Verify existing iOS navigation separately.
+
+## Installed APK follow-up — 2026-09-10
+
+The user repeated steps 1–5. Executed them on the existing Pixel_7 Android 16 / API 36 installation, using the authorized signed-in account. The installed APK SHA-256 is `4906a08bf54793007c613c2793f2e676188b2b67251020148f9bb4bbae6c5480`, matching `outputs/android/AI-SW-CAMPUS-0.1.0-3-comment-cache-fix-test.apk` (version 0.1.0, code 3). This artifact already includes the earlier Android Back fix. No new APK was generated or installed for this check.
+
+Both a `KEYCODE_BACK` sequence and an Android left-edge Back gesture sequence produced the expected result:
+
+1. Launch the installed app through its MAIN/LAUNCHER activity; Home appears.
+2. Back from Home returns to the Android launcher.
+3. Launch the app again through MAIN/LAUNCHER; Home appears.
+4. Tap Participation; the club guide appears with Participation selected.
+5. Back returns to app Home while the same application Activity remains foreground.
+
+Raw ADB screenshots, UI Automator XML and foreground-Activity records are in `outputs/qa/reopen-back-2026-09-10/`; `verification.json` records all nine passed screen/Activity assertions across the two sequences. Captures include [leaving Home](../../outputs/qa/reopen-back-2026-09-10/02-apk-exit.png), [reopened Home](../../outputs/qa/reopen-back-2026-09-10/03-apk-reopened.png), [Participation](../../outputs/qa/reopen-back-2026-09-10/04-apk-participation.png), [button Back result](../../outputs/qa/reopen-back-2026-09-10/05-apk-back-result.png) and [gesture Back result](../../outputs/qa/reopen-back-2026-09-10/09-apk-gesture-back-result.png).
+
+The reported failure was not reproduced on this installed artifact. Asked the user what happens at step 5; the exact failing symptom and reporting-device/build details are not yet established. No additional application-code fix is claimed. Physical-device reproduction and on-screen three-button navigation remain separate checks.
