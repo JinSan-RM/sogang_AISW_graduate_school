@@ -52,6 +52,8 @@ My Page/Settings opens from the profile action rather than a sixth bottom tab. D
 
 The root layout must guard all member routes and must guard `/admin` by role. The UI guard is navigation hygiene only; every admin mutation also uses a backend admin dependency.
 
+2026-09-10 keyboard policy: the native root navigator reserves keyboard overlap so all input routes share the same available viewport. Android releases that space completely when the keyboard hides, and bottom tabs hide while typing. Long forms and report details remain scrollable within that viewport. A native Modal with text input uses its own keyboard viewport because it has a separate native window. Web retains browser layout behavior. See `docs/qa/KEYBOARD_AVOIDANCE_ANDROID_2026-09-10.md` for Android execution and remaining packaged/iOS QA.
+
 ## 3. Home Screen Requirements
 
 Sections:

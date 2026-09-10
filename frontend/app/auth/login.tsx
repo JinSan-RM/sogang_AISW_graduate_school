@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { authApi } from "../../services/api";
@@ -73,7 +73,7 @@ export default function LoginScreen() {
         <View style={styles.iconButton} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.scroller} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.field}>
           <Text style={styles.label}>이메일</Text>
           <SchoolEmailInput
@@ -130,7 +130,7 @@ export default function LoginScreen() {
             <Text style={styles.linkText}>비밀번호 찾기</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -161,10 +161,12 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     fontWeight: "500", // Figma: Inter Medium
   },
+  scroller: { flex: 1 },
   content: {
     gap: 20, // Figma body gap
     paddingHorizontal: 20,
     paddingTop: 24,
+    paddingBottom: 24,
   },
   field: {
     gap: 6, // Figma label→input gap

@@ -81,6 +81,7 @@ export default function TabsLayout() {
           tabBarLabelStyle: { fontSize: 11, fontFamily: "Pretendard_400Regular", fontWeight: "400", lineHeight: 13, marginTop: 3, marginBottom: 0 },
           tabBarItemStyle: { paddingVertical: 0 },
           tabBarStyle,
+          tabBarHideOnKeyboard: true,
           headerShown: false,
         }}
       >

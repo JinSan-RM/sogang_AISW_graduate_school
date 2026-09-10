@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Image, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
 import NotificationBootstrap from "../components/NotificationBootstrap";
+import KeyboardViewport from "../components/KeyboardViewport";
 import { useUserStore } from "../stores/userStore";
 import { APP_FONTS, patchDefaultFontFamily } from "../utils/fonts";
 import { isAdminUser } from "../utils/permissions";
@@ -55,7 +56,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <View style={[styles.viewport, useWebFrame ? styles.webViewport : null]}>
-        <View style={[styles.appShell, useWebFrame ? styles.webAppShell : null]}>
+        <KeyboardViewport style={[styles.appShell, useWebFrame ? styles.webAppShell : null]}>
           <NotificationBootstrap />
           <Stack
             screenOptions={{
@@ -81,7 +82,7 @@ export default function RootLayout() {
             <Stack.Screen name="legal/account-deletion" options={{ headerShown: false }} />
             <Stack.Screen name="legal/support" options={{ headerShown: false }} />
           </Stack>
-        </View>
+        </KeyboardViewport>
       </View>
     </QueryClientProvider>
   );

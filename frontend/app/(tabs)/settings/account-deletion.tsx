@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import KeyboardViewport from "../../../components/KeyboardViewport";
 
 import { userApi } from "../../../services/api";
 import { useUserStore } from "../../../stores/userStore";
@@ -187,50 +188,52 @@ export default function AccountDeletionScreen() {
       </ScrollView>
 
       <Modal transparent animationType="fade" visible={passwordModalVisible} onRequestClose={() => setPasswordModalVisible(false)}>
-        <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalBackdrop}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.modalCard}>
-            <Text style={styles.modalTitle}>현재 비밀번호 확인</Text>
-            <TextInput
-              accessibilityLabel="현재 비밀번호"
-              autoCapitalize="none"
-              autoComplete="current-password"
-              autoFocus
-              onChangeText={(value) => {
-                setCurrentPassword(value);
-                setPasswordError(null);
-              }}
-              onSubmitEditing={() => {
-                if (currentPassword && !isSubmitting) void deleteAccount();
-              }}
-              placeholder="현재 비밀번호를 입력하세요"
-              placeholderTextColor={COLORS.subtle}
-              secureTextEntry
-              style={[styles.input, passwordError ? styles.inputError : null]}
-              value={currentPassword}
-            />
-            {passwordError ? (
-              <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.errorText}>
-                {passwordError}
-              </Text>
-            ) : null}
-            <View style={styles.modalActions}>
-              <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalCancelButton}>
-                <Text style={styles.modalCancelText}>취소</Text>
-              </Pressable>
-              <Pressable
-                disabled={!currentPassword || isSubmitting}
-                onPress={() => void deleteAccount()}
-                style={[styles.modalDeleteButton, !currentPassword || isSubmitting ? styles.deleteButtonDisabled : null]}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={[styles.deleteButtonText, !currentPassword ? styles.deleteButtonTextDisabled : null]}>탈퇴하기</Text>
-                )}
-              </Pressable>
-            </View>
+        <KeyboardViewport>
+          <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalBackdrop}>
+            <Pressable onPress={(event) => event.stopPropagation()} style={styles.modalCard}>
+              <Text style={styles.modalTitle}>현재 비밀번호 확인</Text>
+              <TextInput
+                accessibilityLabel="현재 비밀번호"
+                autoCapitalize="none"
+                autoComplete="current-password"
+                autoFocus
+                onChangeText={(value) => {
+                  setCurrentPassword(value);
+                  setPasswordError(null);
+                }}
+                onSubmitEditing={() => {
+                  if (currentPassword && !isSubmitting) void deleteAccount();
+                }}
+                placeholder="현재 비밀번호를 입력하세요"
+                placeholderTextColor={COLORS.subtle}
+                secureTextEntry
+                style={[styles.input, passwordError ? styles.inputError : null]}
+                value={currentPassword}
+              />
+              {passwordError ? (
+                <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.errorText}>
+                  {passwordError}
+                </Text>
+              ) : null}
+              <View style={styles.modalActions}>
+                <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalCancelButton}>
+                  <Text style={styles.modalCancelText}>취소</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!currentPassword || isSubmitting}
+                  onPress={() => void deleteAccount()}
+                  style={[styles.modalDeleteButton, !currentPassword || isSubmitting ? styles.deleteButtonDisabled : null]}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={[styles.deleteButtonText, !currentPassword ? styles.deleteButtonTextDisabled : null]}>탈퇴하기</Text>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardViewport>
       </Modal>
     </View>
   );

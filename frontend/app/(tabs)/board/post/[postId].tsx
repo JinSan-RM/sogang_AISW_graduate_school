@@ -788,7 +788,7 @@ export default function PostDetailScreen() {
         )}
       </View>
 
-      <ScrollView style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroller} contentContainerStyle={[styles.content, isAdminParticipationGuide || isCouncilActivityEntry || isPhotoAlbum || commentsDisabled ? styles.contentWithoutCommentBar : null]}>
         {!isAdminParticipationGuide ? visualHeroSection : null}
 
         {board?.board_type !== "album" ? (
@@ -1243,48 +1243,50 @@ export default function PostDetailScreen() {
       {reportTarget ? (
         <Pressable accessibilityLabel="신고하기 닫기" onPress={() => setReportTarget(null)} style={styles.modalBackdrop}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportSheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.reportSheetTitle}>신고하기</Text>
-            <Text style={styles.reportSheetSubtitle}>신고 사유를 선택해주세요</Text>
-            <View style={styles.reportReasonList}>
-              {REPORT_REASONS.map((reason, index) => {
-                const selected = reportReason === reason.value;
-                const isLast = index === REPORT_REASONS.length - 1;
-                return (
-                  <Pressable
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
-                    key={reason.value}
-                    onPress={() => setReportReason(reason.value)}
-                    style={[styles.reportReasonItem, isLast ? styles.reportReasonItemLast : null, { outlineStyle: "none" } as never]}
-                  >
-                    <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
-                      {selected ? <View style={styles.radioInner} /> : null}
-                    </View>
-                    <Text style={[styles.reportReasonText, selected ? styles.reportReasonTextSelected : null]}>{reason.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {reportReason === "other" ? (
-              <TextInput
-                maxLength={1000}
-                multiline
-                value={reportDetail}
-                onChangeText={setReportDetail}
-                placeholder="구체적인 사유를 입력해주세요"
-                placeholderTextColor={COLORS.subtle}
-                style={[styles.reportDetailInput, { outlineStyle: "none" } as never]}
-                textAlignVertical="top"
-              />
-            ) : null}
-            <Pressable
-              disabled={isReporting || !canSubmitReport}
-              onPress={submitReport}
-              style={[styles.reportPrimaryButton, isReporting || !canSubmitReport ? styles.buttonDisabled : null]}
-            >
-              <Text style={styles.reportPrimaryButtonText}>{isReporting ? "제출 중" : "제출"}</Text>
-            </Pressable>
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.reportScroller} contentContainerStyle={styles.reportContent}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.reportSheetTitle}>신고하기</Text>
+              <Text style={styles.reportSheetSubtitle}>신고 사유를 선택해주세요</Text>
+              <View style={styles.reportReasonList}>
+                {REPORT_REASONS.map((reason, index) => {
+                  const selected = reportReason === reason.value;
+                  const isLast = index === REPORT_REASONS.length - 1;
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected }}
+                      key={reason.value}
+                      onPress={() => setReportReason(reason.value)}
+                      style={[styles.reportReasonItem, isLast ? styles.reportReasonItemLast : null, { outlineStyle: "none" } as never]}
+                    >
+                      <View style={[styles.radioOuter, selected ? styles.radioOuterSelected : null]}>
+                        {selected ? <View style={styles.radioInner} /> : null}
+                      </View>
+                      <Text style={[styles.reportReasonText, selected ? styles.reportReasonTextSelected : null]}>{reason.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {reportReason === "other" ? (
+                <TextInput
+                  maxLength={1000}
+                  multiline
+                  value={reportDetail}
+                  onChangeText={setReportDetail}
+                  placeholder="구체적인 사유를 입력해주세요"
+                  placeholderTextColor={COLORS.subtle}
+                  style={[styles.reportDetailInput, { outlineStyle: "none" } as never]}
+                  textAlignVertical="top"
+                />
+              ) : null}
+              <Pressable
+                disabled={isReporting || !canSubmitReport}
+                onPress={submitReport}
+                style={[styles.reportPrimaryButton, isReporting || !canSubmitReport ? styles.buttonDisabled : null]}
+              >
+                <Text style={styles.reportPrimaryButtonText}>{isReporting ? "제출 중" : "제출"}</Text>
+              </Pressable>
+            </ScrollView>
           </Pressable>
         </Pressable>
       ) : null}
@@ -1490,10 +1492,15 @@ const styles = StyleSheet.create({
   reportSheet: {
     width: "100%",
     maxWidth: 480,
+    maxHeight: "100%",
     alignSelf: "center",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: COLORS.surface,
+    overflow: "hidden",
+  },
+  reportScroller: { flexGrow: 0 },
+  reportContent: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 20,
