@@ -641,6 +641,21 @@ test("게시판 경로 파라미터는 양의 정수만 허용한다", () => {
   assert.equal(routeBoardId("1.5"), null);
 });
 
+test("내 활동 상세에서 돌아올 때 작성·댓글·스크랩 필터를 보존한다", () => {
+  for (const type of ["posts", "comments", "bookmarks"]) {
+    const route = `/(tabs)/settings/activity?type=${type}`;
+    assert.equal(postDetailReturnRoute(route), route);
+    assert.equal(postDetailRoute(123, undefined, route), `/board/post/123?returnTo=${encodeURIComponent(route)}`);
+    assert.deepEqual(postDetailBackDecision(null, true, undefined, route), { action: "navigate", route });
+  }
+});
+
+test("내 활동 복귀 필터는 정해진 세 종류와 단일 쿼리만 허용한다", () => {
+  for (const query of ["type=unknown", "type=", "type=posts&type=bookmarks", "type=posts&next=https://example.com"]) {
+    assert.equal(postDetailReturnRoute(`/(tabs)/settings/activity?${query}`), null);
+  }
+});
+
 test("수정 후 복원된 상세의 뒤로가기는 모든 진입 목록 스택을 정확히 복원한다", () => {
   const board = { slug: "exam-archive", category: "resources", board_type: "resource" };
   const listRoutes = [

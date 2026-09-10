@@ -20,7 +20,8 @@ export type PostDetailReturnRoute =
   | "/(tabs)/notifications"
   | "/(tabs)/search"
   | `/(tabs)/search?scope=${string}`
-  | "/(tabs)/settings/activity";
+  | "/(tabs)/settings/activity"
+  | `/(tabs)/settings/activity?type=${"posts" | "comments" | "bookmarks"}`;
 
 export type PostDetailBackDecision =
   | { action: "back" }
@@ -149,6 +150,9 @@ export function postDetailReturnRoute(value: unknown): PostDetailReturnRoute | n
   if (/^\/board\/[1-9]\d*$/.test(candidate)) return candidate as ReturnType<typeof boardRoute>;
   if (/^\/\(tabs\)\/search\?scope=[a-z-]+$/.test(candidate)) {
     return candidate as `/(tabs)/search?scope=${string}`;
+  }
+  if (/^\/\(tabs\)\/settings\/activity\?type=(posts|comments|bookmarks)$/.test(candidate)) {
+    return candidate as PostDetailReturnRoute;
   }
   return null;
 }

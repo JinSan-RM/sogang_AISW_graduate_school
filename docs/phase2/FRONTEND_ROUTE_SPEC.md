@@ -260,11 +260,11 @@ My activity:
 - My posts.
 - My comments.
 - Bookmarks.
-- Header and Android hardware back return to `/(tabs)/settings` so opening My activity from the profile drawer never falls through to the previously visible main tab.
+- Header and Android hardware Back use the shared drawer return: one press restores the original My Page drawer without replacing the activity route with another Settings index. Repeated visits preserve the selected `posts`, `comments`, or `bookmarks` query and do not accumulate duplicate My Page screens. Closing the restored drawer reveals its remembered main tab. Android evidence: `docs/qa/MY_ACTIVITY_BACK_ANDROID_2026-09-10.md`.
 
 My Page drawer return and avatar:
 
-- QA 145-147: when the drawer opens, it records the mounted Home, Notices, Community, Participation, or Council origin. Entering Profile, Notifications, or Account keeps the drawer covering the origin until the focused settings screen has laid out and had a paint opportunity. Header Back and Android hardware Back first show the full drawer, then explicitly reactivate the mounted origin underneath it; unrelated settings history is ignored, and Home is used only without a valid origin. Reactivating the mounted tab preserves its nested list, filters, search/sort, and scroll state. These handoffs do not slide the drawer away or reopen it over an exposed origin; explicit close retains its slide. Profile-save navigation remains unchanged. See `docs/qa/MY_PAGE_TRANSITIONS_ANDROID_2026-09-10.md` for Android execution and final packaged QA scope.
+- QA 145-147: when the drawer opens, it records the mounted Home, Notices, Community, Participation, or Council origin. Entering Profile, Notifications, Account, or My Activity keeps the drawer covering the origin until the focused settings screen has laid out and had a paint opportunity. Header Back and Android hardware Back first show the full drawer, then explicitly reactivate the mounted origin underneath it; unrelated settings history is ignored, and Home is used only without a valid origin. Reactivating the mounted tab preserves its nested list, filters, search/sort, and scroll state. These handoffs do not slide the drawer away or reopen it over an exposed origin; explicit close retains its slide. Profile-save navigation remains unchanged. See `docs/qa/MY_PAGE_TRANSITIONS_ANDROID_2026-09-10.md` for Android execution and final packaged QA scope.
 - QA 148: a positive integer profile media ID or trimmed nonempty profile URL renders the profile image. Missing, blank, or invalid media renders `DefaultAvatarIcon`; no nickname initial, `?`, or other character fallback is rendered inside the avatar.
 
 ## 9. Design Gate

@@ -1,14 +1,14 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, BackHandler, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../components/LoadingState";
 import { BackIcon, BookmarkIcon } from "../../../components/icons";
+import { useReturnToMyPageDrawer } from "../../../hooks/useReturnToMyPageDrawer";
 import { userApi } from "../../../services/api";
-import { MY_PAGE_ROUTE, postDetailRoute } from "../../../utils/appRoutes";
+import { postDetailRoute } from "../../../utils/appRoutes";
 import { formatBoardDate } from "../../../utils/dateFormat";
 import {
   bookmarkActivityMeta,
@@ -50,6 +50,7 @@ function normalizeType(value?: string | string[]): FilterValue {
 export default function ActivityScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ type?: string }>();
+  const { returnToMyPageDrawer, onLayout } = useReturnToMyPageDrawer("/settings/activity");
   const [type, setType] = useState<FilterValue>(() => normalizeType(params.type));
   const { data, isLoading, isError, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["activity", type],
@@ -67,26 +68,13 @@ export default function ActivityScreen() {
 
   const items = data?.pages.flatMap((page) => page.data) ?? [];
   const title = FILTERS.find((item) => item.value === type)?.label ?? "내 활동";
-  const goBackToMyPage = useCallback(() => {
-    router.replace(MY_PAGE_ROUTE as never);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-        goBackToMyPage();
-        return true;
-      });
-      return () => subscription.remove();
-    }, [goBackToMyPage])
-  );
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onLayout={onLayout}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={goBackToMyPage}
+          onPress={returnToMyPageDrawer}
           style={styles.iconButton}
         >
           <BackIcon size={24} color={COLORS.text} />
@@ -116,7 +104,7 @@ export default function ActivityScreen() {
             const label = userActivityCategoryLabel(item);
             const tone = categoryTone(label);
             return (
-              <Pressable onPress={() => router.push(postDetailRoute(item.post_id, undefined, "/(tabs)/settings/activity") as never)} style={styles.row}>
+              <Pressable onPress={() => router.push(postDetailRoute(item.post_id, undefined, `/(tabs)/settings/activity?type=${type}`) as never)} style={styles.row}>
                 <View style={styles.rowText}>
                   <View style={[styles.pill, { backgroundColor: tone.bg }]}>
                     <Text style={[styles.pillText, { color: tone.fg }]}>{label}</Text>

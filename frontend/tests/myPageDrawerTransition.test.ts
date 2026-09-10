@@ -148,3 +148,37 @@ for (const [label, route] of [["프로필", "/settings/profile"], ["알림 설�
     assert.equal(h.animations.length, 1); // Explicit close still slides away.
   });
 }
+
+test("작성 글과 스크랩을 반복해서 열어도 필터를 보존하고 한 번에 원래 패널로 돌아온다", () => {
+  const h = harness("/participation");
+  h.open();
+  for (const [label, type] of [["내가 쓴 글", "posts"], ["스크랩한 글", "bookmarks"], ["내가 쓴 글", "posts"]]) {
+    h.calls.length = 0;
+    h.press(label);
+    assert.deepEqual(h.calls, [`push:/settings/activity?type=${type}`]);
+    assert.equal(h.timers.length, 0);
+    assert.equal(h.animations.length, 0);
+    assert.ok(h.overlay());
+    h.path("/settings/activity");
+    h.context().settingsDidLayout("/settings/activity");
+    h.render();
+    assert.equal(h.overlay(), undefined);
+    h.context().returnToDrawer();
+    h.render();
+    const overlay = h.overlay()!;
+    assert.ok(overlay);
+    (overlay.props.onShow as () => void)();
+    assert.deepEqual(h.calls, [`push:/settings/activity?type=${type}`, "navigate:/(tabs)/participation"]);
+    h.path("/participation");
+  }
+});
+
+test("활동 목록 위의 패널에서 다른 필터를 선택해도 쿼리를 잃거나 대기가 멈추지 않는다", () => {
+  const h = harness("/settings/activity");
+  h.open();
+  h.press("스크랩한 글");
+  assert.deepEqual(h.calls, ["push:/settings/activity?type=bookmarks"]);
+  h.context().settingsDidLayout("/settings/activity");
+  h.render();
+  assert.equal(h.overlay(), undefined);
+});

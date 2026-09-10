@@ -167,13 +167,14 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
 
   const navigateTo = (href: string) => {
     if (pendingSettingsRef.current || returningToDrawerRef.current) return;
-    if (MY_PAGE_DRAWER_SETTINGS_ROUTES.includes(href as MyPageDrawerSettingsRoute)) {
+    const route = href.split("?")[0] as MyPageDrawerSettingsRoute;
+    if (MY_PAGE_DRAWER_SETTINGS_ROUTES.includes(route)) {
       // The edge gesture can open the drawer over this very settings screen.
       if (href === pathname) {
         setIsVisible(false);
         return;
       }
-      pendingSettingsRef.current = href as MyPageDrawerSettingsRoute;
+      pendingSettingsRef.current = route;
       translateX.stopAnimation();
       translateX.setValue(0);
       router.push(href as never);

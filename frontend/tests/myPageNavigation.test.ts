@@ -58,11 +58,12 @@ test("유효한 원본 탭이 없는 직접 진입만 Home으로 복귀한다", 
   assert.deepEqual(calls, ["open", "navigate:/(tabs)/home"]);
 });
 
-test("프로필·알림·계정 화면 계약은 모두 같은 마이페이지 복귀 동작을 실행한다", () => {
+test("프로필·알림·계정·내 활동 화면은 같은 마이페이지 복귀 동작을 실행한다", () => {
   assert.deepEqual(MY_PAGE_DRAWER_SETTINGS_ROUTES, [
     "/settings/profile",
     "/settings/notifications",
     "/settings/account",
+    "/settings/activity",
   ]);
 
   const calls: string[] = [];

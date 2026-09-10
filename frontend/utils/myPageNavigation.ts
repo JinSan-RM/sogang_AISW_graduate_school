@@ -20,6 +20,7 @@ export const MY_PAGE_DRAWER_SETTINGS_ROUTES = [
   "/settings/profile",
   "/settings/notifications",
   "/settings/account",
+  "/settings/activity",
 ] as const;
 
 export type MyPageDrawerSettingsRoute = (typeof MY_PAGE_DRAWER_SETTINGS_ROUTES)[number];

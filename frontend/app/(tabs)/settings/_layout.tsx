@@ -9,6 +9,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="profile" options={{ animation: "none" }} />
       <Stack.Screen name="notifications" options={{ animation: "none" }} />
       <Stack.Screen name="account" options={{ animation: "none" }} />
+      <Stack.Screen name="activity" options={{ animation: "none" }} />
     </Stack>
   );
 }
