@@ -592,7 +592,16 @@ export default function PostDetailScreen() {
     deletePostMutation.mutate(undefined, {
       onSuccess: () => {
         setShowDeleteConfirm(false);
-        router.replace(`/board/${post.board_id}`);
+        setShowPostMenu(false);
+        navigateFromPostDetail(board, params.fromBoardId, params.returnTo, {
+          canGoBack: () => router.canGoBack(),
+          back: () => router.back(),
+          navigate: (route) => {
+            if (route.startsWith("/board/")) router.dismissTo(route as never);
+            else router.navigate(route as never);
+          },
+          replace: (route) => router.replace(route as never),
+        });
       },
       onError: () => Alert.alert("삭제 실패", "게시글을 삭제할 수 없습니다."),
     });

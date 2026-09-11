@@ -497,7 +497,12 @@ export function useDeletePost(
   return useMutation({
     mutationFn: () => postApi.deletePost(postId),
     onSuccess: async () => {
-      await invalidatePostMutationCaches(queryClient, postMutationCacheTargets(boardId, board));
+      await Promise.all([
+        invalidatePostMutationCaches(queryClient, postMutationCacheTargets(boardId, board)),
+        queryClient.invalidateQueries({ queryKey: ["activity"] }),
+        queryClient.invalidateQueries({ queryKey: ["home", "album"] }),
+        queryClient.invalidateQueries({ queryKey: ["home", "popular"] }),
+      ]);
     },
   });
 }

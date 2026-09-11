@@ -2,9 +2,10 @@
   "expo": {
     "name": "AI·SW CAMPUS",
     "slug": "sogang-community",
-    "owner": "sogang30s@gmail.com",
+    "owner": "kimjinsan11",
     "scheme": "sogang-community",
     "version": "0.1.0",
+    "icon": "./assets/app-icon.png",
     "splash": {
       "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
@@ -14,6 +15,18 @@
       "expo-router",
       "expo-asset",
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-logo.png",
+          "backgroundColor": "#EEF2FE",
+          "resizeMode": "contain",
+          "imageWidth": 360,
+          "android": {
+            "imageWidth": 600
+          }
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -31,9 +44,17 @@
         }
       ]
     ],
+    "androidStatusBar": {
+      "barStyle": "dark-content"
+    },
     "android": {
       "package": "kr.ac.sogang.aisw.campus",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EEF2FE",
+        "monochromeImage": "./assets/adaptive-icon.png"
+      },
       "blockedPermissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -76,6 +97,7 @@
       }
     },
     "extra": {
+      "pushNotificationsEnabled": false,
       "router": {
         "origin": false
       },

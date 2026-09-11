@@ -203,6 +203,7 @@ function NoticesContent() {
         )}
         refreshing={noticeRefreshControlRefreshing({
           boardsLoading,
+          postsLoading: postsQuery.isLoading,
           boardsRefetching,
           postsRefetching: postsQuery.isRefreshingFirstPage,
         })}
@@ -216,7 +217,7 @@ function NoticesContent() {
         }}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
-          postsQuery.isFetchingNextPage ? (
+          !isLoading && !boardsRefetching && !postsQuery.isRefreshingFirstPage && postsQuery.isFetchingNextPage ? (
             <View style={styles.feedFooter}>
               <ActivityIndicator color={COLORS.primary} />
             </View>

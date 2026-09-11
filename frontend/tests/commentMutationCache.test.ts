@@ -146,6 +146,33 @@ test("댓글 삭제는 홈·다중 게시판·내 활동·관리자 목록을 �
   }
 });
 
+test("게시글 삭제 후 돌아온 내 활동 목록은 삭제한 글을 다시 표시하지 않는다", async () => {
+  const [{ api }, hooks] = await modules;
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  let deleted = false;
+  const originalAdapter = api.defaults.adapter;
+  api.defaults.adapter = async (config) => {
+    deleted = true;
+    return { config, headers: {}, status: 200, statusText: "OK", data: { status: "success", data: { id: 42 } } };
+  };
+  const observer = new QueryObserver(queryClient, {
+    queryKey: ["activity", "posts"], initialData: [post(1)],
+    queryFn: async () => deleted ? [] : [post(1)],
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  const inactiveKeys = [["activity", "bookmarks"], ["home", "album", 7], ["home", "popular", 7]];
+  inactiveKeys.forEach((key) => queryClient.setQueryData(key, [post(1)]));
+  try {
+    await renderHook(queryClient, () => hooks.useDeletePost(42, 7)).mutateAsync();
+    assert.deepEqual(observer.getCurrentResult().data, []);
+    inactiveKeys.forEach((key) => assert.equal(queryClient.getQueryState(key)?.isInvalidated, true));
+  } finally {
+    unsubscribe();
+    queryClient.clear();
+    api.defaults.adapter = originalAdapter;
+  }
+});
+
 test("댓글 삭제 API가 실패하면 목록의 댓글 수를 바꾸지 않는다", async () => {
   const [{ api }, hooks] = await modules;
   const queryClient = new QueryClient();

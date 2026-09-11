@@ -1,4 +1,4 @@
-package com.anonymous.sogangcommunity
+package kr.ac.sogang.aisw.campus
 
 import android.app.Application
 import android.content.res.Configuration

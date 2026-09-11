@@ -26,7 +26,7 @@ This repository already has the correct broad architecture.
 - Local release-engineering gate verified on 2026-07-27: SQLite and isolated PostgreSQL each passed 104/104 backend tests; the isolated Compose stack reached `0021_account_deletion_receipts`; clean, `0019`→head, `0021`→`0019`→`0021`, and exact unversioned `0001` recovery paths passed; unknown schemas remained fail-closed. PostgreSQL dump/restore and media tar/restore rehearsals also passed.
 - An isolated Windows short-path rehearsal built a temporary unsigned Android release AAB from the same 115 frontend source files. Bundletool validation, API 36, 16 KB page alignment, release-manifest security, and an extracted-artifact Gitleaks scan passed. That disposable artifact contained placeholder identity/development strings and was not a signed production or store candidate.
 - A provider-neutral operational-alert adapter now covers unhandled API exceptions, notification worker failures, and push send/ticket/receipt failures with structured non-PII context. Production startup requires an approved HTTPS webhook; provider selection, secret registration, routing, and live delivery remain external operations work.
-- Store readiness is tracked separately. The strict frontend release check currently stops on 18 approved external inputs, and no production EAS environment values, remote store versions, signed AAB, or iOS archive have been created or inspected.
+- Store readiness is tracked separately. Android branding/native identity, 10 EAS public production values, and the new-registration upload key are prepared. On 2026-09-09 the user deferred remote push; strict checks pass with the explicit disabled flag and Firebase/FCM activation is later-release work. Signed AAB `outputs/android/AI-SW-CAMPUS-0.1.0-2.aab` was generated and passed bundle, signature, API 36, 16 KB alignment, and secret-scan checks. Final policy content, physical-device QA, Play submission, and iOS archive remain open; see `docs/qa/ANDROID_BRANDING_2026-09-08.md`.
 
 Phase 2 converted the Notion planning into concrete API, DB, auth, route, and implementation documents. Phase 3 and Phase 4 should now be treated as development sprints.
 
@@ -93,7 +93,7 @@ P1 features:
 - Draft autosave.
 - Optimized image upload with progress.
 - Recent search suggestions.
-- Basic push notifications.
+- Basic push notifications: deferred to a later release by the user on 2026-09-09. The first Android release keeps in-app notifications and polling; native permission/token registration is disabled with `expo.extra.pushNotificationsEnabled=false`. Firebase/FCM setup resumes when push is enabled.
 - My activity history.
 
 P2 features:

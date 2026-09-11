@@ -14,8 +14,10 @@
     "doctor": "npx expo-doctor",
     "export:web": "expo export --platform web --output-dir dist",
     "release:check:ci": "node scripts/validate-release-config.mjs --ci",
+    "release:sync-android-branding": "node scripts/sync-android-branding.cjs",
     "release:verify-android-manifest": "node scripts/verify-android-release-manifest.mjs",
     "release:check": "node scripts/prepare-release-native-config.mjs --strict && node scripts/validate-release-config.mjs --strict",
+    "release:check:local": "node --env-file=.env.production scripts/prepare-release-native-config.mjs --strict && node --env-file=.env.production scripts/validate-release-config.mjs --strict",
     "eas-build-pre-install": "node scripts/prepare-release-native-config.mjs && node scripts/validate-release-config.mjs"
   },
   "dependencies": {

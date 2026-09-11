@@ -45,6 +45,7 @@ function layoutHarness(platform: "android" | "ios" | "web") {
       StyleSheet: { create: (styles: unknown) => styles }, useWindowDimensions: () => ({ width: 400 }) },
     "expo-font": { useFonts: () => [state.fontsLoaded] },
     "expo-router": { Stack: Object.assign("Stack", { Protected: "Protected", Screen: "Screen" }) },
+    "expo-status-bar": { StatusBar: "StatusBar" },
     "expo-splash-screen": {
       preventAutoHideAsync: () => { calls.push("prevent"); return Promise.resolve(true); },
       hide: () => { calls.push("hide"); },

@@ -11,6 +11,17 @@ if (!strict) {
   process.exit(0);
 }
 
+const config = JSON.parse(fs.readFileSync(path.join(projectRoot, "app.json"), "utf8"));
+const pushNotificationsEnabled = config.expo?.extra?.pushNotificationsEnabled;
+if (typeof pushNotificationsEnabled !== "boolean") {
+  console.error("expo.extra.pushNotificationsEnabled must be an explicit boolean.");
+  process.exit(1);
+}
+if (!pushNotificationsEnabled) {
+  console.log("Remote push is disabled; Firebase configuration injection is not required.");
+  process.exit(0);
+}
+
 const destination = path.join(projectRoot, "android", "app", "google-services.json");
 const source = process.env.GOOGLE_SERVICES_JSON;
 

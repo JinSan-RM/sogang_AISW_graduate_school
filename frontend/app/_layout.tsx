@@ -2,6 +2,7 @@ import { useFonts } from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { Image, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 
@@ -69,12 +70,14 @@ export default function RootLayout() {
         onLayout={isWeb ? undefined : SplashScreen.hide}
       >
         <KeyboardViewport style={[styles.appShell, useWebFrame ? styles.webAppShell : null]}>
+          <StatusBar style="dark" />
           <NotificationBootstrap />
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: "#ffffff" },
               headerTitleStyle: { color: "#111827", fontWeight: "900" },
               contentStyle: { backgroundColor: "#FFFFFF" },
+              statusBarStyle: "dark",
             }}
           >
             {/* Protected routes fall back to the first available screen, so keep login first for guests. */}

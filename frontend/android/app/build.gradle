@@ -88,9 +88,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.sogangcommunity'
+    namespace 'kr.ac.sogang.aisw.campus'
     defaultConfig {
-        applicationId 'com.anonymous.sogangcommunity'
+        applicationId 'kr.ac.sogang.aisw.campus'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -147,13 +147,20 @@ android {
     }
 }
 
-if (file("google-services.json").exists()) {
-    apply plugin: "com.google.gms.google-services"
-} else if (System.getenv("EAS_BUILD_PROFILE") == "production") {
-    throw new GradleException(
-        "Production Android builds require android/app/google-services.json. " +
-        "Provide GOOGLE_SERVICES_JSON as an EAS file environment variable."
-    )
+def expoConfig = new groovy.json.JsonSlurper().parse(new File(projectRoot, "app.json")).expo
+def pushNotificationsEnabled = expoConfig.extra?.pushNotificationsEnabled
+if (!(pushNotificationsEnabled instanceof Boolean)) {
+    throw new GradleException("expo.extra.pushNotificationsEnabled must be an explicit boolean.")
+}
+if (pushNotificationsEnabled) {
+    if (file("google-services.json").exists()) {
+        apply plugin: "com.google.gms.google-services"
+    } else if (System.getenv("EAS_BUILD_PROFILE") == "production") {
+        throw new GradleException(
+            "Production Android builds with remote push require android/app/google-services.json. " +
+            "Provide GOOGLE_SERVICES_JSON as an EAS file environment variable."
+        )
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`

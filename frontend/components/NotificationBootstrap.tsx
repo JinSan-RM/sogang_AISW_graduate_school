@@ -40,6 +40,10 @@ function storeLatestId(id: number) {
 }
 
 function getExpoNotifications(): ExpoNotificationsModule | null {
+  // Remote push is deferred for this release; keep the in-app polling below.
+  if (Constants.expoConfig?.extra?.pushNotificationsEnabled !== true) {
+    return null;
+  }
   try {
     return require("expo-notifications") as ExpoNotificationsModule;
   } catch {

@@ -403,7 +403,7 @@ function NoticeList({
   if (loading) {
     return (
       <View style={styles.loadingBox}>
-        <ActivityIndicator size="small" color={COLORS.primary} />
+        <Text style={styles.emptyText}>공지사항을 불러오는 중이에요</Text>
       </View>
     );
   }
@@ -538,7 +538,7 @@ function HomePopularPostsSection({
       <SectionHeader title="🔥 인기 게시글" onPress={() => router.push((boardId ? `/board/${boardId}` : COMMUNITY_TAB_ROUTE) as never)} />
       {popularQuery.isLoading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.emptyText}>인기 글을 불러오는 중이에요</Text>
         </View>
       ) : boardsError || popularQuery.isError ? (
         <HomeErrorState label="인기 게시글" onRetry={() => void Promise.all([refetchBoards(), popularQuery.refetch()])} />
@@ -670,6 +670,8 @@ export default function HomeScreen() {
   const alumniDirectoryLink = useMemo(() => homeAlumniDirectoryLink(boards), [boards]);
   const hasUnreadNotifications = (notificationQuery.data?.data ?? []).some((notification) => !notification.is_read);
   const displayName = user?.nickname || "서강인";
+  const isHomeLoading = boardsLoading || bannersQuery.isLoading || noticesQuery.isLoading
+    || eventsQuery.isLoading || albumQuery.isLoading;
   const isRefreshing = boardsRefetching
     || bannersQuery.isRefetching
     || noticesQuery.isRefetching
@@ -701,7 +703,7 @@ export default function HomeScreen() {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 12, 21) }]}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refreshHome} tintColor={COLORS.primary} />}
+      refreshControl={<RefreshControl refreshing={!isHomeLoading && isRefreshing} onRefresh={refreshHome} tintColor={COLORS.primary} />}
     >
       <View style={styles.header}>
         <View style={styles.greetingWrap}>
@@ -722,9 +724,11 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {isHomeLoading ? <ActivityIndicator accessibilityLabel="홈 콘텐츠 로딩" size="small" color={COLORS.primary} /> : null}
+
       {bannersQuery.isLoading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.emptyText}>배너를 불러오는 중이에요</Text>
         </View>
       ) : bannersQuery.isError ? (
         <HomeErrorState label="홈 배너" onRetry={() => void bannersQuery.refetch()} />
@@ -750,7 +754,7 @@ export default function HomeScreen() {
       <SectionHeader title="서강생활 일정" />
       {eventsQuery.isLoading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.emptyText}>일정을 불러오는 중이에요</Text>
         </View>
       ) : eventsQuery.isError ? (
         <HomeErrorState label="일정" onRetry={() => void eventsQuery.refetch()} />
@@ -781,7 +785,7 @@ export default function HomeScreen() {
       />
       {albumQuery.isLoading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.emptyText}>사진첩을 불러오는 중이에요</Text>
         </View>
       ) : boardsError || albumQuery.isError ? (
         <HomeErrorState label="행사 사진첩" onRetry={() => void Promise.all([refetchBoards(), albumQuery.refetch()])} />
@@ -868,7 +872,7 @@ const styles = StyleSheet.create({
   },
   bannerCarousel: {
     width: "100%",
-    overflow: "visible",
+    overflow: "hidden",
   },
   bannerCarouselContent: {
     gap: 12,

@@ -8,14 +8,16 @@ export function enabledRefetch(enabled: boolean, refetch: Refetch): Refetch | un
 
 export function noticeRefreshControlRefreshing({
   boardsLoading,
+  postsLoading = false,
   boardsRefetching,
   postsRefetching,
 }: {
   boardsLoading: boolean;
+  postsLoading?: boolean;
   boardsRefetching: boolean;
   postsRefetching: boolean;
 }): boolean {
-  return !boardsLoading && (boardsRefetching || postsRefetching);
+  return !boardsLoading && !postsLoading && (boardsRefetching || postsRefetching);
 }
 
 export async function refreshQueries(

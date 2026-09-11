@@ -104,6 +104,8 @@ function extractQuotedValue(source, pattern) {
 const appJson = readJson("app.json");
 const easJson = readJson("eas.json");
 const expo = appJson.expo ?? {};
+const pushNotificationsEnabled = expo.extra?.pushNotificationsEnabled;
+check(typeof pushNotificationsEnabled === "boolean", "expo.extra.pushNotificationsEnabled must be an explicit boolean.");
 const android = expo.android ?? {};
 const ios = expo.ios ?? {};
 const production = easJson.build?.production ?? {};
@@ -229,7 +231,7 @@ const splashPlugin = expo.plugins?.find((plugin) => Array.isArray(plugin) && plu
 const splashAsset = resolveProjectFile(Array.isArray(splashPlugin) ? splashPlugin[1]?.image : null);
 check(Boolean(splashAsset && fs.existsSync(splashAsset)), "The approved splash image file must exist.");
 
-if (strict || ci) {
+if ((strict || ci) && pushNotificationsEnabled !== false) {
   const googleServicesPath = path.join(projectRoot, "android", "app", "google-services.json");
   check(fs.existsSync(googleServicesPath), "Production Android builds require injected google-services.json.");
   if (fs.existsSync(googleServicesPath)) {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -94,4 +96,75 @@ test("development keeps local API fallback as a non-blocking configuration", () 
   const result = runValidator("development");
   assert.equal(result.status, 0, result.output);
   assert.doesNotMatch(result.output, /EAS development API configuration failed/);
+});
+
+function releaseFixture(t: test.TestContext, pushNotificationsEnabled: unknown) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aisw-release-test-"));
+  t.after(() => {
+    assert.equal(path.dirname(root), os.tmpdir());
+    assert.ok(path.basename(root).startsWith("aisw-release-test-"));
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  for (const relative of ["scripts", "assets", "eas.json", "android/build.gradle", "android/app/build.gradle", "android/app/src/main"]) {
+    fs.cpSync(path.join(frontendRoot, relative), path.join(root, relative), { recursive: true });
+  }
+  const config = JSON.parse(fs.readFileSync(path.join(frontendRoot, "app.json"), "utf8"));
+  config.expo.extra.pushNotificationsEnabled = pushNotificationsEnabled;
+  fs.writeFileSync(path.join(root, "app.json"), JSON.stringify(config));
+  const env = {
+    ...process.env,
+    EAS_BUILD_PROFILE: "production",
+    GOOGLE_SERVICES_JSON: "",
+    EXPO_PUBLIC_API_URL: "https://api.aisw-connect.kr/api",
+    EXPO_PUBLIC_AUTH_EMAIL_TIMEOUT_MS: "120000",
+    EXPO_PUBLIC_SUPPORT_URL: "https://aisw-connect.kr/legal/support",
+    EXPO_PUBLIC_PRIVACY_POLICY_URL: "https://aisw-connect.kr/legal/privacy",
+    EXPO_PUBLIC_ACCOUNT_DELETION_URL: "https://aisw-connect.kr/legal/account-deletion",
+    EXPO_PUBLIC_SUPPORT_EMAIL: "support@aisw-connect.kr",
+    EXPO_PUBLIC_OPERATOR_NAME: "AI·SW대학원 원우회",
+    EXPO_PUBLIC_PRIVACY_EFFECTIVE_DATE: "2026-07-12",
+    EXPO_PUBLIC_PRIVACY_POLICY_VERSION: "2026-07-12",
+  };
+  return (script: string, overrides = {}) => {
+    const result = spawnSync(process.execPath, [path.join(root, "scripts", script), "--strict"], {
+      cwd: root, encoding: "utf8", env: { ...env, ...overrides },
+    });
+    assert.equal(result.error, undefined);
+    return { status: result.status, output: `${result.stdout}${result.stderr}` };
+  };
+}
+
+test("production can build without Firebase when remote push is explicitly deferred", (t) => {
+  const run = releaseFixture(t, false);
+  for (const script of ["prepare-release-native-config.mjs", "validate-release-config.mjs"]) {
+    const result = run(script);
+    assert.equal(result.status, 0, result.output);
+  }
+});
+
+test("enabling remote push still requires Firebase configuration in production", (t) => {
+  const run = releaseFixture(t, true);
+  for (const script of ["prepare-release-native-config.mjs", "validate-release-config.mjs"]) {
+    const result = run(script);
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /GOOGLE_SERVICES_JSON|google-services\.json/);
+  }
+});
+
+test("missing or string-valued push configuration cannot silently disable Firebase checks", (t) => {
+  for (const value of [undefined, "false"]) {
+    const run = releaseFixture(t, value);
+    for (const script of ["prepare-release-native-config.mjs", "validate-release-config.mjs"]) {
+      const result = run(script);
+      assert.notEqual(result.status, 0);
+      assert.match(result.output, /pushNotificationsEnabled.*boolean/);
+    }
+  }
+});
+
+test("deferring push does not weaken the production API checks", (t) => {
+  const run = releaseFixture(t, false);
+  const result = run("validate-release-config.mjs", { EXPO_PUBLIC_API_URL: "http://localhost:8000/api" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /EXPO_PUBLIC_API_URL must be a public HTTPS URL/);
 });
