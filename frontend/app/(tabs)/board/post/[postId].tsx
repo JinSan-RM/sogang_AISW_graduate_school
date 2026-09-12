@@ -10,7 +10,7 @@ import ActivityCertificationMediaImage from "../../../../components/ActivityCert
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import NaturalAspectMediaImage from "../../../../components/NaturalAspectMediaImage";
-import { AttachDocIcon, AttachLinkIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, GalleryNextIcon, GalleryPrevIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
+import { AttachDocIcon, AttachLinkIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, ExternalLinkIcon, FlagIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../components/icons";
 import { useBoardsQuery } from "../../../../hooks/useApi";
 import { resolveMediaAccessUrl, useMediaAccessUrl } from "../../../../hooks/useMediaAccessUrl";
 import type { MediaReference } from "../../../../utils/mediaAccess";
@@ -725,10 +725,10 @@ export default function PostDetailScreen() {
             {imageAttachments.length > 1 ? (
               <>
                 <Pressable accessibilityLabel="이전 사진" onPress={showPreviousImage} style={[styles.galleryArrow, styles.galleryArrowLeft]}>
-                  {isPhotoAlbum ? <GalleryPrevIcon size={28} /> : <SliderPrevIcon size={28} />}
+                  <SliderPrevIcon size={28} />
                 </Pressable>
                 <Pressable accessibilityLabel="다음 사진" onPress={showNextImage} style={[styles.galleryArrow, styles.galleryArrowRight]}>
-                  {isPhotoAlbum ? <GalleryNextIcon size={28} /> : <SliderNextIcon size={28} />}
+                  <SliderNextIcon size={28} />
                 </Pressable>
               </>
             ) : null}
@@ -1789,7 +1789,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   galleryArrow: {
-    // Figma: 배경 원 없이 흰 화살표만, 좌우 8 여백, 세로 중앙
+    // Reuse the existing gray-circle slider icons; keep the current hit areas.
     position: "absolute",
     top: 0,
     bottom: 0,

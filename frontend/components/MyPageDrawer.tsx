@@ -84,6 +84,7 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const pendingSettingsRef = useRef<MyPageDrawerSettingsRoute | null>(null);
   const lastMountedOriginRef = useRef<MyPageOriginRoute | null>(null);
   const drawerOriginRef = useRef<MyPageOriginRoute | null>(null);
+  const edgeTouchStartXRef = useRef<number | null>(null);
   const me = data?.data;
 
   useEffect(() => {
@@ -202,12 +203,22 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
   const edgePanResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => !isVisible,
-        onMoveShouldSetPanResponder: (_, gesture) =>
-          !isVisible && gesture.dx > 14 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.4,
+        // Observe edge drags from the parent without placing a touch surface over children.
+        onStartShouldSetPanResponder: () => false,
+        onStartShouldSetPanResponderCapture: (event) => {
+          // gesture.x0 is not populated until grant, after the move-capture decision.
+          edgeTouchStartXRef.current = event.nativeEvent.pageX;
+          return false;
+        },
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          !isVisible
+          && gesture.numberActiveTouches === 1
+          && edgeTouchStartXRef.current !== null
+          && edgeTouchStartXRef.current >= 0 && edgeTouchStartXRef.current < 24
+          && gesture.dx > 14 && gesture.dx > Math.abs(gesture.dy) * 1.4,
         onPanResponderTerminationRequest: () => false,
-        onPanResponderRelease: (_, gesture) => {
-          if (gesture.dx > 36) {
+        onPanResponderRelease: (event) => {
+          if (edgeTouchStartXRef.current !== null && event.nativeEvent.pageX - edgeTouchStartXRef.current > 36) {
             openDrawer();
           }
         },
@@ -242,9 +253,8 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
 
   return (
     <MyPageDrawerContext.Provider value={contextValue}>
-      <View style={styles.host}>
+      <View style={styles.host} {...edgePanResponder.panHandlers}>
         {children}
-        {!isVisible ? <View pointerEvents="box-only" style={styles.edgeSwipeArea} {...edgePanResponder.panHandlers} /> : null}
         {isVisible ? (
           <MyPageDrawerOverlay onClose={closeDrawer} onShow={drawerDidShow}>
             <View
@@ -315,15 +325,6 @@ export function MyPageDrawerProvider({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   host: {
     flex: 1,
-  },
-  edgeSwipeArea: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 24,
-    zIndex: 20,
-    backgroundColor: "rgba(255,255,255,0.001)",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

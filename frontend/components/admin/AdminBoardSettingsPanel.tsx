@@ -108,9 +108,7 @@ function ActivityRuleEditor({ label, rule, disabled, onChange }: { label: string
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <Choice label="contain" selected={rule.fit === "contain"} disabled={disabled} onPress={() => onChange({ ...rule, fit: "contain" })} />
         <Choice label="cover" selected={rule.fit === "cover"} disabled={disabled} onPress={() => onChange({ ...rule, fit: "cover" })} />
-        <Choice label="제한 시 전체보기" selected={rule.expandable} disabled={disabled} onPress={() => onChange({ ...rule, expandable: !rule.expandable })} />
       </View>
-      <Text style={{ color: "#6B7280", fontSize: 11 }}>고정 세로 또는 최대 세로로 제한된 사진에 전체보기 버튼을 표시합니다.</Text>
     </View>
   );
 }

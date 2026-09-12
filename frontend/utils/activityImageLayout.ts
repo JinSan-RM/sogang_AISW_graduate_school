@@ -4,7 +4,7 @@ export type ActivityImageRule = {
   height: number | null;
   max_height: number | null;
   fit: ActivityImageFit;
-  expandable: boolean;
+  expandable: boolean; // Legacy metadata field; participation images no longer open a viewer.
 };
 export type ActivityImageLayout = {
   version: 1;
@@ -23,9 +23,9 @@ export type ActivityImageFrame = {
 
 export const DEFAULT_ACTIVITY_IMAGE_LAYOUT: ActivityImageLayout = {
   version: 1,
-  default: { max_width: null, height: 400, max_height: null, fit: "contain", expandable: true },
-  landscape: { max_width: null, height: 240, max_height: null, fit: "contain", expandable: true },
-  portrait: { max_width: null, height: 400, max_height: null, fit: "contain", expandable: true },
+  default: { max_width: null, height: 400, max_height: null, fit: "contain", expandable: false },
+  landscape: { max_width: null, height: 240, max_height: null, fit: "contain", expandable: false },
+  portrait: { max_width: null, height: 400, max_height: null, fit: "contain", expandable: false },
 };
 
 const inRange = (value: unknown, min: number, max: number): value is number =>
@@ -145,9 +145,6 @@ export function activityImageFrame(
   const rule = resolveActivityImageRule(layout, orientation);
   const width = Math.min(containerWidth, rule.max_width ?? containerWidth);
   const naturalHeight = width * imageHeight / imageWidth;
-  const clamped = rule.height === null
-    && rule.max_height !== null
-    && naturalHeight > rule.max_height;
   const height = rule.height
     ?? (rule.max_height === null ? naturalHeight : Math.min(naturalHeight, rule.max_height));
   return {
@@ -155,6 +152,6 @@ export function activityImageFrame(
     height,
     naturalHeight,
     fit: rule.fit,
-    showViewer: rule.expandable && (rule.height !== null || clamped),
+    showViewer: false,
   };
 }

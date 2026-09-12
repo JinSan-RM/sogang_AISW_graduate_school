@@ -804,13 +804,14 @@ board type return `422 INVALID_ACTIVITY_IMAGE_LAYOUT`.
 aspect-ratio height, and `max_height: null` means no height cap. A matching
 landscape or portrait rule wins over `default`; square images and unreadable
 source dimensions use `default`. `fit` controls how the image is placed inside
-the resulting frame. When `expandable` is true, a fixed-height or
-maximum-height-clipped frame exposes the complete image in the full-view
-viewer.
+the resulting frame. Per the 2026-09-12 user correction, participation images
+do not expose a full-view button or viewer. `expandable` remains a required
+boolean in the version-1 wire format for compatibility, but the current app
+ignores its value and the administrator UI no longer offers this setting.
 
-The key may be omitted. The app fallback is exactly the example above: full
+The key may be omitted. The app fallback uses full
 available width, a fixed 400px default/portrait frame, a fixed 240px landscape
-frame, `contain`, and full-view. Square images and images whose dimensions
+frame, `contain`, and `expandable: false`. Square images and images whose dimensions
 cannot be read use the 400px default frame. Other board metadata keys remain
 unrestricted. PUT retains its existing whole-metadata replacement semantics:
 when `metadata` is present, callers must include every metadata key they intend

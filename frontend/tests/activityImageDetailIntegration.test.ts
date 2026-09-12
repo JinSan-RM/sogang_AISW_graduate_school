@@ -15,5 +15,4 @@ test("전용 렌더러는 원본 방향과 frame fit을 실제 MediaImage에 적
   assert.match(renderer, /activityImageOrientation\(dimensions\.width, dimensions\.height\)/);
   assert.match(renderer, /activityImageFrame\(/);
   assert.match(renderer, /resizeMode=\{frame\?\.fit/);
-  assert.match(renderer, /frame\?\.showViewer/);
 });

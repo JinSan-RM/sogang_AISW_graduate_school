@@ -15,7 +15,7 @@ test("활동 이미지 metadata 누락과 잘못된 값은 안전한 기본 레�
   assert.deepEqual(activityImageLayoutFromMetadata({ version: 9, default: {} }), DEFAULT_ACTIVITY_IMAGE_LAYOUT);
 });
 
-test("설정 없는 활동인증 세로 이미지는 400px contain 프레임과 전체보기를 사용한다", () => {
+test("설정 없는 활동인증 세로 이미지는 전체보기 없이 400px contain 프레임을 사용한다", () => {
   const frame = activityImageFrame(
     activityImageLayoutFromMetadata(undefined),
     "portrait",
@@ -29,11 +29,11 @@ test("설정 없는 활동인증 세로 이미지는 400px contain 프레임과 
     height: 400,
     naturalHeight: 640,
     fit: "contain",
-    showViewer: true,
+    showViewer: false,
   });
 });
 
-test("설정 없는 활동인증 가로 이미지는 240px contain 프레임과 전체보기를 사용한다", () => {
+test("설정 없는 활동인증 가로 이미지는 전체보기 없이 240px contain 프레임을 사용한다", () => {
   const frame = activityImageFrame(
     activityImageLayoutFromMetadata(undefined),
     "landscape",
@@ -47,7 +47,7 @@ test("설정 없는 활동인증 가로 이미지는 240px contain 프레임과 
     height: 240,
     naturalHeight: 160,
     fit: "contain",
-    showViewer: true,
+    showViewer: false,
   });
 });
 
@@ -75,7 +75,7 @@ test("frame은 max width와 fixed height를 우선하고 auto height만 max heig
     height: 500,
     naturalHeight: 666.6666666666666,
     fit: "contain",
-    showViewer: true,
+    showViewer: false,
   });
   assert.deepEqual(activityImageFrame(layout, "portrait", 900, 1600, 500), {
     width: 500,
@@ -114,10 +114,10 @@ test("프론트 저장 검증은 서버 계약처럼 두 방향 키와 정확한
   assert.equal(isValidActivityImageLayout({ ...valid, default: { ...valid.default, extra: true } }), false);
 });
 
-test("전체보기는 고정 높이 또는 최대 높이로 실제 제한된 preview에서만 표시한다", () => {
+test("예전 metadata에서 전체보기를 켰더라도 제한된 활동 사진의 전체보기는 표시하지 않는다", () => {
   const maxHeightLayout = {
     ...DEFAULT_ACTIVITY_IMAGE_LAYOUT,
-    default: { ...DEFAULT_ACTIVITY_IMAGE_LAYOUT.default, height: null, max_height: 600 },
+    default: { ...DEFAULT_ACTIVITY_IMAGE_LAYOUT.default, height: null, max_height: 600, expandable: true },
     portrait: null,
   };
   const exactLimit = activityImageFrame(maxHeightLayout, "portrait", 390, 600, 390);
@@ -131,6 +131,6 @@ test("전체보기는 고정 높이 또는 최대 높이로 실제 제한된 pre
   assert.equal(exactLimit?.height, 600);
   assert.equal(exactLimit?.showViewer, false);
   assert.equal(clipped?.height, 600);
-  assert.equal(clipped?.showViewer, true);
+  assert.equal(clipped?.showViewer, false);
   assert.equal(disabled?.showViewer, false);
 });
