@@ -656,7 +656,7 @@ function ExecutiveIntroScreen({ board, topInset, onBack }: { board?: Board | nul
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(topInset, 10) }]}>
         <IconButton icon="chevron-back" label="뒤로" onPress={onBack} />
-        <Text style={styles.appBarTitle}>{council?.title || "원우회 임원진 소개"}</Text>
+        <Text style={styles.appBarTitle}>원우회 임원진 소개</Text>
         <View style={styles.iconButton} />
       </View>
       {council ? (

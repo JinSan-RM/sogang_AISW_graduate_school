@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { Alert, BackHandler, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
+import { Alert, BackHandler, Image, Keyboard, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, type TextInputKeyPressEvent, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../../components/CommentItem";
@@ -647,6 +647,7 @@ export default function PostDetailScreen() {
           setCommentText("");
           setCommentInputHeight(38);
           setReplyTarget(null);
+          Keyboard.dismiss();
         },
         onError: () => Alert.alert("댓글 등록 실패", "댓글을 저장할 수 없습니다."),
         onSettled: () => {

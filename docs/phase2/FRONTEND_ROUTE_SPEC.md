@@ -139,6 +139,7 @@ Required controls:
 
 Presentation rules from the approved Figma capture set:
 
+- 2026-09-12 comment/council follow-up (WP5/WP9 P0): dismiss the keyboard and remove input focus only after comment/reply registration succeeds; pending or failed submissions retain the composer. The current council introduction detail header always reads `원우회 임원진 소개`, including when its stored introduction title is `현재 원우회`. Introduction metadata, content, and administrator titles are retained.
 - 2026-09-12 user override (WP5/WP9 P0): photo-album previous/next controls reuse the existing activity/council slider icons: a 28px circle with 35% black opacity and a white chevron. Multi-image visibility and current button geometry are preserved. The closed My Page drawer must not overlay any photo-button touch area: its parent observes horizontal drags starting within the leftmost 24px without claiming initial presses. Both album buttons retain their full 44px hit width. Participation and album images do not expose a full-view button or viewer, including when legacy activity metadata has `expandable: true`. See `docs/qa/GALLERY_TOUCH_AND_FULL_VIEW_2026-09-12.md`.
 - Community, notice, My Posts/Scrap, council, mutual-aid, and activity-feed dates use `YY.MM.DD(weekday)` in Korean, calculated in `Asia/Seoul`.
 - Comment metadata appends `· N분 전` for activity under one hour and `· HH:mm` afterward.
