@@ -59,6 +59,7 @@ function hookHarness(platform = "android") {
   let listener: (() => boolean) | undefined;
   let focusEffect: (() => (() => void) | undefined) | undefined;
   const calls: string[] = [];
+  let stateRef: { current: unknown } | undefined;
   const moduleExports: { useAndroidTabBack?: (open: boolean, close: () => void) => void } = {};
   const code = ts.transpileModule(readFileSync("hooks/useAndroidTabBack.ts", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS },
@@ -69,7 +70,11 @@ function hookHarness(platform = "android") {
       usePathname: () => pathname,
       useFocusEffect: (effect: typeof focusEffect) => { focusEffect = effect; },
     },
-    react: { useCallback: (callback: unknown) => callback },
+    react: {
+      useCallback: (callback: unknown) => callback,
+      useRef: (value: unknown) => (stateRef ??= { current: value }),
+      useLayoutEffect: (effect: () => void) => effect(),
+    },
     "react-native": {
       Platform: { OS: platform },
       BackHandler: {

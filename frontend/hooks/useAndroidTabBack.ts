@@ -1,5 +1,5 @@
 import { router, useFocusEffect, usePathname } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { BackHandler, Platform } from "react-native";
 
 import { androidTabBackAction } from "../utils/androidTabBack";
@@ -7,12 +7,17 @@ import { HOME_TAB_ROUTE } from "../utils/appRoutes";
 
 export function useAndroidTabBack(drawerOpen: boolean, closeDrawer: () => void) {
   const pathname = usePathname();
+  const current = useRef({ pathname, drawerOpen, closeDrawer });
+  useLayoutEffect(() => {
+    current.current = { pathname, drawerOpen, closeDrawer };
+  }, [pathname, drawerOpen, closeDrawer]);
 
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS !== "android") return undefined;
 
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        const { pathname, drawerOpen, closeDrawer } = current.current;
         const action = androidTabBackAction(pathname, router.canGoBack(), drawerOpen);
         if (action === "close-drawer") {
           closeDrawer();
@@ -27,6 +32,8 @@ export function useAndroidTabBack(drawerOpen: boolean, closeDrawer: () => void) 
       });
 
       return () => subscription.remove();
-    }, [closeDrawer, drawerOpen, pathname]),
+    // Keep this fallback older than focused screen/overlay handlers, including
+    // after returning from a detail or closing the native My Page modal.
+    }, []),
   );
 }

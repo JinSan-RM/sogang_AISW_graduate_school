@@ -333,37 +333,47 @@ export default function PostDetailScreen() {
       setShowPostMenu(false);
       return;
     }
-    if (!post) return;
     navigateFromPostDetail(board, params.fromBoardId, params.returnTo, {
       canGoBack: () => router.canGoBack(),
       back: () => router.back(),
       navigate: (route) => router.navigate(route as never),
       replace: (route) => router.replace(route as never),
     });
-  }, [board, deleteCommentMutation.isPending, deletePostMutation.isPending, params.fromBoardId, params.returnTo, pendingDeleteCommentId, post, reportTarget, showDeleteConfirm, showPostMenu]);
+  }, [board, deleteCommentMutation.isPending, deletePostMutation.isPending, params.fromBoardId, params.returnTo, pendingDeleteCommentId, reportTarget, showDeleteConfirm, showPostMenu]);
 
   useFocusEffect(
     useCallback(() => {
-      if (Platform.OS !== "android" || !post) return undefined;
+      if (Platform.OS !== "android") return undefined;
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
         handlePostBack();
         return true;
       });
       return () => subscription.remove();
-    }, [handlePostBack, post])
+    }, [handlePostBack])
+  );
+
+  const navigationHeader = (
+    <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+      <IconButton icon="chevron-back" label="뒤로" onPress={handlePostBack} />
+      <Text numberOfLines={1} style={styles.appBarTitle}>{board?.name ?? "게시글"}</Text>
+      <View style={styles.iconButton} />
+    </View>
   );
 
   if (isLoading) {
-    return <LoadingState />;
+    return <View style={styles.screen}>{navigationHeader}<LoadingState /></View>;
   }
 
   if (isError || !post) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.loadErrorText}>게시글을 불러오지 못했습니다.</Text>
-        <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>다시 시도</Text>
-        </Pressable>
+      <View style={styles.screen}>
+        {navigationHeader}
+        <View style={styles.center}>
+          <Text style={styles.loadErrorText}>게시글을 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }

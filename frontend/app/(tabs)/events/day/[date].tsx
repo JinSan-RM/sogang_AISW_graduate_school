@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback } from "react";
+import { BackHandler, FlatList, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../../components/LoadingState";
@@ -61,17 +62,27 @@ export default function EventDayScreen() {
   });
   const events = [...(data?.data ?? [])].sort((left, right) => +new Date(left.start_at) - +new Date(right.start_at));
 
+  const handleBack = useCallback(() => {
+    const decision = eventDayBackDecision(params.returnTo, router.canGoBack());
+    if (decision.action === "navigate") router.navigate(decision.route as never);
+    else if (decision.action === "back") router.back();
+    else router.replace(decision.route as never);
+  }, [params.returnTo]);
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== "android") return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]));
+
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={() => {
-            const decision = eventDayBackDecision(params.returnTo, router.canGoBack());
-            if (decision.action === "navigate") router.navigate(decision.route as never);
-            else if (decision.action === "back") router.back();
-            else router.replace(decision.route as never);
-          }}
+          onPress={handleBack}
           style={styles.iconButton}
         >
           <BackIcon size={24} color={COLORS.text} />

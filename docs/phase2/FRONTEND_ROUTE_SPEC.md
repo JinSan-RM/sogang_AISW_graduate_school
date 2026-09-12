@@ -21,6 +21,8 @@ My Page/Settings opens from the profile action rather than a sixth bottom tab. D
 
 ## 2. Route Map
 
+2026-09-12 navigation QA follow-up (WP5/WP9 P0): FAQ returns to Council, notice-scoped search returns to Notices, Home-origin day screens return to Home, and notification-origin event details return to Notifications through both header and Android Back. Ordinary event details retain their originating day/history. On shared board lists, Android first dismisses the keyboard, then an open sort menu, then inline search (clearing draft/submitted keywords), before leaving the list. Returning from a post or closing My Page must preserve this priority: the tab fallback keeps a stable focus subscription and reads current route/drawer state without registering above screen handlers. Post detail, post edit, and event detail keep their navigation controls during loading and errors; retry remains available. Header/system navigation does not reset retained tab filters. Verification: `docs/qa/NAVIGATION_FIXES_2026-09-12.md`.
+
 2026-09-10 startup policy: native platforms keep the system splash until session hydration, fonts, and the existing 1,500 ms minimum duration are ready, then hide it when the navigator viewport lays out. Do not replay the same artwork in a React loading view on native, because its different scaling causes a visible size jump. Web retains its full-screen React splash and the same readiness gate. Packaged startup verification follows the final APK build; see `docs/qa/SPLASH_TRANSITION_ANDROID_2026-09-10.md`.
 
 | Screen ID | Route | Purpose | Auth |

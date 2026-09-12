@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useEffect, useState } from "react";
+import { Alert, BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
@@ -106,7 +106,11 @@ export default function PostEditScreen() {
     router.replace(`/board/post/create?boardId=${post.board_id}&postId=${post.id}` as never);
   }, [isActivityCertification, post]);
 
-  const goBack = () => {
+  const goBack = useCallback(() => {
+    if (isBoardMenuOpen) {
+      setIsBoardMenuOpen(false);
+      return;
+    }
     if (params.editOrigin) {
       const decision = postCreateFormBackDecision({
         boardType: board?.board_type,
@@ -124,25 +128,47 @@ export default function PostEditScreen() {
     }
     if (router.canGoBack()) router.back();
     else router.replace(postDetailRoute(postId));
-  };
+  }, [board?.board_type, isBoardMenuOpen, params.editOrigin, params.fromBoardId, params.returnTo, post?.board_id, postId]);
+
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== "android") return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [goBack]));
+
+  const navigationHeader = (
+    <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 18) }]}>
+      <Pressable accessibilityLabel="닫기" onPress={goBack} style={styles.iconButton}>
+        <CloseIcon size={20} color={COLORS.text} />
+      </Pressable>
+      <Text style={styles.appBarTitle}>{isStudyRecruit ? "스터디 모집" : "글 수정"}</Text>
+      <View style={styles.iconButton} />
+    </View>
+  );
 
   if (isLoading) {
-    return <LoadingState />;
+    return <View style={styles.screen}>{navigationHeader}<LoadingState /></View>;
   }
 
   if (isError || !post) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.loadErrorText}>게시글을 불러오지 못했습니다.</Text>
-        <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>다시 시도</Text>
-        </Pressable>
+      <View style={styles.screen}>
+        {navigationHeader}
+        <View style={styles.center}>
+          <Text style={styles.loadErrorText}>게시글을 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   if (isActivityCertification) {
-    return <LoadingState message="활동인증 수정 화면으로 이동하고 있어요" />;
+    return <View style={styles.screen}>{navigationHeader}<LoadingState message="활동인증 수정 화면으로 이동하고 있어요" /></View>;
   }
 
   const onSubmit = (values: FormValues) => {
@@ -306,13 +332,7 @@ export default function PostEditScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 18) }]}>
-        <Pressable accessibilityLabel="닫기" onPress={goBack} style={styles.iconButton}>
-          <CloseIcon size={20} color={COLORS.text} />
-        </Pressable>
-        <Text style={styles.appBarTitle}>{isStudyRecruit ? "스터디 모집" : "글 수정"}</Text>
-        <View style={styles.iconButton} />
-      </View>
+      {navigationHeader}
 
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroller} contentContainerStyle={styles.content}>
         {isResourceEdit ? (

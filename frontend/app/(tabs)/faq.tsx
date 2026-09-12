@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../components/LoadingState";
@@ -32,6 +32,16 @@ export default function FAQScreen() {
   const [isError, setIsError] = useState(false);
   const [expandedFaqIds, setExpandedFaqIds] = useState<Set<number>>(createFaqAccordionState);
 
+  const handleBack = useCallback(() => router.navigate("/(tabs)/council"), []);
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== "android") return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]));
+
   const loadFAQs = useCallback(async () => {
     setIsLoading(true);
     setIsError(false);
@@ -57,7 +67,7 @@ export default function FAQScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
-        <Pressable accessibilityLabel="뒤로" onPress={() => router.replace("/(tabs)/council" as never)} style={styles.iconButton}>
+        <Pressable accessibilityLabel="뒤로" onPress={handleBack} style={styles.iconButton}>
           <BackIcon size={24} color={COLORS.text} />
         </Pressable>
         <Text style={styles.appBarTitle}>자주 묻는 질문</Text>

@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, BackHandler, FlatList, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { searchApi } from "../../services/api";
@@ -71,6 +71,21 @@ export default function SearchScreen() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const recentQuery = useQuery({ queryKey: ["recent-searches"], queryFn: searchApi.recent, enabled: !isNoticeSearch });
+
+  const handleBack = useCallback(() => {
+    Keyboard.dismiss();
+    if (isNoticeSearch) router.navigate("/(tabs)/notices");
+    else if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/home");
+  }, [isNoticeSearch]);
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== "android") return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]));
 
   const runSearch = async (nextPage = 1, keyword = query.trim(), noticeFilter = selectedNoticeFilter) => {
     if (keyword.length < 2) {
@@ -142,7 +157,7 @@ export default function SearchScreen() {
     <View style={styles.screen}>
       {isNoticeSearch ? (
         <View style={[styles.noticeSearchHeader, { paddingTop: Math.max(insets.top, 10) }]}>
-          <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/notices"))} style={[styles.iconButton, styles.noticeBackButton]}>
+          <Pressable accessibilityLabel="뒤로" onPress={handleBack} style={[styles.iconButton, styles.noticeBackButton]}>
             <BackIcon size={24} color={COLORS.text} />
           </Pressable>
           {searchInput}
@@ -150,7 +165,7 @@ export default function SearchScreen() {
       ) : (
         <>
           <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
-            <Pressable accessibilityLabel="뒤로" onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/home"))} style={styles.iconButton}>
+            <Pressable accessibilityLabel="뒤로" onPress={handleBack} style={styles.iconButton}>
               <BackIcon size={24} color={COLORS.text} />
             </Pressable>
             <Text style={styles.appBarTitle}>검색</Text>

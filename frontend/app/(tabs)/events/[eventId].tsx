@@ -1,7 +1,7 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback } from "react";
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../components/LoadingState";
@@ -34,17 +34,45 @@ export default function EventDetailScreen() {
 
   const event = data?.data;
 
+  const handleBack = useCallback(() => {
+    const decision = eventDetailBackDecision(params.returnTo, router.canGoBack());
+    if (decision.action === "navigate") router.navigate(decision.route as never);
+    else if (decision.action === "back") router.back();
+    else router.replace(decision.route as never);
+  }, [params.returnTo]);
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== "android") return undefined;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleBack]));
+
+  const navigationHeader = (
+    <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
+      <Pressable accessibilityLabel="뒤로" onPress={handleBack} style={styles.iconButton}>
+        <BackIcon size={24} color={COLORS.text} />
+      </Pressable>
+      <Text style={styles.appBarTitle}>일정</Text>
+      <View style={styles.iconButton} />
+    </View>
+  );
+
   if (isLoading) {
-    return <LoadingState />;
+    return <View style={styles.screen}>{navigationHeader}<LoadingState /></View>;
   }
 
   if (isError || !event) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>일정을 불러오지 못했습니다.</Text>
-        <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
-          <Text style={styles.retryButtonText}>다시 시도</Text>
-        </Pressable>
+      <View style={styles.screen}>
+        {navigationHeader}
+        <View style={styles.center}>
+          <Text style={styles.errorText}>일정을 불러오지 못했습니다.</Text>
+          <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -53,22 +81,7 @@ export default function EventDetailScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
-        <Pressable
-          accessibilityLabel="뒤로"
-          onPress={() => {
-            const decision = eventDetailBackDecision(params.returnTo, router.canGoBack());
-            if (decision.action === "navigate") router.navigate(decision.route as never);
-            else if (decision.action === "back") router.back();
-            else router.replace(decision.route as never);
-          }}
-          style={styles.iconButton}
-        >
-          <BackIcon size={24} color={COLORS.text} />
-        </Pressable>
-        <Text style={styles.appBarTitle}>일정</Text>
-        <View style={styles.iconButton} />
-      </View>
+      {navigationHeader}
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
         <View style={[styles.categoryPill, { backgroundColor: categoryTone.backgroundColor }]}>

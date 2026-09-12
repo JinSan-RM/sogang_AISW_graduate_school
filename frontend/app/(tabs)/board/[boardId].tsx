@@ -1080,18 +1080,33 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
     router.replace(boardParentRoute(board) as never);
   }, [board, isTabRoot]);
 
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    setQuery("");
+    setQueryInput("");
+  }, []);
+
   const registerNestedBackHandler = useCallback((handler: (() => void) | null) => {
     nestedBackHandlerRef.current = handler;
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      if (Platform.OS !== "android" || isTabRoot) return undefined;
+      if (Platform.OS !== "android") return undefined;
       const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (sortMenuOpen) {
+          setSortMenuOpen(false);
+          return true;
+        }
+        if (showSearch) {
+          closeSearch();
+          return true;
+        }
+        if (isTabRoot) return false;
         return handleNestedBoardHardwareBack(nestedBackHandlerRef.current, exitBoardDepth);
       });
       return () => subscription.remove();
-    }, [exitBoardDepth, isTabRoot])
+    }, [closeSearch, exitBoardDepth, isTabRoot, showSearch, sortMenuOpen])
   );
 
   const handleFilterPress = (item: string) => {
@@ -1189,11 +1204,7 @@ export default function BoardPostsScreen({ initialBoardId, isTabRoot = initialBo
           <>
             <Pressable
               accessibilityLabel="검색 닫기"
-              onPress={() => {
-                setShowSearch(false);
-                setQuery("");
-                setQueryInput("");
-              }}
+              onPress={closeSearch}
               style={styles.iconButton}
             >
               <SearchBackIcon size={16} />
