@@ -378,6 +378,8 @@ Definition of done:
 
 ## Work Package 9: Phase 4 Full Frontend-Backend Integration
 
+- 2026-09-26 WP9 three-format release preparation: the `production-apk` EAS profile inherits the production environment and remote Android signing credentials, but produces an internally installable APK without incrementing the remote version code. Build the production AAB first so the APK can use the same version code; the production iOS IPA retains its own auto-incrementing build number. Store publication and screenshots remain separate release steps.
+
 - 2026-09-24 WP9 iOS App Store update: the prior IPA (build 8) reached App Store Connect with `expo.version` 0.1.0 while the live App Store version is 1.0 (build 4). Bump the shared app version and Android native version name to 1.0.1 before creating the next production iOS build; EAS remote auto-increment continues to own the iOS build number. Screenshots and App Store review/release remain separate App Store Connect steps.
 
 - 2026-09-24 WP9 iOS submission tooling: EAS CLI 21.3.0 fails Apple Developer login with `iTunes service key is empty`; Expo resolved this in 24.4.1. The CLI range now requires that fix, and the production iOS submit profile uses the existing App Store Connect app ID so EAS can reuse its stored API key without an Apple ID session. Static release configuration checks pass; this does not change the built app binary.
