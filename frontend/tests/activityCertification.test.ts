@@ -40,7 +40,8 @@ const detailParticipants = (
 test("현재 게시판 납부 효력은 검정과 회색 두 색으로만 표시한다", () => {
   assert.equal(activityParticipantTextColor({ is_paid_for_board: true }), "#212429");
   assert.equal(activityParticipantTextColor({ is_paid_for_board: false }), "#8A919C");
-  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /검정.*납부.*회색.*미납/);
+  // Figma Screen/Activity/Verify(110:39) 문구. 색이 뜻하는 것은 납부 여부가 아니라 지원금 지급 여부다.
+  assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /검정은 지급 가능, 회색은 지급 불가/);
   assert.match(ACTIVITY_PARTICIPANT_GUIDANCE, /본인도 검색해서 추가해주세요/);
   assert.doesNotMatch(ACTIVITY_PARTICIPANT_GUIDANCE, /주황|5만원|1회 납부/);
 });
@@ -419,4 +420,42 @@ test("운영 종료만 제외하고 모집 마감·기존 동아리는 모든 �
     pagination: { page, size: 2, total: 3, total_pages: 2 },
   }));
   assert.deepEqual(posts.map((post) => post.id), [2, 3]);
+});
+
+test("고른 참가자의 납부 여부가 유지되어 칩도 검색 목록과 같은 색이 된다", () => {
+  const unpaid = { id: 7, name: "한다현", is_paid_for_board: false };
+  const paid = { id: 8, name: "김민석", is_paid_for_board: true };
+  assert.equal(activityParticipantTextColor(unpaid), activityCertification.ACTIVITY_PARTICIPANT_UNPAID_COLOR);
+  assert.equal(activityParticipantTextColor(paid), activityCertification.ACTIVITY_PARTICIPANT_PAID_COLOR);
+});
+
+test("납부 여부를 모르면 납부자 색으로 둔다", () => {
+  // 메타데이터만 있는 예전 글은 납부 여부가 없다. 회색으로 잘못 칠하면 안 된다.
+  assert.equal(activityParticipantTextColor({}), activityCertification.ACTIVITY_PARTICIPANT_PAID_COLOR);
+  assert.equal(
+    activityParticipantTextColor({ is_paid_for_board: null }),
+    activityCertification.ACTIVITY_PARTICIPANT_PAID_COLOR,
+  );
+});
+
+test("저장된 참가자에 글 상세의 납부 여부를 id로 채운다", () => {
+  const stored: activityCertification.ActivityParticipant[] = [
+    { id: 7, name: "한다현", persisted: true },
+    { id: 8, name: "김민석", persisted: true },
+  ];
+  const filled = activityCertification.withParticipantDuesState(stored, [
+    { id: 7, is_paid_for_board: false },
+    { id: 8, is_paid_for_board: true },
+  ]);
+  assert.equal(filled[0].is_paid_for_board, false);
+  assert.equal(filled[1].is_paid_for_board, true);
+  // 원본을 건드리지 않는다.
+  assert.equal(stored[0].is_paid_for_board, undefined);
+});
+
+test("상세에 없는 참가자와 id 없는 항목은 그대로 둔다", () => {
+  const stored = [{ id: -1, name: "옛날 참가자", legacy: true }];
+  assert.deepEqual(activityCertification.withParticipantDuesState(stored, [{ id: null, is_paid_for_board: false }]), stored);
+  assert.deepEqual(activityCertification.withParticipantDuesState(stored, []), stored);
+  assert.deepEqual(activityCertification.withParticipantDuesState(stored, null), stored);
 });

@@ -67,13 +67,13 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 공지 상세 이미지는 가로 4:3·세로 4:5 고정 프레임이며 전체보기를 열지 않는다", () => {
+test("#41·45 공지 상세 이미지는 가로 4:3·세로 4:5 고정 프레임이며 누르면 공용 사진 보기를 연다", () => {
   assert.match(postDetailSource, /const isNotice = board\?\.board_type === "notice" \|\| post\?\.is_notice === true/);
   assert.match(postDetailSource, /function NoticeAttachmentImage/);
   assert.match(postDetailSource, /noticeAttachmentFrameAspectRatio\(sourceAspectRatio\)/);
   assert.match(postDetailSource, /<MediaImage[\s\S]*resizeMode="contain"[\s\S]*style=\{styles\.noticeAttachmentImage\}/);
   assert.match(postDetailSource, /shouldOpenPostAttachment\(\{[\s\S]*isNotice,[\s\S]*contentType: attachment\.content_type/);
-  assert.match(postDetailSource, /!canOpenAttachment \? \([\s\S]*<NoticeAttachmentImage key=\{attachment\.id\} media=\{attachment\} \/>/);
+  assert.match(postDetailSource, /!canOpenAttachment \? \([\s\S]*onPress=\{\(\) => setViewerIndex\([\s\S]*<NoticeAttachmentImage media=\{attachment\} \/>/);
   assert.doesNotMatch(postDetailSource, /NOTICE_IMAGE_COLLAPSE_ASPECT|collapseNoticeImage|사진 전체보기/);
   assert.match(postDetailSource, /noticeAttachmentImage:[\s\S]*width: "100%"[\s\S]*height: "100%"/);
 });
@@ -113,8 +113,10 @@ test("#62·63 공지 목록은 공통 로딩과 중앙 빈 상태 레이아웃�
   assert.match(noticeListSource, /emptyState:[\s\S]*justifyContent: "center"/);
 });
 
-test("활동 인증 목록 이미지는 이전의 가로형 고정 비율을 사용한다", () => {
-  assert.match(boardSource, /activityThumb:[\s\S]*aspectRatio: 2\.05/);
+test("활동 인증 목록 이미지는 Figma 인증피드카드의 328x219 비율을 쓴다", () => {
+  // 카드 폭은 좌우 16 여백을 뺀 328이라 Figma와 같다. 높이만 맞추면 된다.
+  assert.match(boardSource, /activityThumb:[\s\S]*aspectRatio: 328 \/ 219/);
+  assert.match(boardSource, /cardContent:[\s\S]*paddingHorizontal: 16/);
 });
 
 test("활동 인증 상세 이미지는 게시판별 관리자 규칙을 사용하고 사진첩만 240px 프레임을 유지한다", () => {
@@ -169,7 +171,8 @@ test("#187 홈 동문회 주소록은 디자인 기준의 조밀한 세로 간�
 });
 
 test("스터디 모집 카드 메타는 작성자·날짜 뒤에 댓글 수를 붙이고 추천 수는 감춘다", () => {
-  assert.match(postCardSource, /const showCommentCount = !isLectureReview && !isWorkflowRequest;/);
+  // 강의후기도 댓글을 쓸 수 있으므로 댓글 수는 상조회·건의만 감춘다.
+  assert.match(postCardSource, /const showCommentCount = !isWorkflowRequest;/);
   assert.match(postCardSource, /const showLikeCount = !isWorkflowRequest && !isStudyRecruit;/);
   assert.match(postCardSource, /showCommentCount \? `댓글 \$\{post\.comment_count\}` : null/);
 });

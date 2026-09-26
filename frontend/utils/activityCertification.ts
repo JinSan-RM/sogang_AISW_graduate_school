@@ -12,6 +12,10 @@ export type ActivityParticipant = {
   student_number?: string;
   legacy?: boolean;
   persisted?: boolean;
+  // 검색 결과에서 고른 사람은 원우회비 납부 여부를 함께 들고 온다. 고른 뒤 아래에
+  // 붙는 칩도 검색 목록과 같은 색으로 보여 주기 위해 남긴다. 저장된 글을 다시 열
+  // 때는 글 상세의 activity_participants에서 채운다.
+  is_paid_for_board?: boolean | null;
 };
 
 type ActivityBadgePost = {
@@ -74,7 +78,9 @@ export const ACTIVITY_PARTICIPANT_PAID_COLOR = "#212429";
 export const ACTIVITY_PARTICIPANT_UNPAID_COLOR = "#8A919C";
 
 export function activityParticipantTextColor(
-  participant: { is_paid_for_board: boolean | null },
+  // 납부 여부를 모르는 경우(저장된 글의 메타데이터 등)는 undefined로 들어온다.
+  // 명시적으로 false일 때만 미납자 색이므로 그대로 납부자 색이 된다.
+  participant: { is_paid_for_board?: boolean | null },
 ) {
   return participant.is_paid_for_board === false
     ? ACTIVITY_PARTICIPANT_UNPAID_COLOR
@@ -85,8 +91,9 @@ export function activityParticipantSearchKey(boardId: number, query: string) {
   return ["dues-payer-search", boardId, query] as const;
 }
 
+// Figma Screen/Activity/Verify(60:70)의 참가자안내(110:39) 문구를 그대로 쓴다.
 export const ACTIVITY_PARTICIPANT_GUIDANCE =
-  "참가자 이름 색상 구분: 검정은 현재 활동 기준 납부, 회색은 현재 활동 기준 미납입니다. 지원금은 참가자 목록 기준 지급되니 본인도 검색해서 추가해주세요.";
+  "참가자 이름 색상으로 지원금 지급 여부를 알 수 있어요. 검정은 지급 가능, 회색은 지급 불가. 본인도 검색해서 추가해주세요.";
 
 export function activityBankAccountFieldState(postId: number | null) {
   if (postId) {
@@ -233,6 +240,28 @@ export function activityParticipantsFromMetadata(
     legacy: true,
     persisted: true,
   }));
+}
+
+/**
+ * 저장된 참가자 목록에 글 상세가 준 납부 여부를 채워 넣는다. 메타데이터에는 이름과
+ * dues_payer_id만 있어 색을 알 수 없으므로, 수정 화면에서도 검색 목록과 같은 색이
+ * 나오도록 id로 맞춘다. 상세에 없는 사람은 그대로 둔다(= 납부자 색).
+ */
+export function withParticipantDuesState(
+  participants: ActivityParticipant[],
+  details?: { id: number | null; is_paid_for_board: boolean | null }[] | null,
+): ActivityParticipant[] {
+  if (!Array.isArray(details) || details.length === 0) return participants;
+  const paidById = new Map<number, boolean | null>();
+  for (const detail of details) {
+    if (typeof detail.id === "number") paidById.set(detail.id, detail.is_paid_for_board);
+  }
+  if (paidById.size === 0) return participants;
+  return participants.map((participant) => (
+    paidById.has(participant.id)
+      ? { ...participant, is_paid_for_board: paidById.get(participant.id) ?? null }
+      : participant
+  ));
 }
 
 export function activityParticipantSelectionError(
