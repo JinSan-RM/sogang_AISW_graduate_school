@@ -1,0 +1,21 @@
+# Three-format release artifacts — 2026-09-26
+
+Source commit: `122b7b28ad92beecd158dbff885a9aab18e61aa1` (`main`). All three EAS builds use the production environment. The APK profile inherits the production signing credentials and does not increment Android's remote version code after the AAB build.
+
+| Format | Version | EAS build | Artifact | SHA-256 |
+| --- | --- | --- | --- | --- |
+| AAB | 1.0.1 (Android code 9) | [5ecaa33b](https://expo.dev/accounts/kimjinsan11/projects/sogang-community/builds/5ecaa33b-44ae-425a-989b-d09a5d766ac1) | [Download](https://expo.dev/artifacts/eas/9L3RTBqsV92alNW_IwtOhAWoKE4iKGm3tOR-KFR2WpQ.aab) | `20f449c16140beb4621b2fdbf3f4156c2c7aeb0e9b9a83159428c6e5ebecb059` |
+| APK | 1.0.1 (Android code 9) | [677b7d98](https://expo.dev/accounts/kimjinsan11/projects/sogang-community/builds/677b7d98-a663-4113-9cdf-f460bf048f3e) | [Download](https://expo.dev/artifacts/eas/o3y_jC45xxxPLce-Gvg6uJ4JLdzQBd2HlP3RW2FYaws.apk) | `42a5301776da3e55c06b07f4afb185a528f9ea839ee5e3772ce39b21b2041b17` |
+| IPA | 1.0.1 (iOS build 10) | [26c5e4ad](https://expo.dev/accounts/kimjinsan11/projects/sogang-community/builds/26c5e4ad-5ded-4a5e-a409-068fa1f4bfcc) | [Download](https://expo.dev/artifacts/eas/-mvjvagoSUi8Y1Fb1bIp5aIjinsbt9ADBcBHPPt2Qxc.ipa) | `d4f16d9332dbb8c1dc9819a3ce6ffa4880235465dacde4d7f2306b8a3e042c13` |
+
+Local copies are ignored by Git under `outputs/releases/2026-09-26/`.
+
+## Verification
+
+- `npm test`: 804 passed, 0 failed. `npm run typecheck`: passed. `npm run release:check:ci`: passed with 11 previously approved external-input blockers reported by the validator.
+- EAS reported all three builds `FINISHED` with the same source commit. The AAB and APK share Android code 9 and source fingerprint `5c239f2ba68d66de4b86df79032196a097d09e47`.
+- All three downloaded archives passed ZIP integrity checks. The IPA's `Info.plist` contains bundle ID `kr.ac.sogang.aisw.campus`, version `1.0.1`, build `10`, and the `AppIcon` entry. APK manifest inspection shows package `kr.ac.sogang.aisw.campus`, version code `9`, version name `1.0.1`, and target SDK `36`.
+- `apksigner verify` passed with APK Signature Scheme v2. `jarsigner -verify` passed for the AAB; its Android upload key is self-signed as expected. The AAB and APK signer SHA-256 digest is `34809aacf23ca22f2522a0c591f6fdf2c2dfe0a0537523e09e6bd486becd31de`.
+- [iOS submission b359b9cc](https://expo.dev/accounts/kimjinsan11/projects/sogang-community/submissions/b359b9cc-a066-4f95-9179-a2fb16144f88) is `FINISHED` on EAS. At the last App Store Connect status query, the live listing was version `1.1`/build `9`; build `10` had not yet appeared in the valid TestFlight build list.
+
+The AAB has not been submitted to Google Play in this run. App Store review/publication and screenshot changes have not been performed in this run.

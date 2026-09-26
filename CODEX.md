@@ -378,7 +378,7 @@ Definition of done:
 
 ## Work Package 9: Phase 4 Full Frontend-Backend Integration
 
-- 2026-09-26 WP9 three-format release preparation: the `production-apk` EAS profile inherits the production environment and remote Android signing credentials, but produces an internally installable APK without incrementing the remote version code. Build the production AAB first so the APK can use the same version code; the production iOS IPA retains its own auto-incrementing build number. Store publication and screenshots remain separate release steps.
+- 2026-09-26 WP9 three-format release: the `production-apk` EAS profile inherits the production environment and remote Android signing credentials, but produces an internally installable APK without incrementing the remote version code. Production AAB and APK were built from the same commit as version 1.0.1/code 9; the iOS IPA is version 1.0.1/build 10 and was uploaded through EAS Submit. Archive, version, and signature checks are recorded in `docs/qa/RELEASE_ARTIFACTS_2026-09-26.md`. Play Console publication, App Store review/release, and screenshots remain separate steps.
 
 - 2026-09-24 WP9 iOS App Store update: the prior IPA (build 8) reached App Store Connect with `expo.version` 0.1.0 while the live App Store version is 1.0 (build 4). Bump the shared app version and Android native version name to 1.0.1 before creating the next production iOS build; EAS remote auto-increment continues to own the iOS build number. Screenshots and App Store review/release remain separate App Store Connect steps.
 
