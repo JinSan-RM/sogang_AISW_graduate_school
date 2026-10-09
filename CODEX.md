@@ -1,5 +1,14 @@
 # Codex Work Backlog
 
+2026-10-09 WP9 store follow-up: user explicitly requested store submission and
+approved 1.0.4 for public review. ASC currently reports live 1.0.3/build 14;
+1.0.3/build 15 was uploaded via EAS submission `6a91c47b` (FINISHED), with
+Apple processing still to verify. Advance display/native versionName to 1.0.4
+and rebuild from a clean commit with existing remote signing identities.
+Android submission is awaiting the existing Play submission credential or
+console access; EAS has no submission service-account key for this package.
+Plan: `docs/superpowers/plans/2026-10-09-store-submission.md`.
+
 2026-10-09 WP9 native artifact follow-up: per the user's IPA/AAB/APK request,
 built all three from clean main `8e6107a`, including the poll reference UI and
 merged PR #31. Preserve display version 1.0.3; EAS remote counters advance to
