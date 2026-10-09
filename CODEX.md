@@ -3,11 +3,17 @@
 2026-10-09 WP9 store follow-up: user explicitly requested store submission and
 approved 1.0.4 for public review. ASC currently reports live 1.0.3/build 14;
 1.0.3/build 15 was uploaded via EAS submission `6a91c47b` (FINISHED), with
-Apple processing still to verify. Advance display/native versionName to 1.0.4
-and rebuild from a clean commit with existing remote signing identities.
+Apple processing unverified. Version change committed/pushed as `cee7d48`.
+1.0.4/build16 IPA finished, package checks pass, EAS upload `a2789199` finished,
+and Apple VALID build is attached to the 1.0.4 draft with MANUAL release.
+Review is blocked by the inherited non-email demo login; valid review access
+requested. Android 1.0.4/code14 AAB finished; downloaded source/identity/version,
+CRC/font/API, signature/certificate, bundletool and16KB checks pass.
 Android submission is awaiting the existing Play submission credential or
 console access; EAS has no submission service-account key for this package.
-Plan: `docs/superpowers/plans/2026-10-09-store-submission.md`.
+No App Review/Play submission or public release is claimed. Evidence:
+`docs/qa/STORE_SUBMISSION_1_0_4_2026-10-09.md`; plan:
+`docs/superpowers/plans/2026-10-09-store-submission.md`.
 
 2026-10-09 WP9 native artifact follow-up: per the user's IPA/AAB/APK request,
 built all three from clean main `8e6107a`, including the poll reference UI and

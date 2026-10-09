@@ -28,19 +28,23 @@
 
 ## Task 1: Release version and native builds
 
-- [ ] Update frontend/app.json and frontend/android/app/build.gradle to 1.0.4.
-- [ ] Run npm run release:check:local and inspect the complete Git diff.
-- [ ] Commit the verified version change and build production IPA/AAB with frozen existing credentials.
-- [ ] Download FINISHED artifacts; verify the exact source, version, identity, signing/profile and 16 KB Android alignment using the existing artifact verifier.
+- [x] Update frontend/app.json and frontend/android/app/build.gradle to 1.0.4.
+- [x] Run npm run release:check:local and inspect the complete Git diff.
+- [x] Commit the verified version change and queue production IPA/AAB with frozen existing credentials.
+- [x] Download FINISHED artifacts; verify the exact source, version, identity, signing/profile and 16 KB Android alignment using the existing artifact verifier.
 
 ## Task 2: Store submission
 
-- [ ] Reuse the managed ASC API key; upload the exact new IPA and verify Apple's processingState.
-- [ ] Inspect existing ASC version/localization/review metadata, prepare 1.0.4 and attach the valid build.
+- [x] Reuse the managed ASC API key; upload the exact new IPA and verify Apple's processingState.
+- [x] Inspect existing ASC version/localization/review metadata, prepare 1.0.4 and attach the valid build.
 - [ ] Submit App Review and verify the returned review state, or report the exact missing store requirement.
-- [ ] Locate existing Play submission credentials/console access in prior authorized records; upload the exact AAB and verify the configured review/track state, or report the access blocker.
+- [x] Search prior authorized Play records; report no existing submission key or accessible console session. Upload/review remains blocked until access is available.
 
 ## Task 3: Evidence
 
-- [ ] Record IDs, source, artifact checks, review states and limitations in docs/qa and CODEX.md.
-- [ ] Check documentation against actual remote results, commit and push the release record.
+- [x] Record IDs, source, artifact checks, review states and limitations in docs/qa and CODEX.md.
+- [x] Check documentation against actual remote results and commit/push the release record.
+
+Remaining store work is blocked on a valid production App Review demo login
+and authorized Play submission access. Apple upload/VALID processing and draft
+attachment are complete; actual App Review/Play submission is not complete.
