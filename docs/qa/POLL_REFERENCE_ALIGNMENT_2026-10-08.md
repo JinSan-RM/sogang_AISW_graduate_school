@@ -115,3 +115,50 @@ Logs and the disposable web export are in ignored
 `outputs/qa/poll-push-2026-10-09/`. This request updates Git; GCP deployment and
 native/store release remain separate. Existing local browser captures above
 verify the poll design; no fresh physical iOS/Android validation is claimed.
+
+## GCP deployment — 2026-10-09
+
+The user subsequently authorized GCP deployment. Previous VM checkout/runtime
+was `7a2cffe`; deployed application code is
+`462c826a824c8aacbec4a75ae1ecb32dd1e5972c`, including merged PR #31 and these poll
+changes. The server is `sogang-aisw-app` in `asia-northeast3-b`, repository
+`/opt/aisw-app`, canonical site `https://www.aisw-campus.com`.
+
+- Candidate backend/worker/frontend production builds completed before replacing
+  the running services. No migration or deployment configuration changed.
+- Coordinated private DB/public-media/private-media backup completed in
+  `/srv/aisw-backups/poll-20261009-462c826`. Archive parsing and SHA-256 checks
+  passed; each artifact has mode 600. Previous runtime images and environment
+  snapshots were retained privately on the VM.
+- The real custom-format database dump was restored successfully into an isolated
+  temporary PostgreSQL container with networking disabled. Its migration head
+  remained `0034_attendance_polls`; the temporary container was removed.
+- Production-domain deployment and verification jobs exited **0**. Recovery
+  coverage remained active through verification. Error scanning began before
+  service replacement, including startup.
+- Production Alembic current/check passed with one head
+  `0034_attendance_polls` and no new upgrade operations.
+- Backend and worker each match **all 134** tracked runtime/migration source
+  hashes. Backend, worker, web, database and ingress are running with restart
+  count **0**. Backend/worker post-switch error-marker counts are **0**.
+- HTTPS certificate/readiness, IP compatibility and canonical/alias redirect
+  smoke checks passed. External login/privacy/detail/admin deep links served
+  the current web shell. Unauthenticated poll/participant/admin APIs returned
+  normalized **401** errors.
+- External served index and JavaScript bytes match the frontend container.
+  Bundle: `entry-46d51e82bdf3e87f0f36b76c0f50d28c.js`, 3,992,857 bytes, SHA-256
+  `8ce57c623eb0453a014cc0d6a92d563b15c2cc90ff7447183f4cceb8731750c7`.
+  Index SHA-256:
+  `9c13fcdcafef14e528da49b0ba81b9138bdee60de058ac1b968001c50b47bc00`.
+
+No production users, votes, notices or notifications were created for checks.
+Operational script review findings were corrected before switching: explicit
+clean-checkout guards, network-isolated restore, recovery through verification,
+and startup-inclusive error scanning. Corrected scripts had no remaining
+concrete review blockers.
+
+Redacted verification evidence is in ignored
+`outputs/qa/gcp-poll-deploy-2026-10-09/`; backups and private restore diagnostics
+remain on the VM. This deployment does not publish Android/iOS packages or
+replace the outstanding physical-device QA. The final deployment-record commit
+changes documentation only; application sources remain identical to `462c826`.

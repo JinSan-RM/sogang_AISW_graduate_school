@@ -1,5 +1,14 @@
 # Codex Work Backlog
 
+2026-10-09 WP6/WP8/WP9 P0 GCP deployment completed: runtime `462c826` includes
+merged PR #31 and the supplied-reference poll follow-up. Candidate Docker builds,
+coordinated DB/media backup and actual isolated database restore passed. All 134
+tracked backend/worker source hashes match; production remains at the single
+`0034_attendance_polls` head with no schema drift. Public HTTPS/deep links,
+unauthenticated API guards and served-bundle hashes pass; services run with zero
+restarts and no post-switch backend/worker error markers. No native/store release.
+Evidence: `docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md` (GCP follow-up).
+
 2026-10-09 WP6/WP8/WP9 P0 poll integration for commit/push: pulled the user's
 merged PR #31 main (`3b32d6a`) and restored the supplied-reference poll changes
 without conflicts. Preserve the merged shared-route/tab-stack design. Fresh
@@ -20,7 +29,8 @@ Voted participant summaries add only current major; no schema migration.
 Final frontend938/backend626 tests pass (three PostgreSQL lock tests skipped in
 local SQLite), typecheck/lint/web export and browser state/paging checks pass.
 Independent review approved the corrected diff. Verification:
-`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`. This follow-up is not deployed.
+`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`. The subsequent GCP deployment
+is recorded in its 2026-10-09 follow-up.
 
 2026-10-08 WP5/WP6/WP8/WP9 integration completed: administrator/poll development and latest main are committed/pushed; merged local5/remote3 branches removed with worktrees preserved. GCP runs the verified code with single database head `0034_attendance_polls` after coordinated backup and actual restore/migration rehearsal. Final frontend940 and PostgreSQL629 tests pass; typecheck/lint/web build and read-only live verification pass. Native device/store QA remains Phase5. Evidence: `docs/qa/INTEGRATION_GCP_2026-10-08.md`.
 
