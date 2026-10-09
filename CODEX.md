@@ -1,5 +1,16 @@
 # Codex Work Backlog
 
+2026-10-09 WP9 native artifact follow-up: per the user's IPA/AAB/APK request,
+built all three from clean main `8e6107a`, including the poll reference UI and
+merged PR #31. Preserve display version 1.0.3; EAS remote counters advance to
+Android 13 and iOS 15, with APK sharing AAB's Android number. Production EAS
+public URLs now use canonical www.aisw-campus.com. All builds finished and
+downloaded archives passed version/identity/CRC/font/API checks; Android
+signatures, certificate, bundletool and 16KB checks pass. APK/AAB Hermes bundles
+match. Fresh 966 frontend tests, typecheck, lint and strict release config pass.
+Independent macOS codesign and physical native runtime remain Phase 5 QA;
+store submission is separate. Evidence: `docs/qa/RELEASE_1_0_3_2026-10-09.md`.
+
 2026-10-09 WP6/WP9 P0 poll participant sheet width follow-up: reproduced the
 420px sheet protruding 7.5px on each side of the 405px member web frame. Match
 the frame above the existing 430px web breakpoint; smaller web and native
