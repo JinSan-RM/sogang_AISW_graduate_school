@@ -5,8 +5,10 @@
 the frame above the existing 430px web breakpoint; smaller web and native
 widths keep the previous cap. Browser geometry at 320/390/430/431/669/1280px,
 option-tab switching and dismissal pass; 12 poll tests, typecheck and scoped
-lint pass. Local development fix; verification is appended to
-`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`.
+lint pass. Committed/pushed as `8d54268`; GCP frontend-only deployment passed
+HTTPS/deep-link/auth-guard checks and served asset hash verification. Backend,
+worker, DB and ingress containers and private environment files are unchanged.
+Verification: `docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`.
 
 2026-10-09 WP6/WP8/WP9 P0 GCP deployment completed: runtime `462c826` includes
 merged PR #31 and the supplied-reference poll follow-up. Candidate Docker builds,

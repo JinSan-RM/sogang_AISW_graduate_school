@@ -196,3 +196,39 @@ its temporary cold-start network state recovered through the existing Retry
 action before final measurements. This follow-up is verified locally; the
 earlier GCP deployment above still identifies the previous runtime. Physical
 native runtime was not re-tested for this web-only change.
+
+### Commit/push and GCP follow-up
+
+The user subsequently requested committing, pushing and deploying the width
+fix. Fresh typecheck, scoped lint and all 12 poll component tests passed before
+commit. Main `8d542689b9316386766cf67c567563cf3ce983e1` was pushed and
+fast-forwarded on the existing GCP VM.
+
+Only the frontend image was rebuilt and recreated, using the existing production
+Compose overlays and private environment files. Ingress configuration tested
+successfully and nginx reloaded to resolve the new frontend container address.
+The previous web image and index are retained privately in the rollout record
+`/srv/aisw-backups/poll-width-20261009-8d54268`, with image tag
+`aisw-rollback-poll-width-8d54268`. Recovery coverage remained active through
+public verification. Independent operational script review found no blockers.
+
+- Deployment job exited **0**, completed at **2026-10-09 03:21 UTC**.
+- Official HTTPS/certificate/readiness/deep-link and canonical/alias smoke checks
+  passed. Local external requests independently confirmed the same results.
+- Login, privacy, post-detail and admin deep links serve the new web shell.
+  Unauthenticated poll, participant and admin APIs return normalized **401**.
+- Served index and JavaScript SHA-256 values match the deployed frontend image.
+  Bundle: `entry-bc2a2de2b84b324588e0aa47c44bd476.js`, **3,992,875 bytes**, SHA-256
+  `4348818d48c1106dffa0f98f512733586184fb1eec026fc2a9db6261be3eca82`.
+  Index SHA-256:
+  `58458a320cea89edd581ca10d6a501e69a182dc89a58b7d0091009507fd6b56e`.
+- Backend, worker, DB and ingress container IDs/image IDs remain identical;
+  production/worker environment checksums remain identical. No migrations ran.
+  Web is healthy; all five services run with restart count **0**. Post-switch
+  web error-marker count is **0**.
+
+No production content, votes or accounts were changed. Redacted deployment logs,
+scripts and external result JSON are in ignored
+`outputs/qa/gcp-poll-width-2026-10-09/`. This supersedes the local-only scope
+of the preceding section. The final deployment-record commit changes only
+documentation; deployed application code remains identical to `8d54268`.
