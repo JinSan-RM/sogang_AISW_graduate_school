@@ -97,6 +97,7 @@ def participants(post_id: int, option_id: int | None = Query(None, ge=1),
     for ballot, member in rows:
         answers = [{"question_id": q.id, "question_title": q.title, "option_id": o.id, "label": o.label}
                    for bid, o, q in selections if bid == ballot.id and (question_id is None or q.id == question_id)]
-        result.append({"user_id": member.id, "nickname": member.nickname, "cohort": member.cohort, "answers": answers})
+        result.append({"user_id": member.id, "nickname": member.nickname, "cohort": member.cohort,
+                       "major": member.major, "answers": answers})
     return success_response(result, pagination={"page": page, "size": size, "total": total,
                                                "total_pages": math.ceil(total / size)})

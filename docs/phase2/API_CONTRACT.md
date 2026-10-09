@@ -1,5 +1,12 @@
 # Phase 2 API Contract
 
+2026-10-08 WP6/WP8/WP9 supplied-reference participant profiles: voted rows from
+`GET /posts/{id}/poll/participants` additionally return nullable current `major`
+for the member sheet subtitle. Keep `user_id`, current `nickname`, `cohort` and
+question-scoped answers/pagination. The `not_voted` response is unchanged and
+does not gain major. No contact, company, account or roster fields are returned;
+parent-notice/member access and option ownership checks remain unchanged.
+
 2026-10-08 WP6/WP8/WP9 P0 poll usability: `GET /posts/admin/all` additionally
 returns nullable `poll_summary` for each selected-page notice:
 `{question_count, open_count, closed_count, participant_count}`. Counts are batched

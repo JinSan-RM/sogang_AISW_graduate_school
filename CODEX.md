@@ -1,5 +1,27 @@
 # Codex Work Backlog
 
+2026-10-09 WP6/WP8/WP9 P0 poll integration for commit/push: pulled the user's
+merged PR #31 main (`3b32d6a`) and restored the supplied-reference poll changes
+without conflicts. Preserve the merged shared-route/tab-stack design. Fresh
+frontend 966/966, backend 626 passed/3 PostgreSQL-only skips, typecheck, full
+lint, backend compile and Expo web export pass. Independent read-only review
+found no actionable issues. No GCP deployment or native release is included.
+Evidence: `docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md` (2026-10-09 follow-up).
+
+2026-10-08 WP6/WP8/WP9 P0 supplied-reference poll UI completed: follow the user's two
+attached screenshots in the existing notice flow. Immediate option-tap voting;
+compact full-row result fills, saved-answer outline/check, total count and only
+post-vote/closed participant access; closed badge and no closed revote. Remove
+member progress, receipts, rankings, refresh, submit/result buttons and extra
+participant tabs. Show option-tab bottom sheets with cohort/name/major/avatar
+cards and scrolling pagination. Align the read-only admin preview; preserve
+manual closure, first-vote lock, legacy results and account-scoped caching.
+Voted participant summaries add only current major; no schema migration.
+Final frontend938/backend626 tests pass (three PostgreSQL lock tests skipped in
+local SQLite), typecheck/lint/web export and browser state/paging checks pass.
+Independent review approved the corrected diff. Verification:
+`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`. This follow-up is not deployed.
+
 2026-10-08 WP5/WP6/WP8/WP9 integration completed: administrator/poll development and latest main are committed/pushed; merged local5/remote3 branches removed with worktrees preserved. GCP runs the verified code with single database head `0034_attendance_polls` after coordinated backup and actual restore/migration rehearsal. Final frontend940 and PostgreSQL629 tests pass; typecheck/lint/web build and read-only live verification pass. Native device/store QA remains Phase5. Evidence: `docs/qa/INTEGRATION_GCP_2026-10-08.md`.
 
 2026-10-08 WP5/WP8/WP9 integration/deployment: harden credential deletion races and mutual-aid evidence policy, isolate administrator dialogs across sessions, preserve notice body anchors via dedicated editing, and serialize PostgreSQL board hierarchy writes. Consolidate current administrator/usage/poll work with latest main; preserve every named branch tip before deletion. Execute isolated PostgreSQL migration/API tests, full merged-tree checks and a verified production DB/media backup before GCP synchronization. Plan: `docs/superpowers/plans/2026-10-08-integrate-admin-polls-deploy.md`.

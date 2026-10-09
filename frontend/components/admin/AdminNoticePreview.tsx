@@ -30,14 +30,15 @@ export default function AdminNoticePreview({notice, attachments, disabled}: {not
               : <MediaImage key={index} media={{id: block.media_id}} style={styles.image} resizeMode="contain" />)}
             {attachments.filter(image => !inline.has(image.id)).map(image => <MediaImage key={image.id} media={image} style={styles.image} resizeMode="contain" />)}
             {notice.poll?.questions.map((question, index) => <View key={question.id ?? index} style={styles.poll}>
-              <View style={styles.pollHeader}><Text style={styles.hint}>투표 {index + 1}</Text><Text style={styles.category}>{!question.id ? "등록 후 시작" : question.is_closed ? "종료" : "진행 중"}</Text></View>
-              <Text style={styles.question}>{question.title.trim() || "투표 질문을 입력해 주세요"}</Text>
-              <Text style={styles.hint}>기명 투표 · {question.legacy ? "기존 투표 결과" : "하나만 선택"}</Text>
+              <View style={styles.pollHeader}>
+                <Text style={styles.question}>{question.title.trim() || "투표 질문을 입력해 주세요"}</Text>
+                {question.is_closed ? <Text style={styles.closedBadge}>마감</Text> : null}
+              </View>
+              {question.is_closed ? <Text style={styles.hint}>마감됨</Text> : null}
               {question.options.map((option, oi) => <View key={option.id ?? oi} style={styles.option}>
-                <View style={styles.radio} /><Text style={styles.optionText}>{pollOptionLabel(option.label, question.kind) || "선택항목을 입력해 주세요"}</Text>
+                <Text style={styles.optionText}>{pollOptionLabel(option.label, question.kind) || "선택항목을 입력해 주세요"}</Text>
                 {option.media_id ? <MediaImage media={{id: option.media_id}} style={styles.optionImage} resizeMode="cover" /> : null}
               </View>)}
-              <Text style={styles.hint}>항목 구성 미리보기 · 실제 응답 현황은 저장된 공지에서 확인하세요.</Text>
             </View>)}
           </ScrollView>
         </View>
@@ -54,8 +55,9 @@ const styles = StyleSheet.create({
   closeText: {fontSize: 26, color: "#15171C"}, content: {padding: 20, gap: 12, paddingBottom: 32},
   hint: {fontSize: 12, lineHeight: 19, color: "#6B7280"}, category: {fontSize: 12, color: "#2761FF"},
   title: {fontSize: 20, lineHeight: 29, color: "#15171C", fontWeight: "600"}, body: {fontSize: 14, lineHeight: 23, color: "#15171C"},
-  image: {width: "100%", height: 220, borderRadius: 4}, poll: {padding: 16, borderWidth: 1, borderColor: "#E8EAED", borderRadius: 4, gap: 8},
-  pollHeader: {flexDirection: "row", justifyContent: "space-between", gap: 8}, question: {fontSize: 16, lineHeight: 24, fontWeight: "600", color: "#15171C"},
-  option: {flexDirection: "row", minHeight: 44, alignItems: "center", gap: 8}, radio: {width: 18, height: 18, borderWidth: 1, borderColor: "#D3D6DB", borderRadius: 9},
-  optionText: {flex: 1, minWidth: 0, fontSize: 14, lineHeight: 21, color: "#15171C"}, optionImage: {width: 40, height: 40},
+  image: {width: "100%", height: 220, borderRadius: 4}, poll: {padding: 16, borderWidth: 1, borderColor: "#E8EAED", borderRadius: 10, gap: 10},
+  pollHeader: {flexDirection: "row", alignItems: "center", gap: 8}, question: {flexShrink: 1, fontSize: 14, lineHeight: 21, fontWeight: "600", color: "#15171C"},
+  closedBadge: {fontSize: 10, lineHeight: 16, color: "#7B8291", backgroundColor: "#F3F4F6", paddingHorizontal: 6, borderRadius: 8},
+  option: {flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, borderRadius: 7, backgroundColor: "#F3F4F6", paddingHorizontal: 12, paddingVertical: 10},
+  optionText: {flex: 1, minWidth: 0, fontSize: 13, lineHeight: 20, color: "#15171C"}, optionImage: {width: 32, height: 32, borderRadius: 4},
 });

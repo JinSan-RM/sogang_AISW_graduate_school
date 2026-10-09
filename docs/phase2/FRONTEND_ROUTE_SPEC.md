@@ -1,5 +1,19 @@
 # Phase 2 Frontend Route and Screen Spec
 
+2026-10-08 WP6/WP8/WP9 supplied-reference member poll layout supersedes the
+earlier progress/receipt and full-screen status UI below. The existing notice
+detail uses compact rounded cards, full-row blue count fills, a confirmed
+choice outline/check and total count. Open unvoted cards save immediately on
+option tap; voted cards offer participant access and 다시 투표하기. Closed cards
+show 마감/마감됨 and no voting controls. Participant access opens a transparent
+bottom sheet containing only option/count tabs and rounded avatar/cohort/name/
+major rows. More participants load on scroll; backdrop/handle/back closes the
+sheet. No member refresh/ranking/submit/result/progress/receipt or extra status
+tabs remain. Empty/loading/error recovery states remain available. Admin
+draft previews match the rows without fabricated participant counts. Existing
+manual closure and routes remain; absent poll deadline data is not invented or
+copied from the notice application deadline.
+
 2026-10-08 WP8/WP9 hardening: web notice create/edit links, including legacy generic-composer admin routes, dispatch to the dedicated notice editor so inline image anchors, deadlines and poll state are managed together. Non-notice post editing retains the generic composer. Administrator dialogs cannot survive authentication-session replacement or accept stale callbacks from an unmounted host.
 
 2026-10-08 WP6/WP8/WP9 P0 poll usability: existing admin notice forms explain

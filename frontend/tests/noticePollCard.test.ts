@@ -12,7 +12,7 @@ const fixture: NoticePoll = {id: 1, post_id: 50, revision: 2, ends_at: null, clo
   questions: [{id: 10, title: "장소", kind: "text", allow_multiple: false,
     options: [{id: 20, label: "학교", media_id: null, vote_count: 0}, {id: 21, label: "식당", media_id: null, vote_count: 0}]}]};
 
-function harness(initialPoll: NoticePoll, failures = 0) {
+function harness(initialPoll: NoticePoll, failures = 0, holdVote = false) {
   let poll = initialPoll;
   const path = join(process.cwd(), "components/NoticePollCard.tsx");
   const nativeRequire = createRequire(path), react = nativeRequire("react");
@@ -20,6 +20,12 @@ function harness(initialPoll: NoticePoll, failures = 0) {
   let index = 0;
   const submissions: unknown[][] = [];
   const queryKeys: unknown[] = [];
+  const infiniteOptions: any[] = [];
+  const participantCalls: unknown[][] = [];
+  let release!: () => void;
+  const pending = holdVote ? new Promise<void>(resolve => {release = resolve;}) : Promise.resolve();
+  const member = {user_id: 7, nickname: "홍길동", cohort: "72", major: "데이터사이언스·인공지능", answers: [{question_id: 10, question_title: "장소", option_id: 20, label: "학교"}]};
+  const pages = [{status: "success", data: [member], pagination: {page: 1, size: 20, total_pages: 2, total: 21}}];
   const cacheActions: {action: string; key?: unknown}[] = [];
   let cardKeys: (string | null)[] = [];
   const compiled = ts.transpileModule(readFileSync(path, "utf8"), {compilerOptions: {
@@ -28,11 +34,16 @@ function harness(initialPoll: NoticePoll, failures = 0) {
   const fakeApi = {get: async () => ({data: poll}), vote: async (...args: unknown[]) => {
     submissions.push(args);
     if (failures-- > 0) throw {response: {data: {message: "연결을 확인한 뒤 다시 시도해 주세요."}}};
-    return {data: {...poll, has_voted: true}};
+    await pending;
+    const answers = args[2] as NoticePoll["my_answers"];
+    const next = {...poll, has_voted: true, my_answers: [...poll.my_answers.filter(a => !answers.some(next => next.question_id === a.question_id)), ...answers],
+      questions: poll.questions.map(q => answers.some(a => a.question_id === q.id) ? {...q, has_voted: true} : q)};
+    return {data: next};
   },
-    participants: async () => ({data: [{user_id: 7, nickname: "홍길동", cohort: "72", answers: [{question_id: 10, question_title: "장소", option_id: 20, label: "학교"}]}], pagination: {page: 1, total_pages: 1, total: 1}})};
+    participants: async (...args: unknown[]) => {participantCalls.push(args); return {status: "success", data: [member], pagination: {page: args[1], size: 20, total_pages: 2, total: 21}};}};
   const module = {exports: {} as {default: (props: unknown) => unknown}};
   const loader = (id: string) => {
+    if (id === "@expo/vector-icons") return {Ionicons: "Icon"};
     if (id === "react") return {...react, useEffect: () => {},
       useRef: (initial: unknown) => {const i = index++; if (!(i in states)) states[i] = {current: initial}; return states[i];},
       useState: (initial: unknown) => {const i = index++; if (!(i in states)) states[i] = typeof initial === "function" ? (initial as () => unknown)() : initial;
@@ -41,8 +52,12 @@ function harness(initialPoll: NoticePoll, failures = 0) {
     if (id === "react-native-safe-area-context") return {useSafeAreaInsets: () => ({top: 0, bottom: 0, left: 0, right: 0})};
     if (id === "@tanstack/react-query") return {useQueryClient: () => ({
       cancelQueries: async (options: any) => {cacheActions.push({action: "cancel", key: options.queryKey});},
-      setQueryData: (key: unknown) => {cacheActions.push({action: "write", key});},
+      setQueryData: (key: unknown, next: {data: NoticePoll}) => {cacheActions.push({action: "write", key}); poll = next.data;},
       invalidateQueries: async (options: any) => {cacheActions.push({action: "refetch", key: options.queryKey});}}),
+      useInfiniteQuery: (options: any) => {queryKeys.push(options.queryKey); infiniteOptions.push(options); return {
+        data: {pages}, isError: false, isFetching: false, isFetchingNextPage: false, hasNextPage: true,
+        refetch: async () => {}, fetchNextPage: async () => {const next = await options.queryFn({pageParam: 2}); pages.push(next);},
+      };},
       useQuery: (options: {queryKey: unknown[]}) => {queryKeys.push(options.queryKey); return {data: options.queryKey[0] === "notice-poll" ? {data: poll} : {data: [{user_id: 7, nickname: "홍길동", cohort: "72", answers: [{question_id: 10, question_title: "장소", option_id: 20, label: "학교"}]}], pagination: {page: 1, total_pages: 1, total: 1}}, refetch: async () => {}, isError: false, isFetching: false};}};
     if (id.endsWith("/services/api")) return {pollApi: fakeApi};
     if (id.endsWith("/stores/userStore")) return {useUserStore: (selector: (v: unknown) => unknown) => selector({userId: 1})};
@@ -68,19 +83,21 @@ function harness(initialPoll: NoticePoll, failures = 0) {
     walk(module.exports.default({postId: 50, poll}));
     return nodes;
   };
-  return {render, submissions, queryKeys, cacheActions, keys: () => cardKeys, update: (next: NoticePoll) => {poll = next;}};
+  return {render, submissions, queryKeys, cacheActions, infiniteOptions, participantCalls, release: () => release(), pages, keys: () => cardKeys, update: (next: NoticePoll) => {poll = next;}};
 }
 
-test("member selects an option then submits actual question IDs once", async () => {
+
+const label = (nodes: any[], value: string) => nodes.find(node => node.props.accessibilityLabel === value);
+const voted = (): NoticePoll => ({...fixture, has_voted: true, locked: true, my_answers: [{question_id: 10, option_ids: [21]}]});
+const words = (value: any): string => Array.isArray(value) ? value.map(words).join("") : typeof value === "string" || typeof value === "number" ? String(value) : "";
+const texts = (nodes: any[]) => nodes.filter(node => node.type === "Text").map(node => words(node.props.children));
+
+test("tapping an option immediately saves only that card and displays the confirmed answer", async () => {
   const view = harness(fixture);
-  let nodes = view.render();
-  const submit = () => nodes.find(n => n.props.accessibilityLabel === "투표하기")!;
-  assert.equal(submit().props.disabled, true);
-  nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress();
-  nodes = view.render();
-  assert.equal(submit().props.disabled, false);
-  await submit().props.onPress();
-  assert.deepEqual(view.submissions[0], [50, 2, [{question_id: 10, option_ids: [20]}]]);
+  await label(view.render(), "장소 · 학교").props.onPress();
+  assert.deepEqual(view.submissions, [[50, 2, [{question_id: 10, option_ids: [20]}]]]);
+  assert.equal(label(view.render(), "장소 · 학교").props.accessibilityState.checked, true);
+  assert.ok(label(view.render(), "다시 투표하기"));
   assert.deepEqual(view.cacheActions.slice(0, 3), [
     {action: "cancel", key: ["notice-poll", 1, 50]},
     {action: "write", key: ["notice-poll", 1, 50]},
@@ -88,144 +105,132 @@ test("member selects an option then submits actual question IDs once", async () 
   ]);
 });
 
-test("results can reopen existing selection for a revote", () => {
-  const view = harness({...fixture, has_voted: true, locked: true, my_answers: [{question_id: 10, option_ids: [21]}]});
-  let nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "다시 투표하기")!.props.onPress();
-  nodes = view.render();
-  const selected = nodes.find(n => n.props.accessibilityLabel === "장소 · 식당")!;
-  assert.equal(selected.props.accessibilityState.checked, true);
-});
-
-test("response receipt and progress use saved answers while a revote is still pending", () => {
-  const second = {...fixture.questions[0], id: 11, title: "뒤풀이", options: [
-    {id: 30, label: "YES", media_id: null, vote_count: 0}, {id: 31, label: "NO", media_id: null, vote_count: 0}]};
-  const view = harness({...fixture, has_voted: true, my_answers: [{question_id: 10, option_ids: [21]}], questions: [...fixture.questions, second]});
-  const words = (value: any): string => Array.isArray(value) ? value.map(words).join("") : typeof value === "string" || typeof value === "number" ? String(value) : "";
-  const texts = (nodes: any[]) => nodes.filter(node => node.type === "Text").map(node => words(node.props.children));
-  let nodes = view.render();
-  assert.ok(texts(nodes).includes("진행 중인 투표 2개 중 1개 응답 완료"));
-  assert.ok(texts(nodes).includes("응답 완료 · 식당"));
-  nodes.find(n => n.props.accessibilityLabel === "다시 투표하기")!.props.onPress();
-  nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress();
-  nodes = view.render();
-  assert.ok(texts(nodes).includes("현재 저장된 응답 · 식당"));
-  assert.ok(texts(nodes).includes("진행 중인 투표 2개 중 1개 응답 완료"));
-  assert.equal(view.submissions.length, 0);
-});
-
-test("results show only submitted choices after cancelling a new selection", () => {
-  const view = harness({...fixture, has_voted: true, my_answers: [{question_id: 10, option_ids: [21]}]});
-  let nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "다시 투표하기")!.props.onPress();
-  nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress();
-  nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "결과 보기")!.props.onPress();
-  nodes = view.render();
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.accessibilityState.checked, false);
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "장소 · 식당")!.props.accessibilityState.checked, true);
-});
-
-test("closed results expose participants but never a submission action", () => {
-  const view = harness({...fixture, is_closed: true});
+test("an open unvoted card exposes option actions without extra status or participant controls", () => {
+  const view = harness({...fixture, questions: [...fixture.questions, {...fixture.questions[0], id: 11, title: "뒤풀이"}]});
   const nodes = view.render();
-  assert.equal(nodes.some(n => ["투표하기", "다시 투표하기"].includes(n.props.accessibilityLabel)), false);
-  assert.ok(nodes.some(n => n.props.accessibilityLabel === "참여자 보기 · 0명 참여"));
+  assert.equal(nodes.filter(node => node.props.accessibilityRole === "radio").length, 4);
+  assert.equal(nodes.some(node => node.props.accessibilityRole === "button"), false);
+  assert.ok(!texts(nodes).some(text => /응답 완료|기명 투표|진행 중|하나만 선택/.test(text)));
 });
 
-test("clicking result option opens filtered participants using person cards", () => {
-  const view = harness({...fixture, has_voted: true, my_answers: [{question_id: 10, option_ids: [21]}]});
+test("result rows cannot revote or open people until the explicit actions are pressed", async () => {
+  const view = harness(voted());
   let nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress();
+  assert.equal(label(nodes, "장소 · 학교").props.disabled, true);
+  await label(nodes, "장소 · 학교").props.onPress();
+  assert.equal(view.submissions.length, 0);
+  assert.ok(!view.render().some(node => node.type === "Modal"));
+  label(nodes, "다시 투표하기").props.onPress();
   nodes = view.render();
-  assert.ok(nodes.some(n => n.type === "PersonListCard" && n.props.name === "홍길동"));
-  assert.ok(view.queryKeys.some((key: any) => key[0] === "notice-poll-participants" && key.includes(20)));
+  assert.equal(label(nodes, "장소 · 학교").props.disabled, false);
+  await label(nodes, "장소 · 학교").props.onPress();
+  assert.equal(label(view.render(), "장소 · 학교").props.accessibilityState.checked, true);
+  assert.equal(label(view.render(), "장소 · 식당").props.accessibilityState.checked, false);
 });
 
-test("each attendance card submits only its own answer", async () => {
+test("a pending revote preserves the saved check and prevents repeated requests", async () => {
+  const view = harness(voted(), 0, true);
+  label(view.render(), "다시 투표하기").props.onPress();
+  const option = label(view.render(), "장소 · 학교");
+  const work = option.props.onPress();
+  await option.props.onPress();
+  const nodes = view.render();
+  assert.equal(view.submissions.length, 1);
+  assert.equal(label(nodes, "장소 · 학교").props.accessibilityState.checked, false);
+  assert.equal(label(nodes, "장소 · 식당").props.accessibilityState.checked, true);
+  assert.equal(label(nodes, "장소 · 학교").props.disabled, true);
+  view.release(); await work;
+  assert.equal(label(view.render(), "장소 · 학교").props.accessibilityState.checked, true);
+});
+
+test("failed immediate votes expose the API reason and allow another option tap", async () => {
+  const view = harness(fixture, 1);
+  await label(view.render(), "장소 · 학교").props.onPress();
+  let nodes = view.render();
+  assert.ok(nodes.some(node => node.props.accessibilityRole === "alert" && node.props.children === "연결을 확인한 뒤 다시 시도해 주세요."));
+  assert.equal(label(nodes, "장소 · 학교").props.accessibilityState.checked, false);
+  assert.equal(label(nodes, "장소 · 학교").props.disabled, false);
+  await label(nodes, "장소 · 학교").props.onPress();
+  nodes = view.render();
+  assert.equal(view.submissions.length, 2);
+  assert.equal(nodes.some(node => node.props.accessibilityRole === "alert"), false);
+  assert.equal(label(nodes, "장소 · 학교").props.accessibilityState.checked, true);
+});
+
+test("closed and legacy cards show results and participants without any voting action", async () => {
+  for (const poll of [{...fixture, is_closed: true}, {...fixture, questions: [{...fixture.questions[0], legacy: true}]}]) {
+    const view = harness(poll);
+    const nodes = view.render();
+    assert.ok(label(nodes, "참여자 보기 · 0명 참여"));
+    assert.ok(!label(nodes, "다시 투표하기"));
+    assert.equal(label(nodes, "장소 · 학교").props.disabled, true);
+    await label(nodes, "장소 · 학교").props.onPress();
+    assert.equal(view.submissions.length, 0);
+  }
+  const textsClosed = texts(harness({...fixture, is_closed: true}).render());
+  assert.ok(textsClosed.includes("마감"));
+  assert.ok(textsClosed.includes("마감됨"));
+  assert.ok(!textsClosed.some(text => /1위|종료/.test(text)));
+});
+
+test("each immediate attendance vote sends only its own question", async () => {
   const view = harness({...fixture, questions: [...fixture.questions, {...fixture.questions[0], id: 11, title: "뒤풀이", options: [
     {id: 30, label: "YES", media_id: null, vote_count: 0}, {id: 31, label: "NO", media_id: null, vote_count: 0}]}]});
-  let nodes = view.render();
-  nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress(); nodes = view.render();
-  const buttons = nodes.filter(n => n.props.accessibilityLabel === "투표하기");
-  assert.equal(buttons.length, 2); assert.equal(buttons[0].props.disabled, false); assert.equal(buttons[1].props.disabled, true);
-  await buttons[0].props.onPress();
-  assert.deepEqual(view.submissions[0], [50, 2, [{question_id: 10, option_ids: [20]}]]);
+  await label(view.render(), "뒤풀이 · NO").props.onPress();
+  assert.deepEqual(view.submissions, [[50, 2, [{question_id: 11, option_ids: [31]}]]]);
 });
 
-test("option participant count is reachable while selecting without changing the vote", () => {
-  const view = harness(fixture);
-  let nodes = view.render();
-  const count = nodes.find(n => n.props.accessibilityLabel === "장소 · 학교 참여자 0명");
-  assert.ok(count); count.props.onPress(); nodes = view.render();
-  assert.ok(nodes.some(n => n.type === "PersonListCard"));
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.accessibilityState.checked, false);
+test("legacy photo results keep their identifying image without enabling voting", () => {
+  const view = harness({...fixture, questions: [{...fixture.questions[0], legacy: true,
+    options: [{...fixture.questions[0].options[0], media_id: 44}, fixture.questions[0].options[1]]}]});
+  const nodes = view.render();
+  assert.ok(nodes.some(node => node.type === "MediaImage" && node.props.media.id === 44));
+  assert.equal(label(nodes, "장소 · 학교").props.disabled, true);
+  assert.ok(!label(nodes, "다시 투표하기"));
 });
 
-test("overall status offers option, member and nonparticipant views", () => {
-  const view = harness({...fixture, has_voted: true, my_answers: [{question_id: 10, option_ids: [21]}]});
-  view.render().find(n => n.props.accessibilityLabel?.startsWith("참여자 보기"))!.props.onPress();
+test("participants open a dismissible bottom sheet with only option tabs and profile summaries", () => {
+  const view = harness(voted());
+  label(view.render(), "참여자 보기 · 0명 참여").props.onPress();
   let nodes = view.render();
-  assert.ok(nodes.some(n => n.props.accessibilityRole === "tab" && n.props.accessibilityLabel === "항목별"));
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "항목별")!.props["aria-selected"], true);
-  nodes.find(n => n.props.accessibilityRole === "tab" && n.props.accessibilityLabel === "회원별")!.props.onPress();
-  nodes = view.render(); assert.ok(nodes.some(n => n.type === "PersonListCard"));
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "회원별")!.props["aria-selected"], true);
-  nodes.find(n => n.props.accessibilityRole === "tab" && n.props.accessibilityLabel === "미참여")!.props.onPress();
+  const modal = nodes.find(node => node.type === "Modal")!;
+  assert.equal(modal.props.transparent, true);
+  assert.deepEqual(nodes.filter(node => node.props.accessibilityRole === "tab").map(node => node.props.accessibilityLabel), ["학교 0명", "식당 0명"]);
+  assert.ok(nodes.some(node => node.type === "PersonListCard" && node.props.name === "72기 홍길동" && node.props.caption === "데이터사이언스·인공지능"));
+  assert.ok(!nodes.some(node => ["현황 새로고침", "항목별", "회원별", "미참여", "이전 참여자", "다음 참여자"].includes(node.props.accessibilityLabel)));
+  label(nodes, "식당 0명").props.onPress();
   nodes = view.render();
-  assert.ok(view.queryKeys.some((key: any) => key.includes("not_voted")));
+  assert.equal(label(nodes, "식당 0명").props["aria-selected"], true);
+  assert.deepEqual(view.queryKeys.at(-1), ["notice-poll-participants", 1, 50, 10, 21, "voted"]);
+  label(nodes, "참여자 닫기").props.onPress();
+  assert.ok(!view.render().some(node => node.type === "Modal"));
 });
 
-test("closed results distinguish winning options from zero-vote or tied results", () => {
-  const result = {...fixture, is_closed: true, participant_count: 3, questions: [{...fixture.questions[0], participant_count: 3,
-    options: fixture.questions[0].options.map((o, i) => ({...o, vote_count: i === 0 ? 2 : 1}))}]};
-  const nodes = harness(result).render();
-  assert.ok(nodes.some(n => n.type === "Text" && n.props.children === "1위"));
-  assert.ok(!harness({...fixture, is_closed: true}).render().some(n => n.type === "Text" && n.props.children === "1위"));
-  const tied = harness({...result, participant_count: 4, questions: [{...result.questions[0], participant_count: 4,
-    options: result.questions[0].options.map(o => ({...o, vote_count: 2}))}]}).render();
-  assert.equal(tied.filter(n => n.type === "Text" && n.props.children === "공동 1위").length, 2);
+test("participant scrolling loads the next question-option page and deduplicates users", async () => {
+  const view = harness(voted());
+  label(view.render(), "참여자 보기 · 0명 참여").props.onPress();
+  const nodes = view.render();
+  const config = view.infiniteOptions.at(-1);
+  assert.equal(config.initialPageParam, 1);
+  assert.equal(config.getNextPageParam({pagination: {page: 1, total_pages: 2}}), 2);
+  assert.equal(config.getNextPageParam({pagination: {page: 2, total_pages: 2}}), undefined);
+  await nodes.find(node => node.type === "ScrollView")!.props.onScroll({nativeEvent: {layoutMeasurement: {height: 300}, contentOffset: {y: 950}, contentSize: {height: 1250}}});
+  assert.deepEqual(view.participantCalls, [[50, 2, 20, 10]]);
+  assert.equal(view.render().filter(node => node.type === "PersonListCard").length, 1);
 });
 
-test("adding a different poll must not reset an in-progress card selection", () => {
+test("web radio Space activation submits once without scrolling the page", async () => {
+  const view = harness(fixture);
+  const option = label(view.render(), "장소 · 학교");
+  let prevented = false;
+  await option.props.onKeyDown({key: " ", preventDefault: () => {prevented = true;}, stopPropagation: () => {}});
+  assert.equal(prevented, true);
+  assert.deepEqual(view.submissions, [[50, 2, [{question_id: 10, option_ids: [20]}]]]);
+});
+
+test("adding another card preserves the existing card identity", () => {
   const view = harness(fixture); view.render();
   const original = view.keys()[0];
   view.update({...fixture, revision: 3, questions: [...fixture.questions, {...fixture.questions[0], id: 11}]}); view.render();
   assert.equal(view.keys()[0], original);
-});
-
-test("repeated taps while a vote is pending cannot send duplicate requests", async () => {
-  const view = harness(fixture);
-  view.render().find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress();
-  const submit = view.render().find(n => n.props.accessibilityLabel === "투표하기")!;
-  await Promise.all([submit.props.onPress(), submit.props.onPress()]);
-  assert.equal(view.submissions.length, 1);
-});
-
-test("web radio choices accept Space without scrolling the page", () => {
-  const view = harness(fixture);
-  const choice = view.render().find(n => n.props.accessibilityLabel === "장소 · 학교")!;
-  let prevented = false;
-  choice.props.onKeyDown({key: " ", preventDefault: () => {prevented = true;}, stopPropagation: () => {}});
-  const nodes = view.render();
-  assert.equal(prevented, true);
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props["aria-checked"], true);
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "투표하기")!.props.disabled, false);
-});
-
-test("a failed vote retains the chosen option and can be retried", async () => {
-  const view = harness(fixture, 1);
-  view.render().find(n => n.props.accessibilityLabel === "장소 · 학교")!.props.onPress();
-  await view.render().find(n => n.props.accessibilityLabel === "투표하기")!.props.onPress();
-  let nodes = view.render();
-  assert.ok(nodes.some(n => n.props.accessibilityRole === "alert" && n.props.children === "연결을 확인한 뒤 다시 시도해 주세요."));
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "장소 · 학교")!.props["aria-checked"], true);
-  assert.equal(nodes.find(n => n.props.accessibilityLabel === "투표하기")!.props.disabled, false);
-  await nodes.find(n => n.props.accessibilityLabel === "투표하기")!.props.onPress();
-  nodes = view.render();
-  assert.equal(view.submissions.length, 2);
-  assert.deepEqual(view.submissions[0], view.submissions[1]);
-  assert.equal(nodes.some(n => n.props.accessibilityRole === "alert"), false);
 });

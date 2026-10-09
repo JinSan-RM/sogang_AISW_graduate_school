@@ -2,20 +2,21 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { AppText as Text } from "./AppTypography";
 
-export default function PersonListCard({badge, name, caption, captionFirst = false, onPress, children, variant = "card"}: {
-  badge: string; name: string; caption?: string; captionFirst?: boolean; onPress?: () => void; children?: ReactNode;
-  variant?: "card" | "plain";
+export default function PersonListCard({badge, name, caption, captionFirst = false, onPress, children, avatar, variant = "card"}: {
+  badge: string; name: string; caption?: string; captionFirst?: boolean; onPress?: () => void; children?: ReactNode; avatar?: ReactNode;
+  variant?: "card" | "plain" | "poll";
 }) {
   const plain = variant === "plain";
-  const content = <><View style={[styles.badge, plain && styles.plainBadge]}><Text style={[styles.badgeText, plain && styles.plainBadgeText]}>{badge || "—"}</Text></View>
+  const poll = variant === "poll";
+  const content = <><View style={[styles.badge, plain && styles.plainBadge, poll && styles.pollAvatar]}>{avatar ?? <Text style={[styles.badgeText, plain && styles.plainBadgeText]}>{badge || "—"}</Text>}</View>
     <View style={styles.text}>
       {captionFirst && caption ? <Text style={styles.caption}>{caption}</Text> : null}
-      <Text style={[styles.name, plain && styles.plainName]}>{name}</Text>
-      {!captionFirst && caption ? <Text style={styles.caption}>{caption}</Text> : null}
+      <Text style={[styles.name, plain && styles.plainName, poll && styles.pollName]}>{name}</Text>
+      {!captionFirst && caption ? <Text style={[styles.caption, poll && styles.pollCaption]}>{caption}</Text> : null}
       {children}
     </View></>;
-  return onPress ? <Pressable accessibilityRole="button" onPress={onPress} style={[styles.card, plain && styles.plainRow]}>{content}</Pressable>
-    : <View style={[styles.card, plain && styles.plainRow]}>{content}</View>;
+  return onPress ? <Pressable accessibilityRole="button" onPress={onPress} style={[styles.card, plain && styles.plainRow, poll && styles.pollRow]}>{content}</Pressable>
+    : <View style={[styles.card, plain && styles.plainRow, poll && styles.pollRow]}>{content}</View>;
 }
 
 const styles = StyleSheet.create({
@@ -27,4 +28,8 @@ const styles = StyleSheet.create({
   plainRow: {minHeight: 60, borderWidth: 0, borderRadius: 0, paddingHorizontal: 0, paddingVertical: 10, marginBottom: 0},
   plainBadge: {width: 36, height: 36, borderRadius: 18, backgroundColor: "#F0F2F4", marginRight: 10},
   plainBadgeText: {fontSize: 11, color: "#59616C"}, plainName: {fontSize: 14},
+  pollRow: {minHeight: 68, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 0, borderColor: "#E8EBF0"},
+  pollAvatar: {width: 40, height: 40, borderRadius: 20, marginRight: 10},
+  pollName: {fontSize: 13, lineHeight: 20, fontWeight: "400"},
+  pollCaption: {fontSize: 11, lineHeight: 16, color: "#7B8291"},
 });

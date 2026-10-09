@@ -22,6 +22,19 @@ Security/integration decision checked on 2026-07-27:
 
 ## Current Project State
 
+2026-10-08 WP6/WP8/WP9 P0 supplied poll screenshots supersede the earlier member
+visual/usability additions below. Render compact bordered cards with full-row
+count fills, a server-confirmed selection check/outline, total participation,
+post-vote participant access and a neutral revote button. An option tap saves
+immediately; closed cards display 마감/마감됨 and omit revoting. Remove member
+progress/receipts/rankings/refresh/submit/result buttons and extra status tabs.
+Participants use an option-tab bottom sheet and rounded avatar/name/cohort/major
+rows, with infinite scrolling. Only voted profiles additionally expose current
+major; contact/roster fields remain excluded. Admin previews follow the new row
+layout without fabricated counts. Independent manual closure remains unchanged;
+no poll deadline or notice-deadline coupling is introduced. Evidence:
+`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`.
+
 2026-10-08 WP6/WP8/WP9 P0 poll usability follow-up: implement the user's
 approved audit findings within the existing notice/poll flow. Administrators see
 first-response lock and separate application-deadline/manual-close guidance,

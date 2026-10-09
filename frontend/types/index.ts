@@ -233,7 +233,7 @@ export type NoticePollDraft = {
 };
 export type NoticePollPayload = {revision?: number; ends_at: string | null; questions: NoticePollDraft["questions"]};
 export type NoticePollParticipant = {
-  user_id: number; nickname: string; cohort: string | null;
+  user_id: number; nickname: string; cohort: string | null; major?: string | null;
   answers: {question_id: number; question_title: string; option_id: number; label: string}[];
 };
 

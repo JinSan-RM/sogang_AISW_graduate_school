@@ -61,7 +61,7 @@ def test_notice_poll_creation_and_named_revote(api):
     people = api.client.get(f"/api/posts/{post_id}/poll/participants", headers=api.headers["owner"])
     assert people.status_code == 200
     assert {p["user_id"] for p in people.json()["data"]} == {1, 2}
-    assert all(set(p) == {"user_id", "nickname", "cohort", "answers"} for p in people.json()["data"])
+    assert all(set(p) == {"user_id", "nickname", "cohort", "major", "answers"} for p in people.json()["data"])
     filtered = api.client.get(f"/api/posts/{post_id}/poll/participants?option_id={q['options'][1]['id']}",
                               headers=api.headers["other"])
     assert [p["user_id"] for p in filtered.json()["data"]] == [1]
@@ -271,12 +271,18 @@ def test_participants_pagination_profiles_and_foreign_filter(api):
     from app.models.user import User
     with api.session() as db:
         db.get(User, 1).nickname = "현재 이름"
+        db.get(User, 1).major = "데이터사이언스·인공지능"
+        db.get(User, 1).phone = "010-0000-0000"
+        db.get(User, 1).company = "비공개 회사"
         db.commit()
     first = api.client.get(f"/api/posts/{post_id}/poll/participants?size=1", headers=api.headers["owner"]).json()
     second = api.client.get(f"/api/posts/{post_id}/poll/participants?size=1&page=2", headers=api.headers["owner"]).json()
     assert first["pagination"] == {"page": 1, "size": 1, "total": 2, "total_pages": 2}
     assert {p["user_id"] for p in first["data"] + second["data"]} == {1, 2}
     assert next(p for p in first["data"] + second["data"] if p["user_id"] == 1)["nickname"] == "현재 이름"
+    assert next(p for p in first["data"] + second["data"] if p["user_id"] == 1)["major"] == "데이터사이언스·인공지능"
+    assert next(p for p in first["data"] + second["data"] if p["user_id"] == 2)["major"] is None
+    assert all(set(p) == {"user_id", "nickname", "cohort", "major", "answers"} for p in first["data"] + second["data"])
     assert api.client.get(f"/api/posts/{post_id}/poll/participants?option_id=99999", headers=api.headers["owner"]).status_code == 422
 
 
