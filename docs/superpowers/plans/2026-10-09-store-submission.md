@@ -38,13 +38,17 @@
 - [x] Reuse the managed ASC API key; upload the exact new IPA and verify Apple's processingState.
 - [x] Inspect existing ASC version/localization/review metadata, prepare 1.0.4 and attach the valid build.
 - [ ] Submit App Review and verify the returned review state, or report the exact missing store requirement.
-- [x] Search prior authorized Play records; report no existing submission key or accessible console session. Upload/review remains blocked until access is available.
+- [x] Search prior authorized Play records; no existing submission key found. User subsequently supplied an authenticated Play Console session.
+- [x] Verify existing developer/app/package and highest versionCode; upload exact production AAB14 and save production release5 with Korean release notes.
+- [ ] Resolve both stores' non-email reviewer credentials, reconcile Google managed-publishing setting with review-only scope, then send for review and verify the returned state.
 
 ## Task 3: Evidence
 
 - [x] Record IDs, source, artifact checks, review states and limitations in docs/qa and CODEX.md.
 - [x] Check documentation against actual remote results and commit/push the release record.
 
-Remaining store work is blocked on a valid production App Review demo login
-and authorized Play submission access. Apple upload/VALID processing and draft
-attachment are complete; actual App Review/Play submission is not complete.
+Remaining store work is blocked on valid production reviewer login for both
+stores. Apple upload/VALID processing and draft attachment are complete;
+Google upload and production candidate save are complete. Google's automatic
+pre-review check is still pending and managed publishing is disabled. Actual
+App Review/Play review submission is not complete.

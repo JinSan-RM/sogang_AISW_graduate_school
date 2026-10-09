@@ -37,8 +37,9 @@ AAB PAGE_ALIGNMENT_16K passes. Hermes SHA-256 matches the verified1.0.3 AAB.
 Fresh read-only whole-change review found no new implementation defect and
 confirmed the exact iOS source/processing/attachment evidence. Android was
 still building at review time; root subsequently ran and read the complete
-artifact verifier's successful output. Review-access and Play-access blockers
-remain unresolved; no claim of overall store readiness is made.
+artifact verifier's successful output. Play Console access was subsequently
+provided by the user. Valid reviewer login remains unresolved on both stores;
+no claim of overall store readiness is made.
 
 Ignored files/evidence: `outputs/releases/2026-10-09-1.0.4/`.
 
@@ -75,19 +76,41 @@ attachment. Live versions were untouched.
 
 ## Google Play
 
-**Blocked:** EAS has no Play submission service-account key for this package.
-The user's requested search of documents, retained build logs and prior task
-records found only `aisw-campus-production`, the distinct Android signing key;
-no existing Play key path or developer/app ID was found. Current GCP project
-lists only the Compute default service account. No key, API/IAM grant or new
-store identity was created.
+The initial access blocker is resolved: the user logged into the available
+in-app Play Console session. No Play service-account key was found in the
+requested records search or configured in EAS; manual Console upload used the
+existing authenticated account without creating a key, IAM grant or identity.
+Cookies from the separate computer Chrome window were not extracted.
 
-The user reported Google login in a separate computer Chrome window. Enabled
-browser inventory exposes only Codex IAB, and selecting Chrome returned
-unavailable. Its login/cookies were not extracted or transferred. Play Console
-access through an available session or an existing submission key remains
-required. No Play upload, highest-existing-versionCode check, track mutation,
-review or public release has been performed.
+- Verified Sogang University developer `8611485546430892155`, app
+  `4975619384534060826`, package `kr.ac.sogang.aisw.campus`.
+- Highest registered bundle was 11 / 1.0.2, also the current production release
+  published on October 6. Verified code14 is greater than the registered code.
+- Rehashed the exact verified production AAB, then uploaded it to production
+  track `4698260163931056055`, release `5`. Google accepted 14 / 1.0.4, minimum
+  API24 and target SDK36.
+- Saved candidate `1.0.4 (14)` with Korean poll/participant and tab-navigation
+  release notes. Publishing overview lists one change **not sent for review**.
+  The saved candidate uses the existing target countries and 100% rollout.
+- Release validation reports zero lost supported devices across every displayed
+  form factor. Its single warning concerns a missing deobfuscation mapping file;
+  the checked-in release configuration defaults ProGuard/R8 minification off.
+  The separate automatic pre-review quick check was still running when recorded;
+  its completion or overall policy approval has not been established.
+- Existing app-content declarations show no outstanding required declaration.
+  Existing monitor also shows a DEX obfuscation optimization notice for live
+  11 / 1.0.2, with a February2027 deadline; this is not a resolved optimization.
+- Managed publishing is currently **disabled**, so approved changes would be
+  published automatically. No setting was changed; the requested review-only
+  scope must be reconciled before final submission.
+
+**Blocked:** Google also has a saved reviewer username containing no email,
+while current production login requires an email. A password is present, but
+its contents were not exported, printed or changed. The user was asked for the
+valid production reviewer email, or to correct the console login details
+directly. No final Google review submission or public release was performed.
+
+Ignored proof: `google-play-publishing-draft.jpg` in the release evidence folder.
 
 ## Other deployment scope
 

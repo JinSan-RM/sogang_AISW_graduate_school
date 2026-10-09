@@ -9,9 +9,14 @@ and Apple VALID build is attached to the 1.0.4 draft with MANUAL release.
 Review is blocked by the inherited non-email demo login; valid review access
 requested. Android 1.0.4/code14 AAB finished; downloaded source/identity/version,
 CRC/font/API, signature/certificate, bundletool and16KB checks pass.
-Android submission is awaiting the existing Play submission credential or
-console access; EAS has no submission service-account key for this package.
-No App Review/Play submission or public release is claimed. Evidence:
+User-provided Play Console login resolved Android access. Exact AAB14/1.0.4
+uploaded and saved as production release5; highest existing code was11.
+No supported devices were lost; one missing mapping-file warning and a running
+automatic pre-review check were recorded. Google reviewer login also has no
+email, so both stores await valid production review access. Google managed
+publishing remains disabled; review-only scope needs reconciliation before
+final submission. No final App Review/Play submission or public release is
+claimed. Evidence:
 `docs/qa/STORE_SUBMISSION_1_0_4_2026-10-09.md`; plan:
 `docs/superpowers/plans/2026-10-09-store-submission.md`.
 
