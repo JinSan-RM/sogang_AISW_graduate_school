@@ -122,12 +122,13 @@ function QuestionCard({postId, userId, poll, question, onSaved, refresh}: {postI
 function Participants({postId, userId, question, onClose}: {postId: number; userId: number | null;
   question: NoticePollQuestion; onClose: () => void}) {
   const [optionId, setOptionId] = useState(question.options[0]?.id);
-  const {height} = useWindowDimensions();
+  const {height, width} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   return <Modal visible transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.backdrop}>
       <Pressable accessibilityRole="button" accessibilityLabel="참여자 창 닫기" onPress={onClose} style={StyleSheet.absoluteFillObject} />
-      <View style={[styles.sheet, {maxHeight: Math.min(height * .85, height - insets.top - 12), paddingBottom: Math.max(insets.bottom, 16)}]}
+      <View style={[styles.sheet, {maxWidth: Platform.OS === "web" && width > 430 ? 405 : 420,
+        maxHeight: Math.min(height * .85, height - insets.top - 12), paddingBottom: Math.max(insets.bottom, 16)}]}
         accessibilityViewIsModal>
         <Pressable accessibilityRole="button" accessibilityLabel="참여자 닫기" onPress={onClose} style={styles.handleButton}>
           <View style={styles.handle} />
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   buttonText: {fontSize: 12, lineHeight: 18, color: "#7B8291"},
   error: {fontSize: 12, color: "#B91C1C", lineHeight: 20, marginTop: 8},
   backdrop: {flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(0,0,0,.12)"},
-  sheet: {width: "100%", maxWidth: 420, backgroundColor: "#FFF", borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", paddingHorizontal: 20},
+  sheet: {width: "100%", backgroundColor: "#FFF", borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", paddingHorizontal: 20},
   handleButton: {minHeight: 28, alignItems: "center", justifyContent: "center"},
   handle: {width: 32, height: 4, borderRadius: 2, backgroundColor: "#D3D7DD"},
   sheetTitle: {fontSize: 14, lineHeight: 21, fontWeight: "600", color: "#15171C", marginBottom: 8},

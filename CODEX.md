@@ -1,5 +1,13 @@
 # Codex Work Backlog
 
+2026-10-09 WP6/WP9 P0 poll participant sheet width follow-up: reproduced the
+420px sheet protruding 7.5px on each side of the 405px member web frame. Match
+the frame above the existing 430px web breakpoint; smaller web and native
+widths keep the previous cap. Browser geometry at 320/390/430/431/669/1280px,
+option-tab switching and dismissal pass; 12 poll tests, typecheck and scoped
+lint pass. Local development fix; verification is appended to
+`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`.
+
 2026-10-09 WP6/WP8/WP9 P0 GCP deployment completed: runtime `462c826` includes
 merged PR #31 and the supplied-reference poll follow-up. Candidate Docker builds,
 coordinated DB/media backup and actual isolated database restore passed. All 134

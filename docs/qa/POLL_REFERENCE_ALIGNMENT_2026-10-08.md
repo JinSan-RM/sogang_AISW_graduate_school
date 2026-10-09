@@ -162,3 +162,37 @@ Redacted verification evidence is in ignored
 remain on the VM. This deployment does not publish Android/iOS packages or
 replace the outstanding physical-device QA. The final deployment-record commit
 changes documentation only; application sources remain identical to `462c826`.
+
+## Participant sheet width follow-up — 2026-10-09
+
+The user's screenshot exposed a web-only frame mismatch: at a 669px viewport,
+the centered member shell spans x=132–537 (405px), while the participant sheet
+spanned x=124.5–544.5 (420px). It protruded 7.5px on each side. The Modal is
+portaled outside the shell, so its own width must follow the web frame.
+
+The sheet now caps its width at 405px on web above the existing 430px frame
+breakpoint. Smaller web widths and native retain the previous 420px cap.
+Browser measurements verify:
+
+| Viewport | Sheet width | Outside frame/viewport | Content overflow |
+| --- | --- | --- | --- |
+| 320px | 320px | No | No |
+| 390px | 390px | No | No |
+| 430px | 420px | No | No |
+| 431px | 405px | No | No |
+| 669px | 405px, x=132–537 | No | No |
+| 1280px | 405px | No | No |
+
+Checks ran while resizing the open sheet, including the breakpoint transition.
+Option-tab switching and handle dismissal passed. Existing 12 poll component
+tests, frontend typecheck and scoped lint passed; independent read-only review
+found no concrete regressions. No new style-mirroring unit test was added; the
+real browser bounds check failed before the fix and passed afterward.
+
+Ignored evidence: `outputs/qa/poll-sheet-width-2026-10-09/geometry.json`,
+`before-669.jpg`, `after-669.jpg`, `after-669-compact.jpg` and `after-320.jpg`.
+The local Metro preview was restarted after the merged route file changes;
+its temporary cold-start network state recovered through the existing Retry
+action before final measurements. This follow-up is verified locally; the
+earlier GCP deployment above still identifies the previous runtime. Physical
+native runtime was not re-tested for this web-only change.
