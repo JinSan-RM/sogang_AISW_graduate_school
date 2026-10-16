@@ -687,3 +687,81 @@ def test_popular_and_views_use_id_as_final_tie_breaker(api) -> None:
         assert single_board.status_code == 200
         assert [item["id"] for item in feed.json()["data"]] == expected
         assert [item["id"] for item in single_board.json()["data"]] == expected
+
+
+def test_board_recruiting_sort_puts_open_posts_first_across_pages(api) -> None:
+    with api.session() as db:
+        board = _board(name="Club Promo Sort", slug="club-promo-sort", category="participation", board_type="guide")
+        db.add(board)
+        db.flush()
+        base = datetime(2026, 8, 1, 9, 0)
+        specs = [
+            ("open-old", "모집중", False),
+            ("closed-new", "마감", False),
+            ("legacy-empty", None, False),
+            ("always", "상시", False),
+            ("open-new", " 모집중 ", False),
+            ("pinned-closed", "마감", True),
+        ]
+        posts = {
+            title: Post(
+                board_id=board.id,
+                author_id=1,
+                title=title,
+                content=title,
+                category=category,
+                is_pinned=pinned,
+                created_at=base + timedelta(minutes=index),
+            )
+            for index, (title, category, pinned) in enumerate(specs)
+        }
+        db.add_all(posts.values())
+        db.commit()
+        board_id = board.id
+
+    titles = []
+    for page in (1, 2, 3):
+        response = api.client.get(
+            f"/api/boards/{board_id}/posts",
+            params={"page": page, "size": 2, "sort": "recruiting"},
+            headers=api.headers["owner"],
+        )
+        assert response.status_code == 200
+        titles += [item["title"] for item in response.json()["data"]]
+
+    assert titles == ["pinned-closed", "open-new", "legacy-empty", "open-old", "always", "closed-new"]
+
+
+def test_search_ignores_spaces_and_line_breaks_and_skips_blank_queries(api) -> None:
+    with api.session() as db:
+        board = _board(name="Spaceless Search", slug="spaceless-search", category="resources", board_type="resource")
+        db.add(board)
+        db.flush()
+        db.add_all(
+            [
+                Post(board_id=board.id, author_id=1, title="서강 대학원 안내", content="본문"),
+                Post(board_id=board.id, author_id=1, title="두 번째", content="서강\n대학원 행사"),
+                Post(board_id=board.id, author_id=1, title="무관한 글", content="다른 내용"),
+            ]
+        )
+        db.commit()
+        board_id = board.id
+
+    def titles(q: str) -> list[str]:
+        response = api.client.get(f"/api/boards/{board_id}/posts", params={"q": q}, headers=api.headers["owner"])
+        assert response.status_code == 200
+        return sorted(item["title"] for item in response.json()["data"])
+
+    assert titles("서강대학원") == ["두 번째", "서강 대학원 안내"]
+    assert titles("서 강 대 학 원") == ["두 번째", "서강 대학원 안내"]
+    assert titles("대학원행사") == ["두 번째"]
+    assert titles("   ") == ["두 번째", "무관한 글", "서강 대학원 안내"]
+
+    blank = api.client.get("/api/search", params={"q": "  "}, headers=api.headers["owner"])
+    assert blank.status_code == 200
+    assert blank.json()["data"] == []
+
+    # 한 글자 검색도 받는다(2026-10-16).
+    one = api.client.get("/api/search", params={"q": "두", "scope": "resources"}, headers=api.headers["owner"])
+    assert one.status_code == 200
+    assert [item["title"] for item in one.json()["data"]] == ["두 번째"]

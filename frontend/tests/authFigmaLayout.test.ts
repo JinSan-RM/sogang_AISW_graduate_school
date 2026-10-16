@@ -50,25 +50,27 @@ test("signup typography, code input, steps, and action match the Figma signup fr
 
   const codeInput = styleBlock(source, "codeInput");
   assert.match(codeInput, /height: 48/);
-  assert.match(codeInput, /borderWidth: 1/);
+  // 테두리는 입력 칸 공통 원칙(FieldBorder)이 그린다.
+  assert.doesNotMatch(codeInput, /borderWidth/);
   assert.match(codeInput, /paddingHorizontal: 16/);
   assert.match(codeInput, /lineHeight: 22/);
 
   const actionText = styleBlock(source, "primaryButtonText");
-  assert.match(actionText, /fontSize: 16/);
-  assert.match(actionText, /lineHeight: 24/);
+  assert.match(actionText, /\.\.\.BUTTON_TEXT/);
+  assert.doesNotMatch(actionText, /lineHeight/);
   assert.match(source, /VERIFICATION_ATTEMPTS_EXCEEDED_MESSAGE/);
 });
 
 test("login and password reset keep the Figma primary action type scale", () => {
+  // 2026-10-15 피그마: 버튼 글자는 모두 16px, 줄 높이는 공통 19(utils/buttonText.ts).
+  assert.match(readSource("utils/buttonText.ts"), /fontSize: 16,/);
   const loginAction = styleBlock(readSource("app/auth/login.tsx"), "primaryButtonText");
-  assert.match(loginAction, /fontSize: 16/);
-  assert.match(loginAction, /lineHeight: 24/);
+  assert.match(loginAction, /\.\.\.BUTTON_TEXT/);
+  assert.doesNotMatch(loginAction, /lineHeight/);
 
-  // 비밀번호 찾기 최신 Figma: 인증코드 받기 버튼은 14/24.
   const resetAction = styleBlock(readSource("app/auth/password-reset.tsx"), "primaryButtonText");
-  assert.match(resetAction, /fontSize: 14/);
-  assert.match(resetAction, /lineHeight: 24/);
+  assert.match(resetAction, /\.\.\.BUTTON_TEXT/);
+  assert.doesNotMatch(resetAction, /lineHeight/);
 });
 
 test("auth controls do not add the browser default black focus outline", () => {
@@ -77,10 +79,11 @@ test("auth controls do not add the browser default black focus outline", () => {
     assert.match(styleBlock(source, "primaryButton"), /outlineStyle: "none"/, screen);
   }
 
-  for (const screen of ["app/auth/register.tsx", "app/auth/password-reset.tsx"]) {
+  // 입력 칸은 FieldInput이 브라우저 기본 테두리를 끈다.
+  assert.match(readSource("components/FieldBorder.tsx"), /outlineStyle: "none"/);
+  for (const screen of ["app/auth/login.tsx", "app/auth/register.tsx", "app/auth/password-reset.tsx"]) {
     const source = readSource(screen);
-    assert.match(styleBlock(source, "input"), /outlineStyle: "none"/, screen);
+    assert.match(source, /<FieldInput/, screen);
+    assert.doesNotMatch(source, /<TextInput/, screen);
   }
-
-  assert.match(styleBlock(readSource("app/auth/register.tsx"), "codeInput"), /outlineStyle: "none"/);
 });

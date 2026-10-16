@@ -23,8 +23,6 @@ const COLORS = {
   muted: "#6B7280",
   subtle: "#8A919C",
   divider: "#EEF0F3",
-  pink50: "#FFEAF1",
-  pink700: "#B91C4C",
   yellow50: "#FFF6DC",
   yellow700: "#9A6B00",
   green50: "#EAF8EF",
@@ -37,7 +35,6 @@ const TYPE_LABELS: Record<string, string> = {
   faq: "FAQ",
   organization_intro: "소개",
   suggestion: "건의",
-  notice: "공지",
   calendar: "일정",
   guide: "가이드",
   resource: "자료",
@@ -69,14 +66,7 @@ function normalizeCategory(post: PostListItem, boardType?: string, boardSlug?: s
     const recruitmentStatus = String(post.metadata?.recruitment_status ?? raw ?? "").toLowerCase();
     return recruitmentStatus.includes("closed") || recruitmentStatus.includes("마감") ? "마감" : "진행중";
   }
-  if (raw) {
-    const lower = raw.toLowerCase();
-    if (lower.includes("event") || lower.includes("webinar") || raw.includes("행사") || raw.includes("특강")) return "행사공지";
-    if (lower.includes("academic") || raw.includes("학사")) return "학사공지";
-    if (lower.includes("other") || lower.includes("general") || raw.includes("기타")) return "기타공지";
-    if (raw.includes("전체")) return "공지";
-    return raw.length <= 8 ? raw : "공지";
-  }
+  if (raw) return raw;
   return boardType ? (TYPE_LABELS[boardType] ?? boardType) : "게시글";
 }
 
@@ -130,7 +120,7 @@ export default function PostCard({ post, onPress, boardType, boardSlug, isLast }
         <View style={[styles.pill, { backgroundColor: tone.bg }]}>
           <Text style={[styles.pillText, { color: tone.fg }]}>{label}</Text>
         </View>
-        {post.is_pinned || post.is_notice ? (
+        {post.is_pinned ? (
           <View style={styles.pinPill}>
             <BookmarkIcon filled size={11} color={COLORS.primary} />
             <Text style={styles.pinText}>고정</Text>
@@ -167,7 +157,8 @@ const styles = StyleSheet.create({
   row: {
     borderBottomWidth: 0.5,
     borderBottomColor: "#E1E4E9",
-    backgroundColor: "#FFFFFF",
+    // 배경을 칠하지 않는다. 칸 높이가 소수 픽셀이면 다음 칸이 1px 겹쳐 그려지는데, 흰 배경이
+    // 있으면 앞 칸의 구분선을 덮어 구분선이 두 글마다 하나씩만 보였다. 목록 바탕이 이미 흰색이다.
     // Figma: 구분선이 좌우 16px 안쪽에만 그려지도록 padding 대신 margin.
     marginHorizontal: 16,
     paddingVertical: 14,

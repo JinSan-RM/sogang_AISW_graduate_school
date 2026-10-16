@@ -22,6 +22,7 @@ from app.models.post_extension import PostMutualAid, PostSuggestion
 from app.models.student_roster import StudentRosterMember
 from app.models.user import User
 from app.models.user_block import UserBlock
+from app.text_search import contains, search_pattern
 from app.notifications import (
     ADMIN_REPLY_MESSAGE,
     MUTUAL_AID_MESSAGES,
@@ -61,8 +62,6 @@ def _safe_metadata(
     if not normalized:
         return None
     metadata = dict(normalized)
-    if board.board_type == "mutual_aid" and not include_sensitive:
-        metadata.pop("proof_url", None)
     if board.board_type == "activity_certification" and not (include_sensitive or include_bank_account):
         metadata.pop("bank_account", None)
     if board.slug == "study-activity" and not include_sensitive:
@@ -293,14 +292,14 @@ def _club_activity_source_titles(db: Session, board: Board | None, posts: list[P
 
 
 def _activity_certification_search_filter(board: Board, keyword: str):
-    text_match = Post.title.ilike(keyword) | Post.content.ilike(keyword)
+    text_match = contains(Post.title, keyword) | contains(Post.content, keyword)
     # Study cards display a title without an activity badge.
     if board.slug == "study-activity":
         return text_match
 
     category = func.nullif(func.trim(Post.category), "")
     if board.slug != "club-activity":
-        return text_match | func.coalesce(category, "활동 인증").ilike(keyword)
+        return text_match | contains(func.coalesce(category, "활동 인증"), keyword)
 
     # Match the displayed club badge: current source title, category, legacy name.
     # Compare IDs as text so malformed legacy metadata cannot cause a SQL cast error.
@@ -323,7 +322,7 @@ def _activity_certification_search_filter(board: Board, keyword: str):
         case((legacy_name.not_in(generic_labels), legacy_name)),
         "동아리 활동 인증",
     )
-    return text_match | badge.ilike(keyword)
+    return text_match | contains(badge, keyword)
 
 
 def _canonical_activity_metadata(
@@ -494,6 +493,15 @@ def _post_list_order(sort: str, *, pin_priority: bool = True):
             Post.created_at.desc(),
             Post.id.desc(),
         )
+    if sort == "recruiting":
+        # 모집중(상태가 비어 있는 옛 글 포함)을 먼저, 상시·마감 등 나머지를 뒤에 둔다.
+        recruitment_category = func.coalesce(func.trim(Post.category), "")
+        return (
+            *pin_order,
+            case((recruitment_category.in_(("모집중", "")), 0), else_=1),
+            Post.created_at.desc(),
+            Post.id.desc(),
+        )
     return (*pin_order, Post.created_at.desc(), Post.id.desc())
 
 
@@ -559,22 +567,22 @@ def _post_feed_notice_filters(scope: str, notice_category: str | None):
 
 
 def _post_feed_search_filter(q: str | None, current_user: User):
-    if q is None:
+    keyword = search_pattern(q)
+    if keyword is None:
         return None
-    keyword = f"%{q}%"
     author_match = or_(
-        User.nickname.ilike(keyword),
-        Post.author_nickname_snapshot.ilike(keyword),
+        contains(User.nickname, keyword),
+        contains(Post.author_nickname_snapshot, keyword),
     )
     if current_user.role == "admin":
         return or_(
-            Post.title.ilike(keyword),
-            Post.content.ilike(keyword),
+            contains(Post.title, keyword),
+            contains(Post.content, keyword),
             author_match,
         )
     return or_(
-        Post.title.ilike(keyword),
-        Post.content.ilike(keyword),
+        contains(Post.title, keyword),
+        contains(Post.content, keyword),
         and_(
             Post.is_anonymous.is_(False),
             Board.slug.not_in(ANONYMOUS_BOARD_SLUGS),
@@ -646,10 +654,6 @@ def _serialize_post_list_item(
     activity_source_title: str | None = None,
 ) -> dict:
     content_preview = post_content_preview(_visible_post_content(post, board), board.slug)
-    if board.board_type == "mutual_aid" and current_user.role != "admin":
-        attachment_count = 0
-        thumbnail_media_id = None
-        thumbnail_url = None
     return {
         "id": post.id,
         "board_id": post.board_id,
@@ -798,7 +802,7 @@ def get_posts(
     category: str | None = None,
     status: str | None = None,
     operation_status: str | None = Query(None, pattern="^(active|ended)$"),
-    sort: str = Query("latest", pattern="^(latest|popular|views)$"),
+    sort: str = Query("latest", pattern="^(latest|popular|views|recruiting)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -810,20 +814,20 @@ def get_posts(
 
     filters = [Post.board_id == board_id, Post.deleted_at.is_(None)]
     filters.append(post_status_read_filter(current_user))
-    if q:
-        keyword = f"%{q}%"
+    keyword = search_pattern(q)
+    if keyword:
         if board.board_type == "activity_certification":
             filters.append(_activity_certification_search_filter(board, keyword))
         elif hides_author_identity(board) and current_user.role != "admin":
-            filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword))
+            filters.append(contains(Post.title, keyword) | contains(Post.content, keyword))
         else:
             author_match = or_(
-                User.nickname.ilike(keyword),
-                Post.author_nickname_snapshot.ilike(keyword),
+                contains(User.nickname, keyword),
+                contains(Post.author_nickname_snapshot, keyword),
             )
             if current_user.role != "admin":
                 author_match = and_(Post.is_anonymous.is_(False), author_match)
-            filters.append(Post.title.ilike(keyword) | Post.content.ilike(keyword) | author_match)
+            filters.append(contains(Post.title, keyword) | contains(Post.content, keyword) | author_match)
     if category:
         filters.append(Post.category == category)
     if status:
@@ -923,8 +927,6 @@ def _post_attachments(
     *,
     include_evidence: bool = False,
 ) -> list[dict]:
-    if board.board_type == "mutual_aid" and not (include_evidence or current_user.role == "admin"):
-        return []
     rows = db.execute(
         select(PostAttachment, MediaAsset)
         .join(MediaAsset, MediaAsset.id == PostAttachment.media_id)
@@ -943,6 +945,7 @@ def _post_attachments(
         for _, media in rows
         if include_evidence
         or not media.is_private
+        or board.board_type == "mutual_aid"
         or media.owner_id == current_user.id
         or current_user.role == "admin"
     ]
@@ -1287,14 +1290,14 @@ def get_admin_posts(
         filters.append(Post.is_pinned.is_(is_pinned))
     if is_notice is not None:
         filters.append(Post.is_notice.is_(is_notice))
-    if q:
-        keyword = f"%{q}%"
+    keyword = search_pattern(q)
+    if keyword:
         filters.append(
-            Post.title.ilike(keyword)
-            | Post.content.ilike(keyword)
-            | User.nickname.ilike(keyword)
-            | Post.author_nickname_snapshot.ilike(keyword)
-            | Board.name.ilike(keyword)
+            contains(Post.title, keyword)
+            | contains(Post.content, keyword)
+            | contains(User.nickname, keyword)
+            | contains(Post.author_nickname_snapshot, keyword)
+            | contains(Board.name, keyword)
         )
 
     total = (

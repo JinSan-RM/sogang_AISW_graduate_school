@@ -3,8 +3,9 @@ import { useIsFocused } from "@react-navigation/native";
 import { Pressable, StyleSheet, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 import { AppText as Text } from "./AppTypography";
-import { isNetworkError, isServerLoadError } from "../utils/networkError";
-import { registerNetworkRetry } from "../stores/networkStatusStore";
+import { isLoadFailure, isNetworkError, isServerLoadError } from "../utils/networkError";
+import { registerNetworkRetry, useNetworkStatusStore } from "../stores/networkStatusStore";
+import { BUTTON_TEXT } from "../utils/buttonText";
 
 export function NetworkErrorFallback({ error, onRetry, children }: { error: unknown; onRetry: () => void; children: ReactNode }) {
   const focused = useIsFocused();
@@ -15,6 +16,19 @@ export function NetworkErrorFallback({ error, onRetry, children }: { error: unkn
     if (focused && retryable) return registerNetworkRetry(onRetry);
   }, [focused, retryable, onRetry]);
   return isNetworkError(error) ? <NetworkErrorState onRetry={onRetry} /> : <>{children}</>;
+}
+
+// 조회 실패(4xx 포함)를 화면 안 오류 상자 대신 앱 전체 LoadError로 덮는다.
+// "다시 시도"는 이 화면의 onRetry로 다시 받고, 또 실패하면 덮개가 그대로 남는다.
+export function useLoadErrorOverlay(error: unknown, onRetry: () => void) {
+  const focused = useIsFocused();
+  const failed = isLoadFailure(error);
+  useEffect(() => {
+    if (focused && failed) useNetworkStatusStore.getState().markServerFailed();
+  }, [focused, failed, error]);
+  useEffect(() => {
+    if (focused && (failed || isNetworkError(error))) return registerNetworkRetry(onRetry);
+  }, [focused, failed, error, onRetry]);
 }
 
 export default function NetworkErrorState({ onRetry, retrying = false }: { onRetry: () => void; retrying?: boolean }) {
@@ -61,5 +75,5 @@ const styles = StyleSheet.create({
   title: { marginTop: 16, color: "#15171C", fontWeight: "500", fontSize: 16, lineHeight: 19, textAlign: "center" },
   description: { marginTop: 6, color: "#6B7280", fontWeight: "400", fontSize: 13, lineHeight: 16, textAlign: "center" },
   retryButton: { marginTop: 24, minWidth: 100, minHeight: 48, paddingHorizontal: 24, paddingVertical: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#2761FF", borderRadius: 8 },
-  retryText: { color: "#FFFFFF", fontWeight: "500", fontSize: 14, lineHeight: 17 },
+  retryText: { ...BUTTON_TEXT, color: "#FFFFFF", fontWeight: "500" },
 });

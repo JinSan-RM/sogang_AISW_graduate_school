@@ -637,10 +637,71 @@ export function ParticipantAddIcon({ size = 28, color = "#2761FF" }: IconProps) 
 }
 
 // 목록 행 우측 셰브론 — 디자인 원본 15x15 (stroke 1.5, #A6ACB7).
+// 검색 칸 오른쪽 검색어 지우기 — 디자인 원본 20x20 원 #C5C8CE, 안의 X 6x6 선 1.5.
+export function ClearSearchIcon({ size = 20, color = "#C5C8CE" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Circle cx={10} cy={10} r={10} fill={color} />
+      <Path d="M7 7L13 13M13 7L7 13" stroke="#FFFFFF" strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// 회원가입 약관 동의 체크박스 안의 체크 — 디자인 원본 13x13, 선 1.8.
+export function CheckboxCheckIcon({ size = 13, color = "#FFFFFF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 13 13" fill="none">
+      <Path d="M2.5 7L5.5 10L10.5 4" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 회원가입 약관 동의 줄 오른쪽 화살표 — 디자인 원본 16x16, 4x8 선 1.6.
+export function ConsentChevronIcon({ size = 16, color = "#A6ACB7" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path d="M6 4L10 8L6 12" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 선택 시트에서 고른 항목 오른쪽 체크 — 디자인 원본 16x16, 선 1.8, 끝 둥글게.
+export function SheetCheckIcon({ size = 16, color = "#2761FF" }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path d="M3 8.5L6.2 11.7L13 4.5" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function ChevronRightIcon({ size = 15, color = "#A6ACB7" }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 15 15" fill="none">
       <Path d="M5.625 2.8125L10.3125 7.5L5.625 12.1875" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 글쓰기 첨부파일 행의 문서 아이콘 — 피그마 Write-BoardPreselected '첨부파일미리보기' 원본 18x18, 선 1.3.
+export function AttachmentDocumentIcon({ size = 18, color = MUTED }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path
+        d="M5 2.5H11L14 5.5V13.5C14 13.8978 13.842 14.2794 13.5607 14.5607C13.2794 14.842 12.8978 15 12.5 15H5C4.6933 14.8921 4.4299 14.6875 4.2495 14.417C4.0692 14.1464 3.9816 13.8246 4 13.5V4C4 3.6022 4.158 3.2206 4.4393 2.9393C4.7206 2.658 5.1022 2.5 5.5 2.5H5Z"
+        stroke={color}
+        strokeWidth={1.3}
+        strokeLinejoin="round"
+      />
+      <Path d="M11 2.5V5.5H14" stroke={color} strokeWidth={1.3} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// 글쓰기 첨부파일 행의 삭제 X — 피그마 '첨부파일미리보기' 원본 18x18, 9x9 X, 선 1.7.
+export function AttachmentRemoveIcon({ size = 18, color = MUTED }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+      <Path d="M13.5 4.5L4.5 13.5M4.5 4.5L13.5 13.5" stroke={color} strokeWidth={1.7} strokeLinecap="round" />
     </Svg>
   );
 }

@@ -69,6 +69,9 @@ test("인증 API와 공통 API 모두 연결 오류를 보고하고 HTTP 오류�
     await assert.rejects(handler(new AxiosError("write failed", "ERR_BAD_RESPONSE", { method: "post" } as any, {}, { status: 500 } as any)));
     await assert.rejects(handler(new AxiosError("not found", "ERR_BAD_RESPONSE", { method: "get" } as any, {}, { status: 404 } as any)));
     await assert.rejects(handler(new CanceledError()));
+    // 2026-10-16: 실패를 자기 자리에서 보여 주는 요청(투표 참여자 시트)은 덮개를 켜지 않는다.
+    await assert.rejects(handler(new AxiosError("offline", "ERR_NETWORK", { method: "get", skipAppErrorOverlay: true } as any)));
+    await assert.rejects(handler(new AxiosError("server response", "ERR_BAD_RESPONSE", { method: "get", skipAppErrorOverlay: true } as any, {}, { status: 500 } as any)));
     assert.equal(useNetworkStatusStore.getState().revision, revision + 2);
   }
 });
@@ -77,4 +80,18 @@ test("LoadError 재시도가 성공하면 서버 조회 실패 상태도 지운�
   useNetworkStatusStore.getState().markServerFailed();
   await retryNetworkReads(async () => {}, async () => {});
   assert.equal(useNetworkStatusStore.getState().serverFailed, false);
+});
+
+test("화면 첫 조회 실패는 4xx도 LoadError로 보되 인터넷 끊김·401·취소는 뺀다", async () => {
+  const { AxiosError, CanceledError } = await import("axios");
+  const { isLoadFailure } = await import("../utils/networkError");
+  const response = (status: number) => new AxiosError("bad", "ERR_BAD_REQUEST", { method: "get" } as any, {}, { status } as any);
+  assert.equal(isLoadFailure(response(404)), true);
+  assert.equal(isLoadFailure(response(403)), true);
+  assert.equal(isLoadFailure(response(500)), true);
+  assert.equal(isLoadFailure(new Error("board is missing")), true);
+  assert.equal(isLoadFailure(response(401)), false);
+  assert.equal(isLoadFailure(new AxiosError("offline", "ERR_NETWORK")), false);
+  assert.equal(isLoadFailure(new CanceledError()), false);
+  assert.equal(isLoadFailure(null), false);
 });

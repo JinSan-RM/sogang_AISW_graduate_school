@@ -1,18 +1,24 @@
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text } from "../../../../components/AppTypography";
-import { NetworkErrorFallback } from "../../../../components/NetworkErrorState";
+import { useLoadErrorOverlay } from "../../../../components/NetworkErrorState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMeQuery } from "../../../../hooks/useApi";
+import { useToast } from "../../../../hooks/useToast";
+import EdgeSwipeBack from "../../../../components/EdgeSwipeBack";
 import ProfileAvatar from "../../../../components/ProfileAvatar";
+import Toast from "../../../../components/Toast";
 import { formatCohortName } from "../../../../utils/userLabel";
 import { authApi, notificationApi } from "../../../../services/api";
 import { useUserStore } from "../../../../stores/userStore";
 import { clearStoredPushToken, getStoredPushToken } from "../../../../utils/pushTokenStorage";
 import { navigateToTabRoot } from "../../../../utils/tabNavigation";
+import { takeQueuedToast } from "../../../../utils/toast";
 
 import { BackIcon, ChevronRightIcon } from "../../../../components/icons";
+import { BUTTON_TEXT } from "../../../../utils/buttonText";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#EDF2FE",
@@ -33,13 +39,39 @@ const MENU_ITEMS = [
   { title: "계정 설정", href: "/settings/account" },
 ] as const;
 
+// 마이페이지 화면. 홈에서는 홈 위를 덮는 서랍(components/MyPageDrawer)으로 열고, 이
+// 경로는 아래 화면이 없을 때(웹 새로고침·직접 링크)만 열린다.
 export default function SettingsScreen() {
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else navigateToTabRoot("home");
+  }, []);
+
+  return (
+    <EdgeSwipeBack onBack={goBack}>
+      <MyPageContent onBack={goBack} />
+    </EdgeSwipeBack>
+  );
+}
+
+// 마이페이지 내용. 헤더 뒤로가기는 여는 쪽이 정한 onBack을 탄다.
+export function MyPageContent({ onBack }: { onBack: () => void }) {
   const insets = useSafeAreaInsets();
-  const { data, isError, error, isLoading, refetch } = useMeQuery();
+  const { data, error, isLoading, refetch } = useMeQuery();
+  useLoadErrorOverlay(error, () => void refetch());
   const refreshToken = useUserStore((state) => state.refreshToken);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clearSession = useUserStore((state) => state.clearSession);
   const me = data?.data;
+  const { toast, showToast, hideToast } = useToast();
+
+  // 프로필 수정에서 저장하면 그 화면을 닫고 여기로 돌아온다. 맡겨 둔 성공 토스트를 띄운다.
+  useFocusEffect(
+    useCallback(() => {
+      const queued = takeQueuedToast();
+      if (queued) showToast(queued.message, queued.variant);
+    }, [showToast]),
+  );
 
   const logout = async () => {
     const pushToken = await getStoredPushToken().catch(() => null);
@@ -59,10 +91,7 @@ export default function SettingsScreen() {
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else navigateToTabRoot("home");
-          }}
+          onPress={onBack}
           style={styles.iconButton}
         >
           <BackIcon size={22} color={COLORS.text} />
@@ -72,13 +101,6 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
-        {isError ? (
-          <NetworkErrorFallback error={error} onRetry={() => void refetch()}>
-            <Pressable accessibilityRole="button" onPress={() => void refetch()} style={styles.loadErrorBox}>
-              <Text style={styles.loadErrorText}>프로필을 불러오지 못했습니다. 다시 시도</Text>
-            </Pressable>
-          </NetworkErrorFallback>
-        ) : null}
         <Pressable onPress={() => router.push("/settings/profile")} style={styles.profileRow}>
           {isLoading ? (
             <View style={styles.avatar}>
@@ -101,8 +123,9 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
 
         <View style={styles.menuList}>
-          {MENU_ITEMS.map((item, index) => (
-            <Pressable key={item.title} onPress={() => router.push(item.href as never)} style={[styles.menuRow, index === MENU_ITEMS.length - 1 ? styles.menuRowLast : null]}>
+          {/* 계정 설정 화면의 회원 탈퇴처럼, 마지막 메뉴 아래에도 구분선을 그어 로그아웃과 나눈다. */}
+          {MENU_ITEMS.map((item) => (
+            <Pressable key={item.title} onPress={() => router.push(item.href as never)} style={styles.menuRow}>
               <Text style={styles.menuText}>{item.title}</Text>
               <ChevronRightIcon size={15} color={COLORS.subtle} />
             </Pressable>
@@ -119,6 +142,7 @@ export default function SettingsScreen() {
           </Pressable>
         )}
       </ScrollView>
+      <Toast toast={toast} onHide={hideToast} />
     </View>
   );
 }
@@ -159,19 +183,6 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: 36,
-  },
-  loadErrorBox: {
-    borderRadius: 8,
-    backgroundColor: "#FFF1F2",
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-  },
-  loadErrorText: {
-    color: COLORS.danger,
-    fontSize: 13,
-    fontWeight: "700",
-    textAlign: "center",
   },
   // Figma 프로필래퍼: padding 0/16/16, 구분선은 별도 전폭 1px.
   profileRow: {
@@ -224,9 +235,6 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     paddingVertical: 13,
   },
-  menuRowLast: {
-    borderBottomWidth: 0,
-  },
   menuText: {
     color: COLORS.text,
     fontSize: 14,
@@ -255,8 +263,8 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   loginText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 16,
     fontWeight: "900",
   },
 });

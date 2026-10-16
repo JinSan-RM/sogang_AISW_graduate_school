@@ -1,11 +1,9 @@
-import { Ionicons } from "@expo/vector-icons";
-import { BackIcon, EmptyCalendarIcon } from "../../../components/icons";
+import { BackIcon, EmptyCalendarIcon, SearchIcon } from "../../../components/icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { AppText as Text } from "../../../components/AppTypography";
-import { isNetworkError } from "../../../utils/networkError";
-import { NetworkErrorFallback } from "../../../components/NetworkErrorState";
+import { useLoadErrorOverlay } from "../../../components/NetworkErrorState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useBoardsQuery } from "../../../hooks/useApi";
@@ -46,27 +44,18 @@ const COLORS = {
   divider: "#EEF0F3",
   surface: "#FFFFFF",
   page: "#FFFFFF",
-  danger: "#B91C1C",
   danger50: "#FFF1F2",
-  pink50: "#FFEAF1",
-  pink700: "#B91C4C",
   cyan50: "#E6F9FB",
   cyan700: "#14788A",
 };
 
-type IconName = keyof typeof Ionicons.glyphMap;
+// 게시판 목록은 받았지만 공지 게시판이 하나도 없을 때도 조회 실패와 같이 LoadError로 덮는다.
+const MISSING_NOTICE_BOARDS = new Error("notice boards are missing");
 
 function flattenBoards(groups?: { boards: Board[] }[]) {
   return groups?.flatMap((group) => group.boards) ?? [];
 }
 
-function IconButton({ icon, onPress, label }: { icon: IconName; onPress: () => void; label: string }) {
-  return (
-    <Pressable accessibilityLabel={label} onPress={onPress} style={styles.iconButton}>
-      <Ionicons name={icon} size={24} color={COLORS.text} />
-    </Pressable>
-  );
-}
 
 function LoadingRows() {
   return <LoadingState compact />;
@@ -127,7 +116,18 @@ function NoticesContent() {
     }));
   }, [boardById, postsQuery.items]);
 
-  const isOfflinePreview = boardsError || feedFailures.initial || (!boardsLoading && noticeBoards.length === 0);
+  const missingNoticeBoards = !boardsLoading && !boardsError && noticeBoards.length === 0;
+  // 첫 쪽·다음 쪽·당겨서 새로고침 중 무엇이 실패해도 앱 전체 LoadError로 덮고, 다시 시도는 실패한 조회만 다시 받는다.
+  const noticeLoadError = boardsLoadError
+    ?? (feedFailures.initial || feedFailures.nextPage ? postsQuery.error : null)
+    ?? postsQuery.refreshFirstPageError
+    ?? (missingNoticeBoards ? MISSING_NOTICE_BOARDS : null);
+  useLoadErrorOverlay(noticeLoadError, () => {
+    if (boardsError || missingNoticeBoards) void refetchBoards();
+    if (feedFailures.initial) void retryActions.retryInitial();
+    if (feedFailures.nextPage) void retryActions.retryNextPage();
+    if (feedFailures.refresh) void retryActions.retryRefresh();
+  });
   const isLoading = boardsLoading || postsQuery.isLoading;
   const visibleRows = realRows;
 
@@ -143,7 +143,10 @@ function NoticesContent() {
           </Pressable>
         )}
         <Text style={styles.appBarTitle}>공지사항</Text>
-        <IconButton icon="search-outline" label="검색" onPress={() => router.push("/search?scope=notices" as never)} />
+        {/* 돋보기는 다른 게시판과 같은 피그마 아이콘(20px 상자, 모양 15px)을 쓴다. */}
+        <Pressable accessibilityLabel="검색" onPress={() => router.push("/search?scope=notices" as never)} style={styles.iconButton}>
+          <SearchIcon size={20} color={COLORS.text} />
+        </Pressable>
       </View>
 
       <View style={styles.filterWrap}>
@@ -168,30 +171,6 @@ function NoticesContent() {
           );
         })}
       </View>
-
-      {isOfflinePreview && (visibleRows.length > 0 || !isNetworkError(boardsLoadError ?? postsQuery.error)) ? (
-        <NetworkErrorFallback error={boardsLoadError ?? postsQuery.error} onRetry={() => { void refetchBoards(); void retryActions.retryInitial(); }}>
-          <Pressable
-            onPress={() => {
-              void refetchBoards();
-              void retryActions.retryInitial();
-            }}
-            style={styles.connectionStrip}
-          >
-            <Ionicons name="cloud-offline-outline" size={16} color={COLORS.danger} />
-            <Text numberOfLines={1} style={styles.connectionText}>
-              데이터 서버 연결 필요 · 탭하면 다시 시도
-            </Text>
-          </Pressable>
-        </NetworkErrorFallback>
-      ) : null}
-
-      {feedFailures.refresh ? (
-        <Pressable onPress={() => void retryActions.retryRefresh()} style={styles.refreshErrorStrip}>
-          <Ionicons name="refresh-outline" size={16} color={COLORS.danger} />
-          <Text style={styles.refreshErrorText}>새로고침하지 못했습니다. 탭해서 다시 시도하세요.</Text>
-        </Pressable>
-      ) : null}
 
       <FlatList
         data={visibleRows}
@@ -226,22 +205,13 @@ function NoticesContent() {
             <View style={styles.feedFooter}>
               <ActivityIndicator color={COLORS.primary} />
             </View>
-          ) : feedFailures.nextPage ? (
-            <Pressable onPress={() => void retryActions.retryNextPage()} style={styles.feedFooter}>
-              <Text style={styles.feedFooterRetry}>다음 공지를 불러오지 못했습니다. 탭해서 다시 시도하세요.</Text>
-            </Pressable>
           ) : null
         }
         ListEmptyComponent={
           isLoading ? (
             <LoadingRows />
-          ) : (
-            <NetworkErrorFallback error={boardsLoadError ?? postsQuery.error} onRetry={() => { void refetchBoards(); void retryActions.retryInitial(); }}>
-              <EmptyState
-                title={isOfflinePreview ? "공지사항을 불러오지 못했습니다." : "등록된 공지사항이 없어요"}
-                description={isOfflinePreview ? "잠시 후 다시 시도해주세요" : "새로운 공지가 등록되면 알려드릴게요"}
-              />
-            </NetworkErrorFallback>
+          ) : noticeLoadError ? null : (
+            <EmptyState title="등록된 공지사항이 없어요" description="새로운 공지가 등록되면 알려드릴게요" />
           )
         }
       />
@@ -305,50 +275,11 @@ const styles = StyleSheet.create({
   filterTextActive: {
     color: "#FFFFFF",
   },
-  connectionStrip: {
-    height: 34,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: "#FECACA",
-    backgroundColor: COLORS.danger50,
-    paddingHorizontal: 24,
-  },
-  connectionText: {
-    flex: 1,
-    color: COLORS.danger,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  refreshErrorStrip: {
-    minHeight: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: "#FECACA",
-    backgroundColor: COLORS.danger50,
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-  },
-  refreshErrorText: {
-    flex: 1,
-    color: COLORS.danger,
-    fontSize: 12,
-    fontWeight: "700",
-  },
   feedFooter: {
     minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
-  },
-  feedFooterRetry: {
-    color: COLORS.danger,
-    fontSize: 12,
-    fontWeight: "700",
-    textAlign: "center",
   },
   listContent: {
     paddingHorizontal: 16,

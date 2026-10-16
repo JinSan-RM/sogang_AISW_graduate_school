@@ -2,7 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppTypography";
+import { AppText as Text } from "../../components/AppTypography";
+import { FIELD_ERROR_COLOR, FieldInput } from "../../components/FieldBorder";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { authApi } from "../../services/api";
@@ -11,14 +12,14 @@ import MigrationNoticeModal from "../../components/MigrationNoticeModal";
 import SchoolEmailInput from "../../components/SchoolEmailInput";
 import { composeSchoolEmail, emailIdError } from "../../utils/authValidation";
 import { dismissMigrationNoticeForNow, hideMigrationNoticeForever, isMigrationNoticeHidden } from "../../utils/migrationNotice";
+import { BUTTON_TEXT } from "../../utils/buttonText";
 
 const COLORS = {
   primary: "#2761FF", // primary/500
   text: "#15171C", // gray/900 (Figma)
   muted: "#6B7280", // gray/600
   subtle: "#A6ACB7", // placeholder
-  border: "#E1E4E9", // border/default
-  danger: "#DC2626",
+  danger: FIELD_ERROR_COLOR,
   bg: "#FFFFFF",
 };
 
@@ -32,7 +33,6 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const [emailId, setEmailId] = useState("");
   const [password, setPassword] = useState("");
-  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const setSession = useUserStore((state) => state.setSession);
@@ -95,24 +95,18 @@ export default function LoginScreen() {
 
         <View style={styles.field}>
           <Text style={styles.label}>비밀번호</Text>
-          <TextInput
-            onBlur={() => setIsPasswordFocused(false)}
+          <FieldInput
+            hasError={Boolean(errors.password || errors.form)}
             onChangeText={(value) => {
               setPassword(value);
               setErrors((current) => ({ ...current, password: undefined, form: undefined }));
             }}
-            onFocus={() => setIsPasswordFocused(true)}
             onSubmitEditing={() => void handleLogin()}
             placeholder="비밀번호"
             placeholderTextColor={COLORS.subtle}
             returnKeyType="go"
             secureTextEntry
-            style={[
-              styles.input,
-              isPasswordFocused && !errors.password && !errors.form ? styles.inputFocused : null,
-              errors.password || errors.form ? styles.inputError : null,
-              { outlineStyle: "none" } as never,
-            ]}
+            style={styles.input}
             submitBehavior="submit"
             value={password}
           />
@@ -203,21 +197,12 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 48,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400", // Figma: Inter Regular
     paddingHorizontal: 16,
-  },
-  // 피그마 Login-Error: 오류 칸은 배경 없이 빨간 테두리만 둔다.
-  inputError: {
-    borderColor: COLORS.danger,
-  },
-  inputFocused: {
-    borderColor: COLORS.primary,
   },
   primaryButton: {
     height: 48,
@@ -230,7 +215,7 @@ const styles = StyleSheet.create({
   // Figma Login-Error: 칸 아래 14에 오류 문구, 그 아래 28에 로그인 버튼 (본문 gap 20 기준)
   errorRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start", // 좁은 화면에서 두 줄이 돼도 아이콘은 첫 줄 옆
     gap: 4,
     marginTop: -6,
     marginBottom: 7,
@@ -245,9 +230,8 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   primaryButtonText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 16,
-    lineHeight: 24,
     fontWeight: "500", // Figma: Inter Medium
   },
   links: {

@@ -4,10 +4,12 @@ import { router as expoRouter, usePathname, useFocusEffect, useLocalSearchParams
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert as NativeAlert, BackHandler, Image, Keyboard, Linking, PanResponder, Platform, Pressable, ScrollView, StyleSheet, type TextInputKeyPressEvent, type TextStyle, View } from "react-native";
 import { AppText as Text, AppTextInput as TextInput } from "../../../../../components/AppTypography";
+import { FieldInput } from "../../../../../components/FieldBorder";
 import { NetworkErrorFallback } from "../../../../../components/NetworkErrorState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CommentItem from "../../../../../components/CommentItem";
+import EdgeSwipeBack from "../../../../../components/EdgeSwipeBack";
 import NoticePollCard from "../../../../../components/NoticePollCard";
 import { noticeBodyBlocks } from "../../../../../utils/noticeBody";
 import ActivityCertificationMediaImage from "../../../../../components/ActivityCertificationMediaImage";
@@ -20,7 +22,6 @@ import NaturalAspectMediaImage from "../../../../../components/NaturalAspectMedi
 import { AttachDocIcon, AttachLinkIcon, BackIcon, BookmarkIcon, CalendarSmallIcon, DownloadIcon, EmptyCalendarIcon, ExternalLinkIcon, FlagIcon, ImagePlaceholderIcon, MoreIcon, PencilIcon, SendIcon, SliderNextIcon, SliderPrevIcon, TrashIcon } from "../../../../../components/icons";
 import { useBoardsQuery } from "../../../../../hooks/useApi";
 import { useBoardTabHighlight } from "../../../../../hooks/useBoardTabHighlight";
-import { useSwipeBackInScreen } from "../../../../../hooks/useSwipeBackInScreen";
 import { useToast } from "../../../../../hooks/useToast";
 import { resolveMediaAccessUrl, useMediaAccessUrl } from "../../../../../hooks/useMediaAccessUrl";
 import type { MediaReference } from "../../../../../utils/mediaAccess";
@@ -65,6 +66,7 @@ import {
   noticeAttachmentFrameAspectRatio,
   postDetailImagePresentation,
   shouldOpenPostAttachment,
+  VERTICAL_IMAGE_FRAME_ASPECT_RATIO,
 } from "../../../../../utils/postDetailImagePresentation";
 import { imageDimensionsFromLoadEvent } from "../../../../../utils/imageDimensions";
 import { postDetailFocusDecision } from "../../../../../utils/postDetailCache";
@@ -77,6 +79,7 @@ import { resourceCategoryLabel, resourceDetailMeta } from "../../../../../utils/
 import { RESOURCE_SUBJECT_SEPARATOR, resourceSubjectSegments, type ResourceSubjectTone } from "../../../../../utils/resourcePostFields";
 import { adminPostRouter } from "../../../../../utils/adminPostRouter";
 import { useAdminAlert } from "../../../../../utils/adminAlert";
+import { BUTTON_TEXT } from "../../../../../utils/buttonText";
 
 const COLORS = {
   primary: "#2761FF",
@@ -93,8 +96,19 @@ const COLORS = {
   cyan700: "#14788A",
   green50: "#EAF8EF",
   green700: "#1F7A46",
-  pink50: "#FFEAF1",
-  pink700: "#B91C4C",
+  pink50: "#FBEAF0",
+  pink700: "#993556",
+  lime50: "#EAF3DE",
+  lime700: "#3B6D11",
+  amber50: "#FAEEDA",
+  amber700: "#854F0B",
+  blue50: "#E6F1FB",
+  blue700: "#0C447C",
+  gray50: "#F1F3F5",
+  indigo50: "#EEEDFE",
+  indigo700: "#3C3489",
+  purple50: "#F0EEF9",
+  purple700: "#6543A2",
   yellow50: "#FFF6DC",
   yellow700: "#9A6B00",
 };
@@ -145,18 +159,18 @@ function categoryLabel(value?: string | null, fallback = "게시글") {
 }
 
 function categoryTone(label: string) {
-  if (label.includes("반려")) return { bg: "#FBEAF0", fg: "#993556" };
+  if (label.includes("반려")) return { bg: COLORS.pink50, fg: COLORS.pink700 };
   if (label.includes("종합")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
-  if (label.includes("행사") || label.includes("시험") || label.includes("족보")) return { bg: "#FBEAF0", fg: "#993556" };
-  if (label.includes("진행중")) return { bg: "#EAF3DE", fg: "#3B6D11" };
-  if (label === "마감") return { bg: "#F1F3F5", fg: COLORS.muted };
-  if (label.includes("졸업") || label.includes("논문")) return { bg: "#EAF3DE", fg: "#3B6D11" };
+  if (label.includes("행사") || label.includes("시험") || label.includes("족보")) return { bg: COLORS.pink50, fg: COLORS.pink700 };
+  if (label.includes("진행중")) return { bg: COLORS.lime50, fg: COLORS.lime700 };
+  if (label === "마감") return { bg: COLORS.gray50, fg: COLORS.muted };
+  if (label.includes("졸업") || label.includes("논문")) return { bg: COLORS.lime50, fg: COLORS.lime700 };
   if (label.includes("인증") || label.includes("완료")) return { bg: COLORS.green50, fg: COLORS.green700 };
   if (label.includes("대기")) return { bg: COLORS.yellow50, fg: COLORS.yellow700 };
   if (label.includes("건의") || label.includes("답변")) return { bg: COLORS.cyan50, fg: COLORS.cyan700 };
-  if (label.includes("후기")) return { bg: "#EEEDFE", fg: "#3C3489" };
-  if (label.includes("기타")) return { bg: "#F0EEF9", fg: "#6543A2" };
-  return { bg: "#E6F1FB", fg: "#0C447C" };
+  if (label.includes("후기")) return { bg: COLORS.indigo50, fg: COLORS.indigo700 };
+  if (label.includes("기타")) return { bg: COLORS.purple50, fg: COLORS.purple700 };
+  return { bg: COLORS.blue50, fg: COLORS.blue700 };
 }
 
 function isAdminParticipationGuideBoard(board?: { slug?: string } | null) {
@@ -202,7 +216,7 @@ function BackButton({ onPress }: { onPress: () => void }) {
 }
 
 // Figma Detail-Image(Horizontal|Vertical)-Reordered: 참여활동 대표 이미지는
-// 가로형이면 320x240(4:3), 세로형이면 320x400(4:5) 고정 박스에 cover로 채운다.
+// 가로형이면 320x240(4:3), 세로형이면 320x452 고정 박스에 cover로 채운다.
 function ParticipationHeroImage({ media }: { media: MediaReference }) {
   const [aspect, setAspect] = useState<number | null>(null);
   const { uri } = useMediaAccessUrl(media);
@@ -223,7 +237,7 @@ function ParticipationHeroImage({ media }: { media: MediaReference }) {
   }, [uri]);
 
   return (
-    <View style={[styles.participationHeroBox, { aspectRatio: aspect !== null && aspect < 1 ? 4 / 5 : 4 / 3 }]}>
+    <View style={[styles.participationHeroBox, { aspectRatio: aspect !== null && aspect < 1 ? VERTICAL_IMAGE_FRAME_ASPECT_RATIO : 4 / 3 }]}>
       <MediaImage media={media} resizeMode="cover" style={styles.participationHeroImage} />
     </View>
   );
@@ -412,10 +426,9 @@ export default function PostDetailScreen() {
     });
   }, [board, deleteCommentMutation.isPending, deletePostMutation.isPending, params.fromBoardId, params.returnTo, pendingDeleteCommentId, reportTarget, showDeleteConfirm, showPostMenu, router]);
 
-  useSwipeBackInScreen(
-    pendingDeleteCommentId !== null || showDeleteConfirm || Boolean(reportTarget) || showPostMenu,
-    handlePostBack,
-  );
+  // ⋯ 메뉴·삭제·신고·댓글 삭제 확인창이 열려 있으면 iOS 가장자리 스와이프도
+  // 안드로이드 뒤로가기처럼 그것부터 닫는다.
+  const hasOpenOverlay = pendingDeleteCommentId !== null || showDeleteConfirm || Boolean(reportTarget) || showPostMenu;
 
   useFocusEffect(
     useCallback(() => {
@@ -493,14 +506,14 @@ export default function PostDetailScreen() {
       : categoryLabel(post.category, isAdminParticipationGuide ? "모집중" : board?.board_type === "notice" ? "공지" : board?.name ?? "게시글");
   const tone = isSuggestionRequest
     ? post.suggestion?.status === "answered"
-      ? { bg: "#EAF3DE", fg: "#3B6D11" }
-      : { bg: "#FAEEDA", fg: "#854F0B" }
+      ? { bg: COLORS.lime50, fg: COLORS.lime700 }
+      : { bg: COLORS.amber50, fg: COLORS.amber700 }
     : isMutualAidRequest
       ? post.mutual_aid?.status === "completed"
-        ? { bg: "#EAF3DE", fg: "#3B6D11" }
+        ? { bg: COLORS.lime50, fg: COLORS.lime700 }
         : post.mutual_aid?.status === "rejected"
-          ? { bg: "#FBEAF0", fg: "#993556" }
-          : { bg: "#E6F1FB", fg: "#0C447C" }
+          ? { bg: COLORS.pink50, fg: COLORS.pink700 }
+          : { bg: COLORS.blue50, fg: COLORS.blue700 }
       : categoryTone(label);
   const applicationUrl = participationApplicationUrl(metadata);
   const isRecruitmentClosed =
@@ -643,6 +656,11 @@ export default function PostDetailScreen() {
 
   const startReport = (target: ReportTarget) => {
     if (!requireLogin()) return;
+    // 이번에 신고한 댓글을 다시 누르면 신고 창 없이 바로 알린다. 예전에 신고한 댓글은 서버가 중복으로 알려 준다.
+    if (target.type === "comment" && reportedTargets[`comment:${target.id}`]) {
+      showToast(TOAST_INFO_MESSAGES.alreadyReportedComment, "info");
+      return;
+    }
     setReportTarget(target);
     setReportReason(REPORT_REASONS[0].value);
     setReportDetail("");
@@ -662,8 +680,9 @@ export default function PostDetailScreen() {
       setReportedTargets((current) => ({ ...current, [`${reportTarget.type}:${reportTarget.id}`]: true }));
       setReportTarget(null);
       setReportDetail("");
-      if (response.data.duplicate) showToast(TOAST_INFO_MESSAGES.alreadyReported, "info");
-      else showToast(TOAST_SUCCESS_MESSAGES.reportSubmitted, "success");
+      if (!response.data.duplicate) showToast(TOAST_SUCCESS_MESSAGES.reportSubmitted, "success");
+      else if (reportTarget.type === "comment") showToast(TOAST_INFO_MESSAGES.alreadyReportedComment, "info");
+      else showToast(TOAST_INFO_MESSAGES.alreadyReported, "info");
     } catch {
       showToast(TOAST_ERROR_MESSAGES.report);
     } finally {
@@ -955,7 +974,7 @@ export default function PostDetailScreen() {
   ) : null;
 
   return (
-    <View style={styles.screen}>
+    <EdgeSwipeBack active={hasOpenOverlay} onBack={handlePostBack} style={styles.screen}>
       {viewerIndex !== null && viewerImages.length > 0 ? (
         <ImageViewerModal key={postId} images={viewerImages} initialIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
       ) : null}
@@ -1102,7 +1121,8 @@ export default function PostDetailScreen() {
                   style={[
                     styles.infoRow,
                     isMutualAidRequest ? styles.mutualAidInfoRow : null,
-                    isMutualAidRequest && !hasMutualAidNote && !mutualAidProofUrl && !hasMutualAidEvidenceFiles && index === visibleDetailRows.length - 1
+                    // Figma: 증빙서류는 별도 항목이라 바로 위 행에도 구분선을 긋지 않는다.
+                    isMutualAidRequest && !hasMutualAidNote && index === visibleDetailRows.length - 1
                       ? styles.mutualAidInfoRowLast
                       : null,
                   ]}
@@ -1241,7 +1261,7 @@ export default function PostDetailScreen() {
           </View>
         ) : null}
 
-                {post.poll && isNotice ? <NoticePollCard key={`${userId}:${post.id}`} postId={post.id} /> : null}
+                {post.poll && isNotice ? <NoticePollCard key={`${userId}:${post.id}`} postId={post.id} onSaveError={() => showToast(TOAST_ERROR_MESSAGES.pollVote)} /> : null}
 
         {isAdminParticipationGuide ? (
           isRecruitmentClosed ? (
@@ -1417,7 +1437,6 @@ export default function PostDetailScreen() {
                   }
                 }}
                 onReport={startReport}
-                reportedTargets={reportedTargets}
                 // 스터디 모집 댓글에는 답글(대댓글)을 제공하지 않는다.
                 onReply={
                   isStudyRecruit
@@ -1446,7 +1465,7 @@ export default function PostDetailScreen() {
             </View>
           ) : null}
           <View style={styles.commentInputRow}>
-            <TextInput
+            <FieldInput
               ref={commentInputRef}
               blurOnSubmit={Platform.OS === "web" ? false : undefined}
               multiline
@@ -1461,7 +1480,7 @@ export default function PostDetailScreen() {
               placeholderTextColor="#A6ACB7"
               returnKeyType="send"
               scrollEnabled={commentInputHeight >= 88}
-              style={[styles.commentInput, { height: commentInputHeight }, { outlineStyle: "none" } as never]}
+              style={[styles.commentInput, { height: commentInputHeight }]}
               submitBehavior={Platform.OS === "web" ? "newline" : "submit"}
             />
             <Pressable accessibilityLabel="댓글 등록" disabled={createCommentMutation.isPending} onPress={handleCreateComment}>
@@ -1552,14 +1571,14 @@ export default function PostDetailScreen() {
                 })}
               </View>
               {reportReason === "other" ? (
-                <TextInput
+                <FieldInput
                   maxLength={1000}
                   multiline
                   value={reportDetail}
                   onChangeText={setReportDetail}
                   placeholder="구체적인 사유를 입력해주세요"
                   placeholderTextColor={COLORS.subtle}
-                  style={[styles.reportDetailInput, { outlineStyle: "none" } as never]}
+                  style={styles.reportDetailInput}
                   textAlignVertical="top"
                 />
               ) : null}
@@ -1625,7 +1644,7 @@ export default function PostDetailScreen() {
         </Pressable>
       ) : null}
       <Toast toast={toast} onHide={hideToast} />
-    </View>
+    </EdgeSwipeBack>
   );
 }
 
@@ -1866,8 +1885,7 @@ const styles = StyleSheet.create({
   },
   reportDetailInput: {
     minHeight: 88,
-    borderWidth: 1,
-    borderColor: COLORS.divider,
+    // 테두리는 FieldBorder 공통 원칙을 따른다(Figma ReasonSheet-OtherInput 평소 0.5).
     borderRadius: 8,
     color: COLORS.text,
     fontSize: 13,
@@ -1884,8 +1902,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   reportPrimaryButtonText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 15,
     fontWeight: "500",
   },
   buttonDisabled: {
@@ -1946,10 +1964,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   confirmCancelText: {
+    ...BUTTON_TEXT,
     color: "#4B5160",
-    fontSize: 16,
     fontWeight: "500",
-    lineHeight: 24,
   },
   confirmDeleteButton: {
     height: 40,
@@ -1960,10 +1977,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   confirmDeleteText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 16,
     fontWeight: "500",
-    lineHeight: 24,
   },
   postMenu: {
     position: "absolute",
@@ -2209,7 +2225,7 @@ const styles = StyleSheet.create({
     color: "#1F4E8C",
   },
   subjectSatisfaction: {
-    color: "#3B6D11",
+    color: COLORS.lime700,
   },
   metaMutualAid: {
     color: "#A6ACB7", // Figma: Regular 12/14
@@ -2360,8 +2376,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   joinButtonText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 14,
     fontWeight: "500",
   },
   joinButtonClosed: {
@@ -2512,23 +2528,24 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 9,
   },
+  // Figma MutualAidDetail-V2-Rejected 반려사유: 상태칩과 같은 분홍(pink50)·자주(pink700), gap 6, 부제 13 Medium, 본문 14 Regular(행간 기본).
   mutualAidRejectionBox: {
     borderRadius: 12,
     backgroundColor: COLORS.pink50,
     padding: 16,
-    marginTop: 24,
-    gap: 8,
+    // Figma: 증빙서류 항목(아래 여백 14) 다음 정보목록 아래 여백 16 뒤에 박스가 온다.
+    marginTop: 16,
+    gap: 6,
   },
   mutualAidRejectionTitle: {
     color: COLORS.pink700,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
   },
   mutualAidRejectionBody: {
     color: COLORS.text,
     fontSize: 14,
     fontWeight: "400",
-    lineHeight: 22,
   },
   adminReplyBox: {
     gap: 10,
@@ -2752,8 +2769,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 36,
     maxHeight: 88,
-    borderWidth: 0.5,
-    borderColor: "#E1E4E9",
+    // 테두리는 FieldBorder 공통 원칙을 따른다.
     borderRadius: 999,
     color: COLORS.text,
     fontSize: 13,

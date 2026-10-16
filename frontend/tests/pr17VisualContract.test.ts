@@ -30,9 +30,12 @@ test("참여활동 카드는 PR 원본처럼 마지막 구분선을 숨긴다", 
 });
 
 test("활동 인증 폼은 PR 원본 문구를 표시한다", () => {
-  assert.match(create, /isActivity \? styles\.appBarNoDivider : null/);
-  assert.match(create, /appBarNoDivider:[\s\S]*borderBottomWidth: 0/);
-  assert.match(create, /appBarTitle:[\s\S]*fontSize: 18,[\s\S]*fontWeight: "500",[\s\S]*lineHeight: 22/);
+  // 상단 바는 글쓰기·글 수정 공용 PostFormAppBar가 그린다.
+  const appBar = readFileSync("components/PostFormAppBar.tsx", "utf8");
+  assert.match(create, /variant=\{isMutualAid \? "mutualAid" : isActivity \? "activity" : "default"\}/);
+  // 2026-10-15 피그마: 글쓰기·글 수정 상단 바는 모양과 관계없이 제목 아래 구분선이 없다.
+  assert.doesNotMatch(appBar, /borderBottomWidth/);
+  assert.match(appBar, /appBarTitle:[\s\S]*fontSize: 18,[\s\S]*fontWeight: "500",[\s\S]*lineHeight: 22/);
   assert.match(create, /placeholder="이름으로 검색"/);
   assert.doesNotMatch(create, /이름 또는 학번으로 검색/);
   assert.match(create, /attachExtensionHint:[\s\S]*fontSize: 12[\s\S]*lineHeight: 15/);
@@ -59,14 +62,14 @@ test("참여활동 상세는 PR 순서를 유지하고 활동 인증 이미지�
   assert.match(detail, /\{isAdminParticipationGuide \? participationImagesSection : null\}/);
   assert.match(detail, /const participationImagesSection =/);
   assert.match(detail, /function ParticipationHeroImage/);
-  assert.match(detail, /aspectRatio: aspect !== null && aspect < 1 \? 4 \/ 5 : 4 \/ 3/);
+  assert.match(detail, /aspectRatio: aspect !== null && aspect < 1 \? VERTICAL_IMAGE_FRAME_ASPECT_RATIO : 4 \/ 3/);
   assert.match(detail, /activityImageLayoutFromMetadata\(board\?\.metadata\?\.activity_image_layout\)/);
   assert.match(detail, /<ActivityCertificationMediaImage[\s\S]*?layout=\{activityImageLayout\}/);
   assert.match(detail, /isPhotoAlbum \? styles\.visualHeroAlbum : null/);
   assert.doesNotMatch(detail, /const hasExpandableHero = isActivityCertification/);
 });
 
-test("공지 이미지는 가로 4:3·세로 4:5 프레임만 사용하고 PR 첨부 타이포를 유지한다", () => {
+test("공지 이미지는 가로 4:3·세로 320x452 프레임만 사용하고 PR 첨부 타이포를 유지한다", () => {
   assert.match(detail, /function NoticeAttachmentImage/);
   assert.match(detail, /noticeAttachmentFrameAspectRatio\(sourceAspectRatio\)/);
   assert.doesNotMatch(detail, /사진 전체보기/);

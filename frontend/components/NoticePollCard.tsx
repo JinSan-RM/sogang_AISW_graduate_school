@@ -6,6 +6,7 @@ import { AppText as Text } from "./AppTypography";
 import MediaImage from "./MediaImage";
 import PersonListCard from "./PersonListCard";
 import { VoterAvatarIcon } from "./icons";
+import NetworkErrorState, { LoadErrorState, useLoadErrorOverlay } from "./NetworkErrorState";
 import { pollApi } from "../services/api";
 import { useUserStore } from "../stores/userStore";
 import type { NoticePoll, NoticePollQuestion } from "../types";
@@ -13,27 +14,22 @@ import { pollCacheKey, pollOptionLabel, validPollAnswers } from "../utils/notice
 import { pollQuestionAcceptsVote } from "../utils/noticePollUsability";
 import { formatMonthDayTime, parseApiDate } from "../utils/dateFormat";
 import { formatCohortName } from "../utils/userLabel";
+import { isNetworkError } from "../utils/networkError";
+import { BUTTON_TEXT } from "../utils/buttonText";
 
-function Button({label, onPress, disabled = false}: {label: string; onPress: () => void | Promise<void>; disabled?: boolean}) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{disabled}}
-    disabled={disabled} onPress={onPress} style={styles.button}>
-    <Text style={styles.buttonText}>{label}</Text>
-  </Pressable>;
-}
-
-export default function NoticePollCard({postId}: {postId: number; poll?: NoticePoll}) {
+// 투표를 처음 불러오지 못하면 앱 전체 LoadError로 덮고, 투표 저장 실패는 onSaveError로 화면이 토스트를 띄운다.
+export default function NoticePollCard({postId, onSaveError}: {postId: number; poll?: NoticePoll; onSaveError: () => void}) {
   const userId = useUserStore(state => state.userId);
   const client = useQueryClient();
   const query = useQuery({queryKey: pollCacheKey(userId, postId), queryFn: () => pollApi.get(postId),
     enabled: userId !== null, refetchInterval: 30_000});
-  if (!query.data) return <View style={styles.container}>{query.isError ? <>
-    <Text style={styles.error}>투표를 불러오지 못했습니다.</Text><Button label="투표 다시 불러오기" onPress={() => {void query.refetch();}} />
-  </> : <ActivityIndicator color="#2761FF" />}</View>;
+  useLoadErrorOverlay(query.data ? null : query.error, () => {void query.refetch();});
+  if (!query.data) return query.isError ? null : <View style={styles.container}><ActivityIndicator color="#2761FF" /></View>;
   const poll = query.data.data;
   return <View style={styles.cards}>{poll.questions.map(question =>
     <QuestionCard key={`${userId}:${postId}:${JSON.stringify([question.id, question.title, question.kind, question.allow_multiple,
       question.options.map(o => [o.id, o.label, o.media_id]), question.is_closed ?? poll.is_closed])}`}
-      poll={poll} question={question} postId={postId} userId={userId}
+      poll={poll} question={question} postId={postId} userId={userId} onSaveError={onSaveError}
       refresh={async () => {await query.refetch();}} onSaved={async next => {
         await client.cancelQueries({queryKey: pollCacheKey(userId, postId), exact: true});
         client.setQueryData(pollCacheKey(userId, postId), {status: "success", data: next});
@@ -45,8 +41,8 @@ export default function NoticePollCard({postId}: {postId: number; poll?: NoticeP
       }} />)}</View>;
 }
 
-function QuestionCard({postId, userId, poll, question, onSaved, refresh}: {postId: number; userId: number | null; poll: NoticePoll;
-  question: NoticePollQuestion; onSaved: (poll: NoticePoll) => Promise<void>; refresh: () => Promise<void>}) {
+function QuestionCard({postId, userId, poll, question, onSaved, onSaveError, refresh}: {postId: number; userId: number | null; poll: NoticePoll;
+  question: NoticePollQuestion; onSaved: (poll: NoticePoll) => Promise<void>; onSaveError: () => void; refresh: () => Promise<void>}) {
   const endsAt = question.ends_at ? parseApiDate(question.ends_at)?.getTime() ?? null : null;
   const [now, setNow] = useState(() => Date.now());
   const serverClosed = question.is_closed ?? poll.is_closed;
@@ -61,7 +57,6 @@ function QuestionCard({postId, userId, poll, question, onSaved, refresh}: {postI
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [people, setPeople] = useState(false);
   const sending = useRef(false);
   const mounted = useRef(true);
@@ -85,21 +80,20 @@ function QuestionCard({postId, userId, poll, question, onSaved, refresh}: {postI
   const choose = (optionId: number) => {
     if (!selecting || saving) return;
     setDraft(current => current === optionId ? null : optionId);
-    setError("");
   };
   const submit = async () => {
     if (sending.current || !canSubmit) return;
     if (draft === savedId) {setEditing(false); return;}
     if (draft !== null && !validPollAnswers(poll, {[question.id]: [draft]})) return;
-    sending.current = true; setSaving(true); setError("");
+    sending.current = true; setSaving(true);
     try {
       const response = await pollApi.vote(postId, poll.revision, [{question_id: question.id, option_ids: draft === null ? [] : [draft]}]);
       if (!mounted.current) return;
       await onSaved(response.data);
       if (mounted.current) {setEditing(false); setDraft(null);}
-    } catch (issue) {
+    } catch {
       if (mounted.current) {
-        setError((issue as {response?: {data?: {message?: string}}}).response?.data?.message ?? "투표를 저장하지 못했습니다. 다시 시도해 주세요.");
+        onSaveError();
         await refresh();
       }
     } finally {sending.current = false; if (mounted.current) setSaving(false);}
@@ -144,10 +138,9 @@ function QuestionCard({postId, userId, poll, question, onSaved, refresh}: {postI
       disabled={!canSubmit} onPress={submit} style={[styles.voteButton, canSubmit ? styles.voteButtonActive : styles.voteButtonDisabled]}>
       <Text style={[styles.voteLabel, canSubmit && styles.voteLabelActive]}>투표하기</Text>
     </Pressable> : canVote ? <Pressable accessibilityRole="button" accessibilityLabel={`${question.title} 다시 투표하기`}
-      onPress={() => {setEditing(true); setDraft(savedId); setError("");}} style={[styles.voteButton, styles.revoteButton]}>
+      onPress={() => {setEditing(true); setDraft(savedId);}} style={[styles.voteButton, styles.revoteButton]}>
       <Text style={styles.revoteLabel}>다시 투표하기</Text>
     </Pressable> : null}
-    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     <View style={styles.footer}>
       <Text style={styles.participants}>{count}명 참여</Text>
       <Pressable accessibilityRole="button" accessibilityLabel={`참여자 보기 · ${count}명 참여`}
@@ -205,6 +198,15 @@ function PeopleList({postId, userId, question, optionId}: {postId: number; userI
     loadingMore.current = true;
     try {await query.fetchNextPage();} finally {loadingMore.current = false;}
   };
+  // 시트를 하나의 화면으로 본다: 처음이든 더 불러오기든 실패하면 목록 전체를 실패 화면으로 바꾼다
+  // (2026-10-16 사용자 결정). 다시 시도는 실패한 요청만 다시 한다.
+  if (query.isError) {
+    const retry = () => {if (query.isFetchNextPageError) void query.fetchNextPage(); else void query.refetch();};
+    return <View style={styles.peopleScroll}>
+      {isNetworkError(query.error) ? <NetworkErrorState onRetry={retry} retrying={query.isFetching} />
+        : <LoadErrorState onRetry={retry} retrying={query.isFetching} />}
+    </View>;
+  }
   return <ScrollView style={styles.peopleScroll} contentContainerStyle={styles.peopleContent} showsVerticalScrollIndicator={false}
     scrollEventThrottle={100} onScroll={event => {
       const {layoutMeasurement, contentOffset, contentSize} = event.nativeEvent;
@@ -213,9 +215,7 @@ function PeopleList({postId, userId, question, optionId}: {postId: number; userI
     {members.map(member => <PersonListCard key={member.user_id} variant="poll" badge=""
       avatar={<VoterAvatarIcon />}
       name={formatCohortName(member.cohort, member.nickname)} caption={member.major || undefined} />)}
-    {query.isError ? <View style={styles.loadState}><Text accessibilityRole="alert" style={styles.error}>참여자를 불러오지 못했습니다.</Text>
-      <Button label="참여자 다시 불러오기" onPress={() => {if (query.isFetchNextPageError) void query.fetchNextPage(); else void query.refetch();}} /></View>
-      : !query.data || query.isFetchingNextPage ? <ActivityIndicator color="#2761FF" style={styles.loadState} />
+    {!query.data || query.isFetchingNextPage ? <ActivityIndicator color="#2761FF" style={styles.loadState} />
         : !members.length ? <Text style={styles.emptyPeople}>아직 투표한 사람이 없어요</Text> : null}
   </ScrollView>;
 }
@@ -247,16 +247,13 @@ const styles = StyleSheet.create({
   voteButtonDisabled: {backgroundColor: "#F4F5F7"},
   voteButtonActive: {backgroundColor: "#2761FF"},
   revoteButton: {backgroundColor: "#FFF", borderColor: "#E7E9EE"},
-  voteLabel: {fontSize: 14, lineHeight: 17, fontWeight: "500", color: "#A6ACB7"},
+  voteLabel: { ...BUTTON_TEXT, fontWeight: "500", color: "#A6ACB7" },
   voteLabelActive: {fontWeight: "600", color: "#FFF"},
-  revoteLabel: {fontSize: 14, lineHeight: 17, fontWeight: "500", color: "#000"},
+  revoteLabel: { ...BUTTON_TEXT, fontWeight: "500", color: "#000" },
   footer: {flexDirection: "row", justifyContent: "space-between", alignItems: "center"},
   participants: {fontSize: 13, lineHeight: 18, color: "#6B7280"},
   peopleButton: {minHeight: 32, justifyContent: "center", paddingLeft: 12},
   peopleLabel: {fontSize: 13, lineHeight: 18, fontWeight: "500", color: "#2761FF"},
-  button: {paddingVertical: 10, paddingHorizontal: 12, minHeight: 40, borderRadius: 7, backgroundColor: "#F3F4F6", alignItems: "center", justifyContent: "center"},
-  buttonText: {fontSize: 12, lineHeight: 18, color: "#7B8291"},
-  error: {fontSize: 12, color: "#B91C1C", lineHeight: 20, marginTop: 8},
   backdrop: {flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(0,0,0,.12)"},
   sheet: {width: "100%", backgroundColor: "#FFF", borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: "hidden", paddingHorizontal: 20},
   handleButton: {minHeight: 24, paddingVertical: 10, alignItems: "center", justifyContent: "center"},

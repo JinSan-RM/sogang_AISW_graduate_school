@@ -2,7 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppTypography";
+import { AppText as Text } from "../../components/AppTypography";
+import { FIELD_ERROR_COLOR, FieldInput } from "../../components/FieldBorder";
+import Toast from "../../components/Toast";
+import { useToast } from "../../hooks/useToast";
+import { TOAST_ERROR_MESSAGES } from "../../utils/toast";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import SchoolEmailInput from "../../components/SchoolEmailInput";
@@ -10,6 +14,7 @@ import { authApi } from "../../services/api";
 import {
   apiErrorCode,
   composeSchoolEmail,
+  displaySchoolEmail,
   emailIdError,
   passwordError,
 } from "../../utils/authValidation";
@@ -22,6 +27,7 @@ import { passwordResetProgressDotIndex, passwordResetResendControl } from "../..
 
 import { BackIcon } from "../../components/icons";
 import { resendCountdownLabel } from "../../utils/signupVerificationUi";
+import { BUTTON_TEXT } from "../../utils/buttonText";
 const COLORS = {
   primary: "#2761FF", // primary/500
   text: "#15171C", // gray/900 (Figma)
@@ -29,7 +35,7 @@ const COLORS = {
   subtle: "#A6ACB7", // placeholder
   tertiary: "#8A919C", // gray/500, text/tertiary
   border: "#E1E4E9", // border/default
-  danger: "#D64545", // error/500 (Figma)
+  danger: FIELD_ERROR_COLOR,
   successText: "#3B6D11", // Figma 재전송 완료 안내
   success: "#2E9E5B", // success/500 (complete icon)
   bg: "#FFFFFF",
@@ -53,17 +59,24 @@ function StepDots({ mode }: { mode: Mode }) {
   );
 }
 
+// 피그마 오류 문구: 한 줄은 12/14, 줄을 직접 나눈 두 줄 문구는 줄 높이 145%(17.4)다.
+// 아이콘은 어느 쪽이든 첫 줄 옆에 둔다(messageRow가 위쪽 정렬).
+function errorTextStyle(text: string) {
+  return [styles.errorText, text.includes("\n") ? styles.errorTextMultiline : null];
+}
+
 function FieldError({ message }: { message?: string }) {
   return message ? (
     <View style={styles.messageRow}>
       <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
-      <Text style={styles.errorText}>{message}</Text>
+      <Text style={errorTextStyle(message)}>{message}</Text>
     </View>
   ) : null;
 }
 
 export default function PasswordResetScreen() {
   const insets = useSafeAreaInsets();
+  const { toast, showToast, hideToast } = useToast();
   const [mode, setMode] = useState<Mode>("request");
   const [emailId, setEmailId] = useState("");
   const [code, setCode] = useState("");
@@ -134,9 +147,8 @@ export default function PasswordResetScreen() {
       setRateLimited(false);
       const response = await authApi.requestPasswordReset({ email });
       if (response.data.email_sent === false) {
-        const message = "인증 메일을 발송하지 못했어요. 잠시 후 다시 시도해주세요.";
-        if (resend) setVerificationMessage({ type: "error", text: message });
-        else setErrors({ email: message });
+        // 메일을 보내지 못했다. 입력 문제가 아니라 칸을 빨갛게 하지 않고 오류 토스트만 띄운다.
+        showToast(TOAST_ERROR_MESSAGES.verificationEmail);
         return;
       }
 
@@ -156,9 +168,15 @@ export default function PasswordResetScreen() {
     } catch (error) {
       const errorCode = apiErrorCode(error);
       const isRateLimited = errorCode === "RATE_LIMITED" || errorCode === "VERIFICATION_RESEND_COOLDOWN";
+      if (!isRateLimited && errorCode !== "ACCOUNT_NOT_FOUND") {
+        // 서버·네트워크 문제로 메일을 보내지 못했다. 칸 아래 문구 대신 오류 토스트.
+        showToast(TOAST_ERROR_MESSAGES.verificationEmail);
+        return;
+      }
       const message = isRateLimited
         ? "인증 시도 횟수를 초과했어요.\n잠시 후 다시 시도해주세요."
-        : "인증코드를 발송하지 못했어요. 이메일을 확인해주세요.";
+        // Figma Screen/Auth/FindPassword-NotFound. 색·크기는 다른 오류 문구와 같은 #D64545 12px.
+        : "가입된 이메일이 아닙니다. 다시 확인해 주세요.";
       if (resend) setVerificationMessage({ type: "error", text: message });
       else {
         setErrors({ email: message });
@@ -313,11 +331,12 @@ export default function PasswordResetScreen() {
           {mode === "code" ? (
             <>
               <Text style={[styles.heading, styles.headingCode]}>인증코드를 입력해주세요</Text>
-              <Text style={[styles.helper, styles.helperCode]}>{email}로 {codeResent ? "재발송" : "발송"}되었어요</Text>
+              <Text style={[styles.helper, styles.helperCode]}>{displaySchoolEmail(emailId)}로 {codeResent ? "재발송" : "발송"}되었어요</Text>
               {/* Figma 코드영역: 입력 44h + 타이머행, gap 8 */}
               <View style={styles.codeGroup}>
               <View style={styles.field}>
-                <TextInput
+                <FieldInput
+                  hasError={Boolean(codeError)}
                   editable={!verificationAttemptsLocked}
                   keyboardType="number-pad"
                   maxLength={6}
@@ -329,12 +348,8 @@ export default function PasswordResetScreen() {
                     }
                   }}
                   placeholder="인증코드 6자리"
-                  placeholderTextColor={COLORS.tertiary}
-                  style={[
-                    styles.input,
-                    styles.codeInput,
-                    codeError ? styles.inputError : null,
-                  ]}
+                  placeholderTextColor={COLORS.subtle}
+                  style={[styles.input, styles.codeInput]}
                   value={code}
                 />
               </View>
@@ -344,7 +359,7 @@ export default function PasswordResetScreen() {
                   {codeError ? (
                     <View style={styles.messageRow}>
                       <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
-                      <Text style={styles.errorText}>{codeError}</Text>
+                      <Text style={errorTextStyle(codeError)}>{codeError}</Text>
                     </View>
                   ) : verificationMessage ? (
                     <View style={verificationMessage.type === "success" ? styles.successRow : styles.messageRow}>
@@ -353,7 +368,7 @@ export default function PasswordResetScreen() {
                         size={14}
                         color={verificationMessage.type === "success" ? COLORS.successText : COLORS.danger}
                       />
-                      <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
+                      <Text style={verificationMessage.type === "success" ? styles.successText : errorTextStyle(verificationMessage.text)}>
                         {verificationMessage.text}
                       </Text>
                     </View>
@@ -405,7 +420,8 @@ export default function PasswordResetScreen() {
               <Text style={styles.heading}>새 비밀번호를 설정해주세요</Text>
               <View style={styles.field}>
                 <Text style={styles.label}>새 비밀번호</Text>
-                <TextInput
+                <FieldInput
+                  hasError={Boolean(displayedPasswordError)}
                   onChangeText={(value) => {
                     setNewPassword(value);
                     setErrors((current) => ({ ...current, password: undefined, form: undefined }));
@@ -413,7 +429,7 @@ export default function PasswordResetScreen() {
                   placeholder="새 비밀번호"
                   placeholderTextColor={COLORS.subtle}
                   secureTextEntry
-                  style={[styles.input, displayedPasswordError ? styles.inputErrorBorder : null]}
+                  style={styles.input}
                   value={newPassword}
                 />
                 {displayedPasswordError ? (
@@ -424,7 +440,8 @@ export default function PasswordResetScreen() {
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>비밀번호 확인</Text>
-                <TextInput
+                <FieldInput
+                  hasError={Boolean(displayedPasswordConfirmError)}
                   onChangeText={(value) => {
                     setNewPasswordConfirm(value);
                     setErrors((current) => ({ ...current, passwordConfirm: undefined, form: undefined }));
@@ -432,7 +449,7 @@ export default function PasswordResetScreen() {
                   placeholder="새 비밀번호 확인"
                   placeholderTextColor={COLORS.subtle}
                   secureTextEntry
-                  style={[styles.input, displayedPasswordConfirmError ? styles.inputErrorBorder : null]}
+                  style={styles.input}
                   value={newPasswordConfirm}
                 />
                 <FieldError message={displayedPasswordConfirmError} />
@@ -453,6 +470,7 @@ export default function PasswordResetScreen() {
           ) : null}
         </ScrollView>
       )}
+      <Toast toast={toast} onHide={hideToast} />
     </View>
   );
 }
@@ -479,9 +497,7 @@ const styles = StyleSheet.create({
   label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
   input: {
     minHeight: 48,
-    outlineStyle: "none" as never,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    // 테두리는 FieldBorder 공통 원칙을 따른다.
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
@@ -489,15 +505,14 @@ const styles = StyleSheet.create({
     fontWeight: "400", // Figma: Inter Regular
     paddingHorizontal: 16,
   },
-  inputError: { borderWidth: 1, borderColor: COLORS.danger }, // Figma 만료 상태: 1px #D64545
   // 피그마 FindPassword 오류 화면: 오류 칸은 배경 없이 빨간 테두리만 둔다.
-  inputErrorBorder: { borderColor: COLORS.danger },
-  messageRow: { flexDirection: "row", alignItems: "center", gap: 6 }, // Figma 에러행: gap 6
+  messageRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 }, // Figma 에러행: gap 6, 아이콘은 첫 줄 옆
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 }, // Figma 재전송 안내: gap 4
   successText: { flexShrink: 1, color: COLORS.successText, fontSize: 12, fontWeight: "400", lineHeight: 14 }, // Figma: 12/14 #3B6D11
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 14 }, // Figma 에러행: 12/14 error/500
+  errorTextMultiline: { lineHeight: 17.4 }, // Figma FindPassword-Failed: 두 줄 문구 줄 높이 145%
   codeGroup: { width: "100%", gap: 8 }, // Figma 코드영역: 입력 + 타이머행 gap 8
-  codeInput: { minHeight: 48, borderWidth: 0.5, paddingHorizontal: 14, paddingVertical: 12, lineHeight: 17 }, // Figma 코드입력: 48h(Sent·Resent·Expired·Failed), padding 12/14
+  codeInput: { minHeight: 48, paddingHorizontal: 14, paddingVertical: 12, lineHeight: 17 }, // Figma 코드입력: 48h(Sent·Resent·Expired·Failed), padding 12/14
   statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8, minHeight: 16 },
   statusLeft: { flexShrink: 1, minWidth: 0 },
   resendControlTrailing: { marginLeft: "auto" },
@@ -515,7 +530,7 @@ const styles = StyleSheet.create({
   submittingButton: { opacity: 0.55 },
   disabledButton: { backgroundColor: "#D1D5DB" },
   validationDisabledButton: { backgroundColor: COLORS.disabled },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "500", lineHeight: 24 }, // Figma: Inter Medium 14/24
+  primaryButtonText: { ...BUTTON_TEXT, color: "#FFFFFF", fontWeight: "500" }, // Figma: Medium 16 (줄 높이는 버튼 공통 19)
   stepDots: { flexDirection: "row", gap: 6 }, // Figma: 36w = 8x3 + 6x2
   stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#E0E3E8" },
   stepDotActive: { backgroundColor: "#2661FF" },

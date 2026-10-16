@@ -1,11 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppTypography";
+import { Modal, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { AppText as Text } from "../../components/AppTypography";
+import { FIELD_ERROR_COLOR, FieldInput, fieldBorder } from "../../components/FieldBorder";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import SchoolEmailInput from "../../components/SchoolEmailInput";
+import Toast from "../../components/Toast";
+import { useToast } from "../../hooks/useToast";
+import { TOAST_ERROR_MESSAGES } from "../../utils/toast";
+import { CheckboxCheckIcon, ConsentChevronIcon, SheetCheckIcon } from "../../components/icons";
 import { useRegistrationOptionsQuery } from "../../hooks/useApi";
 import { authApi } from "../../services/api";
 import { useUserStore } from "../../stores/userStore";
@@ -14,6 +19,7 @@ import {
   apiErrorCode,
   apiRetryAfterSeconds,
   composeSchoolEmail,
+  displaySchoolEmail,
   emailIdError,
   isEmailDeliveryConfirmed,
   passwordConfirmationError,
@@ -34,6 +40,8 @@ import {
 
 import { BackIcon } from "../../components/icons";
 import PrivacyConsentSheet from "../../components/PrivacyConsentSheet";
+import { useLoadErrorOverlay } from "../../components/NetworkErrorState";
+import { BUTTON_TEXT } from "../../utils/buttonText";
 const COLORS = {
   primary: "#2761FF", // primary/500
   primary50: "#EDF2FE",
@@ -42,8 +50,7 @@ const COLORS = {
   subtle: "#A6ACB7", // placeholder
   tertiary: "#8A919C", // gray/500, text/tertiary
   border: "#E1E4E9", // border/default
-  danger: "#D64545", // error/500 (Figma)
-  success: "#22A163",
+  danger: FIELD_ERROR_COLOR,
   bg: "#FFFFFF",
 };
 
@@ -62,17 +69,24 @@ function StepDots({ step }: { step: number }) {
   );
 }
 
-function FieldError({ message }: { message?: string }) {
+// 피그마 오류 문구: 한 줄은 12/14, 줄을 직접 나눈 두 줄 문구는 줄 높이 145%(17.4)다.
+// 아이콘은 어느 쪽이든 첫 줄 옆에 둔다(errorRow가 위쪽 정렬).
+function errorTextStyle(text: string) {
+  return [styles.errorText, text.includes("\n") ? styles.errorTextMultiline : null];
+}
+
+function FieldError({ message, style }: { message?: string; style?: StyleProp<ViewStyle> }) {
   return message ? (
-    <View style={styles.errorRow}>
+    <View style={[styles.errorRow, style]}>
       <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
-      <Text style={styles.errorText}>{message}</Text>
+      <Text style={errorTextStyle(message)}>{message}</Text>
     </View>
   ) : null;
 }
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
+  const { toast, showToast, hideToast } = useToast();
   const setSession = useUserStore((state) => state.setSession);
   const [step, setStep] = useState(0);
   const [emailId, setEmailId] = useState("");
@@ -101,6 +115,8 @@ export default function RegisterScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const registrationOptionsQuery = useRegistrationOptionsQuery();
+  // 전공 목록·개인정보 처리방침을 받지 못하면(4xx 포함) 앱 전체 LoadError로 덮는다.
+  useLoadErrorOverlay(registrationOptionsQuery.error, () => void registrationOptionsQuery.refetch());
   const majorOptions = registrationOptionsQuery.data?.data.majors ?? [];
   const privacyPolicy = registrationOptionsQuery.data?.data.privacy_policy;
 
@@ -141,12 +157,8 @@ export default function RegisterScreen() {
       setVerificationMessage(null);
       const response = await authApi.requestRegisterVerification({ email });
       if (!isEmailDeliveryConfirmed(response.data.email_sent)) {
-        const failure = registrationVerificationFailure(undefined, resend);
-        if (failure.placement === "verification") {
-          setVerificationMessage({ type: "error", text: failure.message });
-        } else {
-          setErrors({ email: failure.message });
-        }
+        // 메일을 보내지 못했다. 입력 문제가 아니라 칸을 빨갛게 하지 않고 오류 토스트만 띄운다.
+        showToast(TOAST_ERROR_MESSAGES.verificationEmail);
         return;
       }
       setCode("");
@@ -175,7 +187,9 @@ export default function RegisterScreen() {
         setResendCooldown(retryAfter);
       }
       const failure = registrationVerificationFailure(errorCode, resend);
-      if (failure.placement === "verification") {
+      if (!failure) {
+        showToast(TOAST_ERROR_MESSAGES.verificationEmail);
+      } else if (failure.placement === "verification") {
         setVerificationMessage({ type: "error", text: failure.message });
       } else {
         setErrors({ email: failure.message });
@@ -237,7 +251,7 @@ export default function RegisterScreen() {
     if (nextPasswordError) nextErrors.password = nextPasswordError;
     const nextPasswordConfirmationError = passwordConfirmationError(password, passwordConfirm);
     if (nextPasswordConfirmationError) nextErrors.passwordConfirm = nextPasswordConfirmationError;
-    if (!consented) nextErrors.consent = "개인정보 수집 및 이용 동의가 필요해요.";
+    if (!consented) nextErrors.consent = "약관에 동의해주세요.";
     if (!privacyPolicy) nextErrors.consent = "개인정보 처리방침 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요.";
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -363,7 +377,7 @@ export default function RegisterScreen() {
                   onChangeText={(value) => { setEmailId(value); setErrors({}); }}
                   hasError={Boolean(errors.email)}
                 />
-                <FieldError message={errors.email} />
+                <FieldError message={errors.email} style={styles.emailErrorRow} />
               </View>
               <Pressable disabled={isSubmitting} onPress={() => void requestCode(false)} style={[styles.primaryButton, isSubmitting ? styles.disabledButton : null]}>
                 <Text style={styles.primaryButtonText}>{isSubmitting ? "발송 중" : "인증코드 받기"}</Text>
@@ -374,9 +388,10 @@ export default function RegisterScreen() {
           {step === 1 ? (
             <>
               <Text style={styles.heading}>인증코드를 입력해주세요</Text>
-              <Text style={styles.helper}>{email}로 {codeResent ? "재발송" : "발송"}되었어요</Text>
+              <Text style={styles.helper}>{displaySchoolEmail(emailId)}로 {codeResent ? "재발송" : "발송"}되었어요</Text>
               <View style={styles.field}>
-                <TextInput
+                <FieldInput
+                  hasError={Boolean(codeError)}
                   keyboardType="number-pad"
                   maxLength={6}
                   onChangeText={(value) => {
@@ -387,8 +402,8 @@ export default function RegisterScreen() {
                     }
                   }}
                   placeholder="인증코드 6자리"
-                  placeholderTextColor={COLORS.tertiary}
-                  style={[styles.codeInput, codeError ? styles.inputError : null]}
+                  placeholderTextColor={COLORS.subtle}
+                  style={styles.codeInput}
                   value={code}
                 />
               </View>
@@ -397,7 +412,7 @@ export default function RegisterScreen() {
                   {codeError ? (
                     <View style={styles.errorRow}>
                       <Ionicons name="alert-circle-outline" size={14} color={COLORS.danger} />
-                      <Text style={styles.errorText}>{codeError}</Text>
+                      <Text style={errorTextStyle(codeError)}>{codeError}</Text>
                     </View>
                   ) : verificationMessage ? (
                     <View style={verificationMessage.type === "error" ? styles.errorRow : styles.successRow}>
@@ -406,7 +421,7 @@ export default function RegisterScreen() {
                         size={14}
                         color={verificationMessage.type === "success" ? "#3B6D11" : COLORS.danger}
                       />
-                      <Text style={verificationMessage.type === "success" ? styles.successText : styles.errorText}>
+                      <Text style={verificationMessage.type === "success" ? styles.successText : errorTextStyle(verificationMessage.text)}>
                         {verificationMessage.text}
                       </Text>
                     </View>
@@ -455,17 +470,17 @@ export default function RegisterScreen() {
               <Text style={styles.heading}>기본 정보를 입력해주세요</Text>
               <View style={styles.field}>
                 <Text style={styles.label}>이름</Text>
-                <TextInput value={nickname} onChangeText={(value) => { setNickname(value); setErrors((current) => ({ ...current, nickname: undefined, form: undefined })); }} placeholder="이름" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.nickname ? styles.profileInputError : null]} />
+                <FieldInput hasError={Boolean(errors.nickname)} value={nickname} onChangeText={(value) => { setNickname(value); setErrors((current) => ({ ...current, nickname: undefined, form: undefined })); }} placeholder="이름" placeholderTextColor={COLORS.tertiary} style={styles.input} />
                 <FieldError message={errors.nickname} />
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>기수</Text>
-                <TextInput value={cohort} onChangeText={(value) => { setCohort(value.replace(/\D/g, "").slice(0, 3)); setErrors((current) => ({ ...current, cohort: undefined })); }} keyboardType="number-pad" placeholder="숫자만 입력 (예: 72)" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.cohort ? styles.profileInputError : null]} />
+                <FieldInput hasError={Boolean(errors.cohort)} value={cohort} onChangeText={(value) => { setCohort(value.replace(/\D/g, "").slice(0, 3)); setErrors((current) => ({ ...current, cohort: undefined })); }} keyboardType="number-pad" placeholder="숫자만 입력 (예: 72)" placeholderTextColor={COLORS.tertiary} style={styles.input} />
                 <FieldError message={errors.cohort} />
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>전공</Text>
-                <Pressable onPress={() => setMajorModalVisible(true)} style={[styles.selectField, errors.major ? styles.profileInputError : null]}>
+                <Pressable onPress={() => setMajorModalVisible(true)} style={[styles.selectField, fieldBorder(false, Boolean(errors.major))]}>
                   <Text style={[styles.selectText, !major ? styles.selectPlaceholder : null]}>{major || "전공 선택"}</Text>
                   <Ionicons name="chevron-down" size={18} color={COLORS.subtle} />
                 </Pressable>
@@ -473,43 +488,46 @@ export default function RegisterScreen() {
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>연락처</Text>
-                <TextInput value={phone} onChangeText={(value) => { setPhone(value.replace(/\D/g, "").slice(0, 11)); setErrors((current) => ({ ...current, phone: undefined })); }} keyboardType="phone-pad" placeholder="숫자만 입력 (예: 01012345678)" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.phone ? styles.profileInputError : null]} />
+                <FieldInput hasError={Boolean(errors.phone)} value={phone} onChangeText={(value) => { setPhone(value.replace(/\D/g, "").slice(0, 11)); setErrors((current) => ({ ...current, phone: undefined })); }} keyboardType="phone-pad" placeholder="숫자만 입력 (예: 01012345678)" placeholderTextColor={COLORS.tertiary} style={styles.input} />
                 <FieldError message={errors.phone} />
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>비밀번호</Text>
-                <TextInput value={password} onChangeText={(value) => { setPassword(value); setErrors((current) => ({ ...current, password: undefined })); }} secureTextEntry placeholder="비밀번호" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.password ? styles.profileInputError : null]} />
+                <FieldInput hasError={Boolean(errors.password)} value={password} onChangeText={(value) => { setPassword(value); setErrors((current) => ({ ...current, password: undefined })); }} secureTextEntry placeholder="비밀번호" placeholderTextColor={COLORS.tertiary} style={styles.input} />
                 {errors.password ? <FieldError message={errors.password} /> : <Text style={styles.passwordHelper}>영문, 숫자, 특수문자 포함 8자 이상</Text>}
               </View>
               <View style={styles.field}>
                 <Text style={styles.label}>비밀번호 확인</Text>
-                <TextInput value={passwordConfirm} onChangeText={(value) => { setPasswordConfirm(value); setErrors((current) => ({ ...current, passwordConfirm: undefined })); }} secureTextEntry placeholder="비밀번호 확인" placeholderTextColor={COLORS.tertiary} style={[styles.input, errors.passwordConfirm ? styles.profileInputError : null]} />
+                <FieldInput hasError={Boolean(errors.passwordConfirm)} value={passwordConfirm} onChangeText={(value) => { setPasswordConfirm(value); setErrors((current) => ({ ...current, passwordConfirm: undefined })); }} secureTextEntry placeholder="비밀번호 확인" placeholderTextColor={COLORS.tertiary} style={styles.input} />
                 <FieldError message={errors.passwordConfirm} />
               </View>
-              <View style={styles.consentRow}>
-                <Pressable
-                  accessibilityHint="이용약관 및 개인정보 처리방침 동의를 변경합니다."
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: consented, disabled: !privacyPolicy }}
-                  disabled={!privacyPolicy}
-                  onPress={togglePrivacyConsent}
-                  style={styles.consentToggle}
-                >
-                  <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><Ionicons name="checkmark" size={13} color="#FFFFFF" /></View>
-                  <Text style={styles.consentText}>이용약관 및 개인정보 처리방침 동의 (필수)</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="이용약관 및 개인정보 처리방침 전문 보기"
-                  accessibilityRole="link"
-                  disabled={!privacyPolicy}
-                  hitSlop={6}
-                  onPress={openPrivacyPolicy}
-                  style={styles.privacyDetailsLink}
-                >
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} />
-                </Pressable>
+              {/* Figma SignUp-Step3-Error 약관동의블록: 동의 줄 아래 6에 오류 문구를 붙인다. */}
+              <View style={styles.consentBlock}>
+                <View style={styles.consentRow}>
+                  <Pressable
+                    accessibilityHint="이용약관 및 개인정보 처리방침 동의를 변경합니다."
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: consented, disabled: !privacyPolicy }}
+                    disabled={!privacyPolicy}
+                    onPress={togglePrivacyConsent}
+                    style={styles.consentToggle}
+                  >
+                    <View style={[styles.checkBox, consented ? styles.checkBoxActive : null]}><CheckboxCheckIcon /></View>
+                    <Text style={styles.consentText}>이용약관 및 개인정보 처리방침 동의 (필수)</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="이용약관 및 개인정보 처리방침 전문 보기"
+                    accessibilityRole="link"
+                    disabled={!privacyPolicy}
+                    hitSlop={14}
+                    onPress={openPrivacyPolicy}
+                    style={styles.privacyDetailsLink}
+                  >
+                    <ConsentChevronIcon color={COLORS.subtle} />
+                  </Pressable>
+                </View>
+                <FieldError message={errors.consent} />
               </View>
-              <FieldError message={errors.consent} />
               <FieldError message={errors.form} />
               <Pressable disabled={isSubmitting} onPress={register} style={[styles.primaryButton, registerBlocked ? styles.validationDisabledButton : null]}>
                 <Text style={styles.primaryButtonText}>{isSubmitting ? "가입 중" : "가입하기"}</Text>
@@ -527,24 +545,17 @@ export default function RegisterScreen() {
             {majorOptions.map((option) => (
               <Pressable key={option.id} onPress={() => { setMajor(option.name); setErrors((current) => ({ ...current, major: undefined })); setMajorModalVisible(false); }} style={styles.modalOption}>
                 <Text style={[styles.modalOptionText, major === option.name ? styles.modalOptionTextSelected : null]}>{option.name}</Text>
-                {major === option.name ? <Ionicons name="checkmark" size={16} color={COLORS.primary} /> : null}
+                {major === option.name ? <SheetCheckIcon color={COLORS.primary} /> : null}
               </Pressable>
             ))}
             {registrationOptionsQuery.isLoading ? <Text style={styles.modalStateText}>전공 목록을 불러오는 중이에요.</Text> : null}
-            {registrationOptionsQuery.isError ? (
-              <View style={styles.modalRetry}>
-                <Text style={styles.errorText}>전공 목록을 불러오지 못했어요.</Text>
-                <Pressable accessibilityRole="button" onPress={() => void registrationOptionsQuery.refetch()} style={styles.modalRetryButton}>
-                  <Text style={styles.modalRetryText}>다시 시도</Text>
-                </Pressable>
-              </View>
-            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
 
       {/* 계정 설정과 같은 동의 시트(Figma PrivacyConsentSheet)를 쓴다. */}
       <PrivacyConsentSheet visible={privacyModalVisible} onClose={() => setPrivacyModalVisible(false)} />
+      <Toast toast={toast} onHide={hideToast} />
     </View>
   );
 }
@@ -563,13 +574,14 @@ const styles = StyleSheet.create({
   helper: { color: COLORS.tertiary, fontSize: 13, fontWeight: "400", lineHeight: 18 }, // Figma: Inter Regular 13/18
   field: { gap: 6 }, // Figma label→input gap
   label: { color: COLORS.text, fontSize: 14, fontWeight: "500", lineHeight: 22 }, // Figma: Inter Medium 14/22
-  input: { minHeight: 48, outlineStyle: "none" as never, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, border 1, px16, Regular 14
-  codeInput: { height: 48, outlineStyle: "none" as never, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 22, paddingHorizontal: 16 }, // Figma verification code input: 48h, border 1, px16
-  inputError: { borderColor: COLORS.danger },
+  // 입력 칸 테두리는 FieldBorder 공통 원칙(평소 0.5 · 입력 중 1 #21262E · 오류 1 #D64545)을 따른다.
+  input: { minHeight: 48, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", paddingHorizontal: 16 }, // Figma SignUp-Step3: 48h, px16, Regular 14
+  codeInput: { height: 48, borderRadius: 8, backgroundColor: COLORS.bg, color: COLORS.text, fontSize: 14, fontWeight: "400", lineHeight: 22, paddingHorizontal: 16 }, // Figma verification code input: 48h, px16
   // 피그마 SignUp 오류 화면: 오류 칸은 배경 없이 빨간 테두리만 둔다.
-  profileInputError: { borderColor: COLORS.danger },
   // Figma SignUp-Step3-Error: 칸 아래 7에 오류 문구(12/14), 그 아래 20에 다음 라벨
-  errorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  errorRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
+  // Figma SignUp-Step1-Duplicate: 칸 아래 14에 오류 문구, 그 아래 28에 버튼 (field gap 6, 본문 gap 20 기준)
+  emailErrorRow: { marginTop: 8, marginBottom: 8 },
   // Figma SignUp-Step2: 인증코드 칸 아래 6에 재전송·안내 줄을 둔다(본문 gap 20 - 14).
   statusRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 8, marginTop: -14 },
   statusLeft: { flexShrink: 1, minWidth: 0 },
@@ -577,25 +589,27 @@ const styles = StyleSheet.create({
   resendLink: { color: COLORS.primary, fontSize: 13, fontWeight: "400", lineHeight: 16 }, // Figma "재전송 (04:59)": Regular 13/16
   resendLinkDisabled: { color: "#999EA8" }, // Figma SignUp-Step2-Resent: 재전송 뒤 카운트다운은 회색
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 14 }, // Figma: error/500 Regular 12/14
+  errorTextMultiline: { lineHeight: 17.4 }, // Figma SignUp-Step2-Failed: 두 줄 문구 줄 높이 145%
   successText: { color: "#3B6D11", fontSize: 12, fontWeight: "400", lineHeight: 15 }, // Figma: success green Regular 12/15
   successRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   passwordHelper: { color: COLORS.subtle, fontSize: 12, fontWeight: "400", lineHeight: 18 }, // Figma: Regular 12
-  selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 0.5, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: border 0.5, px14 py12
+  selectField: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 12 }, // Figma: px14 py12 (테두리는 FieldBorder)
   selectText: { color: COLORS.text, fontSize: 14, fontWeight: "400" },
   selectPlaceholder: { color: COLORS.tertiary },
   primaryButton: { height: 48, outlineStyle: "none" as never, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: COLORS.primary }, // Figma: 48h
   disabledButton: { opacity: 0.55 },
   validationDisabledButton: { backgroundColor: "#D1D5DB" },
-  primaryButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500", lineHeight: 24 }, // Figma button: Inter Medium 16/24
+  primaryButtonText: { ...BUTTON_TEXT, color: "#FFFFFF", fontWeight: "500" }, // Figma: Medium 16 (줄 높이는 버튼 공통 19)
   resendButton: { alignSelf: "center", paddingVertical: 4, paddingHorizontal: 8 },
   resendText: { color: COLORS.primary, fontSize: 13, fontWeight: "400" }, // Figma: Regular 13, primary/500
   resendTextDisabled: { color: COLORS.subtle },
-  consentRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 },
+  consentBlock: { gap: 6 }, // Figma 약관동의블록: 동의 줄 → 오류 문구 6
+  consentRow: { minHeight: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }, // Figma 약관동의: 20h, gap 8
   consentToggle: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
   checkBox: { width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 5, backgroundColor: "#C7CCD4" }, // Figma: 20, radius 5, gray/300 unchecked
   checkBoxActive: { backgroundColor: COLORS.primary }, // Figma: primary/500 checked
   consentText: { color: COLORS.text, fontSize: 14, fontWeight: "400" }, // Figma: Regular 14
-  privacyDetailsLink: { alignItems: "center", justifyContent: "center", paddingLeft: 8, paddingVertical: 4 },
+  privacyDetailsLink: { alignItems: "center", justifyContent: "center" }, // Figma 화살표 16x16, 누르는 영역은 hitSlop
   completeContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24, gap: 16 }, // Figma: gap 16
   completeTitle: { color: COLORS.text, fontSize: 24, fontWeight: "500" }, // Figma: Inter Medium 24
   completeButton: { width: 280, alignSelf: "center" }, // Figma: w-280
@@ -607,7 +621,4 @@ const styles = StyleSheet.create({
   modalOptionText: { color: COLORS.text, fontSize: 15, fontWeight: "400" }, // Figma: Regular 15
   modalOptionTextSelected: { color: COLORS.primary, fontWeight: "500" }, // Figma: selected = primary Medium
   modalStateText: { color: COLORS.muted, fontSize: 13, fontWeight: "700", paddingVertical: 14 },
-  modalRetry: { alignItems: "flex-start", gap: 8, paddingVertical: 10 },
-  modalRetryButton: { borderRadius: 7, backgroundColor: COLORS.primary50, paddingHorizontal: 12, paddingVertical: 8 },
-  modalRetryText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
 });

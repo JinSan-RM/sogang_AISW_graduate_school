@@ -2,6 +2,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppText as Text } from "./AppTypography";
 import { privacyConsentSheetSections } from "../utils/privacyPolicy";
+import { BUTTON_TEXT } from "../utils/buttonText";
 
 // 계정 설정의 "개인정보 수집 및 이용 동의"를 누르면 아래에서 올라오는 시트.
 // 피그마 Screen/MyPage/PrivacyConsentSheet.
@@ -23,8 +24,11 @@ export default function PrivacyConsentSheet({ visible, onClose }: { visible: boo
   return (
     // 안드로이드 시스템 바 아래까지 그려 시트가 화면 끝에 붙게 한다(SelectionSheet와 같다).
     <Modal animationType="slide" transparent statusBarTranslucent navigationBarTranslucent visible={visible} onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={styles.backdrop}>
-        <Pressable onPress={() => undefined} style={styles.card}>
+      <View style={styles.backdrop}>
+        {/* 바깥 누르기는 카드 뒤에 깐 형제 Pressable이 받는다. 카드를 Pressable로 감싸면
+            카드가 터치를 먼저 잡아, 천천히 끄는 스크롤이 본문 ScrollView로 넘어가지 않는다. */}
+        <Pressable accessibilityLabel="닫기" onPress={onClose} style={StyleSheet.absoluteFill} />
+        <View style={styles.card}>
           <View style={styles.handleWrap}>
             <View style={styles.handle} />
           </View>
@@ -45,8 +49,8 @@ export default function PrivacyConsentSheet({ visible, onClose }: { visible: boo
               <Text style={styles.closeText}>닫기</Text>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -69,5 +73,5 @@ const styles = StyleSheet.create({
   // Figma 닫기래퍼: 위 12, 버튼 46(r10), 아래 20
   footer: { paddingTop: 12, paddingHorizontal: 20 },
   closeButton: { height: 46, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.primary },
-  closeText: { color: "#FFFFFF", fontSize: 15, lineHeight: 18, fontWeight: "600" },
+  closeText: { ...BUTTON_TEXT, color: "#FFFFFF", fontWeight: "600" },
 });

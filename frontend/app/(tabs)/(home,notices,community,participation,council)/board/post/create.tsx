@@ -1,28 +1,29 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useIsFocused, useNavigation, usePreventRemove, type NavigationAction } from "@react-navigation/native";
+import { CommonActions, useIsFocused, useNavigation, usePreventRemove, type NavigationAction } from "@react-navigation/native";
 import { router as expoRouter, usePathname, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, View, type TextStyle } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text, AppTextInput as TextInput } from "../../../../../components/AppTypography";
 import { NetworkErrorFallback } from "../../../../../components/NetworkErrorState";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { z } from "zod";
 
-import { AttachFileIcon, AttachImageIcon, AttachLinkIcon, BackIcon, CalendarSmallIcon, CameraAddIcon, CloseIcon, NoticeAlertIcon, ParticipantAddIcon } from "../../../../../components/icons";
+import { AttachFileIcon, AttachImageIcon, AttachLinkIcon, CalendarSmallIcon, CameraAddIcon, ClearSearchIcon, CloseIcon, NoticeAlertIcon, ParticipantAddIcon, SearchIcon } from "../../../../../components/icons";
 import { useBoardsQuery } from "../../../../../hooks/useApi";
-import { useSwipeBackInScreen } from "../../../../../hooks/useSwipeBackInScreen";
 import { useCreatePost, usePostDetail, useUpdatePost } from "../../../../../hooks/usePosts";
 import CalendarMonth from "../../../../../components/CalendarMonth";
-import CompletionState from "../../../../../components/CompletionState";
 import DiscardWriteModal from "../../../../../components/DiscardWriteModal";
+import EdgeSwipeBack from "../../../../../components/EdgeSwipeBack";
 import ClubOperationStatusField from "../../../../../components/ClubOperationStatusField";
 import { operationStatus } from "../../../../../utils/participationGuide";
 import LoadingState from "../../../../../components/LoadingState";
 import PostAttachmentEditor from "../../../../../components/PostAttachmentEditor";
 import SelectionSheet, { type SelectionOption } from "../../../../../components/SelectionSheet";
+import { FIELD_BORDER, FIELD_PLACEHOLDER_COLOR } from "../../../../../components/FieldBorder";
+import PostFormAppBar from "../../../../../components/PostFormAppBar";
+import FormTextInput from "../../../../../components/FormTextInput";
 import NoticeModal, { type NoticeModalContent } from "../../../../../components/NoticeModal";
 import Toast from "../../../../../components/Toast";
 import { MediaImageBackground } from "../../../../../components/MediaImage";
@@ -45,8 +46,8 @@ import {
 } from "../../../../../utils/activityCertification";
 import {
   navigateAfterPostEdit,
+  postCompletionStack,
   postCreateFormBackDecision,
-  postCreateCompletionRoute,
   postCreateFormInstanceKey,
   postEditCompletionDecision,
 } from "../../../../../utils/appRoutes";
@@ -59,7 +60,7 @@ import {
   maximumActivityCertificationDate,
   minimumMutualAidEventDate,
 } from "../../../../../utils/dateSelection";
-import { TOAST_INFO_MESSAGES, TOAST_MESSAGES, nextToastState, type ToastState, type ToastVariant } from "../../../../../utils/toast";
+import { TOAST_ERROR_MESSAGES, TOAST_INFO_MESSAGES, TOAST_MESSAGES, nextToastState, type ToastState, type ToastVariant } from "../../../../../utils/toast";
 import { uploadFailureFeedback } from "../../../../../utils/uploadFeedback";
 import { pickAndUploadDocuments, pickAndUploadImages } from "../../../../../utils/mediaPicker";
 import {
@@ -81,9 +82,11 @@ import {
   RESOURCE_RATING_LEVELS,
   resourcePostFieldValues,
   resourcePostFields,
-  resourcePostMetadata,
+  withResourcePostMetadata,
 } from "../../../../../utils/resourcePostFields";
+import { resourcePostEditBoards } from "../../../../../utils/resourceBoards";
 import { adminPostRouter } from "../../../../../utils/adminPostRouter";
+import { BUTTON_TEXT } from "../../../../../utils/buttonText";
 
 const COLORS = {
   primary: "#2761FF",
@@ -117,6 +120,25 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+// 빈 폼. 처음 열 때와 게시판을 옮겨 비울 때 같은 값을 쓴다.
+function blankFormValues(): FormValues {
+  return {
+    title: "",
+    category: "",
+    content: "",
+    activityDate: maximumActivityCertificationDate(),
+    participants: "",
+    bankAccount: "",
+    eventDate: "",
+    relation: "",
+    contact: "",
+    professor: "",
+    difficulty: "",
+    satisfaction: "",
+    operationStatus: "active",
+  };
+}
+
 type FormFieldProps = {
   label: string;
   required?: boolean;
@@ -147,69 +169,6 @@ function FormField({ label, required, requiredStar, optional, helper, error, chi
       {helper ? <Text style={styles.helperText}>{helper}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
-  );
-}
-
-// Figma: 기본 0.5px #E1E4E9, 입력 중(포커스)과 오류는 1px 테두리
-function FormTextInput({ style, hasError, onBlur, onFocus, ...props }: ComponentProps<typeof TextInput> & { hasError?: boolean }) {
-  const [focused, setFocused] = useState(false);
-  // 오류 테두리가 포커스 테두리를 이긴다. 값을 채우기 전까지는 눌러도 빨간색을
-  // 유지해야 인증 화면과 감각이 같다.
-  const inputStyle: TextStyle = StyleSheet.flatten([
-    style,
-    focused ? styles.inputFocused : null,
-    hasError ? styles.inputError : null,
-  ]);
-  const scrollableBody = props.multiline && Platform.OS === "android";
-  const iosBody = props.multiline && Platform.OS === "ios";
-  const maximumBodyHeight = 240;
-  const borderWidth = inputStyle?.borderWidth ?? 0;
-  const input = (
-    <TextInput
-      {...props}
-      // Android uses a nested ScrollView for boundary handoff. iOS keeps its
-      // native scrolling UITextView so text selection and caret reveal stay native.
-      scrollEnabled={scrollableBody ? false : iosBody ? true : props.scrollEnabled}
-      onBlur={(event) => {
-        setFocused(false);
-        onBlur?.(event);
-      }}
-      onFocus={(event) => {
-        setFocused(true);
-        onFocus?.(event);
-      }}
-      style={[
-        inputStyle,
-        scrollableBody ? {
-          borderWidth: 0,
-          borderRadius: 0,
-          minHeight: typeof inputStyle?.minHeight === "number" ? Math.max(0, inputStyle.minHeight - borderWidth * 2) : inputStyle?.minHeight,
-        } : null,
-        iosBody ? { maxHeight: maximumBodyHeight } : null,
-        { outlineStyle: "none" } as never,
-      ]}
-    />
-  );
-  if (!scrollableBody) return input;
-
-  return (
-    <ScrollView
-      nestedScrollEnabled
-      keyboardShouldPersistTaps="handled"
-      bounces={false}
-      style={{
-        flexGrow: 0,
-        width: inputStyle?.width,
-        minHeight: inputStyle?.minHeight,
-        maxHeight: maximumBodyHeight,
-        borderWidth,
-        borderColor: inputStyle?.borderColor,
-        borderRadius: inputStyle?.borderRadius,
-        backgroundColor: inputStyle?.backgroundColor,
-      }}
-    >
-      {input}
-    </ScrollView>
   );
 }
 
@@ -300,7 +259,6 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const adminPathname = usePathname();
   const adminWorkspace = adminPathname.startsWith("/admin/");
   const router = useMemo(() => adminPostRouter(expoRouter, adminWorkspace), [adminWorkspace]);
-  const insets = useSafeAreaInsets();
 
   const parsedInitialBoardId = Number(params.boardId);
   const [selectedBoardId, setBoardId] = useState(() =>
@@ -310,7 +268,8 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const postId = Number.isFinite(parsedPostId) && parsedPostId > 0 ? parsedPostId : null;
   const editPostQuery = usePostDetail(postId ?? 0, postId !== null, true);
   const existingPost = editPostQuery.data?.data;
-  const boardId = existingPost?.board_id ?? selectedBoardId;
+  // 수정할 때도 자료공유 게시판끼리는 옮길 수 있어서, 고른 게시판이 있으면 그쪽을 본다.
+  const boardId = selectedBoardId || existingPost?.board_id || 0;
 
   const { data: boardsRes, isError: isBoardsError, error: boardsLoadError, isLoading: isBoardsLoading, refetch: refetchBoards } = useBoardsQuery();
   const [attachments, setAttachments] = useState<MediaAsset[]>([]);
@@ -327,10 +286,8 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const [evidenceMode, setEvidenceMode] = useState<"file" | "link" | null>(null);
   const [evidenceLink, setEvidenceLink] = useState("");
   const [activitySourcePostId, setActivitySourcePostId] = useState<number | null>(null);
-  const [createdPostId, setCreatedPostId] = useState<number | null>(null);
-  // 등록·저장에 성공해 떠나는 이동은 막으면 안 된다. 완료 화면을 쓰는
-  // 활동인증·상조회·건의만 createdPostId가 채워지므로, 나머지 게시판과 수정
-  // 저장은 이 표시로 usePreventRemove 잠금을 먼저 푼다.
+  // 등록·저장에 성공해 떠나는 이동은 막으면 안 된다. 이 표시로 usePreventRemove
+  // 잠금을 먼저 풀고, 다음 렌더에서 pendingSubmitNavigation으로 옮긴다.
   const [submitted, setSubmitted] = useState(false);
   const pendingSubmitNavigation = useRef<(() => void) | null>(null);
   const [notice, setNotice] = useState<NoticeModalContent | null>(null);
@@ -362,10 +319,22 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const bankGroupBottom = useRef(0);
   const attachSectionTop = useRef(0);
   const attachActionsBottom = useRef(0);
-  const revealTarget = useRef<"end" | "bank" | "attach" | null>(null);
+  // 참가자 검색 칸의 위치(스크롤 안쪽 기준)와 스크롤 내용 전체 높이.
+  const participantGroupTop = useRef(0);
+  const participantInputTop = useRef(0);
+  const formContentHeight = useRef(0);
+  const revealTarget = useRef<"end" | "bank" | "attach" | "participants" | null>(null);
   const revealFocusedBlock = () => {
     const target = revealTarget.current;
     if (!target) return;
+    if (target === "participants" && formScrollHeight.current > 0 && formContentHeight.current > 0) {
+      // 평소에는 완료 버튼까지 내린다. 참가자가 많아 칩이 길어지면 끝까지 내릴 때 검색 칸이
+      // 화면 위로 사라지므로, 검색 칸이 보이는 영역 맨 위(여백 16)에 오는 데서 멈춘다.
+      const endY = formContentHeight.current - formScrollHeight.current;
+      const inputY = participantGroupTop.current + participantInputTop.current - 16;
+      formScrollRef.current?.scrollTo({ y: Math.max(0, Math.min(endY, inputY)), animated: true });
+      return;
+    }
     const bottom = target === "bank"
       ? bankGroupBottom.current
       : target === "attach"
@@ -383,8 +352,13 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     () => boards.find((item) => item.id === boardId),
     [boardId, boards]
   );
+  // 수정 중 옮기기 전의 원래 게시판. 저장 후 캐시 갱신과 옮길 수 있는 게시판 목록의 기준이다.
+  const originalBoard = useMemo(
+    () => boards.find((item) => item.id === existingPost?.board_id),
+    [boards, existingPost?.board_id]
+  );
   const createMutation = useCreatePost(boardId, board);
-  const updateMutation = useUpdatePost(postId ?? 0, boardId, board);
+  const updateMutation = useUpdatePost(postId ?? 0, existingPost?.board_id ?? boardId, originalBoard ?? board);
   const fallbackBoardType = [10, 11, 12].includes(boardId)
     ? "activity_certification"
     : boardId === 15
@@ -408,15 +382,19 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const bankAccountField = activityBankAccountFieldState(postId);
   const compactCreate = !isActivity && !isMutualAid;
   const requiresAttachment = isActivity || isMutualAid || isAlbum || isAdminParticipationPost;
-  const canPickBoard =
-    !postId && compactCreate && !isAlbum && !isSuggestion && !isStudyRecruit && !isNetworkingProgram && !isAdminParticipationPost;
+  // 수정할 때는 자료공유 게시판끼리만 옮길 수 있다. 그 밖의 게시판은 수정 중에 옮길 수 없다.
+  const editMoveBoards = useMemo(() => resourcePostEditBoards(boards, originalBoard), [boards, originalBoard]);
+  const canPickBoard = postId
+    ? editMoveBoards.length > 0
+    : compactCreate && !isAlbum && !isSuggestion && !isStudyRecruit && !isNetworkingProgram && !isAdminParticipationPost;
   const selectableBoards = useMemo(() => {
+    if (postId) return editMoveBoards;
     const groups = boardsRes?.data ?? [];
     const owning = groups.find((entry) => entry.boards.some((item) => item.id === boardId));
     if (owning) return owning.boards;
     // 게시판을 아직 안 골랐으면 어느 묶음에서 왔는지로 후보를 좁힌다.
     return groups.find((entry) => entry.category === params.boardGroup)?.boards ?? [];
-  }, [boardsRes?.data, boardId, params.boardGroup]);
+  }, [boardsRes?.data, boardId, editMoveBoards, params.boardGroup, postId]);
   const trimmedParticipantQuery = participantQuery.trim();
   const participantSearch = useQuery({
     queryKey: activityParticipantSearchKey(boardId, trimmedParticipantQuery),
@@ -441,19 +419,10 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const { clearErrors, control, formState, handleSubmit, reset, setError, setValue } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      ...blankFormValues(),
       title: params.title ?? "",
       category: params.category ?? "",
       content: params.content ?? "",
-      activityDate: maximumActivityCertificationDate(),
-      participants: "",
-      bankAccount: "",
-      eventDate: "",
-      relation: "",
-      contact: "",
-      professor: "",
-      difficulty: "",
-      satisfaction: "",
-      operationStatus: "active",
     },
   });
 
@@ -511,23 +480,19 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     hydratedPostId.current = postId;
   }, [board, existingPost, postId, reset, resourceFields]);
 
+  // 새 글의 기본 상태. 수정할 때는 저장된 값을 덮으면 안 된다(마감된 글이 진행중으로 바뀜).
   useEffect(() => {
+    if (postId) return;
     if (isStudyRecruit && (!params.category || params.category === "모집")) {
       setValue("category", "진행중");
     }
-    if (board?.slug === "club-promo" && !params.category) {
+    if (isAdminParticipationPost && !params.category) {
       setValue("category", "모집중");
     }
     if (isActivity && (params.category === "활동 인증" || params.category === "안내")) {
       setValue("category", "");
     }
-  }, [isStudyRecruit, isActivity, board?.slug, params.category, setValue]);
-
-  useEffect(() => {
-    if (isAdminParticipationPost && !params.category) {
-      setValue("category", "모집중");
-    }
-  }, [isAdminParticipationPost, params.category, setValue]);
+  }, [isStudyRecruit, isActivity, isAdminParticipationPost, params.category, postId, setValue]);
 
   const attachmentIds = attachments.map((attachment) => attachment.id);
   const {
@@ -553,7 +518,8 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     syncParticipants(selectedParticipants.filter((item) => item.id !== participantId));
   };
   const labels = {
-    screenTitle: postId ? (isMutualAid ? "상조회 신청 수정" : isActivity ? "활동 인증 수정" : isAlbum ? "사진 수정" : "게시글 수정") : isAlbum ? "사진 등록" : isMutualAid ? "상조회 신청" : isActivity ? "활동 인증" : isSuggestion ? "건의사항 작성" : isStudyRecruit ? "스터디 모집" : isNetworkingProgram ? "네트워킹 등록" : isAdminParticipationPost ? "동아리 등록" : "글쓰기",
+    // 수정 화면 제목은 피그마 수정 화면(MutualAidApply-Edit·Verify-Study-Edit·SuggestionEdit·StudyRecruitEdit·Community/Edit)을 따른다.
+    screenTitle: postId ? (isMutualAid ? "상조회 신청 수정" : isActivity ? "활동 인증 수정" : isSuggestion ? "건의사항 수정" : isStudyRecruit ? "스터디 모집" : "글 수정") : isAlbum ? "사진 등록" : isMutualAid ? "상조회 신청" : isActivity ? "활동 인증" : isSuggestion ? "건의사항 작성" : isStudyRecruit ? "스터디 모집" : isNetworkingProgram ? "네트워킹 등록" : isAdminParticipationPost ? "동아리 등록" : "글쓰기",
     title: isAlbum ? "행사명" : isMutualAid ? "신청 제목" : isActivity ? "인증 제목" : isSuggestion ? "건의 제목" : "제목",
     titlePlaceholder: isMutualAid
       ? "신청 내용을 한 줄로 입력하세요"
@@ -614,8 +580,9 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
             body: "경조사 일자와 관계를 입력하고 증빙서류를 첨부하세요.",
           }
         : null;
+  // 피그마 수정 화면은 모두 "완료"다.
   const submitLabel = postId
-    ? (isMutualAid || isActivity ? "수정 완료" : "변경사항 저장")
+    ? "완료"
     : isAlbum
       ? "사진 등록"
     : isSuggestion
@@ -640,7 +607,9 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
         activitySourcePostId,
       });
     }
-    const metadata: Record<string, unknown> = {};
+    // 수정할 때는 저장된 정보 위에 덮어쓴다. 서버가 metadata를 통째로 바꿔서, 새로 만들면
+    // 화면에 없는 값(공지 설정 등)이 지워진다. 자료공유 과목정보는 고른 게시판 기준으로 다시 쓴다.
+    const metadata = withResourcePostMetadata(existingPost?.metadata, resourceFields, values);
     if (isMutualAid) {
       if (clean(values.eventDate)) metadata.event_date = clean(values.eventDate) as string;
       if (clean(values.relation)) metadata.relation = clean(values.relation) as string;
@@ -648,18 +617,19 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     }
     if (isStudyRecruit) {
       metadata.recruitment_status = values.category === "마감" ? "closed" : "open";
-      if (clean(values.contact)) metadata.contact = clean(values.contact) as string;
+      const contact = clean(values.contact);
+      if (contact) metadata.contact = contact;
+      else delete metadata.contact;
     }
     if (isAdminParticipationPost) {
-      Object.assign(metadata, existingPost?.metadata);
       metadata.operation_status = values.operationStatus;
     }
-    Object.assign(metadata, resourcePostMetadata(resourceFields, values));
-    return Object.keys(metadata).length > 0 ? metadata : undefined;
+    // 수정은 빈 값도 보내야 저장된 정보가 그대로 남는다(서버는 안 보내면 비운다).
+    return existingPost || Object.keys(metadata).length > 0 ? metadata : undefined;
   };
 
   const handleMutationError = () => {
-    showToast(TOAST_MESSAGES.error);
+    showToast(postId ? TOAST_ERROR_MESSAGES.postEdit : TOAST_MESSAGES.error);
   };
 
   const onSubmit = (values: FormValues) => {
@@ -687,7 +657,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       requireField("eventDate", values.eventDate);
       requireField("relation", values.relation);
     }
-    if (isStudyRecruit) requireField("contact", values.contact);
+    // 스터디 모집 연락수단은 필수가 아니다(2026-10-11 결정).
     if (resourceFields?.professor) requireField("professor", values.professor);
     if (resourceFields?.difficulty) requireField("difficulty", values.difficulty);
     if (resourceFields?.satisfaction) requireField("satisfaction", values.satisfaction);
@@ -722,8 +692,11 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       category: isAlbum ? undefined : clean(values.category),
       metadata: buildMetadata(values),
       attachment_ids: attachmentIds,
+      // 자료공유 게시판을 옮겼을 때만 보낸다.
+      board_id: existingPost && boardId !== existingPost.board_id ? boardId : undefined,
       replace_evidence: Boolean(postId && isMutualAid),
-      is_anonymous: isSuggestion,
+      // 수정은 저장된 익명 여부를 그대로 둔다.
+      is_anonymous: existingPost?.is_anonymous ?? isSuggestion,
     };
     if (postId) {
       updateMutation.mutate(payload, {
@@ -733,7 +706,8 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
             params.editOrigin,
             router.canGoBack(),
             postId,
-            params.fromBoardId,
+            // 게시판을 옮겼으면 상세의 출발 게시판도 옮긴 게시판이다.
+            existingPost && boardId !== existingPost.board_id ? boardId : params.fromBoardId,
             params.returnTo,
           );
           pendingSubmitNavigation.current = () => navigateAfterPostEdit(decision, {
@@ -749,12 +723,12 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
 
     createMutation.mutate(payload, {
       onSuccess: (res) => {
-        if (isActivity || isMutualAid || isSuggestion) {
-          setCreatedPostId(res.data.id);
-          return;
-        }
-        const route = postCreateCompletionRoute(boardType, res.data.id, boardId, params.returnTo);
-        pendingSubmitNavigation.current = () => router.replace(route as never);
+        const createdPostId = res.data.id;
+        // 글쓰기 자리에 확인의 도착지와 완료 화면을 한 번에 놓는다(모든 게시판 공통).
+        pendingSubmitNavigation.current = () => navigation.dispatch((state) => {
+          const routes = postCompletionStack(state.routes, boardType, createdPostId, boardId, params.returnTo);
+          return CommonActions.reset({ ...state, routes, index: routes.length - 1 } as never);
+        });
         setSubmitted(true);
       },
       onError: handleMutationError,
@@ -885,6 +859,8 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     { key: "bereavement", label: "상(喪)" },
   ];
   const mutualAidRelationOptions: SelectionOption[] = ["본인", "배우자", "부모", "자녀"].map((label) => ({ key: label, label }));
+  // 시트를 다시 열면 고른 항목을 파란 글자와 체크로 보여 준다(Figma MutualAidApply-TypeSelect·RelationSelect).
+  const [selectedCategory, selectedRelation] = useWatch({ control, name: ["category", "relation"] });
   const imageAttachments = attachments.filter((attachment) => attachment.content_type.startsWith("image/"));
   const nonImageAttachments = attachments.filter((attachment) => !attachment.content_type.startsWith("image/"));
 
@@ -894,13 +870,16 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     formState.isDirty ||
     attachments.map((attachment) => attachment.id).join(",") !== unsavedBaseline.current.attachmentIds ||
     selectedParticipants.map((participant) => participant.id).join(",") !== unsavedBaseline.current.participantIds ||
-    evidenceLink !== unsavedBaseline.current.evidenceLink;
+    evidenceLink !== unsavedBaseline.current.evidenceLink ||
+    // 수정 중 자료공유 게시판을 옮긴 것도 변경이다.
+    Boolean(existingPost && boardId !== existingPost.board_id);
 
   // 게시판마다 받는 항목이 달라서 쓰던 값을 그대로 옮기면 엉뚱한 칸에 남는다.
   // 디자인(BoardChangeConfirmModal)대로 확인을 받은 뒤 처음 상태로 되돌린다.
   const applyBoardChange = useCallback((nextBoardId: number) => {
     setBoardId(nextBoardId);
-    reset();
+    // 수정 중에도 저장된 글로 되돌리지 않고 비운다(2026-10-15 결정).
+    reset(blankFormValues());
     setAttachments([]);
     setSelectedParticipants([]);
     setParticipantQuery("");
@@ -915,13 +894,13 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   const selectBoard = useCallback((nextBoardId: number) => {
     setSelectionSheet(null);
     if (nextBoardId === boardId) return;
-    // 아직 아무것도 안 썼으면 물어볼 것이 없다.
-    if (!hasUnsavedChanges) {
+    // 아직 아무것도 안 썼으면 물어볼 것이 없다. 수정은 저장된 글이 채워져 있어 늘 묻는다.
+    if (!hasUnsavedChanges && !existingPost) {
       applyBoardChange(nextBoardId);
       return;
     }
     setPendingBoardId(nextBoardId);
-  }, [applyBoardChange, boardId, hasUnsavedChanges]);
+  }, [applyBoardChange, boardId, existingPost, hasUnsavedChanges]);
 
   const leaveCreateScreen = useCallback(() => {
     const decision = postCreateFormBackDecision({
@@ -939,14 +918,6 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   }, [boardId, boardType, params.editOrigin, params.fromBoardId, params.postId, params.returnTo, router]);
 
   const handleCreateBack = useCallback(() => {
-    if (createdPostId) {
-      const route = postCreateCompletionRoute(boardType, createdPostId, boardId, params.returnTo);
-      // 상조회·건의 완료 뒤에는 그 게시판 목록이 아래에 있으면 거기까지 돌아가 같은
-      // 목록이 두 번 쌓이지 않게 한다. 없으면 dismissTo가 이 화면을 목록으로 바꾼다.
-      if (route.startsWith("/board/post/")) router.replace(route as never);
-      else router.dismissTo(route as never);
-      return;
-    }
     if (selectionSheet) {
       setSelectionSheet(null);
       return;
@@ -961,24 +932,20 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       return;
     }
     leaveCreateScreen();
-  }, [boardId, boardType, createdPostId, datePickerOpen, hasUnsavedChanges, leaveCreateScreen, params.returnTo, selectionSheet, router]);
+  }, [datePickerOpen, hasUnsavedChanges, leaveCreateScreen, selectionSheet]);
 
-  // iOS 가장자리 스와이프는 UIKit이 직접 pop 해서 위 핸들러들을 타지 않는다.
-  // usePreventRemove가 native-stack의 preventNativeDismiss를 켜 그 제스처까지
-  // 막아주므로, 확인창을 헤더·안드로이드 뒤로가기와 같은 지점으로 모은다.
+  // 헤더·안드로이드 뒤로가기가 아닌 이동(다른 코드의 pop 등)도 작성 취소 확인을 거친다.
+  // iOS 가장자리 스와이프는 이것으로 막으면 튕기므로 아래 EdgeSwipeBack이 맡는다.
   const navigation = useNavigation();
   const [removeConfirmed, setRemoveConfirmed] = useState(false);
   const pendingRemoveAction = useRef<NavigationAction | null>(null);
   // 하단 탭을 눌러 떠나려는 경우. 확인 후에 이 함수를 불러 그 탭으로 옮긴다.
   const pendingTabLeave = useRef<(() => void) | null>(null);
 
-  usePreventRemove(hasUnsavedChanges && !createdPostId && !submitted && !removeConfirmed && !datePickerOpen, ({ data }) => {
+  usePreventRemove(hasUnsavedChanges && !submitted && !removeConfirmed, ({ data }) => {
     pendingRemoveAction.current = data.action;
     setDiscardPromptOpen(true);
   });
-
-  // 완료 화면과 펼친 날짜 선택은 안드로이드 뒤로가기처럼 handleCreateBack이 먼저 처리한다.
-  useSwipeBackInScreen(Boolean(createdPostId) || datePickerOpen, handleCreateBack);
 
   useEffect(() => {
     if (!submitted) return;
@@ -991,7 +958,10 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
 
   // 탭바는 이 화면의 부모라 handleCreateBack을 타지 않는다. 가로채기를 걸어
   // 헤더·안드로이드 뒤로가기와 같은 확인창을 거치게 한다.
-  const blocksLeaving = hasUnsavedChanges && !createdPostId && !removeConfirmed;
+  const blocksLeaving = hasUnsavedChanges && !submitted && !removeConfirmed;
+  // 펼친 날짜 선택이나 입력 중인 내용이 있으면 iOS 가장자리 스와이프도 안드로이드
+  // 뒤로가기처럼 handleCreateBack을 탄다(날짜 선택 닫기, 작성 취소 확인).
+  const swipeHandledInScreen = datePickerOpen || blocksLeaving;
   useEffect(() => {
     if (!blocksLeaving) return undefined;
     setWriteLeaveGuard((proceed) => {
@@ -1046,23 +1016,27 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
   );
 
   if (postId && (editPostQuery.isLoading || isBoardsLoading)) {
-    return <LoadingState message="활동인증 정보를 불러오는 중이에요" />;
+    return <View style={styles.screen}><PostFormAppBar title={labels.screenTitle} onClose={handleCreateBack} /><LoadingState /></View>;
   }
 
   if (postId && (editPostQuery.isError || isBoardsError || !existingPost || !board)) {
+    // 상단 바를 남겨 웹·iOS에서도 닫을 수 있게 한다.
     return (
-      <NetworkErrorFallback error={editPostQuery.error ?? boardsLoadError} onRetry={() => void Promise.all([editPostQuery.refetch(), refetchBoards()])}>
-        <View style={styles.editStateScreen}>
-          <Text style={styles.editStateText}>수정할 활동인증을 불러오지 못했습니다.</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void Promise.all([editPostQuery.refetch(), refetchBoards()])}
-            style={styles.editRetryButton}
-          >
-            <Text style={styles.editRetryButtonText}>다시 시도</Text>
-          </Pressable>
-        </View>
-      </NetworkErrorFallback>
+      <View style={styles.screen}>
+        <PostFormAppBar title={labels.screenTitle} onClose={handleCreateBack} />
+        <NetworkErrorFallback error={editPostQuery.error ?? boardsLoadError} onRetry={() => void Promise.all([editPostQuery.refetch(), refetchBoards()])}>
+          <View style={styles.editStateScreen}>
+            <Text style={styles.editStateText}>게시글을 불러오지 못했습니다.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => void Promise.all([editPostQuery.refetch(), refetchBoards()])}
+              style={styles.editRetryButton}
+            >
+              <Text style={styles.editRetryButtonText}>다시 시도</Text>
+            </Pressable>
+          </View>
+        </NetworkErrorFallback>
+      </View>
     );
   }
 
@@ -1081,37 +1055,9 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
     );
   }
 
-  if ((isActivity || isMutualAid || isSuggestion) && createdPostId) {
-    return (
-      <CompletionState
-        title={isSuggestion ? "건의사항이 등록되었어요!" : isMutualAid ? "신청이 완료되었어요!" : "활동 인증이 등록됐어요!"}
-        onConfirm={handleCreateBack}
-      />
-    );
-  }
-
   return (
-    <View style={styles.screen}>
-      {/* Figma Verify-PhotoPreview: 활동 인증 상단바에는 구분선이 없다 */}
-      {/* Figma 상조회 신청 TopBar: padding 18/16/14, 구분선 없음, 닫기 20×20(stroke 1.8), 제목 18/21, 우측 spacer 20. */}
-      <View style={[styles.appBar, isActivity ? styles.appBarNoDivider : null, isMutualAid ? styles.appBarMutualAid : null, { paddingTop: Math.max(insets.top, 10) + (isMutualAid ? 18 : 0) }]}>
-        <Pressable
-          accessibilityLabel="닫기"
-          hitSlop={isMutualAid ? 11 : undefined}
-          onPress={handleCreateBack}
-          style={isMutualAid ? styles.appBarIconMutualAid : styles.iconButton}
-        >
-          {isMutualAid ? (
-            <CloseIcon size={20} color={COLORS.text} />
-          ) : isActivity ? (
-            <BackIcon size={24} color={COLORS.text} />
-          ) : (
-            <Ionicons name="close" size={24} color={COLORS.text} />
-          )}
-        </Pressable>
-        <Text style={[styles.appBarTitle, isMutualAid ? styles.appBarTitleMutualAid : null]}>{labels.screenTitle}</Text>
-        <View style={isMutualAid ? styles.appBarIconMutualAid : styles.iconButton} />
-      </View>
+    <EdgeSwipeBack active={swipeHandledInScreen} onBack={handleCreateBack} style={styles.screen}>
+      <PostFormAppBar title={labels.screenTitle} onClose={handleCreateBack} variant={isMutualAid ? "mutualAid" : isActivity ? "activity" : "default"} />
 
       <ScrollView
         ref={formScrollRef}
@@ -1123,6 +1069,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
           formScrollHeight.current = event.nativeEvent.layout.height;
           revealFocusedBlock();
         }}
+        onContentSizeChange={(_width, height) => { formContentHeight.current = height; }}
       >
         {isActivity ? (
           <>
@@ -1181,7 +1128,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                     multiline
                     onChangeText={clearOnChange("content", field.onChange)}
                     placeholder="활동에 대한 소감을 남겨주세요"
-                    placeholderTextColor="#A6ACB7"
+                    placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                     hasError={Boolean(fieldState.error)}
                     style={[styles.input, styles.activityFeedbackInput]}
                     textAlignVertical="top"
@@ -1237,7 +1184,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                     onFocus={() => { revealTarget.current = "bank"; revealFocusedBlock(); }}
                     onChangeText={clearOnChange("bankAccount", field.onChange)}
                     placeholder={bankAccountField.placeholder}
-                    placeholderTextColor="#A6ACB7"
+                    placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                     hasError={Boolean(fieldState.error)}
                     style={styles.input}
                     value={field.value ?? ""}
@@ -1254,7 +1201,10 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
               </View>
             </View>
 
-            <View style={[styles.activityFieldGroup, styles.activityParticipantGroup]}>
+            <View
+              style={[styles.activityFieldGroup, styles.activityParticipantGroup]}
+              onLayout={(event) => { participantGroupTop.current = event.nativeEvent.layout.y; }}
+            >
               <Text style={styles.activityFieldTitle}>참가자</Text>
               <Controller
                 control={control}
@@ -1262,17 +1212,26 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 render={({ fieldState }) => {
                   return (
                     <>
-                      <View style={[styles.activityInputWithIcon, participantSearchFocused ? styles.activityInputWithIconFocused : null, fieldState.error ? styles.inputError : null]}>
-                        <Ionicons name="search-outline" size={16} color="#A6ACB7" />
+                      <View
+                        style={[styles.activityInputWithIcon, participantSearchFocused ? styles.activityInputWithIconFocused : null, fieldState.error ? styles.inputError : null]}
+                        onLayout={(event) => { participantInputTop.current = event.nativeEvent.layout.y; }}
+                      >
+                        <SearchIcon size={16} color="#A6ACB7" />
                         <TextInput
                           onBlur={() => { setParticipantSearchFocused(false); revealTarget.current = null; }}
                           onChangeText={setParticipantQuery}
-                          onFocus={() => { setParticipantSearchFocused(true); revealTarget.current = "end"; revealFocusedBlock(); }}
+                          onFocus={() => { setParticipantSearchFocused(true); revealTarget.current = "participants"; revealFocusedBlock(); }}
                           placeholder="이름으로 검색"
-                          placeholderTextColor="#A6ACB7"
+                          placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                           style={[styles.activityInlineInput, { outlineStyle: "none" } as never]}
                           value={participantQuery}
                         />
+                        {/* Figma Verify-Study-SearchResults: 검색어가 있으면 오른쪽에 지우기 버튼 */}
+                        {participantQuery ? (
+                          <Pressable accessibilityRole="button" accessibilityLabel="검색어 지우기" hitSlop={12} onPress={() => setParticipantQuery("")}>
+                            <ClearSearchIcon />
+                          </Pressable>
+                        ) : null}
                       </View>
                       {trimmedParticipantQuery.length > 0 && !participantSearch.isLoading && participantResults.length === 0 ? (
                         <Text style={styles.participantNoResultText}>검색 결과가 없어요</Text>
@@ -1408,7 +1367,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
               <FormTextInput
                 onChangeText={clearOnChange("title", field.onChange)}
                 placeholder={labels.titlePlaceholder}
-                placeholderTextColor="#A6ACB7"
+                placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                 hasError={Boolean(fieldState.error)}
                 style={styles.input}
                 value={field.value}
@@ -1438,7 +1397,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                   onChangeText={clearOnChange("professor", field.onChange)}
                   onFocus={() => setProfessorFocused(true)}
                   placeholder="교수명을 입력하세요"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                   style={[styles.suffixInput, { outlineStyle: "none" } as never]}
                   value={field.value}
                 />
@@ -1539,7 +1498,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 <FormTextInput
                   onChangeText={clearOnChange("category", field.onChange)}
                   placeholder={labels.categoryPlaceholder}
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                   style={styles.input}
                   value={field.value}
                 />
@@ -1567,7 +1526,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 <FormTextInput
                   onChangeText={field.onChange}
                   placeholder="YYYY.MM.DD"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                   style={styles.input}
                   value={field.value}
                 />
@@ -1582,7 +1541,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 <FormTextInput
                   onChangeText={field.onChange}
                   placeholder="예: 홍길동, 김서강"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                   style={styles.input}
                   value={field.value}
                 />
@@ -1597,7 +1556,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 <FormTextInput
                   onChangeText={field.onChange}
                   placeholder="예: 신한 110-000-000000 홍길동"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                   style={styles.input}
                   value={field.value}
                 />
@@ -1678,31 +1637,28 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
             </View>
             {evidenceMode === "file" ? (
               <View style={styles.evidenceImageSection}>
-                <Text style={styles.evidenceImageHint}>※ 청첩장, 부고장 이미지를 첨부할 수 있어요 (JPG, PNG)</Text>
+                {/* Figma MutualAidApply-ImageAttached: 사진을 붙이면 안내문 자리에 80x80 썸네일이 온다. */}
                 {imageAttachments.length > 0 ? (
-                  <View style={styles.evidenceImageGrid}>
+                  <View style={styles.evidenceThumbArea}>
                     {imageAttachments.map((attachment) => (
-                      <MediaImageBackground
-                        key={attachment.id}
-                        media={attachment}
-                        imageStyle={styles.evidenceImageTileImage}
-                        style={styles.evidenceImageTile}
-                      >
+                      <View key={attachment.id} style={styles.evidenceThumbWrap}>
+                        <MediaImageBackground media={attachment} imageStyle={styles.evidenceThumbImage} style={styles.evidenceThumb} />
                         <Pressable
                           accessibilityLabel={`${attachment.original_filename} 삭제`}
                           accessibilityRole="button"
                           disabled={isSubmitting}
+                          hitSlop={11}
                           onPress={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                          style={styles.evidenceImageRemove}
+                          style={styles.evidenceThumbRemove}
                         >
-                          <View style={styles.evidenceImageRemoveVisual}>
-                            <CloseIcon size={10} color="#FFFFFF" />
-                          </View>
+                          <CloseIcon size={10} color="#FFFFFF" />
                         </Pressable>
-                      </MediaImageBackground>
+                      </View>
                     ))}
                   </View>
-                ) : null}
+                ) : (
+                  <Text style={styles.evidenceImageHint}>※ 청첩장, 부고장 이미지를 첨부할 수 있어요 (JPG, PNG)</Text>
+                )}
                 {nonImageAttachments.length > 0 ? (
                   <View style={styles.evidenceLegacyFiles}>
                     {nonImageAttachments.map((attachment) => (
@@ -1754,7 +1710,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                   onFocus={() => { revealTarget.current = "end"; revealFocusedBlock(); }}
                   onChangeText={field.onChange}
                   placeholder="전달하고 싶은 내용이 있다면 적어주세요"
-                  placeholderTextColor="#A6ACB7"
+                  placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                   style={[styles.input, styles.textArea]}
                   textAlignVertical="top"
                   value={field.value ?? ""}
@@ -1777,7 +1733,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 onFocus={() => { revealTarget.current = "attach"; revealFocusedBlock(); }}
                 onChangeText={clearOnChange("content", field.onChange)}
                 placeholder={labels.contentPlaceholder}
-                placeholderTextColor="#A6ACB7"
+                placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                 hasError={Boolean(fieldState.error)}
                 style={[styles.input, styles.textArea, isSuggestion ? styles.suggestionContentInput : isStudyRecruit ? styles.studyContentInput : styles.generalContentInput]}
                 textAlignVertical="top"
@@ -1798,7 +1754,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
                 multiline
                 onChangeText={clearOnChange("contact", field.onChange)}
                 placeholder={"스터디원들과 연락할 수단을 입력해주세요.\n(이메일, 카카오톡 ID, 휴대폰번호 등)"}
-                placeholderTextColor="#A6ACB7"
+                placeholderTextColor={FIELD_PLACEHOLDER_COLOR}
                 style={[styles.input, styles.contactInput]}
                 textAlignVertical="top"
                 value={field.value}
@@ -2039,6 +1995,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
         title="경조사 종류"
         options={mutualAidTypeOptions}
         emptyText="선택 가능한 경조사 종류가 없습니다."
+        selectedKey={mutualAidTypeOptions.find((option) => option.label === selectedCategory)?.key}
         onClose={() => setSelectionSheet(null)}
         onSelect={(option) => {
           setValue("category", option.label, { shouldValidate: true });
@@ -2051,6 +2008,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
         title="관계"
         options={mutualAidRelationOptions}
         emptyText="선택 가능한 관계가 없습니다."
+        selectedKey={selectedRelation || undefined}
         onClose={() => setSelectionSheet(null)}
         onSelect={(option) => {
           setValue("relation", option.label, { shouldValidate: true });
@@ -2075,7 +2033,7 @@ function PostCreateForm({ params }: { params: PostCreateRouteParams }) {
       />
       <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       <Toast toast={toast} onHide={hideToast} />
-    </View>
+    </EdgeSwipeBack>
   );
 }
 
@@ -2118,8 +2076,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   successButtonText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 16,
     fontWeight: "400",
   },
   screen: {
@@ -2152,47 +2110,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "400",
   },
-  appBar: {
-    minHeight: 62,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.bg,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  appBarNoDivider: {
-    borderBottomWidth: 0,
-  },
-  appBarMutualAid: {
-    minHeight: 0,
-    borderBottomWidth: 0,
-    paddingBottom: 14, // Figma TopBar padding 18/16/14
-  },
-  appBarIconMutualAid: {
-    width: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  appBarTitleMutualAid: {
-    lineHeight: 21, // Figma 18/21
-  },
-  iconButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-  },
-  appBarTitle: {
-    color: COLORS.text,
-    fontSize: 18,
-    fontWeight: "500",
-    lineHeight: 22, // Figma: 글쓰기 18/22 Medium
-  },
   formScroller: {
     flex: 1,
   },
@@ -2211,10 +2128,9 @@ const styles = StyleSheet.create({
     paddingTop: 18,
   },
   activitySelect: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 14,
@@ -2239,13 +2155,12 @@ const styles = StyleSheet.create({
     color: "#A6ACB7",
   },
   selectionField: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     minHeight: 41, // Figma: 41h, border 0.5, padding 12/14
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 14,
@@ -2426,19 +2341,17 @@ const styles = StyleSheet.create({
     minHeight: 80, // Figma: 후기입력 80h
   },
   activityInputWithIcon: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     minHeight: 41, // Figma: 41h, padding 12/14
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 14,
   },
   activityInputWithIconFocused: {
-    borderWidth: 1, // Figma 참가자검색 focus: 1px #21262E
-    borderColor: "#21262E",
+    ...FIELD_BORDER.focused, // 입력 칸 공통 원칙(FieldBorder)
   },
   activityInlineInput: {
     flex: 1,
@@ -2573,12 +2486,11 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   selectLike: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     height: 41, // Figma: 게시판 선택 41h
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 14,
@@ -2708,39 +2620,6 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     lineHeight: 16,
   },
-  evidenceImageGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  evidenceImageTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: "#E9ECF1",
-  },
-  evidenceImageTileImage: {
-    borderRadius: 8,
-  },
-  evidenceImageRemove: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 44,
-    height: 44,
-    alignItems: "flex-end",
-    paddingTop: 4,
-    paddingRight: 4,
-  },
-  evidenceImageRemoveVisual: {
-    width: 18,
-    height: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 9,
-    backgroundColor: "rgba(17,24,39,0.68)",
-  },
   evidenceLegacyFiles: {
     gap: 8,
   },
@@ -2791,7 +2670,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    paddingTop: 12, // Figma 첨부영역 padding 12/0/0
+    // Figma 첨부영역은 탭 아래 8 + 위 패딩 12 = 탭 테두리에서 20 아래에 썸네일이 온다.
+    // 앱 탭은 누르는 영역(44)이 테두리(34)보다 아래로 5 더 나와 있고 field gap 8이
+    // 그 뒤에 붙으므로, 남은 7만 위 패딩으로 둔다.
+    paddingTop: 7,
   },
   evidenceThumbWrap: {
     width: 80,
@@ -2828,13 +2710,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(33, 36, 41, 0.8)",
   },
   evidenceLinkField: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     // Figma: 링크입력필드 36h, padding 10/12, gap 8
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     height: 36,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 12,
@@ -2848,8 +2729,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   evidenceLinkFieldFocused: {
-    borderWidth: 1, // Figma focus: 1px #21262E
-    borderColor: "#21262E",
+    ...FIELD_BORDER.focused, // 입력 칸 공통 원칙(FieldBorder)
   },
   optionalMark: {
     color: "#A6ACB7",
@@ -2859,20 +2739,18 @@ const styles = StyleSheet.create({
   },
   // Figma: 교수명 입력 — 우측에 "교수" 접미 라벨이 붙은 단일 입력 박스
   suffixInputRow: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     paddingHorizontal: 14,
   },
   // 제목 칸(input)과 글자 시작 위치를 맞추려면 굵어진 테두리만큼 패딩을 줄인다.
   suffixInputRowFocused: {
-    borderWidth: 1, // Figma focus: 1px #21262E
-    borderColor: "#21262E",
+    ...FIELD_BORDER.focused, // 입력 칸 공통 원칙(FieldBorder)
   },
   suffixInput: {
     flex: 1,
@@ -2919,10 +2797,9 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   input: {
+    ...FIELD_BORDER.normal, // 입력 칸 공통 원칙(FieldBorder)
     width: "100%",
     minHeight: 41, // Figma: 41h (textArea가 덮어씀)
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
     borderRadius: 8,
     backgroundColor: COLORS.bg,
     color: COLORS.text,
@@ -2933,20 +2810,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   inputFocused: {
-    borderWidth: 1, // Figma 참가자검색 focus와 동일: 1px #21262E
-    borderColor: "#21262E",
+    ...FIELD_BORDER.focused, // 입력 칸 공통 원칙(FieldBorder)
   },
-  // Figma 오류 상태: 1px #D64545. 입력칸·등급 버튼 모두 같은 굵기다.
-  // 기본 0.5 -> 1로 0.5px만 굵어져 여백 보정 없이도 글자가 밀리지 않는다.
-  // 기본 테두리(0.5)보다 굵어지는 만큼 좌우 패딩을 줄여 글자 위치를 유지한다.
+  // 오류 > 선택 순서로 합친다. 등급 버튼도 같은 오류 테두리를 쓴다.
   inputError: {
-    borderWidth: 1,
-    borderColor: "#D64545",
+    ...FIELD_BORDER.error, // 입력 칸 공통 원칙(FieldBorder)
   },
   // 등급 버튼은 좌우 패딩이 없어 두께만 바꾼다.
   borderOnlyError: {
-    borderWidth: 1,
-    borderColor: "#D64545",
+    ...FIELD_BORDER.error, // 입력 칸 공통 원칙(FieldBorder)
   },
   textArea: {
     minHeight: 70, // Figma: 비고필드 70h
@@ -3170,7 +3042,7 @@ const styles = StyleSheet.create({
     marginTop: 14, // gap 14 + 14 = 본문 하단 16 + 래퍼 상단 12
   },
   activitySubmitButton: {
-    height: 45, // Figma: 인증버튼 45h
+    height: 47, // Figma Verify 인증 등록 버튼 47 (16px 글자 + 위아래 14)
     borderRadius: 8,
     marginTop: 2,
   },
@@ -3178,13 +3050,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#AABDFD",
   },
   submitText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 15, // Figma: Medium 15/18
     fontWeight: "500",
-    lineHeight: 18,
   },
   activitySubmitText: {
-    fontSize: 14,
-    lineHeight: 17,
+    ...BUTTON_TEXT,
   },
 });

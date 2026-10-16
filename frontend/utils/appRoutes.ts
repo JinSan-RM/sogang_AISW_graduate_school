@@ -47,10 +47,6 @@ type PostEditRouteBoardInfo = {
   write_permission: string;
 };
 
-function isPostDetailEditOrigin(value: unknown) {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate === ACTIVITY_POST_DETAIL_EDIT_ORIGIN || candidate === POST_DETAIL_EDIT_ORIGIN;
-}
 
 type PostDetailNavigator = {
   canGoBack: () => boolean;
@@ -68,6 +64,11 @@ export function routeBoardId(value: unknown): number | null {
 
 export function boardRoute(boardId: number) {
   return `/board/${boardId}` as const;
+}
+
+// 기수별 기장단 소개·역대 원우회의 기수 상세. 카드 id에 한글 기수가 들어가 인코딩한다.
+export function councilCardRoute(boardId: number, cardId: string) {
+  return `/board/${boardId}/council/${encodeURIComponent(cardId)}`;
 }
 
 /**
@@ -161,40 +162,17 @@ export function participationGroupDefaultSlug(group: ParticipationGroupKey) {
   return "networking-programs" as const;
 }
 
-export function activityPostEditRouteFromDetail(
-  boardId: number,
+// 모든 게시판의 글 수정은 글쓰기 화면(create.tsx)의 수정 모드에서 한다.
+// boardId를 모르면 빼도 된다(글쓰기 화면이 불러온 글의 게시판을 쓴다).
+export function postEditRoute(
+  boardId: number | null,
   postId: number,
   fromBoardId?: unknown,
   returnTo?: unknown,
+  editOrigin: string = POST_DETAIL_EDIT_ORIGIN,
 ) {
-  const params = [`boardId=${boardId}`, `postId=${postId}`, `editOrigin=${ACTIVITY_POST_DETAIL_EDIT_ORIGIN}`];
-  const sourceBoardId = routeBoardId(fromBoardId);
-  if (sourceBoardId) params.push(`fromBoardId=${sourceBoardId}`);
-  const safeReturnTo = postDetailReturnRoute(returnTo);
-  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
-  return `/board/post/create?${params.join("&")}` as const;
-}
-
-export function postEditRouteFromDetail(
-  postId: number,
-  fromBoardId?: unknown,
-  returnTo?: unknown,
-) {
-  const params = [`editOrigin=${POST_DETAIL_EDIT_ORIGIN}`];
-  const sourceBoardId = routeBoardId(fromBoardId);
-  if (sourceBoardId) params.push(`fromBoardId=${sourceBoardId}`);
-  const safeReturnTo = postDetailReturnRoute(returnTo);
-  if (safeReturnTo) params.push(`returnTo=${encodeURIComponent(safeReturnTo)}`);
-  return `/board/post/edit/${postId}?${params.join("&")}` as const;
-}
-
-export function mutualAidPostEditRouteFromDetail(
-  boardId: number,
-  postId: number,
-  fromBoardId?: unknown,
-  returnTo?: unknown,
-) {
-  const params = [`boardId=${boardId}`, `postId=${postId}`, `editOrigin=${POST_DETAIL_EDIT_ORIGIN}`];
+  const params = [`postId=${postId}`, `editOrigin=${editOrigin}`];
+  if (boardId !== null && boardId > 0) params.unshift(`boardId=${boardId}`);
   const sourceBoardId = routeBoardId(fromBoardId);
   if (sourceBoardId) params.push(`fromBoardId=${sourceBoardId}`);
   const safeReturnTo = postDetailReturnRoute(returnTo);
@@ -209,27 +187,20 @@ export function postEditRouteForPostDetail(
   fromBoardId?: unknown,
   returnTo?: unknown,
 ) {
-  if (!board) return `/board/post/edit/${postId}` as const;
-  const usesMemberNavigation = board.write_permission !== "admin" && board.board_type !== "album";
-  if (!usesMemberNavigation) return `/board/post/edit/${postId}` as const;
-  if (board.board_type === "activity_certification") {
-    return activityPostEditRouteFromDetail(boardId, postId, fromBoardId, returnTo);
-  }
-  if (board.board_type === "mutual_aid") {
-    return mutualAidPostEditRouteFromDetail(boardId, postId, fromBoardId, returnTo);
-  }
-  return postEditRouteFromDetail(postId, fromBoardId, returnTo);
+  const origin = board?.board_type === "activity_certification" ? ACTIVITY_POST_DETAIL_EDIT_ORIGIN : POST_DETAIL_EDIT_ORIGIN;
+  return postEditRoute(board ? boardId : null, postId, fromBoardId, returnTo, origin);
 }
 
 export function postEditCompletionDecision(
   _boardType: string | undefined,
-  editOrigin: unknown,
+  _editOrigin: unknown,
   canGoBack: boolean,
   postId: number,
   fromBoardId?: unknown,
   returnTo?: unknown,
 ): PostEditCompletionDecision {
-  if (isPostDetailEditOrigin(editOrigin) && canGoBack) {
+  // 수정은 글 상세에서 들어온다. 아래 화면이 있으면 그 상세로 pop 한다.
+  if (canGoBack) {
     return { action: "back" };
   }
   return {
@@ -272,7 +243,8 @@ export function postCreateFormBackDecision(params: {
   fromBoardId?: unknown;
 }): PostCreateBackDecision | PostEditCompletionDecision {
   const postId = routeBoardId(params.postId);
-  if (postId && isPostDetailEditOrigin(params.editOrigin)) {
+  // 수정 화면(postId 있음)은 늘 글 상세로 돌아간다. 관리자 웹처럼 editOrigin 없이 열려도 같다.
+  if (postId) {
     if (params.canGoBack) return { action: "back" };
     return {
       action: "replace",
@@ -304,19 +276,71 @@ export function handleNestedBoardHardwareBack(
   return true;
 }
 
+// 완료 화면에서 "확인"을 누르면 갈 곳. 건의사항·상조회는 글 상세를 볼 일이 없어
+// 게시판 목록으로, 나머지는 방금 쓴 글 상세로 간다.
+function completionReturnsToList(boardType: string | undefined) {
+  return boardType === "mutual_aid" || boardType === "suggestion";
+}
+
+// 글 상세에서 뒤로 갈 곳. 활동 인증은 참여활동 탭에서 쓰므로 그곳으로 돌아간다.
+function completionDetailReturnTo(boardType: string | undefined, returnTo?: unknown) {
+  return boardType === "activity_certification" ? PARTICIPATION_TAB_ROUTE : postDetailReturnRoute(returnTo);
+}
+
 export function postCreateCompletionRoute(
   boardType: string | undefined,
   createdPostId: number,
   boardId: number,
   returnTo?: unknown,
 ) {
-  if (boardType === "activity_certification") {
-    return postDetailRoute(createdPostId, boardId, PARTICIPATION_TAB_ROUTE);
+  if (completionReturnsToList(boardType)) return boardRoute(boardId);
+  return postDetailRoute(createdPostId, boardId, completionDetailReturnTo(boardType, returnTo));
+}
+
+type StackRouteInput = { name: string; params?: object };
+
+// 등록 직후 글쓰기 화면 자리에 놓을 스택. 모든 게시판이 완료 화면을 거친다.
+// 완료 화면 바로 아래에 "확인"의 도착지(postCreateCompletionRoute와 같은 곳)를 깔아
+// 두어, 확인·안드로이드 뒤로가기·iOS 스와이프가 모두 완료 화면만 빼서 같은 화면으로
+// 돌아가게 한다.
+// - 건의사항·상조회: 그 게시판 목록. 아래에 있으면 거기까지 비워 같은 목록이 두 번
+//   쌓이지 않게 하고, 없으면 목록을 깐다.
+// - 그 밖의 게시판: 방금 쓴 글 상세. 그 아래는 글쓰기 전 화면이다.
+export function postCompletionStack<R extends StackRouteInput>(
+  routes: R[],
+  boardType: string | undefined,
+  createdPostId: number,
+  boardId: number,
+  returnTo?: unknown,
+): (R | StackRouteInput)[] {
+  const below: (R | StackRouteInput)[] = routes.slice(0, -1);
+  const detailReturnTo = completionDetailReturnTo(boardType, returnTo);
+  const complete = {
+    name: "board/post/complete",
+    params: {
+      boardType: boardType ?? "",
+      boardId: String(boardId),
+      postId: String(createdPostId),
+      // 웹 새로고침처럼 아래 화면이 없을 때 같은 도착지를 다시 만들 수 있게 넘긴다.
+      ...(detailReturnTo && !completionReturnsToList(boardType) ? { returnTo: detailReturnTo } : {}),
+    },
+  };
+  if (!completionReturnsToList(boardType)) {
+    const detail = {
+      name: "board/post/[postId]",
+      params: { postId: String(createdPostId), fromBoardId: String(boardId), ...(detailReturnTo ? { returnTo: detailReturnTo } : {}) },
+    };
+    return [...below, detail, complete];
   }
-  if (boardType === "mutual_aid" || boardType === "suggestion") {
-    return boardRoute(boardId);
-  }
-  return postDetailRoute(createdPostId, boardId, returnTo);
+  let listIndex = -1;
+  below.forEach((route, index) => {
+    const params = route.params as { boardId?: unknown } | undefined;
+    if (route.name === "board/[boardId]" && Number(params?.boardId) === boardId) listIndex = index;
+  });
+  const list = listIndex >= 0
+    ? below.slice(0, listIndex + 1)
+    : [...below, { name: "board/[boardId]", params: { boardId: String(boardId) } }];
+  return [...list, complete];
 }
 
 export function postDetailBackDecision(

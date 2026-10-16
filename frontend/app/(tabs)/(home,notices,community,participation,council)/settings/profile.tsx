@@ -1,17 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { AppText as Text, AppTextInput as TextInput } from "../../../../components/AppTypography";
-import { NetworkErrorFallback } from "../../../../components/NetworkErrorState";
+import { AppText as Text } from "../../../../components/AppTypography";
+import { FieldInput } from "../../../../components/FieldBorder";
+import { useLoadErrorOverlay } from "../../../../components/NetworkErrorState";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import LoadingState from "../../../../components/LoadingState";
 import MediaImage from "../../../../components/MediaImage";
 import Toast from "../../../../components/Toast";
 import { useToast } from "../../../../hooks/useToast";
-import { useReturnToMyPageDrawer } from "../../../../hooks/useReturnToMyPageDrawer";
 import { registrationApi, userApi } from "../../../../services/api";
 import { pickAndUploadImage } from "../../../../utils/mediaPicker";
 import { apiErrorCode, phoneError } from "../../../../utils/authValidation";
@@ -19,6 +18,8 @@ import { buildProfileUpdatePayload } from "../../../../utils/profileUpdate";
 import { TOAST_ERROR_MESSAGES, TOAST_SUCCESS_MESSAGES, queueToastForNextScreen } from "../../../../utils/toast";
 
 import { BackIcon, DefaultAvatarIcon } from "../../../../components/icons";
+import { backToMyPage } from "../../../../utils/tabNavigation";
+import { BUTTON_TEXT } from "../../../../utils/buttonText";
 const COLORS = {
   primary: "#2761FF",
   primary50: "#E6F1FB",
@@ -39,7 +40,6 @@ type FieldValues = {
 
 export default function ProfileSettingsScreen() {
   const insets = useSafeAreaInsets();
-  const { returnToMyPageDrawer, onLayout } = useReturnToMyPageDrawer("/settings/profile");
   const { toast, showToast, hideToast } = useToast();
   const queryClient = useQueryClient();
   const registrationOptionsQuery = useQuery({
@@ -53,6 +53,11 @@ export default function ProfileSettingsScreen() {
     refetchOnWindowFocus: false,
   });
   const majorOptions = registrationOptionsQuery.data?.data.majors ?? [];
+  // 프로필·전공 목록을 받지 못하면(4xx 포함) 앱 전체 LoadError로 덮는다.
+  useLoadErrorOverlay(profileQuery.error ?? registrationOptionsQuery.error, () => {
+    if (profileQuery.isError) void profileQuery.refetch();
+    if (registrationOptionsQuery.isError) void registrationOptionsQuery.refetch();
+  });
   const [fields, setFields] = useState<FieldValues>({
     nickname: "",
     cohort: "",
@@ -126,9 +131,9 @@ export default function ProfileSettingsScreen() {
         const refreshedProfile = await userApi.getMe();
         queryClient.setQueryData(["me"], refreshedProfile);
       }
-      // 이 화면은 곧 사라지므로 성공 토스트는 옮겨 간 화면이 띄운다.
+      // 이 화면은 곧 사라지므로 성공 토스트는 돌아간 마이페이지가 띄운다.
       queueToastForNextScreen(TOAST_SUCCESS_MESSAGES.profileSaved, "success");
-      router.replace("/(tabs)/settings");
+      backToMyPage();
     } catch (error) {
       setFieldError(
         apiErrorCode(error) === "VALIDATION_ERROR"
@@ -149,11 +154,11 @@ export default function ProfileSettingsScreen() {
   const saveDisabled = isSubmitting || isUploadingImage;
 
   return (
-    <View style={styles.screen} onLayout={onLayout}>
+    <View style={styles.screen}>
       <View style={[styles.appBar, { paddingTop: Math.max(insets.top, 10) }]}>
         <Pressable
           accessibilityLabel="뒤로"
-          onPress={returnToMyPageDrawer}
+          onPress={backToMyPage}
           style={styles.iconButton}
         >
           <BackIcon size={24} color={COLORS.text} />
@@ -164,16 +169,7 @@ export default function ProfileSettingsScreen() {
 
       {profileQuery.isLoading ? (
         <LoadingState />
-      ) : profileQuery.isError ? (
-        <NetworkErrorFallback error={profileQuery.error} onRetry={() => void profileQuery.refetch()}>
-          <View style={styles.center}>
-            <Text style={styles.loadErrorText}>프로필을 불러오지 못했습니다.</Text>
-            <Pressable accessibilityRole="button" onPress={() => void profileQuery.refetch()} style={styles.retryButton}>
-              <Text style={styles.retryButtonText}>다시 시도</Text>
-            </Pressable>
-          </View>
-        </NetworkErrorFallback>
-      ) : (
+      ) : profileQuery.isError ? null : (
         <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroller} contentContainerStyle={styles.content}>
         <View style={styles.avatarSection}>
           <Pressable disabled={isUploadingImage} onPress={() => setPhotoSheetVisible(true)} style={styles.avatarButton}>
@@ -218,19 +214,11 @@ export default function ProfileSettingsScreen() {
               </Text>
               <Ionicons name="chevron-down" size={18} color={COLORS.subtle} />
             </Pressable>
-            {registrationOptionsQuery.isError ? (
-              <View style={styles.inlineError}>
-                <Text style={styles.errorText}>전공 목록을 불러오지 못했습니다.</Text>
-                <Pressable accessibilityRole="button" onPress={() => void registrationOptionsQuery.refetch()} style={styles.inlineRetryButton}>
-                  <Text style={styles.inlineRetryText}>다시 시도</Text>
-                </Pressable>
-              </View>
-            ) : null}
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>연락처</Text>
-            <TextInput
+            <FieldInput
               keyboardType="phone-pad"
               maxLength={11}
               onChangeText={(next) => {
@@ -314,27 +302,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-  },
-  loadErrorText: {
-    color: COLORS.muted,
-    fontSize: 14,
-  },
-  retryButton: {
-    borderRadius: 8,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  retryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "700",
-  },
   appBar: {
     minHeight: 62,
     flexDirection: "row",
@@ -404,9 +371,6 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF",
   },
   errorText: { color: COLORS.danger, fontSize: 12, fontWeight: "800", marginTop: 10 },
-  inlineError: { alignItems: "flex-start", gap: 8 },
-  inlineRetryButton: { borderRadius: 7, backgroundColor: COLORS.primary50, paddingHorizontal: 12, paddingVertical: 8 },
-  inlineRetryText: { color: COLORS.primary, fontSize: 12, fontWeight: "700" },
   form: {
     gap: 14,
   },
@@ -420,8 +384,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 44,
-    borderWidth: 0.5,
-    borderColor: COLORS.border,
+    // 테두리는 FieldBorder 공통 원칙을 따른다.
     borderRadius: 8,
     color: COLORS.text,
     fontSize: 14,
@@ -523,8 +486,8 @@ const styles = StyleSheet.create({
     opacity: 0.55,
   },
   primaryButtonText: {
+    ...BUTTON_TEXT,
     color: "#FFFFFF",
-    fontSize: 15,
     fontWeight: "500",
   },
 });

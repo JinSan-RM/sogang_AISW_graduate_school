@@ -17,8 +17,7 @@ const noticeListSource = source("app/(tabs)/(home,notices,community,participatio
 const boardSource = source("app/(tabs)/(home,notices,community,participation,council)/board/[boardId].tsx");
 const postDetailSource = source("app/(tabs)/(home,notices,community,participation,council)/board/post/[postId].tsx");
 const postCreateSource = source("app/(tabs)/(home,notices,community,participation,council)/board/post/create.tsx");
-const postEditSource = source("app/(tabs)/(home,notices,community,participation,council)/board/post/edit/[postId].tsx");
-const mutualAidCompleteSource = source("app/(tabs)/(home,notices,community,participation,council)/council/mutual-aid-complete.tsx");
+const postCompleteSource = source("app/(tabs)/(home,notices,community,participation,council)/board/post/complete.tsx");
 const searchSource = source("app/(tabs)/(home,notices,community,participation,council)/search.tsx");
 const loginSource = source("app/auth/login.tsx");
 const councilSource = source("app/(tabs)/(home,notices,community,participation,council)/council.tsx");
@@ -43,8 +42,8 @@ test("#2 메인 배너는 설정된 목적지로 직접 이동한다", () => {
 });
 
 test("#66·67·68 홈과 하단 탭은 디자인 기준 아이콘과 정렬을 사용한다", () => {
-  assert.match(tabLayoutSource, /<HomeTabIcon color=\{color\} size=\{22\} \/>/);
-  assert.match(tabLayoutSource, /<NoticeTabIcon color=\{color\} size=\{22\} \/>/);
+  assert.match(tabLayoutSource, /<HomeTabIcon color=\{tabIconColor\(focused, color\)\} size=\{22\} \/>/);
+  assert.match(tabLayoutSource, /<NoticeTabIcon color=\{tabIconColor\(focused, color\)\} size=\{22\} \/>/);
   assert.match(homeSource, /name="chatbubble-outline"/);
   assert.match(homeSource, /name="heart-outline"/);
   assert.match(calendarSource, /dayText:[\s\S]*lineHeight: r\(16\)/);
@@ -56,12 +55,13 @@ test("#5·6·7·11·18 공지와 스터디의 태그 문구 및 상태를 실제
   assert.match(searchSource, /label: "행사공지"/);
   assert.match(searchSource, /label: "기타공지"/);
   assert.match(postCardSource, /resourceCategoryLabel/);
-  assert.match(postDetailSource, /label\.includes\("기타"\).*#F0EEF9.*#6543A2/);
+  assert.match(postDetailSource, /label\.includes\("기타"\).*COLORS\.purple50.*COLORS\.purple700/);
+  assert.match(postDetailSource, /purple50: "#F0EEF9",\s+purple700: "#6543A2",/);
   assert.match(postCardSource, /post\.metadata\?\.recruitment_status/);
   assert.match(postDetailSource, /metadata\.recruitment_status/);
 });
 
-test("#41·45 공지 상세 이미지는 가로 4:3·세로 4:5 고정 프레임이며 누르면 공용 사진 보기를 연다", () => {
+test("#41·45 공지 상세 이미지는 가로 4:3·세로 320x452 고정 프레임이며 누르면 공용 사진 보기를 연다", () => {
   assert.match(postDetailSource, /const isNotice = board\?\.board_type === "notice" \|\| post\?\.is_notice === true/);
   assert.match(postDetailSource, /function NoticeAttachmentImage/);
   assert.match(postDetailSource, /noticeAttachmentFrameAspectRatio\(sourceAspectRatio\)/);
@@ -79,13 +79,18 @@ test("#29·31 상조회 입력 안내는 일반 굵기이고 상세 비고는 �
   assert.ok(evidenceIndex >= 0, "상조회 상세의 증빙서류 부제를 찾을 수 없습니다.");
   assert.ok(noteIndex < evidenceIndex, "비고는 증빙서류보다 먼저 표시되어야 합니다.");
   assert.match(postDetailSource, /!isMutualAidRequest && post\.content\.trim\(\)/);
-  assert.match(postCreateSource, /placeholderTextColor="#A6ACB7"/);
+  assert.match(postCreateSource, /placeholderTextColor=\{FIELD_PLACEHOLDER_COLOR\}/);
+  assert.match(readFileSync("components/FieldBorder.tsx", "utf8"), /FIELD_PLACEHOLDER_COLOR = "#A6ACB7"/);
   assert.match(postCreateSource, /input:[\s\S]*fontWeight: "400"/);
 });
 
+test("상조회 상세는 비고가 없으면 증빙서류가 있어도 마지막 정보 행 아래에 구분선이 없다", () => {
+  // 디자이너: 증빙서류는 별도 항목이라 바로 위에 구분선을 긋지 않는다(피그마 MutualAidDetail-V2-Link).
+  assert.match(postDetailSource, /isMutualAidRequest && !hasMutualAidNote && index === visibleDetailRows\.length - 1/);
+});
+
 test("#48 완료 화면은 공통 CompletionState를 공유한다", () => {
-  assert.match(postCreateSource, /<CompletionState/);
-  assert.match(mutualAidCompleteSource, /<CompletionState/);
+  assert.match(postCompleteSource, /<CompletionState/);
 });
 
 test("#38·39 기본 프로필과 개인정보 동의 상태는 임의 값을 만들지 않는다", () => {
@@ -130,14 +135,15 @@ test("#64·65 상세 더보기와 북마크는 디자인 아이콘과 하단 시
   assert.doesNotMatch(postDetailSource, /작성자 차단/);
 });
 
-test("#71 게시글 수정 화면은 제목과 내용 입력을 게시판 종류와 관계없이 노출한다", () => {
-  assert.match(postEditSource, /accessibilityLabel="제목"/);
-  assert.match(postEditSource, /accessibilityLabel="내용"/);
-  assert.doesNotMatch(postEditSource, /isStudyRecruit \? <Text style=\{styles\.fieldLabel\}>(?:제목|내용)<\/Text>/);
+// 글 수정은 글쓰기 화면(create.tsx)의 수정 모드라 작성 화면과 같은 입력 칸을 같은 조건으로 그린다.
+test("#71 게시글 수정 화면은 작성 화면과 같은 제목·내용 입력을 노출한다", () => {
+  assert.match(postCreateSource, /\{!isMutualAid \? \(\s*<Controller\s+control=\{control\}\s+name="title"/);
+  assert.match(postCreateSource, /\{!isAlbum && !isMutualAid \? \(\s*<Controller\s+control=\{control\}\s+name="content"/);
+  // 수정 모드만 따로 입력 칸을 숨기는 갈래가 없다.
+  assert.doesNotMatch(postCreateSource, /postId \? null : <Controller/);
 
-  for (const label of ["모집 상태", "스터디장 연락수단"]) {
-    assert.match(postEditSource, new RegExp(`>${label}<`));
-  }
+  assert.match(postCreateSource, />모집 상태</);
+  assert.match(postCreateSource, /label="스터디장 연락수단"/);
 });
 
 test("#73 운영진 화면은 임의 기본 프로필 없이 실제 데이터만 사용한다", () => {
@@ -182,9 +188,11 @@ test("댓글 액션행과 저장·취소행은 padding 8/0, gap 16, 라벨 13/16
   assert.doesNotMatch(commentItem, /fontSize: depth > 0 \? 13 : 12/);
 });
 
-test("댓글 수정 입력은 1.3px 파란 테두리에 13\/16 본문과 8\/10 여백을 쓴다", () => {
+test("댓글 수정 입력은 입력 칸 공통 테두리에 13\/16 본문과 8\/10 여백을 쓴다", () => {
   const commentItem = source("components/CommentItem.tsx");
-  assert.match(commentItem, /borderWidth: 1\.3,\s*\n\s*borderColor: "#2761FF"/);
+  // Figma Detail2-CommentEdit·ReplyEdit: 입력 중 1px #21262E (FieldInput이 그린다).
+  assert.match(commentItem, /<FieldInput\s*\n\s*autoFocus/);
+  assert.doesNotMatch(commentItem, /borderColor: "#2761FF"/);
   // Figma 답글수정입력: padding 8px 10px.
   assert.match(commentItem, /fontSize: 13,\s*\n\s*lineHeight: 16,[\s\S]{0,120}paddingHorizontal: 10,\s*\n\s*paddingVertical: 8,/);
 });
@@ -222,7 +230,7 @@ test("활동 인증 날짜 필드는 '활동한 날짜' 소제목과 41h 날짜�
   assert.match(icons, /d="M10 1\.875V4\.375M5 1\.875V4\.375M1\.875 6\.25H13\.125"/);
   assert.match(icons, /export function CalendarSmallIcon[\s\S]{0,700}strokeWidth=\{1\.22\}/);
   assert.match(postCreateSource, /activityFieldGroup:\s*\{\s*\n\s*gap: 6,/);
-  assert.match(postCreateSource, /activityInputWithIcon:\s*\{\s*\n\s*minHeight: 41,/);
+  assert.match(postCreateSource, /activityInputWithIcon:\s*\{\s*\n\s*\.\.\.FIELD_BORDER\.normal,[^\n]*\n\s*minHeight: 41,/);
 });
 
 test("스터디 모집 댓글은 구분선 없이 12px 간격으로만 이어진다", () => {

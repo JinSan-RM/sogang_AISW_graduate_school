@@ -2,17 +2,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
-import { AppText as Text, AppTextInput as TextInput } from "../../../../components/AppTypography";
+import { AppText as Text } from "../../../../components/AppTypography";
+import { FieldInput } from "../../../../components/FieldBorder";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import KeyboardViewport from "../../../../components/KeyboardViewport";
 
 import { userApi } from "../../../../services/api";
 import { useUserStore } from "../../../../stores/userStore";
-import { accountDeletionErrorMessage } from "../../../../utils/accountDeletion";
 import { apiErrorCode, apiErrorStatus } from "../../../../utils/authValidation";
 import { clearStoredPushToken } from "../../../../utils/pushTokenStorage";
 
 import { AlertCircleIcon, BackIcon, FieldErrorIcon, NoticeAlertIcon } from "../../../../components/icons";
+import { BUTTON_TEXT } from "../../../../utils/buttonText";
 const COLORS = {
   primary: "#2761FF",
   text: "#15171C",
@@ -22,9 +23,10 @@ const COLORS = {
   bg: "#FFFFFF",
   panel: "#F8FAFC",
   danger: "#D64545", // Figma: 탈퇴하기 활성 버튼/오류
-  dangerBg: "#FFF4F4",
   disabled: "#D1D5DB",
 };
+
+const ACCOUNT_DELETION_SUBMIT_ERROR = "계정을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.";
 
 export default function AccountDeletionScreen() {
   const insets = useSafeAreaInsets();
@@ -71,7 +73,8 @@ export default function AccountDeletionScreen() {
       if (status === 403 || code === "FORBIDDEN") {
         setPasswordError("비밀번호가 일치하지 않아요.");
       } else {
-        setRequestError(accountDeletionErrorMessage(status ?? (code ? undefined : 0), code));
+        // Figma Screen/MyPage/AccountDelete-PasswordModal-SubmitError: 비밀번호 틀림 말고는 이유와 관계없이 한 문구.
+        setRequestError(ACCOUNT_DELETION_SUBMIT_ERROR);
       }
     } finally {
       setIsSubmitting(false);
@@ -143,20 +146,6 @@ export default function AccountDeletionScreen() {
           <Text style={styles.confirmText}>안내사항을 모두 확인했어요</Text>
         </Pressable>
 
-        {requestError ? (
-          <View accessibilityLiveRegion="assertive" accessibilityRole="alert" style={styles.errorBox}>
-            <Text style={styles.errorBoxText}>{requestError}</Text>
-            <Pressable
-              accessibilityLabel="계정 삭제 다시 시도"
-              accessibilityRole="button"
-              disabled={!canSubmit}
-              onPress={() => void deleteAccount()}
-            >
-              <Text style={styles.retryText}>다시 시도</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
         <Pressable
           accessibilityHint="비밀번호를 확인한 뒤 계정과 개인정보를 삭제합니다."
           accessibilityLabel="계정 삭제"
@@ -182,11 +171,12 @@ export default function AccountDeletionScreen() {
       <Modal transparent animationType="fade" visible={passwordModalVisible} onRequestClose={() => setPasswordModalVisible(false)}>
         <KeyboardViewport>
           <Pressable onPress={() => setPasswordModalVisible(false)} style={styles.modalBackdrop}>
-            {/* Figma: Screen/MyPage/AccountDelete-PasswordModal, -Error */}
+            {/* Figma: Screen/MyPage/AccountDelete-PasswordModal, -Error, -SubmitError */}
             <Pressable onPress={(event) => event.stopPropagation()} style={styles.modalCard}>
               <Text accessibilityRole="header" style={styles.modalTitle}>비밀번호 확인</Text>
               <Text style={styles.modalBody}>본인 확인을 위해 비밀번호를 입력해주세요.</Text>
-              <TextInput
+              <FieldInput
+                hasError={Boolean(passwordError)}
                 accessibilityLabel="비밀번호"
                 autoCapitalize="none"
                 autoComplete="current-password"
@@ -202,7 +192,7 @@ export default function AccountDeletionScreen() {
                 placeholder="비밀번호 입력"
                 placeholderTextColor={COLORS.subtle}
                 secureTextEntry
-                style={[styles.input, passwordError ? styles.inputError : null]}
+                style={styles.input}
                 value={currentPassword}
               />
               {passwordError || requestError ? (
@@ -283,8 +273,7 @@ const styles = StyleSheet.create({
   // Figma PasswordModal 입력칸: 48h, 테두리 1px, 좌우 16, 14/22
   input: {
     height: 48,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    // 테두리는 FieldBorder 공통 원칙을 따른다.
     borderRadius: 8,
     color: COLORS.text,
     fontSize: 14,
@@ -293,7 +282,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   // 다른 오류 칸과 같이 배경 없이 빨간 테두리만 둔다.
-  inputError: { borderColor: COLORS.danger },
   errorText: { flexShrink: 1, color: COLORS.danger, fontSize: 12, fontWeight: "400", lineHeight: 14 }, // Figma 에러행: Regular 12
   confirmRow: {
     flexDirection: "row",
@@ -316,14 +304,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.text,
   },
   confirmText: { flex: 1, color: COLORS.text, fontSize: 13, fontWeight: "400", lineHeight: 16 },
-  errorBox: {
-    borderRadius: 8,
-    backgroundColor: COLORS.dangerBg,
-    padding: 12,
-    gap: 7,
-  },
-  errorBoxText: { color: COLORS.danger, fontSize: 13, lineHeight: 19 },
-  retryText: { color: COLORS.danger, fontSize: 13, fontWeight: "700" },
   deleteButton: {
     height: 48,
     alignItems: "center",
@@ -333,7 +313,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   deleteButtonDisabled: { backgroundColor: COLORS.border }, // Figma: 비활성 #E1E4E9
-  deleteButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "500", lineHeight: 24 },
+  deleteButtonText: { ...BUTTON_TEXT, color: "#FFFFFF", fontWeight: "500" },
   deleteButtonTextDisabled: { color: "#8A919C" },
   modalBackdrop: {
     flex: 1,
@@ -356,7 +336,8 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   modalBody: { color: COLORS.muted, fontSize: 13, fontWeight: "400", textAlign: "center" },
-  modalErrorRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  // Figma AccountDelete-PasswordModal-SubmitError: 두 줄로 넘어가도 아이콘은 첫 줄 옆
+  modalErrorRow: { flexDirection: "row", alignItems: "flex-start", gap: 4 },
   modalActions: { flexDirection: "row", gap: 8 },
   modalCancelButton: {
     flex: 1,
@@ -366,7 +347,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4F5F7",
     paddingVertical: 13,
   },
-  modalCancelText: { color: COLORS.muted, fontSize: 15, fontWeight: "500" },
+  modalCancelText: { ...BUTTON_TEXT, color: COLORS.muted, fontWeight: "500" },
   modalDeleteButton: {
     flex: 1,
     alignItems: "center",
@@ -375,5 +356,5 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.danger,
     paddingVertical: 13,
   },
-  modalDeleteText: { color: "#FFFFFF", fontSize: 15, fontWeight: "600" },
+  modalDeleteText: { ...BUTTON_TEXT, color: "#FFFFFF", fontWeight: "600" },
 });
