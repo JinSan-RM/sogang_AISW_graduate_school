@@ -5,8 +5,8 @@ updates and GCP synchronization. Verified candidate `1550166` deploys merged
 PR #32/#33 with database head `0035_poll_question_deadline`. Version 1.0.5 uses
 Android15/iOS17 and existing signing identities. Real DB/media backup restoration,
 exact running-image migration rehearsal, public API compatibility, source/bundle
-and private-environment preservation checks pass. Apple review is waiting; Google
-review transmission is accepted with automated pre-review checks running. Both
+and private-environment preservation checks and full candidate CI pass. Apple review is waiting; Google
+Console shows the update under review after final reload. Both
 retain automatic publication after approval. No account/password or architecture
 change; unmerged functional corrections and physical native QA remain separate.
 Evidence: `docs/qa/RELEASE_1_0_5_GCP_2026-10-20.md`.

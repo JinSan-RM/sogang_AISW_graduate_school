@@ -2,14 +2,14 @@
 
 2026-10-20 WP9 release/deployment completed: candidate `1550166` contains merged
 PR #32/#33 and version 1.0.5, with existing EAS signing and Android15/iOS17 counters.
-Frontend1001/typecheck/lint/release-config/web checks pass; compatible shell-quote
+Frontend1001/typecheck/lint/release-config/web and full candidate CI pass; compatible shell-quote
 1.12.0 removes the critical audit finding. GCP runs the verified candidate with
 single head0035 after coordinated DB/media backups and actual restore/migration
 rehearsals, including the exact running image. Public HTTPS, client-compatibility,
 bundle/source and unchanged-private-environment checks pass. IPA/AAB identity,
 source, signing/profile and Android16KB checks pass. Apple build17 is VALID and
-1.0.5 is WAITING_FOR_REVIEW; Google accepted release6/code15 for review with its
-automatic pre-review checks running. Existing reviewer username/password matched
+1.0.5 is WAITING_FOR_REVIEW; Google shows release6/code15 under review on the final
+reload, with no pending pre-review banner. Existing reviewer username/password matched
 the same production account; only store login instructions were corrected to its
 registered email, with no account/password change. Approval/public availability
 remain external store steps. Evidence: `docs/qa/RELEASE_1_0_5_GCP_2026-10-20.md`;
