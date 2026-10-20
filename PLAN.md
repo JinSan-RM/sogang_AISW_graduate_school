@@ -1,5 +1,16 @@
 # AI·SW CAMPUS Phase 2-4 Plan
 
+2026-10-20 WP9 release/deployment: the user explicitly authorized one-step native
+updates and GCP synchronization. Verified candidate `1550166` deploys merged
+PR #32/#33 with database head `0035_poll_question_deadline`. Version 1.0.5 uses
+Android15/iOS17 and existing signing identities. Real DB/media backup restoration,
+exact running-image migration rehearsal, public API compatibility, source/bundle
+and private-environment preservation checks pass. Apple review is waiting; Google
+review transmission is accepted with automated pre-review checks running. Both
+retain automatic publication after approval. No account/password or architecture
+change; unmerged functional corrections and physical native QA remain separate.
+Evidence: `docs/qa/RELEASE_1_0_5_GCP_2026-10-20.md`.
+
 2026-10-08 integration hardening (WP5/WP8/WP9): refresh locked account credentials before irreversible deletion; enforce the existing processing-author/admin mutual-aid evidence policy for media and post serialization; isolate administrator confirmations by authenticated session; route web notice edits through the dedicated body/poll editor. PostgreSQL board create/update/archive share one transaction advisory lock before board reads/locks; real concurrent reparent and child-create/archive regressions pass. The user authorized consolidating named branches, removing integrated branch refs, pushing main and updating GCP. Physical native QA remains Phase 5; no store release is included.
 
 Source: Notion `App Development (New)` > `Community App Enhancement Schedule`.

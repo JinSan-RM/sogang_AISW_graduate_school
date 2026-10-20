@@ -1,14 +1,19 @@
 # Codex Work Backlog
 
-2026-10-20 WP9 release/deployment follow-up: the user requested one-step iOS/Android
-version increments and GCP synchronization. Prepare 1.0.5 from merged PR #32/#33
-main, using existing EAS signing and remote counters (previous Android14/iOS16).
-Update only the compatible shell-quote transitive dependency to remove the
-critical audit finding. Back up DB/media and rehearse 0034→0035 on restored data
-before GCP rollout. Preserve existing store metadata and verify exact signed
-artifacts before upload/review. Current App Review ID is not an email; valid
-review access is requested while independent release work proceeds. Plan:
-`docs/superpowers/plans/2026-10-20-release-1.0.5-gcp.md`.
+2026-10-20 WP9 release/deployment completed: candidate `1550166` contains merged
+PR #32/#33 and version 1.0.5, with existing EAS signing and Android15/iOS17 counters.
+Frontend1001/typecheck/lint/release-config/web checks pass; compatible shell-quote
+1.12.0 removes the critical audit finding. GCP runs the verified candidate with
+single head0035 after coordinated DB/media backups and actual restore/migration
+rehearsals, including the exact running image. Public HTTPS, client-compatibility,
+bundle/source and unchanged-private-environment checks pass. IPA/AAB identity,
+source, signing/profile and Android16KB checks pass. Apple build17 is VALID and
+1.0.5 is WAITING_FOR_REVIEW; Google accepted release6/code15 for review with its
+automatic pre-review checks running. Existing reviewer username/password matched
+the same production account; only store login instructions were corrected to its
+registered email, with no account/password change. Approval/public availability
+remain external store steps. Evidence: `docs/qa/RELEASE_1_0_5_GCP_2026-10-20.md`;
+plan: `docs/superpowers/plans/2026-10-20-release-1.0.5-gcp.md`.
 
 2026-10-09 WP9 store follow-up: user explicitly requested store submission and
 approved 1.0.4 for public review. ASC currently reports live 1.0.3/build 14;
