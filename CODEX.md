@@ -1,5 +1,15 @@
 # Codex Work Backlog
 
+2026-10-20 WP9 release/deployment follow-up: the user requested one-step iOS/Android
+version increments and GCP synchronization. Prepare 1.0.5 from merged PR #32/#33
+main, using existing EAS signing and remote counters (previous Android14/iOS16).
+Update only the compatible shell-quote transitive dependency to remove the
+critical audit finding. Back up DB/media and rehearse 0034→0035 on restored data
+before GCP rollout. Preserve existing store metadata and verify exact signed
+artifacts before upload/review. Current App Review ID is not an email; valid
+review access is requested while independent release work proceeds. Plan:
+`docs/superpowers/plans/2026-10-20-release-1.0.5-gcp.md`.
+
 2026-10-09 WP9 store follow-up: user explicitly requested store submission and
 approved 1.0.4 for public review. ASC currently reports live 1.0.3/build 14;
 1.0.3/build 15 was uploaded via EAS submission `6a91c47b` (FINISHED), with
