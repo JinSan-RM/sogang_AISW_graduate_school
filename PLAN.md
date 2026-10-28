@@ -1,5 +1,13 @@
 # AI·SW CAMPUS Phase 2-4 Plan
 
+2026-10-28 WP5/WP9 P0 HEIC web-display correction: preserve HEIC/HEIF source
+bytes and media/attachment metadata; provide authenticated, signed JPEG display
+copies to web and installed mobile clients. New uploads generate copies eagerly;
+existing assets generate them on first authorized display. Copies use a 2048px
+maximum edge, quality 88, applied orientation and no EXIF; explicit original
+access retains original bytes. No schema or frontend-route change. Local runtime
+evidence and deployment/device limits: `docs/qa/HEIC_DISPLAY_2026-10-28.md`.
+
 2026-10-20 WP9 release/deployment: the user explicitly authorized one-step native
 updates and GCP synchronization. Verified candidate `1550166` deploys merged
 PR #32/#33 with database head `0035_poll_question_deadline`. Version 1.0.5 uses

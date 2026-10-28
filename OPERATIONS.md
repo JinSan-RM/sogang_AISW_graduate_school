@@ -1,5 +1,28 @@
 # Runtime Operations
 
+## HEIC display copies (2026-10-28, WP5/WP9)
+
+Install the pinned `Pillow`/`pillow-heif` dependencies with the backend requirements.
+Supported Windows and production Python 3.12 Linux wheels include the HEIC decoder;
+no external image service or new environment variable is used. Rebuild the backend
+image before deploying this change. No Alembic migration or mobile release is needed.
+
+The normal authenticated media access URL now selects a signed JPEG preview for
+HEIC/HEIF. Existing uploaded files are covered without changing database rows:
+their first preview request generates a sidecar beside the original. New uploads
+generate that sidecar before success. Original access is available through
+`GET /api/media/{id}/access-url?original=true` under the same authorization.
+Previously issued original file capabilities retain their behavior and expiry.
+
+Preview files are `<stored_filename>.display-v1.jpg` in the existing durable media
+directories. Include them in the normal media-volume backup; originals remain
+byte-identical. Missing copies regenerate. Pixel/decoder failures return normalized
+`MEDIA_CONVERSION_FAILED`; inspect the original through authorized original access.
+Never publish the storage directory or use a public conversion service. A deployment
+smoke check should request a known HEIC as a member, verify `image/jpeg`/JPEG decoding,
+then request `original=true` and compare the original hash. Refresh an already open
+web page after deployment so it obtains the new representation URL.
+
 This runbook applies to the shared `docker-compose.yml` plus the
 `docker-compose.production.example.yml` production overlay. Commands must be
 run from the repository root. Never run the production overlay by itself.

@@ -348,10 +348,19 @@ def test_upload_accepts_safe_images_documents_presentations_and_data_files(
     content_type: str,
     body: bytes,
 ) -> None:
+    if content_type in {"image/heic", "image/heif"}:
+        from PIL import Image
+        from pillow_heif import from_pillow
+
+        encoded = io.BytesIO()
+        from_pillow(Image.new("RGB", (16, 16), "blue")).save(encoded)
+        body = encoded.getvalue()
     response = _upload(api, filename=filename, content_type=content_type, body=body)
 
     assert response.status_code == 200
-    access = api.client.get(response.json()["data"]["url"], headers=api.headers["owner"])
+    access = api.client.get(
+        response.json()["data"]["url"], params={"original": True}, headers=api.headers["owner"]
+    )
     downloaded = _signed_file_response(api, access)
     assert downloaded.status_code == 200
     assert downloaded.content == body

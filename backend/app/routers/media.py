@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.deps import get_current_user, get_db
 from app.errors import AppException
+from app.media_previews import ensure_jpeg_preview, is_heif
 from app.media_service import (
+    MediaDownload,
     create_media_access_url,
     delete_stored_upload,
     media_access_reference,
@@ -45,14 +47,14 @@ def _media_payload(media: MediaAsset) -> dict:
     ).model_dump()
 
 
-def _access_url_payload(media: MediaAsset) -> dict:
-    url, expires_in = create_media_access_url(media)
+def _access_url_payload(media: MediaAsset, *, original: bool = False) -> dict:
+    url, expires_in = create_media_access_url(media, original=original)
     return MediaAccessUrlPayload(url=url, expires_in=expires_in).model_dump()
 
 
-def _issue_access_url(media: MediaAsset | None, db: Session, user: User) -> dict:
+def _issue_access_url(media: MediaAsset | None, db: Session, user: User, *, original: bool = False) -> dict:
     authorized_media = require_media_access(db, media, user)
-    return success_response(_access_url_payload(authorized_media))
+    return success_response(_access_url_payload(authorized_media, original=original))
 
 
 def migrate_private_files(db: Session) -> None:
@@ -114,13 +116,14 @@ async def upload_media(
 @router.get("/access-url")
 def create_media_access_url_from_reference(
     path: str = Query(..., min_length=1, max_length=500),
+    original: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Resolve stable and legacy server-relative references without exposing storage paths."""
 
     media = resolve_media_reference(db, path)
-    return _issue_access_url(media, db, user)
+    return _issue_access_url(media, db, user, original=original)
 
 
 def _serve_signed_media(
@@ -129,6 +132,7 @@ def _serve_signed_media(
     expires: int,
     signature: str,
     db: Session,
+    preview: bool = False,
 ) -> FileResponse:
     media = db.get(MediaAsset, media_id)
     if media is None or media.status != "ready":
@@ -137,13 +141,18 @@ def _serve_signed_media(
             message="Media access URL expired or is invalid.",
             code="FORBIDDEN",
         )
-    validate_media_file_signature(media, expires=expires, signature=signature)
+    validate_media_file_signature(media, expires=expires, signature=signature, preview=preview)
 
     path: Path = migrate_private_asset(media) if media.is_private else media_storage_path(media)
     if not path.is_file():
         raise AppException(status_code=404, message="Media file not found.", code="NOT_FOUND")
 
     download = resolve_media_download(media, path)
+    if preview:
+        if not is_heif(media.content_type):
+            raise AppException(status_code=404, message="Media preview not found.", code="NOT_FOUND")
+        path = ensure_jpeg_preview(path)
+        download = MediaDownload(filename=f"{Path(download.filename).stem}.jpg", content_type="image/jpeg")
 
     response = FileResponse(
         path,
@@ -154,6 +163,18 @@ def _serve_signed_media(
     response.headers["Cache-Control"] = "private, no-store" if media.is_private else "private, max-age=60"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
+
+
+@router.get("/previews/{media_id}")
+def serve_media_preview(
+    media_id: int,
+    expires: int = Query(...),
+    signature: str = Query(..., min_length=64, max_length=64),
+    db: Session = Depends(get_db),
+):
+    return _serve_signed_media(
+        media_id, expires=expires, signature=signature, db=db, preview=True,
+    )
 
 
 @router.get("/files/{media_id}")
@@ -193,21 +214,23 @@ def download_private_media_compat(
 @router.get("/{media_id}/access-url")
 def issue_media_access_url(
     media_id: int,
+    original: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return _issue_access_url(db.get(MediaAsset, media_id), db, user)
+    return _issue_access_url(db.get(MediaAsset, media_id), db, user, original=original)
 
 
 @router.get("/{media_id}/download-link")
 def create_private_download_link_compat(
     media_id: int,
+    original: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Backward-compatible alias; authorization now covers every media context."""
 
-    return _issue_access_url(db.get(MediaAsset, media_id), db, user)
+    return _issue_access_url(db.get(MediaAsset, media_id), db, user, original=original)
 
 
 @router.get("/{media_id}")

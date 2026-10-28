@@ -1,5 +1,18 @@
 # Phase 2 API Contract
 
+2026-10-28 WP5/WP9 HEIC display: default media access requests (ID, legacy path
+resolver and download-link alias) issue `/api/media/previews/{id}` signed URLs
+for HEIC/HEIF; the response envelope and stable stored references stay unchanged.
+These responses contain `image/jpeg` and a `.jpg` inline filename. Add
+`original=true` to any access request to issue the original signed file URL;
+existing `/media/files/{id}` and `/media/private/{id}` capabilities retain their
+original behavior. Preview signatures bind their representation and cannot be
+substituted into original URLs. Metadata retains the original MIME/name/size.
+New HEIC uploads must decode and generate a JPEG before success; corrupt images
+or images over 50,000,000 decoded pixels return `415 MEDIA_CONVERSION_FAILED`
+with partial uploads removed. Existing HEICs generate copies lazily. JPEG display
+copies apply orientation, fit within 2048x2048, use quality 88, and omit EXIF.
+
 2026-10-08 WP6/WP8/WP9 supplied-reference participant profiles: voted rows from
 `GET /posts/{id}/poll/participants` additionally return nullable current `major`
 for the member sheet subtitle. Keep `user_id`, current `nickname`, `cohort` and

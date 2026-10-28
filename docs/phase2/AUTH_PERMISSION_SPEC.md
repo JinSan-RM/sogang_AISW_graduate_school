@@ -1,5 +1,14 @@
 # Phase 2 Auth and Permission Spec
 
+2026-10-28 WP5/WP9 HEIC display copies inherit the original media authorization
+for every access-URL resolver, including `original=true`. The new signed preview
+route validates the media ID, expiry and preview-specific signature before any
+conversion. Preview tokens cannot authorize original bytes. Private JPEGs remain
+beside protected private originals and use `private, no-store`; ordinary previews
+use the existing private short cache. Account deletion stages/restores both files
+for unattached media, retains both for retained attachments, and conversion cannot
+publish a sidecar after its source has been removed. No public upload mount is added.
+
 2026-10-08 WP6/WP8/WP9 supplied-reference participant sheet: voted summaries
 add only nullable current major alongside existing name/cohort. This implements
 the user's supplied profile-row design; contact/company/roster fields remain

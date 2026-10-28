@@ -1,5 +1,13 @@
 # Phase 2 DB Schema Decisions
 
+2026-10-28 WP5/WP9 HEIC display copies need no schema migration. `media_assets`
+keeps the original filename, MIME, byte size, stored filename and stable reference;
+attachments keep their existing media IDs and order. A disposable, versioned
+`<stored_filename>.display-v1.jpg` sidecar lives in the same protected storage
+directory as its source. JPEGs are regenerable and do not get a second media row.
+Backups continue preserving original bytes; copying the existing durable media
+volumes also preserves generated sidecars.
+
 2026-10-08 WP8/WP9 hierarchy concurrency: all administrator board create/update/archive transactions acquire `pg_advisory_xact_lock(hashtext('aisw-board-navigation-mutations'))` before reading or locking board rows. This serializes cycle validation and descendant archival, preventing active children beneath concurrently archived parents. The SQLite path has no PostgreSQL advisory lock; runtime concurrency is verified against isolated PostgreSQL. No schema migration is added for this lock.
 
 2026-10-07 WP6/WP8/WP9 notice body images reuse `posts.metadata.notice_body`

@@ -15,10 +15,12 @@ from urllib.parse import unquote, urlencode, urlsplit
 from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config import BACKEND_ROOT, settings
 from app.deps import can_read_board
 from app.errors import AppException
+from app.media_previews import ensure_jpeg_preview, is_heif, preview_path
 from app.models.banner import Banner
 from app.models.board import Board
 from app.models.faq import FAQ, FAQAttachment
@@ -274,7 +276,7 @@ def _matches_declared_content(path: Path, content_type: str) -> bool:
     if content_type == "image/webp":
         return len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP"
     if content_type in {"image/heic", "image/heif"}:
-        brands = {b"heic", b"heix", b"hevc", b"hevx"} if content_type == "image/heic" else {b"mif1", b"msf1", b"heif"}
+        brands = {b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1", b"heif"}
         return len(header) >= 12 and header[4:8] == b"ftyp" and header[8:12] in brands
     if content_type == "application/pdf":
         return header.startswith(b"%PDF-")
@@ -345,8 +347,11 @@ async def store_upload(upload: UploadFile, *, private: bool) -> StoredUpload:
                 code="MEDIA_TYPE_MISMATCH",
             )
         os.replace(temporary_path, final_path)
+        if is_heif(declaration.content_type):
+            await run_in_threadpool(ensure_jpeg_preview, final_path)
     except BaseException:
         temporary_path.unlink(missing_ok=True)
+        preview_path(final_path).unlink(missing_ok=True)
         final_path.unlink(missing_ok=True)
         raise
 
@@ -360,6 +365,7 @@ async def store_upload(upload: UploadFile, *, private: bool) -> StoredUpload:
 
 
 def delete_stored_upload(stored: StoredUpload) -> None:
+    preview_path(stored.path).unlink(missing_ok=True)
     stored.path.unlink(missing_ok=True)
 
 
@@ -592,24 +598,27 @@ def profile_image_media_id(db: Session, user: User) -> int | None:
         return None
 
 
-def _signature_payload(media: MediaAsset, expires: int) -> bytes:
+def _signature_payload(media: MediaAsset, expires: int, *, preview: bool = False) -> bytes:
     stored_filename = _safe_stored_filename(media.stored_filename)
-    return f"media-file:v1:{media.id}:{stored_filename}:{expires}".encode("utf-8")
+    purpose = "media-preview:v1" if preview else "media-file:v1"
+    return f"{purpose}:{media.id}:{stored_filename}:{expires}".encode("utf-8")
 
 
-def media_file_signature(media: MediaAsset, expires: int) -> str:
+def media_file_signature(media: MediaAsset, expires: int, *, preview: bool = False) -> str:
     return hmac.new(
         settings.auth_secret_key.encode("utf-8"),
-        _signature_payload(media, expires),
+        _signature_payload(media, expires, preview=preview),
         hashlib.sha256,
     ).hexdigest()
 
 
-def create_media_access_url(media: MediaAsset, *, now: int | None = None) -> tuple[str, int]:
+def create_media_access_url(media: MediaAsset, *, original: bool = False, now: int | None = None) -> tuple[str, int]:
     current_time = int(time.time()) if now is None else now
     expires = current_time + settings.media_access_url_expire_seconds
-    query = urlencode({"expires": expires, "signature": media_file_signature(media, expires)})
-    return f"/api/media/files/{media.id}?{query}", settings.media_access_url_expire_seconds
+    preview = is_heif(media.content_type) and not original
+    query = urlencode({"expires": expires, "signature": media_file_signature(media, expires, preview=preview)})
+    endpoint = "previews" if preview else "files"
+    return f"/api/media/{endpoint}/{media.id}?{query}", settings.media_access_url_expire_seconds
 
 
 def validate_media_file_signature(
@@ -618,9 +627,10 @@ def validate_media_file_signature(
     expires: int,
     signature: str,
     now: int | None = None,
+    preview: bool = False,
 ) -> None:
     current_time = int(time.time()) if now is None else now
-    expected = media_file_signature(media, expires)
+    expected = media_file_signature(media, expires, preview=preview)
     if expires < current_time or not hmac.compare_digest(signature, expected):
         raise AppException(
             status_code=403,

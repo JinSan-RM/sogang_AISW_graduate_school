@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.author_snapshots import DELETED_USER_NICKNAME
 from app.errors import AppException
 from app.media_service import media_storage_path, private_upload_directory, public_upload_directory
+from app.media_previews import preview_path
 from app.models.audit import AccountDeletionReceipt, OperationalAuditLog
 from app.config import settings
 from app.models.auth import EmailVerificationToken, PasswordResetToken, RefreshToken
@@ -64,14 +65,14 @@ class AccountDeletionResult:
 def _media_paths_for_deletion(media: MediaAsset) -> tuple[Path, ...]:
     primary_path = media_storage_path(media)
     if not media.is_private:
-        return (primary_path,)
+        return (primary_path, preview_path(primary_path))
 
     # A private asset may still be in the legacy public directory until the
     # startup compatibility migration has moved it. Remove either location.
     legacy_path = public_upload_directory() / primary_path.name
     if legacy_path == primary_path:
-        return (primary_path,)
-    return (primary_path, legacy_path)
+        return (primary_path, preview_path(primary_path))
+    return (primary_path, preview_path(primary_path), legacy_path, preview_path(legacy_path))
 
 
 def _stage_files(media_items: list[MediaAsset]) -> list[StagedFileDeletion]:

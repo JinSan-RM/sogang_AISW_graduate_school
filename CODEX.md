@@ -1,5 +1,13 @@
 # Codex Work Backlog
 
+2026-10-28 WP5/WP9 P0 HEIC display compatibility: implemented protected JPEG
+display copies for new and existing HEIC/HEIF assets while retaining originals,
+IDs, original metadata and access policy. Representation-scoped signatures,
+atomic bounded conversion, private cache/deletion rollback and async upload
+offloading are covered by API/lifecycle regressions. The three affected legacy
+HEIC copies decode as JPEG in Chromium without changing original hashes. Local
+verification and remaining deployment/native QA: `docs/qa/HEIC_DISPLAY_2026-10-28.md`.
+
 2026-10-20 WP9 release/deployment completed: candidate `1550166` contains merged
 PR #32/#33 and version 1.0.5, with existing EAS signing and Android15/iOS17 counters.
 Frontend1001/typecheck/lint/release-config/web and full candidate CI pass; compatible shell-quote
