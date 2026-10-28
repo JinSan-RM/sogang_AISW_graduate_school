@@ -5,6 +5,9 @@ app can display the photos. The supplied screenshot selects Networking > Activit
 certification, not the administrator guide list. Posts 991/990/989 use HEIC media
 1161/1160/1159. Ordinary member authorization and stored files were valid.
 
+Production deployment subsequently completed at 10:52 KST on the user's explicit
+request. See `HEIC_DEPLOYMENT_2026-10-28.md` for live API/browser evidence and backup.
+
 ## Implementation
 
 - Preserve original bytes and all media/attachment IDs and original metadata.
@@ -54,7 +57,10 @@ in the original checkout; original photos and preview bytes are not committed.
 - Local Docker runtime smoke is **blocked**: Docker Desktop Linux daemon is not
   running (`dockerDesktopLinuxEngine` named pipe is absent). Production wheel
   availability is verified; this is not a Linux runtime pass.
+- Superseding deployment gate: the production candidate image subsequently passed
+  Linux import/decoder checks, **658 tests with 2 PostgreSQL-only skips**, conversion
+  of read-only production copies, and live protected JPEG API/browser checks.
 - `Phase 5 QA`: physical iOS/Android and HDR/wide-gamut visual comparison.
-- Operational deployment is pending; the live website still serves its previous
-  backend until the candidate backend image is deployed. Existing HEICs require
-  no DB backfill and generate JPEGs when accessed after deployment.
+- Operational deployment completed with backend/worker source `68ae289`.
+  Existing HEICs need no DB backfill; the three affected JPEG sidecars were generated
+  through authorized live requests, preserving their pre-deployment original hashes.

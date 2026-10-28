@@ -6,7 +6,10 @@ copies to web and installed mobile clients. New uploads generate copies eagerly;
 existing assets generate them on first authorized display. Copies use a 2048px
 maximum edge, quality 88, applied orientation and no EXIF; explicit original
 access retains original bytes. No schema or frontend-route change. Local runtime
-evidence and deployment/device limits: `docs/qa/HEIC_DISPLAY_2026-10-28.md`.
+evidence and device limits: `docs/qa/HEIC_DISPLAY_2026-10-28.md`. The user then
+authorized production deployment; backend/worker `68ae289` is live with all three
+affected images verified in a browser. Deployment evidence:
+`docs/qa/HEIC_DEPLOYMENT_2026-10-28.md`.
 
 2026-10-20 WP9 release/deployment: the user explicitly authorized one-step native
 updates and GCP synchronization. Verified candidate `1550166` deploys merged
