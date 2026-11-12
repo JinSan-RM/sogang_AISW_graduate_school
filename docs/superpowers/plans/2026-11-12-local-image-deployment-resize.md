@@ -18,17 +18,22 @@ Keep a verified DB backup and original image/config snapshots. On deployment or
 resize failure, restore original images/config and/or `e2-standard-2` capacity.
 Do not change IAM or Ops Agent configuration as part of this task.
 
-- [ ] Implement and test local source-isolated image build/export, server archive
+- [x] Implement and test local source-isolated image build/export, server archive
   import verification/profile generation, and no-build production helper behavior.
-- [ ] Document commands, public build inputs, immutable references, secret handling,
+- [x] Document commands, public build inputs, immutable references, secret handling,
   initial migration and rollback. Independently review the complete change.
-- [ ] Commit the delivery change locally without pushing. Build backend locally,
+- [x] Commit the delivery change locally without pushing. Build backend locally,
   verify its source/revision and isolated application tests, and transfer archive.
-- [ ] Back up the live DB and runtime configuration privately, load verified images,
+- [x] Back up the live DB and runtime configuration privately, load verified images,
   apply the new helpers/profile, deploy without a server build, and verify health,
   exact environment/mount/port preservation and fixed DB address.
-- [ ] Confirm reserved public IP and original disk/config; stop the VM, change only
+- [x] Confirm reserved public IP and original disk/config; stop the VM, change only
   machine type to `e2-custom-medium-6144`, start it, and verify RAM, swap, services,
   both HTTPS origins, database address, and absence of OOM during startup.
-- [ ] Record exact results, limitations and backup evidence in `CODEX.md` and a
+- [x] Record exact results, limitations and backup evidence in `CODEX.md` and a
   dated QA report; commit the verification notes locally, without pushing.
+
+Completed: source `8f1ab4a`, Windows focused 68 passed, isolated Linux 706 passed
+and 7 skipped. Image-only deployment preserved runtime state and added zero
+server build records. VM resize and post-boot checks passed at 10:28 KST.
+Evidence: `docs/qa/LOCAL_IMAGE_DEPLOYMENT_RESIZE_2026-11-12.md`.

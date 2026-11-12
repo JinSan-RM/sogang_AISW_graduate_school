@@ -1,12 +1,15 @@
 # Codex Work Backlog
 
-2026-11-12 WP1/WP9 local image delivery and VM right-sizing: user authorized
-moving builds off production and delegated the 4GiB-versus-6GiB choice. Select
-`e2-custom-medium-6144` (6GiB). Implement clean committed local Linux/amd64 builds,
-checksum/revision/platform-verified imports and an ignored immutable image
-profile; production Config/Up must never build. Preserve existing credentials,
-data volumes, reserved IP, fixed DB address and current frontend image. Deployment
-and resize verification will be recorded after execution. Plan:
+2026-11-12 WP1/WP9 local image delivery and VM right-sizing completed: user
+authorized local builds and delegated the 4GiB-versus-6GiB choice. Source
+`8f1ab4a` built/exported locally; verified backend/worker images deployed without
+any new server build. Production Config/Up now require local images. Existing
+environment values/files, data mounts, ports and frontend image were preserved.
+VM is now `e2-custom-medium-6144` (6GiB), retaining its instance ID, 50GB disk,
+reserved IP and DB `172.18.0.2:5432`. Post-boot services/HTTPS/DB checks pass;
+RAM use was about 0.9GB, swap remained unused and no startup OOM was found.
+Windows focused tests 68 passed; isolated Linux suite 706 passed, 7 skipped.
+Evidence: `docs/qa/LOCAL_IMAGE_DEPLOYMENT_RESIZE_2026-11-12.md`. Plan:
 `docs/superpowers/plans/2026-11-12-local-image-deployment-resize.md`; operator steps:
 `docs/LOCAL_IMAGE_PRODUCTION_DEPLOYMENT.md`. No GitHub push.
 
