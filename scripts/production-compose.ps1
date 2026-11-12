@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("Config", "Up", "Ps", "Logs")]
+    [ValidateSet("Config", "Up", "Ps", "Logs", "Build")]
     [string]$Action = "Up",
     [string]$EnvFile = ".env.production",
     [string]$WorkerEnvFile = ".env.production.worker"
@@ -8,6 +8,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+if ($Action -eq "Build") {
+    throw "Production builds are disabled. Use the local build script and import its images."
+}
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $composeBaseFile = Join-Path $repoRoot "docker-compose.yml"
@@ -102,6 +106,64 @@ function Set-TemporaryProcessValue {
     [Environment]::SetEnvironmentVariable($Name, $Value, "Process")
 }
 
+function Test-ProductionImageReference {
+    param([AllowEmptyString()][string]$Value)
+
+    if ($Value.StartsWith("sha256:")) {
+        return $Value -cmatch '^sha256:[a-f0-9]{64}$'
+    }
+    return $Value -cmatch '^([a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?/)*[a-z0-9]+([._-][a-z0-9]+)*(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(@sha256:[a-f0-9]{64})?$'
+}
+
+function Read-ProductionImageProfile {
+    $setting = [Environment]::GetEnvironmentVariable("PRODUCTION_IMAGES_ENV_FILE", "Process")
+    $profilePath = if ($setting) { $setting } else { "deploy/production-images.env" }
+    if (-not [IO.Path]::IsPathRooted($profilePath)) {
+        $profilePath = Join-Path $repoRoot $profilePath
+    }
+    $values = @{}
+    if (Test-Path -LiteralPath $profilePath) {
+        if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) {
+            throw "Production image profile must be a regular file."
+        }
+        foreach ($rawLine in [IO.File]::ReadAllLines($profilePath)) {
+            $line = $rawLine.Trim()
+            if (-not $line -or $line.StartsWith("#")) { continue }
+            $separator = $line.IndexOf("=")
+            if ($separator -lt 1) { throw "Invalid production image profile entry." }
+            $key = $line.Substring(0, $separator)
+            $value = $line.Substring($separator + 1)
+            if ($key -cnotin @("PRODUCTION_BACKEND_IMAGE", "PRODUCTION_WORKER_IMAGE", "PRODUCTION_FRONTEND_IMAGE")) {
+                throw "Production image profile contains an unsupported key."
+            }
+            if ($values.ContainsKey($key)) { throw "Production image profile contains a duplicate image key." }
+            if (-not (Test-ProductionImageReference -Value $value)) {
+                throw "Invalid image reference in production image profile."
+            }
+            $values[$key] = $value
+        }
+    } elseif ($setting) {
+        throw "Configured production image profile does not exist."
+    }
+    return $values
+}
+
+function Assert-LocalProductionImages {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    $images = @(& docker compose @Arguments config --images)
+    if ($LASTEXITCODE -ne 0 -or $images.Count -eq 0) {
+        throw "Unable to resolve required production images."
+    }
+    foreach ($image in $images) {
+        if (-not $image) { continue }
+        & docker image inspect $image *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw "A required production image is not available locally. Import the verified local build before deploying."
+        }
+    }
+}
+
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker CLI is not installed or is not available on PATH."
 }
@@ -117,6 +179,17 @@ $cloudflareEnabled = $enabledText -eq "true"
 
 $originalProcessValues = @{}
 try {
+    $imageValues = Read-ProductionImageProfile
+    foreach ($key in @("PRODUCTION_BACKEND_IMAGE", "PRODUCTION_WORKER_IMAGE", "PRODUCTION_FRONTEND_IMAGE")) {
+        $value = [Environment]::GetEnvironmentVariable($key, "Process")
+        if ($null -eq $value -and $imageValues.ContainsKey($key)) {
+            $value = [string]$imageValues[$key]
+            Set-TemporaryProcessValue -Name $key -Value $value -OriginalValues $originalProcessValues
+        }
+        if ($null -ne $value -and -not (Test-ProductionImageReference -Value $value)) {
+            throw "Invalid production image reference for $key."
+        }
+    }
     Set-TemporaryProcessValue -Name "PRODUCTION_ENV_FILE" -Value $resolvedEnvFile -OriginalValues $originalProcessValues
     Set-TemporaryProcessValue -Name "PRODUCTION_WORKER_ENV_FILE" -Value $resolvedWorkerEnvFile -OriginalValues $originalProcessValues
     Set-TemporaryProcessValue -Name "CLOUDFLARE_ENABLED" -Value $enabledText -OriginalValues $originalProcessValues
@@ -165,15 +238,16 @@ try {
         }
         "Up" {
             Invoke-DockerCompose -Arguments ($desiredArgs + @("config", "--quiet"))
+            Assert-LocalProductionImages -Arguments $desiredArgs
             Invoke-DockerCompose -Arguments ($baseArgs + @("--profile", "cloudflare", "stop", "cloudflared"))
 
             # Keep ingress stopped until the API has been recreated with the
             # desired trust policy. The second call starts the complete stack.
             Invoke-DockerCompose -Arguments ($desiredArgs + @(
-                "up", "-d", "--build", "--force-recreate", "--wait", "--wait-timeout", "180", "backend"
+                "up", "-d", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "180", "backend"
             ))
             Invoke-DockerCompose -Arguments ($desiredArgs + @(
-                "up", "-d", "--build", "--wait", "--wait-timeout", "180"
+                "up", "-d", "--no-build", "--pull", "never", "--wait", "--wait-timeout", "180"
             ))
 
             if ($cloudflareEnabled) {

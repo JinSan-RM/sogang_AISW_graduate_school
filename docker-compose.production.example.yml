@@ -26,6 +26,7 @@ services:
         max-file: "5"
 
   backend:
+    image: ${PRODUCTION_BACKEND_IMAGE:-aisw-production-backend:latest}
     read_only: true
     restart: unless-stopped
     env_file:
@@ -70,6 +71,7 @@ services:
         max-file: "5"
 
   frontend-web:
+    image: ${PRODUCTION_FRONTEND_IMAGE:-aisw-production-frontend-web:latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile.web
@@ -170,6 +172,7 @@ services:
         max-file: "5"
 
   notification-worker:
+    image: ${PRODUCTION_WORKER_IMAGE:-aisw-production-notification-worker:latest}
     read_only: true
     restart: unless-stopped
     env_file:

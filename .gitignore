@@ -41,6 +41,7 @@ backend/venv/
 .env
 .env.production
 .env.production.worker
+deploy/production-images.env
 .env.production.before-domain
 .env*.before-domain
 .domain-env-*

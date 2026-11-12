@@ -14,6 +14,10 @@ fail() {
   exit 1
 }
 
+[[ "$action" != Build ]] || fail "Production builds are disabled. Use the local build script and import its images."
+source "$script_dir/production-images.sh"
+production_load_image_profile
+
 resolve_required_file() {
   local path="$1"
   local label="$2"
@@ -145,9 +149,10 @@ case "$action" in
     ;;
   Up)
     compose "${desired_args[@]}" config --quiet
+    production_require_local_images compose "${desired_args[@]}" config --images
     compose "${base_args[@]}" --profile cloudflare stop cloudflared
-    compose "${desired_args[@]}" up -d --build --force-recreate --wait --wait-timeout 180 backend
-    compose "${desired_args[@]}" up -d --build --wait --wait-timeout 180
+    compose "${desired_args[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 backend
+    compose "${desired_args[@]}" up -d --no-build --pull never --wait --wait-timeout 180
     if [[ "$enabled_text" == "true" ]]; then
       compose "${desired_args[@]}" ps cloudflared
     else

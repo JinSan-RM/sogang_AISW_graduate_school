@@ -16,6 +16,10 @@ fail() {
   exit 1
 }
 
+[[ "$action" != Build ]] || fail "Production builds are disabled. Use the local build script and import its images."
+source "$script_dir/production-images.sh"
+production_load_image_profile
+
 resolve_required_file() {
   local value="$1"
   local label="$2"
@@ -215,13 +219,15 @@ validate_config() {
 }
 
 validate_runtime() {
-  compose build backend
-  compose run --rm --no-deps backend python -c \
+  production_require_local_images compose config --images backend
+  # Compose run has no --no-build option. The successful image inspection above
+  # and explicit image reference prevent its missing-image build fallback.
+  compose run --rm --no-deps --pull never backend python -c \
     'from app.config import settings; settings.validate_runtime()'
 }
 
 challenge_file() {
-  compose --profile certificate run --rm --no-deps --entrypoint /bin/sh certbot \
+  compose --profile certificate run --rm --no-deps --pull never --entrypoint /bin/sh certbot \
     -ceu 'mkdir -p /var/www/certbot/.well-known/acme-challenge; printf ready > /var/www/certbot/.well-known/acme-challenge/aisw-preflight'
 }
 
@@ -230,7 +236,7 @@ ensure_challenge_server() {
   running="$(compose ps --status running --quiet nginx)"
   challenge_file >/dev/null
   if [[ -z "$running" ]]; then
-    compose --profile certificate up -d nginx-bootstrap
+    compose --profile certificate up -d --no-build --pull never nginx-bootstrap
     bootstrap_started=true
   fi
   for _ in $(seq 1 30); do
@@ -268,7 +274,7 @@ issue_certificate() {
   else
     identity_args=(--preferred-profile shortlived --ip-address "$public_ip")
   fi
-  compose --profile certificate run --rm --no-deps "$service" certonly \
+  compose --profile certificate run --rm --no-deps --pull never "$service" certonly \
     --non-interactive \
     --agree-tos \
     --no-eff-email \
@@ -281,11 +287,11 @@ issue_certificate() {
 }
 
 require_live_certificate() {
-  compose --profile certificate run --rm --no-deps --entrypoint /bin/sh certbot \
+  compose --profile certificate run --rm --no-deps --pull never --entrypoint /bin/sh certbot \
     -ceu 'test -s "/etc/letsencrypt/live/$PUBLIC_IP/fullchain.pem" && test -s "/etc/letsencrypt/live/$PUBLIC_IP/privkey.pem"' || \
     fail "A live certificate for PUBLIC_IP is required. Run Issue first."
   if [[ "$domain_enabled" == true ]]; then
-    compose --profile certificate run --rm --no-deps --entrypoint /bin/sh certbot \
+    compose --profile certificate run --rm --no-deps --pull never --entrypoint /bin/sh certbot \
       -ceu 'test -s "/etc/letsencrypt/live/$1/fullchain.pem" && test -s "/etc/letsencrypt/live/$1/privkey.pem"' -- "$tls_cert_name" || \
       fail "A live domain certificate is required. Run production-domain.sh Issue first."
   fi
@@ -350,12 +356,13 @@ case "$action" in
     ;;
   Up)
     validate_config
+    production_require_local_images compose --profile certificate config --images
     require_live_certificate
     compose --profile certificate stop nginx-bootstrap >/dev/null 2>&1 || true
     bootstrap_started=false
     docker compose --env-file "$resolved_env_file" -f "$compose_base_file" -f "$compose_production_file" \
       --profile cloudflare stop cloudflared >/dev/null 2>&1 || true
-    compose up -d --build --force-recreate --wait --wait-timeout 300
+    compose up -d --no-build --pull never --force-recreate --wait --wait-timeout 300
     running_connector="$(docker compose --env-file "$resolved_env_file" -f "$compose_base_file" \
       -f "$compose_production_file" --profile cloudflare ps --status running --quiet cloudflared)"
     [[ -z "$running_connector" ]] || fail "CLOUDFLARE_ENABLED=false but cloudflared is running."
@@ -364,7 +371,7 @@ case "$action" in
   Renew)
     validate_config
     require_live_certificate
-    compose --profile certificate run --rm --no-deps certbot renew --quiet \
+    compose --profile certificate run --rm --no-deps --pull never certbot renew --quiet \
       --webroot --webroot-path /var/www/certbot
     compose exec nginx nginx -t
     compose exec nginx nginx -s reload
@@ -373,7 +380,7 @@ case "$action" in
   RenewDryRun)
     validate_config
     require_live_certificate
-    compose --profile certificate run --rm --no-deps certbot renew --dry-run \
+    compose --profile certificate run --rm --no-deps --pull never certbot renew --dry-run \
       --webroot --webroot-path /var/www/certbot
     ;;
   Ps)

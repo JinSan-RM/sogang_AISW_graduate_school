@@ -1,5 +1,17 @@
 # AI·SW CAMPUS Phase 2-4 Plan
 
+2026-11-12 WP1/WP9 deployment decision: build Linux/amd64 application images
+on the developer's local Docker host from a clean committed source archive.
+Transfer a checksum-verified image archive over the existing SSH connection;
+production imports the images and uses pinned image IDs from its ignored
+`deploy/production-images.env` profile. Production configuration validation and
+startup must never build images. Keep production credentials and runtime data
+on the VM. The user delegated the 4GB-versus-6GB choice; use
+`e2-custom-medium-6144` (6GiB, shared-core medium) as the first reduction from
+`e2-standard-2`, retaining the existing VM, reserved public IP, disk, swap,
+database `172.18.0.2:5432` and ingress. This changes delivery and VM capacity,
+not the single-VM application/database architecture.
+
 2026-10-28 WP5/WP9 P0 HEIC web-display correction: preserve HEIC/HEIF source
 bytes and media/attachment metadata; provide authenticated, signed JPEG display
 copies to web and installed mobile clients. New uploads generate copies eagerly;

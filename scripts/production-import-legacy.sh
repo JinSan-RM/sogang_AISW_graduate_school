@@ -15,6 +15,9 @@ fail() {
   exit 1
 }
 
+source "$script_dir/production-images.sh"
+production_load_image_profile
+
 resolve_required_file() {
   local value="$1"
   local label="$2"
@@ -93,7 +96,7 @@ ensure_empty_volume() {
   if ! docker volume inspect "$volume" >/dev/null 2>&1; then
     docker volume create "$volume" >/dev/null
   fi
-  entry_count="$(docker run --rm --network none --read-only \
+  entry_count="$(docker run --rm --pull never --network none --read-only \
     --mount "type=volume,source=$volume,target=/target,readonly" \
     "$archive_image" sh -ceu 'find /target -mindepth 1 -maxdepth 1 -print | wc -l')"
   [[ "$entry_count" == 0 ]] || fail "Refusing to overwrite non-empty Docker volume: $volume"
@@ -102,7 +105,7 @@ ensure_empty_volume() {
 restore_media_directory() {
   local source="$1"
   local volume="$2"
-  docker run --rm --network none --read-only \
+  docker run --rm --pull never --network none --read-only \
     --mount "type=bind,source=$source,target=/source,readonly" \
     --mount "type=volume,source=$volume,target=/target" \
     --tmpfs /tmp \
@@ -115,6 +118,23 @@ restore_media_directory() {
 command -v docker >/dev/null 2>&1 || fail "Docker CLI is not installed or unavailable on PATH."
 command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required."
 command -v tar >/dev/null 2>&1 || fail "tar is required."
+
+# Resolve and inspect the prebuilt runtime before creating any import outputs,
+# containers, databases, or volumes. A fresh host must load the image bundle first.
+resolved_env_file="$(resolve_required_file "$env_file" "Production environment")"
+resolved_worker_env_file="$(resolve_required_file "$worker_env_file" "Production worker environment")"
+export PRODUCTION_ENV_FILE="$resolved_env_file"
+export PRODUCTION_WORKER_ENV_FILE="$resolved_worker_env_file"
+export CLOUDFLARE_ENABLED=false
+compose_args=(
+  --env-file "$resolved_env_file"
+  -f "$repo_root/docker-compose.yml"
+  -f "$repo_root/docker-compose.production.example.yml"
+  -f "$repo_root/docker-compose.ip.yml"
+)
+compose config --quiet
+production_require_local_images compose config --images backend db
+
 [[ "$expected_source_manifest" =~ ^[0-9a-fA-F]{64}$ ]] || \
   fail "Pass the expected 64-character source manifest SHA-256 as argument 2."
 
@@ -152,8 +172,6 @@ attachment_count="$(find "$attachment_source" -maxdepth 1 -type f -print | wc -l
 [[ -z "$(find "$attachment_source" -maxdepth 1 -type f -size 0 -print -quit)" ]] || \
   fail "Attachment source contains an empty file."
 
-resolved_env_file="$(resolve_required_file "$env_file" "Production environment")"
-resolved_worker_env_file="$(resolve_required_file "$worker_env_file" "Production worker environment")"
 production_database="$(require_env_value POSTGRES_DB)"
 database_url="$(require_env_value DATABASE_URL)"
 production_media_volume="$(require_env_value PRODUCTION_MEDIA_VOLUME_NAME)"
@@ -161,16 +179,6 @@ production_private_media_volume="$(require_env_value PRODUCTION_PRIVATE_MEDIA_VO
 [[ "$database_url" == *"/$production_database" ]] || \
   fail "DATABASE_URL must end with /POSTGRES_DB and must not contain query parameters."
 
-export PRODUCTION_ENV_FILE="$resolved_env_file"
-export PRODUCTION_WORKER_ENV_FILE="$resolved_worker_env_file"
-export CLOUDFLARE_ENABLED=false
-compose_args=(
-  --env-file "$resolved_env_file"
-  -f "$repo_root/docker-compose.yml"
-  -f "$repo_root/docker-compose.production.example.yml"
-  -f "$repo_root/docker-compose.ip.yml"
-)
-compose config --quiet
 bash "$repo_root/scripts/production-ip.sh" Config "$resolved_env_file" "$resolved_worker_env_file"
 
 running_services="$(compose ps --status running --quiet backend notification-worker nginx certificate-renewer)"
@@ -184,7 +192,7 @@ output_root="$source_root/migration-output-$timestamp"
 install -d -m 0700 "$output_root" "$output_root/media" "$output_root/private-media" \
   "$output_root/reports" "$output_root/artifacts"
 
-compose up -d --wait --wait-timeout 120 db
+compose up -d --no-build --pull never --wait --wait-timeout 120 db
 production_table_count="$(compose exec -T db sh -ceu '
   psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --tuples-only --no-align \
     --command "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = current_schema()"
@@ -201,15 +209,15 @@ compose exec -T -e REVIEW_DATABASE="$review_database" db sh -ceu '
   createdb --username "$POSTGRES_USER" "$REVIEW_DATABASE"
 '
 
-compose run --rm --no-deps -e DATABASE_URL="$review_database_url" backend python -m app.migrate
-compose run --rm --no-deps -e DATABASE_URL="$review_database_url" backend python -c '
+compose run --rm --no-deps --pull never -e DATABASE_URL="$review_database_url" backend python -m app.migrate
+compose run --rm --no-deps --pull never -e DATABASE_URL="$review_database_url" backend python -c '
 from app.database import SessionLocal
 from app.seed import seed_reference_data
 with SessionLocal() as session:
     seed_reference_data(session)
 '
 
-compose run --rm --no-deps \
+compose run --rm --no-deps --pull never \
   --user "$(id -u):$(id -g)" \
   -e DATABASE_URL="$review_database_url" \
   --volume "$source_root:/migration/input:ro" \
@@ -226,7 +234,7 @@ compose run --rm --no-deps \
     --report-dir /migration/output/reports \
     --apply > "$output_root/reports/import-output.json"
 
-compose run --rm --no-deps \
+compose run --rm --no-deps --pull never \
   --user "$(id -u):$(id -g)" \
   -e DATABASE_URL="$review_database_url" \
   --volume "$output_root:/migration/output" \
@@ -237,7 +245,7 @@ compose run --rm --no-deps \
     --report /migration/output/reports/media-verification.json \
     > "$output_root/reports/media-verification-output.json"
 
-compose run --rm --no-deps \
+compose run --rm --no-deps --pull never \
   --user "$(id -u):$(id -g)" \
   -e DATABASE_URL="$review_database_url" \
   --volume "$output_root:/migration/output" \
@@ -342,7 +350,7 @@ compose exec -T -e RESTORE_PATH="$remote_restore_dump" db sh -ceu 'rm -f -- "$RE
 restore_media_directory "$output_root/media" "$production_media_volume"
 restore_media_directory "$output_root/private-media" "$production_private_media_volume"
 
-compose run --rm --no-deps \
+compose run --rm --no-deps --pull never \
   -e DATABASE_URL="$database_url" \
   -e EXPECTED_MANIFEST="$media_manifest" \
   backend sh -ceu '

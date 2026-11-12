@@ -1,5 +1,15 @@
 # Codex Work Backlog
 
+2026-11-12 WP1/WP9 local image delivery and VM right-sizing: user authorized
+moving builds off production and delegated the 4GiB-versus-6GiB choice. Select
+`e2-custom-medium-6144` (6GiB). Implement clean committed local Linux/amd64 builds,
+checksum/revision/platform-verified imports and an ignored immutable image
+profile; production Config/Up must never build. Preserve existing credentials,
+data volumes, reserved IP, fixed DB address and current frontend image. Deployment
+and resize verification will be recorded after execution. Plan:
+`docs/superpowers/plans/2026-11-12-local-image-deployment-resize.md`; operator steps:
+`docs/LOCAL_IMAGE_PRODUCTION_DEPLOYMENT.md`. No GitHub push.
+
 2026-11-12 WP1/WP9 operational configuration: user-requested production DB
 address is fixed at `172.18.0.2:5432` for the existing SSH-tunnel client. The
 default bridge keeps `172.18.0.0/16` and gateway `.1`, with automatic allocations

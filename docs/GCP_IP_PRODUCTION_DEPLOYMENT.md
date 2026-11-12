@@ -1,5 +1,9 @@
 # GCP single-VM public-IP production rehearsal
 
+Application delivery now follows [local image builds and image-only deployment](LOCAL_IMAGE_PRODUCTION_DEPLOYMENT.md).
+Import verified images before Config or initial provisioning; production helpers
+do not build or pull application images.
+
 This runbook deploys the production runtime to one Debian VM and publishes it
 directly at `https://34.50.35.119`. It intentionally does not use Cloudflare or
 a domain. The same HTTPS origin serves the PC web build and the API used by
