@@ -21,7 +21,10 @@ and [Certbot short-lived certificate guidance](https://letsencrypt.org/2026/03/1
 - VM public IPv4: `34.50.35.119` (reserved/static in GCP).
 - Public ports: TCP 80 and 443 only. Port 80 serves ACME HTTP-01 and redirects
   normal traffic to HTTPS after startup.
-- PostgreSQL: private Compose network only; no host port.
+- PostgreSQL: `172.18.0.2:5432` on the private Compose network; no host port.
+  Backend and worker continue connecting to `db:5432`.
+- Default bridge: subnet `172.18.0.0/16`, gateway `172.18.0.1`, automatic
+  allocation pool `172.18.128.0/17`. The DB's fixed address is outside that pool.
 - Backend and web fallback bindings: host loopback only (`127.0.0.1`).
 - Trusted reverse-proxy peer: `172.30.251.14/32` on the private
   `ip_ingress` network.
@@ -32,6 +35,34 @@ and [Certbot short-lived certificate guidance](https://letsencrypt.org/2026/03/1
 Do not expose ports 5432, 8000, or 8080 in the GCP firewall. Do not delete the
 source archive, extracted attachments, migration reports, or coordinated
 backup set until PC web and both physical-device checks pass.
+
+### Fixed database address for SSH clients
+
+The production overlay fixes PostgreSQL at `172.18.0.2:5432`. DBeaver/DataGrip
+can use the existing SSH server `34.50.35.119:22`, database host `172.18.0.2`
+and database port `5432`, with the existing database name and credentials.
+This does not publish a database port on the VM or change the GCP firewall.
+
+The four `PRODUCTION_DB_*` values in `.env.production.example` expose the
+subnet, gateway, fixed DB address and automatic allocation range. For another
+host, choose a non-overlapping subnet and keep the DB address inside the subnet
+but outside its automatic allocation range. Do not reserve the DB address again
+through `aux_addresses`; that would prevent the DB from using it.
+
+Applying this configuration to an already-created dynamic network requires a
+one-time, coordinated network replacement. Back up and validate the database,
+stop writers, preserve the exact running images/environment/volumes, disconnect
+every default-network consumer, and replace only the default network. Recreate
+the DB from the production overlay, reconnect the other consumers with their
+service aliases, resume services and reload Nginx. Never remove data volumes.
+An ordinary `production-domain.sh Up` is not a substitute for this initial
+network migration: it rebuilds application images and cannot remove a network
+that still has connected containers.
+
+Docker's [IPAM documentation](https://docs.docker.com/reference/compose-file/networks/#ipam)
+and [static-address restart guidance](https://docs.docker.com/reference/cli/docker/network/connect/#network-implications-of-stopping-pausing-or-restarting-containers)
+describe the allocation separation. Operational evidence for this VM is in
+`docs/qa/STATIC_PRODUCTION_DB_IP_2026-11-12.md`.
 
 ## 1. Check out the deployment branch
 

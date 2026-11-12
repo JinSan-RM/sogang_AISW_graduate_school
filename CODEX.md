@@ -1,5 +1,15 @@
 # Codex Work Backlog
 
+2026-11-12 WP1/WP9 operational configuration: user-requested production DB
+address is fixed at `172.18.0.2:5432` for the existing SSH-tunnel client. The
+default bridge keeps `172.18.0.0/16` and gateway `.1`, with automatic allocations
+restricted to `172.18.128.0/17`. A checked private DB backup preceded the network
+replacement; two actual DB recreations retained `.2`, all 40 public-table counts,
+and exact runtime images/environment/mounts/ports. Backend DNS/TCP and both HTTPS
+readiness/web checks passed; maintenance took 43.08 seconds. Targeted deployment
+tests: 19 passed. Source and evidence:
+`docs/qa/STATIC_PRODUCTION_DB_IP_2026-11-12.md`. No schema/application release.
+
 2026-10-28 WP5/WP9 P0 HEIC display compatibility: implemented protected JPEG
 display copies for new and existing HEIC/HEIF assets while retaining originals,
 IDs, original metadata and access policy. Representation-scoped signatures,

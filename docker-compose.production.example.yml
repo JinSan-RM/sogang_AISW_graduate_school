@@ -10,6 +10,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
     volumes:
       - production_pgdata:/var/lib/postgresql/data
+    networks:
+      default:
+        ipv4_address: ${PRODUCTION_DB_IP:-172.18.0.2}
     # PostgreSQL is reachable only on the private Compose network.
     healthcheck:
       interval: 10s
@@ -194,6 +197,14 @@ volumes:
     name: ${PRODUCTION_PRIVATE_MEDIA_VOLUME_NAME:-aisw-production_production_private_media}
 
 networks:
+  # Reserve the low half for fixed addresses; automatic allocations cannot
+  # claim the database address during container recreation.
+  default:
+    ipam:
+      config:
+        - subnet: ${PRODUCTION_DB_SUBNET:-172.18.0.0/16}
+          gateway: ${PRODUCTION_DB_GATEWAY:-172.18.0.1}
+          ip_range: ${PRODUCTION_DB_IP_RANGE:-172.18.128.0/17}
   # Origin traffic stays on this private bridge. Only cloudflared has the
   # separate egress network needed to reach Cloudflare on outbound port 7844.
   cloudflare_origin:
