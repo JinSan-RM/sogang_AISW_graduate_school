@@ -564,6 +564,10 @@ headings to the three web tables. The administrator APIs sort the filtered
 dataset before pagination, preserve existing defaults, and use stable
 tie-breakers.
 
+2026-11-23 P0 registration settings: aligned the desktop forms and major
+list with the admin console. Policy activation, major creation, and major
+name, order, and activation changes use their existing controller handlers.
+
 Source: Notion `Admin page development`.
 
 2026-10-07 participation link deferral (WP8/WP9 P0): per the user's follow-up,

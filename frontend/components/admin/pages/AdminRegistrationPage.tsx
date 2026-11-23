@@ -1,10 +1,16 @@
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { AppText as Text } from "../../../components/AppTypography";
 import { ActionButton, COLORS, Field, MajorOptionEditor, Panel } from "../AdminControls";
 import { useAdminWorkspace } from "../AdminWorkspace";
 
 import AdminColumns from "../AdminColumns";
+import AdminRegistrationWebPage from "./AdminRegistrationWebPage";
+
 export default function AdminRegistrationPage() {
+  return Platform.OS === "web" ? <AdminRegistrationWebPage /> : <AdminRegistrationNativePage />;
+}
+
+function AdminRegistrationNativePage() {
   const { adminMajors, adminMajorsQuery, adminPrivacyPolicy, adminPrivacyPolicyQuery, handleCreateMajor, handleSaveMajor, handleSavePrivacyPolicy, newMajorName, newMajorOrder, policyEffectiveAt, policyVersion, setNewMajorName, setNewMajorOrder, setPolicyEffectiveAt, setPolicyVersion } = useAdminWorkspace();
   return (<View style={{ gap: 20 }}><AdminColumns><Panel>
     <View style={{ gap: 10 }}>
