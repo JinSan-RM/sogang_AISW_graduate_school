@@ -4,8 +4,9 @@ import { useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { AppText as Text, AppTextInput as TextInput } from "../AppTypography";
 
+import { useAdminListSort } from "../../hooks/useAdminListSort";
 import { duesPayerApi } from "../../services/api";
-import type { AdminRosterItem } from "../../types";
+import type { AdminRosterItem, AdminRosterSortKey } from "../../types";
 import { formatRosterImportSummary } from "../../utils/duesPayers";
 import {
   DUES_ADMIN_COLORS as COLORS,
@@ -61,11 +62,11 @@ export default function DuesRosterSection() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { page, setPage, sort, order, sortBy } = useAdminListSort<AdminRosterSortKey>({ sort_by: "name", sort_direction: "asc" });
   const [uploading, setUploading] = useState(false);
   const rosterQuery = useQuery({
-    queryKey: ["admin-dues-roster", appliedSearch, page],
-    queryFn: () => duesPayerApi.getAdminRoster({ q: appliedSearch || undefined, page, size: 100 }),
+    queryKey: ["admin-dues-roster", appliedSearch, page, ...(sort ? [sort] : [])],
+    queryFn: () => duesPayerApi.getAdminRoster({ q: appliedSearch || undefined, page, size: 100, ...sort }),
   });
   const members = rosterQuery.data?.data ?? [];
   const pagination = rosterQuery.data?.pagination;
@@ -119,7 +120,11 @@ export default function DuesRosterSection() {
       </View>
 
       <View style={webStyles.summary}><Text style={webStyles.sectionTitle}>원우 목록 <Text style={webStyles.muted}>{pagination ? `${pagination.total.toLocaleString()}명` : ""}</Text></Text><Text style={webStyles.muted}>100명씩 표시</Text></View>
-      <AdminTable minimumWidth={580} columns={[{ label: "이름", flex: 1 }, { label: "학번", flex: 1.1 }, { label: "전공", flex: 1.8 }]} rows={(rosterQuery.isError ? [] : members).map(member => ({ key: member.id, cells: [
+      <AdminTable minimumWidth={580} sorting={{ order, onChange: sortBy }} columns={[
+        { label: "이름", flex: 1, sortKey: "name" },
+        { label: "학번", flex: 1.1, sortKey: "student_number" },
+        { label: "전공", flex: 1.8, sortKey: "major" },
+      ]} rows={(rosterQuery.isError ? [] : members).map(member => ({ key: member.id, cells: [
         <Text key="name" style={[webStyles.text, { fontWeight: "600" }]}>{member.name}</Text>,
         <Text key="studentNumber" style={webStyles.text}>{member.student_number}</Text>,
         <Text key="major" style={webStyles.text}>{member.major}</Text>,

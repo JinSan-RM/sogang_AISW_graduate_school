@@ -422,6 +422,13 @@ the activity-board picker; its footer remains visible while web content scrolls.
 Native presentation and backend contracts remain. Evidence:
 [`ADMIN_DUES_WEB_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ADMIN_DUES_WEB_2026-10-07.md).
 
+2026-11-23 WP8/WP9 administrator tables: the web member, roster, and dues
+screens let administrators sort with the data column headings. Selecting a new
+field starts ascending, and selecting the same heading reverses the direction.
+Sorting resets the list to page 1 and keeps the active search and filters. The
+server applies the order before pagination. Initial ordering is newest signup
+first for members and name ascending for roster and dues.
+
 2026-10-07 roster theme continuation (WP8/WP9 P0): web `/admin/roster` follows the
 main/member-management white theme. Search and workbook upload share a wrapping
 toolbar, neutral two-line guidance retains headerless XLSX column order and

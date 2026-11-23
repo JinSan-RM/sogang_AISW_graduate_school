@@ -559,6 +559,11 @@ tabs and placed the club, study, and networking guide or recruitment filters
 before activity certification. The web view uses the app's guide slugs and
 keeps the existing database order for the other filters.
 
+2026-11-23 P0 member, roster, and dues management: added sortable column
+headings to the three web tables. The administrator APIs sort the filtered
+dataset before pagination, preserve existing defaults, and use stable
+tie-breakers.
+
 Source: Notion `Admin page development`.
 
 2026-10-07 participation link deferral (WP8/WP9 P0): per the user's follow-up,

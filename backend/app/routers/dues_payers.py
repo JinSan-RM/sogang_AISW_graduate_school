@@ -1,9 +1,11 @@
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from sqlalchemy import func, or_, select
+from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import ColumnElement
 
 from app.audit import log_admin_action
 from app.config import settings
@@ -28,6 +30,30 @@ from app.text_search import contains, search_pattern
 
 
 router = APIRouter()
+
+RosterSortKey = Literal["name", "student_number", "major"]
+PaymentSortKey = Literal[RosterSortKey, "payment_scope", "once_board_name"]
+SortDirection = Literal["asc", "desc"]
+_ROSTER_ORDER = (
+    StudentRosterMember.name.asc(),
+    StudentRosterMember.student_number.asc(),
+    StudentRosterMember.id.asc(),
+)
+_ADMIN_ROSTER_SORT_COLUMNS = {
+    "name": func.lower(StudentRosterMember.name),
+    "student_number": StudentRosterMember.student_number,
+    "major": func.lower(StudentRosterMember.major),
+    "payment_scope": case({"ALL": 0, "ONCE": 1}, value=DuesPayment.scope, else_=2),
+    "once_board_name": func.lower(Board.name),
+}
+
+
+def _admin_roster_order(sort_by: PaymentSortKey | None, direction: SortDirection) -> tuple[ColumnElement, ...]:
+    if sort_by is None:
+        return _ROSTER_ORDER
+
+    order = desc if direction == "desc" else asc
+    return (order(_ADMIN_ROSTER_SORT_COLUMNS[sort_by]).nulls_last(), *_ROSTER_ORDER)
 
 
 def require_dues_mutation_admin(
@@ -142,6 +168,8 @@ def get_admin_roster(
     q: str | None = Query(None, min_length=1),
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=1, le=100),
+    sort_by: RosterSortKey | None = None,
+    sort_direction: SortDirection = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
@@ -150,11 +178,7 @@ def get_admin_roster(
     members = db.scalars(
         select(StudentRosterMember)
         .where(*filters)
-        .order_by(
-            StudentRosterMember.name.asc(),
-            StudentRosterMember.student_number.asc(),
-            StudentRosterMember.id.asc(),
-        )
+        .order_by(*_admin_roster_order(sort_by, sort_direction))
         .offset((page - 1) * size)
         .limit(size)
     ).all()
@@ -197,6 +221,8 @@ def get_admin_payments(
     q: str | None = Query(None, min_length=1),
     page: int = Query(1, ge=1),
     size: int = Query(100, ge=1, le=100),
+    sort_by: PaymentSortKey | None = None,
+    sort_direction: SortDirection = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
@@ -207,11 +233,7 @@ def get_admin_payments(
         .outerjoin(DuesPayment, DuesPayment.roster_member_id == StudentRosterMember.id)
         .outerjoin(Board, Board.id == DuesPayment.once_board_id)
         .where(*filters)
-        .order_by(
-            StudentRosterMember.name.asc(),
-            StudentRosterMember.student_number.asc(),
-            StudentRosterMember.id.asc(),
-        )
+        .order_by(*_admin_roster_order(sort_by, sort_direction))
         .offset((page - 1) * size)
         .limit(size)
     ).all()

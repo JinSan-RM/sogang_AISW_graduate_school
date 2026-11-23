@@ -81,6 +81,85 @@ def _activity_board(
         return board.id
 
 
+@pytest.fixture
+def sortable_roster(api):
+    alpha_board = _activity_board(api, name="Alpha Activity", slug="sort-alpha-activity")
+    zulu_board = _activity_board(api, name="Zulu Activity", slug="sort-zulu-activity")
+    roster = [
+        ("Group Zulu", "Beta", "A75003"),
+        ("Group Delta", "Alpha", "A75004"),
+        ("Group Alpha", "Beta", "A75002"),
+        ("Group Alpha", "Alpha", "A75001"),
+        ("Outside Alpha", "Gamma", "A75005"),
+        ("Group Omega", "Alpha", "A75006"),
+    ]
+    with api.session() as db:
+        import_roster(db, _parsed_rows(roster))
+        db.flush()
+        members = {member.student_number: member.id for member in db.scalars(select(StudentRosterMember))}
+        db.add_all([
+            DuesPayment(roster_member_id=members["A75003"], scope="ALL"),
+            DuesPayment(roster_member_id=members["A75002"], scope="ONCE", once_board_id=zulu_board),
+            DuesPayment(roster_member_id=members["A75004"], scope="ONCE", once_board_id=alpha_board),
+        ])
+        db.commit()
+
+
+def _ordered_roster_numbers(api, listing, sort_by=None, direction=None):
+    params = {"q": "Group", "size": 2}
+    if sort_by is not None:
+        params["sort_by"] = sort_by
+    if direction is not None:
+        params["sort_direction"] = direction
+    numbers = []
+    for page in (1, 2, 3):
+        response = api.client.get(
+            f"/api/dues-payers/admin/{listing}", headers=api.headers["admin"], params={**params, "page": page},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pagination"] == {"page": page, "size": 2, "total": 5, "total_pages": 3}
+        numbers.extend(item["student_number"] for item in data["data"])
+    return numbers
+
+
+@pytest.mark.parametrize("listing", ["roster", "payments"])
+@pytest.mark.parametrize(("sort_by", "direction", "expected_numbers"), [
+    ("name", "desc", ["A75003", "A75006", "A75004", "A75001", "A75002"]),
+    ("student_number", "desc", ["A75006", "A75004", "A75003", "A75002", "A75001"]),
+    ("major", None, ["A75001", "A75004", "A75006", "A75002", "A75003"]),
+])
+def test_admin_dues_identity_fields_sort_across_pages(api, sortable_roster, listing, sort_by, direction, expected_numbers):
+    assert _ordered_roster_numbers(api, listing, sort_by, direction) == expected_numbers
+
+
+@pytest.mark.parametrize(("sort_by", "direction", "expected_numbers"), [
+    ("payment_scope", "asc", ["A75003", "A75002", "A75004", "A75001", "A75006"]),
+    ("payment_scope", "desc", ["A75001", "A75006", "A75002", "A75004", "A75003"]),
+    ("once_board_name", "asc", ["A75004", "A75002", "A75001", "A75006", "A75003"]),
+    ("once_board_name", "desc", ["A75002", "A75004", "A75001", "A75006", "A75003"]),
+])
+def test_admin_payments_sort_joined_and_derived_values_across_pages(api, sortable_roster, sort_by, direction, expected_numbers):
+    assert _ordered_roster_numbers(api, "payments", sort_by, direction) == expected_numbers
+
+
+@pytest.mark.parametrize("listing", ["roster", "payments"])
+def test_admin_dues_preserve_default_roster_order(api, sortable_roster, listing):
+    assert _ordered_roster_numbers(api, listing) == ["A75001", "A75002", "A75004", "A75006", "A75003"]
+
+
+@pytest.mark.parametrize(("listing", "params"), [
+    ("roster", {"sort_by": "payment_scope"}),
+    ("roster", {"sort_by": "name", "sort_direction": "up"}),
+    ("payments", {"sort_by": "id"}),
+    ("payments", {"sort_by": "payment_scope", "sort_direction": "up"}),
+])
+def test_admin_dues_reject_unsupported_sort(api, listing, params):
+    response = api.client.get(f"/api/dues-payers/admin/{listing}", headers=api.headers["admin"], params=params)
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+
 def test_roster_service_overwrites_identity_without_touching_payment(api) -> None:
     board_id = _activity_board(api, slug="roster-overwrite-board")
     with api.session() as db:
@@ -411,8 +490,8 @@ def test_invalid_payment_scope_board_and_missing_member_are_normalized(api) -> N
 
 def test_new_admin_routes_require_admin_and_removed_routes_return_404(api) -> None:
     forbidden = [
-        api.client.get("/api/dues-payers/admin/roster", headers=api.headers["owner"]),
-        api.client.get("/api/dues-payers/admin/payments", headers=api.headers["owner"]),
+        api.client.get("/api/dues-payers/admin/roster", headers=api.headers["owner"], params={"sort_by": "name"}),
+        api.client.get("/api/dues-payers/admin/payments", headers=api.headers["owner"], params={"sort_by": "payment_scope"}),
         _import_roster(api, [("추가", "AI", "A74001")], actor="owner"),
         _import_payments(api, [("추가", "AI", "A74001")], actor="owner"),
         api.client.put(

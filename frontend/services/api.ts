@@ -12,8 +12,12 @@ import type {
   AccountDeletionResult,
   AccountDeletionVerifyRequest,
   ApiSuccess,
+  AdminAccountSortKey,
   AdminDuesPaymentItem,
+  AdminDuesPaymentSortKey,
+  AdminListSort,
   AdminRosterItem,
+  AdminRosterSortKey,
   AdminReportItem,
   AdminAuditLog,
   AdminDashboardOverview,
@@ -825,7 +829,7 @@ export const adminApi = {
     );
     return response.data;
   },
-  getUsers: async (params?: { q?: string; role?: "user" | "admin"; is_active?: boolean; page?: number; size?: number }) => {
+  getUsers: async (params?: { q?: string; role?: "user" | "admin"; is_active?: boolean; page?: number; size?: number } & Partial<AdminListSort<AdminAccountSortKey>>) => {
     const response = await api.get<ApiSuccess<AdminUserItem[]>>("/users/admin/users", { params });
     return response.data;
   },
@@ -872,11 +876,11 @@ export const duesPayerApi = {
     });
     return response.data;
   },
-  getAdminRoster: async (params?: { q?: string; page?: number; size?: number }) => {
+  getAdminRoster: async (params?: { q?: string; page?: number; size?: number } & Partial<AdminListSort<AdminRosterSortKey>>) => {
     const response = await api.get<ApiSuccess<AdminRosterItem[]>>("/dues-payers/admin/roster", { params });
     return response.data;
   },
-  getAdminPayments: async (params?: { q?: string; page?: number; size?: number }) => {
+  getAdminPayments: async (params?: { q?: string; page?: number; size?: number } & Partial<AdminListSort<AdminDuesPaymentSortKey>>) => {
     const response = await api.get<ApiSuccess<AdminDuesPaymentItem[]>>("/dues-payers/admin/payments", { params });
     return response.data;
   },

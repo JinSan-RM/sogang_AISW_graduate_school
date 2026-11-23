@@ -696,7 +696,11 @@ Query: required `q` (name substring), required `board_id` (active `activity_cert
 
 Auth: admin
 
-Query: optional `q`, `page`, and `size` (max `100`). Search matches name, student number, or major. Returns `{id, name, major, student_number}` with the shared pagination envelope; payment fields are intentionally absent.
+Query: optional `q`, `page`, and `size` (max `100`). Search matches name, student number, or major.
+Optional `sort_by` accepts `name`, `student_number`, or `major`.
+`sort_direction` accepts `asc` or `desc` and defaults to `asc` for an explicit sort.
+The default is name ascending, then student number and ID. The server sorts
+the filtered result before pagination. Returns `{id, name, major, student_number}` with the shared pagination envelope; payment fields are intentionally absent.
 
 ### POST `/dues-payers/admin/roster/import`
 
@@ -708,7 +712,10 @@ The first sheet is read without a header as `name`, `major`, `student_number`. A
 
 Auth: admin
 
-Query: optional `q`, `page`, and `size` (max `100`). Search matches roster name, student number, or major. The outer-joined roster result is `{id, name, major, student_number, payment_scope, once_board_id, once_board_name}`. `payment_scope` is `ALL`, `ONCE`, or derived `UNPAID` when no payment row exists. Board names are joined at read time, so renames are immediate. Deleting a referenced activity board cascades its `ONCE` payment row and makes that roster member read as `UNPAID`.
+Query: optional `q`, `page`, and `size` (max `100`). Search matches roster name, student number, or major. The roster sort keys and
+default also apply here. This endpoint additionally accepts `payment_scope` and
+`once_board_name`. Ascending payment scope is `ALL`, `ONCE`, then `UNPAID`.
+Missing board names sort last in both directions. The outer-joined roster result is `{id, name, major, student_number, payment_scope, once_board_id, once_board_name}`. `payment_scope` is `ALL`, `ONCE`, or derived `UNPAID` when no payment row exists. Board names are joined at read time, so renames are immediate. Deleting a referenced activity board cascades its `ONCE` payment row and makes that roster member read as `UNPAID`.
 
 ### POST `/dues-payers/admin/payments/import`
 
@@ -793,7 +800,13 @@ Query:
 - Leading/trailing whitespace in `q` is ignored; filtering happens before pagination.
 - `role`: optional `user` or `admin`
 - `is_active`: optional boolean
+- `sort_by`: optional `nickname`, `email`, `cohort`, `major`, `enrollment_status`, `is_active`, `created_at`, or `last_login_at`
+- `sort_direction`: `asc` or `desc`, defaulting to `asc` for an explicit sort
 - `page`, `size`
+
+The default is newest signup first, with descending ID as the tie-breaker.
+Explicit sorting applies to the filtered result before pagination, with
+missing values last in both directions. Numeric cohorts sort numerically.
 
 Response item:
 

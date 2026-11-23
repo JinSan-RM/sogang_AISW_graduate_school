@@ -373,6 +373,11 @@ export type BlockedUserItem = {
   created_at: string;
 };
 
+export type AdminListSort<Key extends string> = { sort_by: Key; sort_direction: "asc" | "desc" };
+export type AdminAccountSortKey = "nickname" | "email" | "cohort" | "major" | "enrollment_status" | "is_active" | "created_at" | "last_login_at";
+export type AdminRosterSortKey = "name" | "student_number" | "major";
+export type AdminDuesPaymentSortKey = AdminRosterSortKey | "payment_scope" | "once_board_name";
+
 export type AdminUserItem = {
   id: number;
   email: string;

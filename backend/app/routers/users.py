@@ -1,6 +1,9 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import asc, case, desc, func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import ColumnElement
 
 from app.account_deletion import delete_user_account
 from app.author_snapshots import resolve_author_display
@@ -27,6 +30,39 @@ from app.user_validation import normalize_nickname
 from app.audit import log_admin_action
 
 router = APIRouter()
+
+AdminUserSortKey = Literal[
+    "nickname", "email", "cohort", "major", "enrollment_status", "is_active", "created_at", "last_login_at",
+]
+SortDirection = Literal["asc", "desc"]
+_ADMIN_USER_SORT_COLUMNS = {
+    "nickname": func.lower(User.nickname),
+    "email": func.lower(User.email),
+    "major": func.nullif(func.lower(func.trim(User.major)), ""),
+    "enrollment_status": case({"active": 0, "leave": 1, "graduated": 2}, value=User.enrollment_status),
+    "is_active": case((User.is_active.is_(True), 0), (User.is_active.is_(False), 1)),
+    "created_at": User.created_at,
+    "last_login_at": User.last_login_at,
+}
+
+
+def _admin_user_order(sort_by: AdminUserSortKey | None, direction: SortDirection) -> tuple[ColumnElement, ...]:
+    if sort_by is None:
+        return User.created_at.desc(), User.id.desc()
+
+    order = desc if direction == "desc" else asc
+    if sort_by == "cohort":
+        cohort = func.nullif(func.trim(User.cohort), "")
+        is_numeric = cohort.regexp_match(r"\A[0-9]+( *기)?\Z")
+        # Legacy imports append 기. Order normalized digits by length and value to keep all 20 digits exact.
+        digits = case((is_numeric, func.ltrim(func.trim(func.rtrim(cohort, "기")), "0")))
+        legacy_text = case((~is_numeric, func.lower(cohort)))
+        columns = (func.length(digits), digits, legacy_text)
+    else:
+        columns = (_ADMIN_USER_SORT_COLUMNS[sort_by],)
+
+    id_order = order(User.id) if sort_by == "created_at" else User.id.asc()
+    return tuple(order(column).nulls_last() for column in columns) + (id_order,)
 
 
 @router.get("/nickname-availability")
@@ -110,6 +146,8 @@ def get_admin_users(
     is_active: bool | None = None,
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
+    sort_by: AdminUserSortKey | None = None,
+    sort_direction: SortDirection = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
@@ -126,7 +164,7 @@ def get_admin_users(
     users = db.scalars(
         select(User)
         .where(*filters)
-        .order_by(User.created_at.desc(), User.id.desc())
+        .order_by(*_admin_user_order(sort_by, sort_direction))
         .offset((page - 1) * size)
         .limit(size)
     ).all()

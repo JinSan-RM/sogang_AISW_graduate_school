@@ -3,9 +3,10 @@ import { useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from "react-native";
 import { AppText as Text, AppTextInput as TextInput } from "../AppTypography";
 
+import { useAdminListSort } from "../../hooks/useAdminListSort";
 import { useBoardsQuery } from "../../hooks/useApi";
 import { duesPayerApi } from "../../services/api";
-import type { AdminDuesPaymentItem, DuesPaymentWritePayload } from "../../types";
+import type { AdminDuesPaymentItem, AdminDuesPaymentSortKey, DuesPaymentWritePayload } from "../../types";
 import {
   formatDuesPayer,
   formatDuesScope,
@@ -30,7 +31,7 @@ export default function DuesPaymentSection() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { page, setPage, sort, order, sortBy } = useAdminListSort<AdminDuesPaymentSortKey>({ sort_by: "name", sort_direction: "asc" });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [importConfirmVisible, setImportConfirmVisible] = useState(false);
@@ -38,8 +39,8 @@ export default function DuesPaymentSection() {
   const [editorMode, setEditorMode] = useState<DuesPaymentEditorMode>("EDIT");
   const [editorItem, setEditorItem] = useState<AdminDuesPaymentItem | null>(null);
   const paymentsQuery = useQuery({
-    queryKey: ["admin-dues-payments", appliedSearch, page],
-    queryFn: () => duesPayerApi.getAdminPayments({ q: appliedSearch || undefined, page, size: 100 }),
+    queryKey: ["admin-dues-payments", appliedSearch, page, ...(sort ? [sort] : [])],
+    queryFn: () => duesPayerApi.getAdminPayments({ q: appliedSearch || undefined, page, size: 100, ...sort }),
   });
   const payments = paymentsQuery.data?.data ?? [];
   const pagination = paymentsQuery.data?.pagination;
@@ -145,8 +146,13 @@ export default function DuesPaymentSection() {
       <View style={webStyles.tabs}>{([[false, "납부 관리"], [true, "개별 행사 1회 납부 등록"]] as const).map(([value, label]) => <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected: onceRegistrationMode === value, disabled: busy }} disabled={busy} onPress={() => setOnceRegistrationMode(value)} style={[webStyles.tab, onceRegistrationMode === value && webStyles.selectedTab, busy && { opacity: 0.45 }]}><Text style={{ fontSize: 13, color: onceRegistrationMode === value ? "#2761FF" : "#6B7280", fontWeight: onceRegistrationMode === value ? "600" : "400" }}>{label}</Text></Pressable>)}</View>
       {onceRegistrationMode && <Text style={webStyles.muted}>원우를 검색한 뒤 1회 납부 등록을 누르고 활동인증 게시판을 선택하세요.</Text>}
       <View style={webStyles.summary}><Text style={webStyles.sectionTitle}>현재 학기 납부 현황 <Text style={webStyles.muted}>{pagination ? `${pagination.total.toLocaleString()}명` : ""}</Text></Text><Text style={webStyles.muted}>100명씩 표시</Text></View>
-      <AdminTable minimumWidth={850} columns={[
-        { label: "이름", flex: 1 }, { label: "학번", width: 110 }, { label: "전공", flex: 1.1 }, { label: "납부 범위", width: 90 }, { label: "활동인증 게시판", flex: 1.4 }, { label: "관리", width: 115 },
+      <AdminTable minimumWidth={850} sorting={{ order, onChange: sortBy }} columns={[
+        { label: "이름", flex: 1, sortKey: "name" },
+        { label: "학번", width: 110, sortKey: "student_number" },
+        { label: "전공", flex: 1.1, sortKey: "major" },
+        { label: "납부 범위", width: 90, sortKey: "payment_scope" },
+        { label: "활동인증 게시판", flex: 1.4, sortKey: "once_board_name" },
+        { label: "관리", width: 115 },
       ]} rows={(paymentsQuery.isError ? [] : payments).map(item => ({ key: item.id, cells: [
         <Text key="name" style={[webStyles.text, { fontWeight: "600" }]}>{item.name}</Text>,
         <Text key="studentNumber" style={webStyles.text}>{item.student_number}</Text>,
