@@ -429,11 +429,13 @@ Sorting resets the list to page 1 and keeps the active search and filters. The
 server applies the order before pagination. Initial ordering is newest signup
 first for members and name ascending for roster and dues.
 
-2026-11-23 WP8 P0 registration appearance: web `/admin/registration` presents
-privacy-policy activation and major creation in labeled forms. The major list
-uses the shared admin table, and each row opens a right-hand editor for name,
-display order, and signup visibility. Existing registration queries, save
-handlers, and native forms are reused.
+2026-11-23 WP8 P0 registration appearance: web `/admin/registration` uses the
+white admin console theme, with underline tabs for major management and privacy
+policy. The major tab opens by default and shows a labeled add form and the
+shared admin table. Each row opens a right-side editor with a persistent footer
+for saving the name, display order, and signup visibility. Both tabs reuse the
+existing registration queries and save handlers. The native screen retains its
+original forms.
 
 2026-10-07 roster theme continuation (WP8/WP9 P0): web `/admin/roster` follows the
 main/member-management white theme. Search and workbook upload share a wrapping
