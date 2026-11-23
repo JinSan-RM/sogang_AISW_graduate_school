@@ -1091,13 +1091,18 @@ export function useAdminController() {
     return true;
   };
 
-  const openManagedBoardDestination = (destination: AdminBoardDestination | null) => {
+  const openManagedBoardDestination = (destination: AdminBoardDestination | null, showAllPosts = false) => {
     if (!destination) return;
     if (boardSettingsSavingRef.current || externalLinkSavingRef.current || noticeOperationRef.current) return;
     beginExplicitAdminNavigation();
     if (!syncExternalLinkNavigationBoardId(destination.boardId)) return;
     boardManagementBoardIdRef.current = destination.boardId;
-    setSection("boardManagement");
+    if (showAllPosts && Platform.OS === "web") {
+      setSectionState("boardManagement");
+      router.navigate({ pathname: "/admin/boards", params: { section: "posts" } } as never);
+    } else {
+      setSection("boardManagement");
+    }
     setBoardManagementScope(destination.scope);
     setBoardManagementBoardId(destination.boardId);
     setBoardManagementTab(destination.tab);
@@ -1122,7 +1127,7 @@ export function useAdminController() {
   };
 
   const openAllManagedPosts = () => {
-    openManagedBoardDestination(adminBoardDestinationForLegacySection("posts", boards));
+    openManagedBoardDestination(adminBoardDestinationForLegacySection("posts", boards), true);
   };
 
   const handleBoardManagementScopeChange = (nextScope: AdminContentScope) => {

@@ -42,6 +42,7 @@ import {
   type CouncilMemberFormData,
 } from "../../../../utils/councilIntroductions";
 import { toAbsoluteMediaUrl } from "../../../../utils/mediaAccess";
+import { COMMUNITY_BOARD_SECTIONS, PARTICIPATION_FILTERS, PARTICIPATION_GROUPS, STUDY_FILTERS } from "../../../../utils/memberBoardNavigation";
 import { pastCouncilActivitiesFromMetadata } from "../../../../utils/pastCouncil";
 import PhotoPager from "../../../../components/PhotoPager";
 import {
@@ -100,13 +101,6 @@ const BOARD_DISPLAY: Record<string, { name: string; description?: string }> = {
   accounting: { name: "회계장부" },
 };
 
-const STUDY_FILTERS = ["모집", "활동 인증"];
-const PARTICIPATION_FILTERS = ["안내", "활동 인증"];
-const PARTICIPATION_GROUPS = [
-  { key: "club", label: "동아리", guideSlug: "club-promo", certificationSlug: "club-activity" },
-  { key: "study", label: "스터디", guideSlug: "study-recruit", certificationSlug: "study-activity" },
-  { key: "networking", label: "네트워킹", guideSlug: "networking-programs", certificationSlug: "networking-activity" },
-] as const;
 const ALBUM_GRADIENTS: readonly (readonly [string, string])[] = [
   ["#2761FF", "#86C8FF"],
   ["#5B49C8", "#B7A4F8"],
@@ -210,15 +204,14 @@ function sectionTabs(board: Board | undefined, boards: Board[]): SectionTab[] {
   if (!board) return [];
   const isCommunityResource = board.slug === "event-album" || board.board_type === "resource" || board.category === "resources";
   if (isCommunityResource) {
-    return [
-      { label: "행사 사진첩", active: board.slug === "event-album", target: findBoardBySlug(boards, "event-album") },
-      {
-        label: "자료공유",
+    return COMMUNITY_BOARD_SECTIONS.map(({ key, label, slug }) => key === "album"
+      ? { label, active: board.slug === slug, target: findBoardBySlug(boards, slug) }
+      : {
+        label,
         active: board.board_type === "resource" || board.category === "resources",
-        target: findBoardBySlug(boards, "lecture-reviews") ?? boards.find((item) => item.board_type === "resource"),
+        target: findBoardBySlug(boards, slug) ?? boards.find((item) => item.board_type === "resource"),
         initialFilter: "전체",
-      },
-    ];
+      });
   }
 
   const groupKey = participationGroupKey(board);

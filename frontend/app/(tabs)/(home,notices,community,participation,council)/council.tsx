@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LoadingState from "../../../components/LoadingState";
 import { useBoardsQuery } from "../../../hooks/useApi";
 import type { Board } from "../../../types";
+import { COUNCIL_MENU_ITEMS } from "../../../utils/memberBoardNavigation";
 
 const COLORS = {
   primary: "#2761FF",
@@ -20,54 +21,19 @@ const COLORS = {
   bg: "#FFFFFF",
 };
 
-type MenuItem = {
-  title: string;
-  slugs?: string[];
-  href?: string;
-};
-
-const MENU_ITEMS: MenuItem[] = [
-  {
-    title: "원우회 임원진 소개",
-    slugs: ["gsa-executives"],
-  },
-  {
-    title: "회계장부",
-    slugs: ["accounting"],
-  },
-  {
-    title: "원우회 상조회",
-    slugs: ["mutual-aid", "gsa-mutual-aid"],
-  },
-  {
-    title: "기수별 기장단 소개",
-    slugs: ["gsa-cohort-leaders"],
-  },
-  {
-    title: "역대 원우회",
-    slugs: ["gsa-past-councils"],
-  },
-  {
-    title: "건의사항",
-    slugs: ["suggestions", "gsa-proposal", "gsa-feedback"],
-  },
-  {
-    title: "자주 묻는 질문",
-    href: "/faq",
-  },
-];
+type MenuItem = typeof COUNCIL_MENU_ITEMS[number];
 
 function flattenBoards(groups?: { boards: Board[] }[]) {
   return groups?.flatMap((group) => group.boards) ?? [];
 }
 
-function boardBySlugs(boards: Board[], slugs?: string[]) {
-  return slugs ? boards.find((board) => slugs.includes(board.slug)) : undefined;
+function boardBySlugs(boards: Board[], slugs: readonly string[]) {
+  return boards.find((board) => slugs.includes(board.slug));
 }
 
 function openItem(item: MenuItem, board?: Board) {
-  if (item.href) {
-    router.push(item.href as never);
+  if ("href" in item) {
+    router.push(item.href);
     return;
   }
   if (board) {
@@ -104,7 +70,7 @@ export default function CouncilScreen() {
 
       <ScrollView style={styles.scroller} contentContainerStyle={styles.content}>
         <View style={styles.menuList}>
-          {MENU_ITEMS.map((item) => (
+          {COUNCIL_MENU_ITEMS.map((item) => (
             <MenuRow key={item.title} item={item} board={boardBySlugs(boards, item.slugs)} />
           ))}
         </View>

@@ -1,5 +1,8 @@
 import type { Board } from "../types";
 import type { AdminContentScope } from "./adminContentManagement";
+import { COMMUNITY_BOARD_SECTIONS, COUNCIL_MENU_ITEMS, PARTICIPATION_FILTERS, PARTICIPATION_GROUPS, STUDY_FILTERS } from "./memberBoardNavigation";
+import { isNoticeContentBoard, NOTICE_FILTERS, type NoticeFilter } from "./noticeFeed";
+import { RESOURCE_FILTERS, RESOURCE_FILTER_SLUGS } from "./resourceBoards";
 
 export const ADMIN_BOARD_GROUPS = [
   {key:"notices", label:"공지사항"},
@@ -8,28 +11,21 @@ export const ADMIN_BOARD_GROUPS = [
   {key:"council", label:"원우회"},
 ] as const;
 export const ADMIN_BOARD_SECTION_DEFINITIONS = [
-  {key:"executives", label:"원우회 임원진 소개", scope:"council", category:"gsa", type:"organization_intro"},
-  {key:"accounting", label:"회계장부", scope:"council", category:"council", type:"external_link"},
-  {key:"mutual-aid", label:"원우회 상조회", scope:"council", category:"council", type:"mutual_aid"},
-  {key:"cohort-leaders", label:"기수별 기장단 소개", scope:"council", category:"gsa", type:"organization_intro"},
-  {key:"past-councils", label:"역대 원우회", scope:"council", category:"gsa", type:"organization_intro"},
-  {key:"suggestions", label:"건의사항", scope:"council", category:"council", type:"suggestion"},
-  {key:"faq", label:"자주 묻는 질문", scope:"council", category:"gsa", type:"faq"},
-  {key:"club", label:"동아리", scope:"participation", category:"club", type:"post"},
-  {key:"study", label:"스터디", scope:"participation", category:"study", type:"post"},
-  {key:"networking", label:"네트워킹", scope:"participation", category:"alumni", type:"post"},
-  {key:"album", label:"행사 사진첩", scope:"community", category:"community", type:"album"},
-  {key:"resources", label:"자료공유", scope:"community", category:"resources", type:"resource"},
-  {key:"notices", label:"공지사항", scope:"notices", category:"notices", type:"notice"},
+  { key: "notices", label: "공지사항", scope: "notices", category: "notices", type: "notice" },
+  ...COMMUNITY_BOARD_SECTIONS.map(({ key, label, category, type }) => ({ key, label, category, type, scope: "community" as const })),
+  ...PARTICIPATION_GROUPS.map(({ key, label, category }) => ({ key, label, category, type: "post" as const, scope: "participation" as const })),
+  ...COUNCIL_MENU_ITEMS.map(({ key, title, category, type }) => ({ key, label: title, category, type, scope: "council" as const })),
 ] as const;
 export type AdminBoardSectionKey = typeof ADMIN_BOARD_SECTION_DEFINITIONS[number]["key"];
 export type AdminBoardSection = {key: AdminBoardSectionKey; label:string; scope:AdminContentScope; boardIds:number[]};
-const slugs: Record<string, AdminBoardSectionKey> = {
-  "gsa-executives":"executives", accounting:"accounting", "mutual-aid":"mutual-aid",
-  "gsa-cohort-leaders":"cohort-leaders", "gsa-past-councils":"past-councils", suggestions:"suggestions", "gsa-faq":"faq",
-  "club-promo":"club", "club-activity":"club", "study-recruit":"study", "study-activity":"study",
-  "networking-programs":"networking", "networking-activity":"networking", "event-album":"album",
-};
+export type AdminNoticeCategory = Exclude<NoticeFilter, "all">;
+
+const slugs = new Map<string, AdminBoardSectionKey>([
+  ["event-album", "album"],
+  ...PARTICIPATION_GROUPS.flatMap(({ key, guideSlug, certificationSlug }) =>
+    [[guideSlug, key], [certificationSlug, key]] as const),
+  ...COUNCIL_MENU_ITEMS.flatMap(({ key, slugs }) => slugs.map(slug => [slug, key] as const)),
+]);
 export function adminBoardParent(board: Board): number | null {
   const navigation = board.metadata?.admin_navigation as {parent_board_id?:unknown} | undefined;
   const id = navigation?.parent_board_id;
@@ -39,7 +35,8 @@ export function adminBoardSection(board: Board): AdminBoardSectionKey | null {
   const navigation = board.metadata?.admin_navigation as {section?:unknown} | undefined;
   const stored = ADMIN_BOARD_SECTION_DEFINITIONS.find(s => s.key === navigation?.section);
   if (stored) return stored.key;
-  if (slugs[board.slug]) return slugs[board.slug];
+  const memberSection = slugs.get(board.slug);
+  if (memberSection) return memberSection;
   if (board.category === "resources" && board.board_type === "resource") return "resources";
   if (board.category === "notices" && board.board_type === "notice") return "notices";
   return null;
@@ -50,6 +47,42 @@ export function adminBoardSections(boards: Board[]): AdminBoardSection[] {
     key:section.key, label:section.label, scope:section.scope,
     boardIds:sorted.filter(board => adminBoardSection(board) === section.key).map(board => board.id),
   }));
+}
+
+type AdminAppBoardFilter = { label: string; boardId: number | null; noticeCategory?: AdminNoticeCategory };
+
+export function adminAppSectionBoards(section: AdminBoardSectionKey | null, boards: Board[]): Board[] {
+  const visible = boards.filter(board => board.is_active !== false && board.read_permission !== "admin");
+  if (section === "notices") {
+    return visible.filter(isNoticeContentBoard)
+      .sort((left, right) => left.sort_order - right.sort_order || left.id - right.id);
+  }
+  if (section === "resources") {
+    return RESOURCE_FILTERS.flatMap(label => visible.filter(board => board.board_type === "resource" && board.slug === RESOURCE_FILTER_SLUGS[label]));
+  }
+  const group = PARTICIPATION_GROUPS.find(item => item.key === section);
+  if (group) {
+    return [group.guideSlug, group.certificationSlug].flatMap(slug => visible.filter(board => board.slug === slug));
+  }
+  const council = COUNCIL_MENU_ITEMS.find(item => item.key === section);
+  const candidates: readonly string[] = council?.slugs ?? (section === "album" ? [COMMUNITY_BOARD_SECTIONS[0].slug] : []);
+  const board = visible.find(item => candidates.includes(item.slug));
+  return board ? [board] : [];
+}
+
+export function adminAppBoardFilters(section: AdminBoardSectionKey | null, boards: Board[]): AdminAppBoardFilter[] {
+  if (section === "notices") return NOTICE_FILTERS.map(({ key, label }) => ({
+    label, boardId: null, noticeCategory: key === "all" ? undefined : key,
+  }));
+  if (section === "resources") return RESOURCE_FILTERS.flatMap<AdminAppBoardFilter>(label => {
+    if (label === "전체") return [{ label, boardId: null }];
+    const board = boards.find(item => item.slug === RESOURCE_FILTER_SLUGS[label]);
+    return board ? [{ label, boardId: board.id }] : [];
+  });
+  const group = PARTICIPATION_GROUPS.find(item => item.key === section);
+  if (!group) return [];
+  const labels = group.key === "study" ? STUDY_FILTERS : PARTICIPATION_FILTERS;
+  return boards.map(board => ({ label: labels[board.slug === group.guideSlug ? 0 : 1], boardId: board.id }));
 }
 export function adminBoardTag(board: Board): string {
   if (board.board_type === "activity_certification") return "활동 인증";

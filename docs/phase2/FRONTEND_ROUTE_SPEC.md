@@ -489,15 +489,16 @@ Before frontend expansion, Figma should provide:
 - 2026-09-17 WP5/WP9 club operation setting: administrator club create/edit forms expose `운영 중 / 운영 종료` independently of recruitment state. Missing legacy state defaults to `운영 중`. A recruitment-closed club remains selectable while operating. Operation-ended clubs disappear from new certification source choices, including source changes during edit, while an existing historical selection stays readable/editable. All source pages are loaded before filtering; an ended-only page cannot hide active clubs on later pages. Saving a guide invalidates the source-option cache along with its board posts.
 
 2026-10-07 WP8/WP9 board console: `/admin/boards` on web uses a white left
-taxonomy rail and a right content area. Since 2026-11-23, the rail follows the
-member tab order (공지사항, 커뮤니티, 참여활동, 원우회). Each participation
-section displays its guide or recruitment filter before 활동 인증, preserving the
-configured order of its remaining filters.
+taxonomy rail and a right content area. Since 2026-11-23, the rail uses the
+member tabs (공지사항, 커뮤니티, 참여활동, 원우회) and their submenu order.
+Notice and resource filters use the member lists. Club and networking show
+안내, 활동 인증, and study shows 모집, 활동 인증. Each participation section
+opens its guide or recruitment board first.
 Current resource/participation/notice tags filter a 10-row post table; no
 board finder is displayed. Settings, board creation and the existing notice
-editor open on demand. Actual notice boards/custom children remain selectable
-under collapsed settings; older boards stay under additional management,
-uncategorized boards under other boards, inactive boards under hidden boards.
+editor open on demand. The 게시판 설정 action opens a separate selector for
+actual notice boards, custom and older boards, and boards marked 비노출. That
+selector preserves direct access to each board's settings and restore action.
 Create selects group, section and optional parent, supporting nested children.
 Deletion is recoverable branch hiding; restore is individual, parent first.
 Existing intro, FAQ, external-link, suggestion, mutual-aid and calendar
@@ -520,8 +521,8 @@ or authorization contracts change.
 networking sections always show their canonical, active guide registration
 action (`동아리 등록` / `네트워킹 행사 등록`) separately from `활동 인증 보기`.
 Selecting a section without a sub-board prefers its guide board for settings,
-regardless of certification sort order. The guide filters read `동아리 목록` /
-`행사 목록`. Selecting the certification board retains `활동 인증 작성`, and
+regardless of certification sort order. The guide filters use the member
+app's `안내` label. Selecting the certification board retains `활동 인증 작성`, and
 custom children retain their existing create actions. Hidden/missing guide
 boards never fall back to registering on the certification board. Both guide
 create/edit forms now expose the existing operation status: active targets

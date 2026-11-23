@@ -1,3 +1,5 @@
+import { PARTICIPATION_GROUPS, type ParticipationGroupKey } from "./memberBoardNavigation";
+
 export const HOME_TAB_ROUTE = "/(tabs)/home" as const;
 export const NOTICES_TAB_ROUTE = "/(tabs)/notices" as const;
 export const COMMUNITY_TAB_ROUTE = "/(tabs)/community" as const;
@@ -37,7 +39,7 @@ export type PostEditCompletionDecision =
   | { action: "back" }
   | { action: "replace"; route: ReturnType<typeof postDetailRoute> };
 
-export type ParticipationGroupKey = "club" | "study" | "networking";
+export type { ParticipationGroupKey };
 
 const ACTIVITY_POST_DETAIL_EDIT_ORIGIN = "activity-post-detail" as const;
 const POST_DETAIL_EDIT_ORIGIN = "post-detail" as const;
@@ -157,9 +159,7 @@ export function postCreateFormInstanceKey(params: {
 }
 
 export function participationGroupDefaultSlug(group: ParticipationGroupKey) {
-  if (group === "club") return "club-promo" as const;
-  if (group === "study") return "study-recruit" as const;
-  return "networking-programs" as const;
+  return PARTICIPATION_GROUPS.find((entry) => entry.key === group)!.guideSlug;
 }
 
 // 모든 게시판의 글 수정은 글쓰기 화면(create.tsx)의 수정 모드에서 한다.

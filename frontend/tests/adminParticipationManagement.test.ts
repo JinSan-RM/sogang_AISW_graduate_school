@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import ts from "typescript";
 import type { Board } from "../types";
+import type { AdminBoardSectionKey } from "../utils/adminBoardTree";
 
 const pagePath = join(process.cwd(), "components/admin/pages/AdminBoardsWebPage.tsx");
 const pageRequire = createRequire(pagePath);
@@ -14,7 +15,7 @@ const board = (id: number, slug: string, type = "post", is_active = true): Board
   is_active, allow_anonymous: false, read_permission: "user", write_permission: "user",
 });
 
-function workspacePage(section: "club" | "study" | "networking", boards: Board[], boardId: number | null = null) {
+function workspacePage(section: AdminBoardSectionKey, boards: Board[], boardId: number | null = null) {
   const pushes: unknown[] = [];
   const opened: string[] = [];
   const target = boards.find(b => b.id === boardId) ?? boards[0];
@@ -90,9 +91,9 @@ for (const [section, guideSlug, activitySlug, label, guideId] of [
 }
 
 for (const [section, guideSlug, guideOrder, activitySlug, activityOrder, guideLabel] of [
-  ["club", "club-promo", 51, "club-activity", 30, "동아리 목록"],
+  ["club", "club-promo", 51, "club-activity", 30, "안내"],
   ["study", "study-recruit", 60, "study-activity", 31, "모집"],
-  ["networking", "networking-programs", 72, "networking-activity", 32, "행사 목록"],
+  ["networking", "networking-programs", 72, "networking-activity", 32, "안내"],
 ] as const) {
   test(`${section} shows the guide filter before activity certification`, () => {
     const extra = {
@@ -105,7 +106,7 @@ for (const [section, guideSlug, guideOrder, activitySlug, activityOrder, guideLa
       extra,
     ]);
 
-    assert.deepEqual(view.filters, ["전체", guideLabel, "활동 인증", "추가 게시판"]);
+    assert.deepEqual(view.filters, [guideLabel, "활동 인증"]);
   });
 }
 
@@ -113,5 +114,20 @@ test("a hidden guide cannot turn registration into certification writing", () =>
   const view = workspacePage("club", [board(1, "club-activity", "activity_certification"), board(21, "club-promo", "post", false)]);
   assert.equal(view.actions.some(action => action.label === "동아리 등록" || action.label === "글 작성"), false);
   assert.ok(view.actions.find(action => action.label === "활동 인증 보기"));
-  assert.deepEqual(view.filters, ["전체", "활동 인증"]);
+  assert.deepEqual(view.filters, ["활동 인증"]);
+});
+
+test("resource filters use the member app's labels and order instead of board names and database order", () => {
+  const resource = (id: number, slug: string, overrides: Partial<Board> = {}) => ({
+    ...board(id, slug, "resource"), category: "resources", ...overrides,
+  });
+  const view = workspacePage("resources", [
+    resource(1, "graduation-thesis"),
+    resource(2, "exam-archive"),
+    resource(3, "hidden-extra", { is_active: false }),
+    resource(4, "custom-extra"),
+    resource(5, "comprehensive-exam"),
+    resource(6, "lecture-reviews"),
+  ]);
+  assert.deepEqual(view.filters, ["전체", "강의후기", "시험족보", "종합시험", "졸업논문"]);
 });

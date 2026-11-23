@@ -559,10 +559,10 @@ Definition of done:
 
 ## Work Package 8: Phase 4 Admin Surface
 
-2026-11-23 P0 board management: aligned the web management groups with the member
-tabs and placed the club, study, and networking guide or recruitment filters
-before activity certification. The web view uses the app's guide slugs and
-keeps the existing database order for the other filters.
+2026-11-23 P0 board management: the web management rail follows the member
+tabs and their submenus, sharing the member notice, resource, and participation
+filters. Legacy, custom, and inactive boards remain accessible through the
+separate 게시판 설정 selector and the existing restore flow.
 
 2026-11-23 P0 member, roster, and dues management: added sortable column
 headings to the three web tables. The administrator APIs sort the filtered
