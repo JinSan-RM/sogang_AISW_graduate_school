@@ -408,6 +408,11 @@ Definition of done:
 
 ## Work Package 5: Phase 3 Core Community Feature A
 
+2026-11-23 member post activity (WP5/WP8): persist successful member post
+creation, edit saves, and deletion in a dedicated server table. Each row keeps
+the action, actor ID, board ID, post ID, and timestamp. Account deletion clears
+the actor link.
+
 - 2026-09-17 WP5/WP9 P0 saved activity-account editing: author/admin edit responses include the stored bank account and the shared activity form prefills it. Unchanged/blank input preserves the account; replacements are visible when reopening edit. Ordinary member lists/details still redact it, peers cannot fetch edit context, and unrelated private metadata remains hidden. Related API tests 100/100, frontend regressions 48/48 and typecheck pass. Evidence: [`ACTIVITY_BANK_ACCOUNT_EDIT_2026-09-17.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ACTIVITY_BANK_ACCOUNT_EDIT_2026-09-17.md).
 
 - 2026-09-17 WP5/WP9 P0 write-return cleanup: reproduced retained new-post text and retained board search after Community > Resources > Write > Back. The retained hidden board route now unmounts an abandoned new-post form; its next visit starts empty, including attachments. Opening Write closes/clears the originating list search but retains its selected category. Existing-post edits and detail-return search preservation keep their policies. Actual-screen regressions cover both missing resets, and the related navigation suite passes 92/92. Evidence: [`POST_CREATE_RETURN_2026-09-17.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/POST_CREATE_RETURN_2026-09-17.md).

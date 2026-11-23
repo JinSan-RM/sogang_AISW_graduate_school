@@ -36,7 +36,7 @@ from app.rate_limit import enforce_rate_limit
 from app.schemas.post import MutualAidUpdate, PostCreate, PostRepresentativeImageUpdate, PostUpdate, SuggestionUpdate
 from app.security import utc_now
 from app.study_activity_cleanup import post_content_preview
-from app.audit import log_admin_action
+from app.audit import log_admin_action, log_user_post_action
 from app.participation_guides import (
     ACTIVITY_SOURCE_BOARD_SLUGS,
     ADMIN_PARTICIPATION_BOARD_SLUGS,
@@ -1517,6 +1517,20 @@ def get_post_detail(
     )
 
 
+def _lock_member_post_actor(db: Session, user: User) -> None:
+    if user.role == "admin":
+        return
+    # Account deletion locks the user before its authored posts. Follow the same
+    # order before an edit or deletion adds an activity row with an actor FK.
+    actor_id = db.scalar(
+        select(User.id)
+        .where(User.id == user.id, User.is_active.is_(True))
+        .with_for_update(read=True, key_share=True)
+    )
+    if actor_id is None:
+        raise AppException(status_code=401, message="Invalid access token.", code="UNAUTHORIZED")
+
+
 @router.post("/boards/{board_id}/posts")
 def create_post(
     board_id: int,
@@ -1544,6 +1558,7 @@ def create_post(
     if payload.is_anonymous and not board.allow_anonymous and board.board_type != "suggestion":
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
 
+    _lock_member_post_actor(db, current_user)
     is_anonymous = True if board.board_type == "suggestion" else payload.is_anonymous
     post_metadata = _canonical_activity_metadata(db, board, normalized_metadata)
     post_metadata, activity_source_title = _canonical_activity_source(db, board, post_metadata, is_new=True)
@@ -1581,6 +1596,8 @@ def create_post(
             )
     if current_user.role == "admin":
         log_admin_action(db, actor_id=current_user.id, action="notice.create" if post.is_notice else "post.create", target_type="post", target_id=post.id, details={"title": post.title})
+    else:
+        log_user_post_action(db, actor_id=current_user.id, action="post.create", board_id=post.board_id, post_id=post.id)
     db.commit()
     db.refresh(post)
 
@@ -1594,6 +1611,7 @@ def update_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _lock_member_post_actor(db, current_user)
     post = db.scalar(select(Post).where(Post.id == post_id).with_for_update())
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
@@ -1720,6 +1738,8 @@ def update_post(
             changed_fields.append("attachments")
         if changed_fields:
             log_admin_action(db, actor_id=current_user.id, action="notice.update" if post.is_notice else "post.update", target_type="post", target_id=post.id, details={"title": post.title, "changed_fields": changed_fields})
+    else:
+        log_user_post_action(db, actor_id=current_user.id, action="post.update", board_id=post.board_id, post_id=post.id)
     db.commit()
     db.refresh(post)
 
@@ -1784,7 +1804,8 @@ def update_post_representative_image(
 
 @router.delete("/posts/{post_id}")
 def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    post = db.get(Post, post_id)
+    _lock_member_post_actor(db, current_user)
+    post = db.scalar(select(Post).where(Post.id == post_id).with_for_update())
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
     board = require_post_read(db, post, current_user)
@@ -1809,6 +1830,8 @@ def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User 
     post.deleted_at = utc_now()
     if current_user.role == "admin":
         log_admin_action(db, actor_id=current_user.id, action="post.delete", target_type="post", target_id=post.id, details={"title": post.title})
+    else:
+        log_user_post_action(db, actor_id=current_user.id, action="post.delete", board_id=post.board_id, post_id=post.id)
     db.commit()
 
     return success_response({"id": post_id})

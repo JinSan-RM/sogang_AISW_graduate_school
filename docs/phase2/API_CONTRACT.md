@@ -1659,6 +1659,11 @@ Synchronizes Expo delivery receipts, records failures, and disables tokens rejec
 
 - `GET /admin/stats`: active users, posts, comments, notices, events, reports, and push-delivery metrics.
 - `GET /admin/audit-logs?page=1&size=30`: recent protected administrator actions.
+
+Successful member post creates, edit saves, and deletions append a matching
+event to `user_post_activity_logs` in the same transaction. These records
+stay in the server database. Post response envelopes and the administrator
+audit endpoint retain their existing contract.
 - `GET /admin/legacy-import/summary`: grouped legacy-import counts by entity type, status, and action.
 - `GET /admin/legacy-import/records?page=1&size=50`: paginated private reconciliation records.
 

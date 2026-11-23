@@ -1,6 +1,8 @@
+from typing import Literal
+
 from sqlalchemy.orm import Session
 
-from app.models.audit import OperationalAuditLog
+from app.models.audit import OperationalAuditLog, UserPostActivityLog
 
 
 def log_admin_action(
@@ -21,3 +23,14 @@ def log_admin_action(
             details=details,
         )
     )
+
+
+def log_user_post_action(
+    db: Session,
+    *,
+    actor_id: int,
+    action: Literal["post.create", "post.update", "post.delete"],
+    board_id: int,
+    post_id: int,
+) -> None:
+    db.add(UserPostActivityLog(actor_id=actor_id, action=action, board_id=board_id, post_id=post_id))

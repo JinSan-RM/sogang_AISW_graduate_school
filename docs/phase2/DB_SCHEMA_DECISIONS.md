@@ -504,6 +504,15 @@ Purpose: durable Expo Push ticket/receipt and retry history.
 
 Columns include notification/token references, token snapshot, status, attempt count, Expo ticket ID, error, and receipt timestamps.
 
+### `user_post_activity_logs`
+
+Migration `0036_user_post_activity` adds a server-only table for member post
+writes. Rows contain `id`, nullable `actor_id`, `action` (`post.create`,
+`post.update`, or `post.delete`), `board_id`, `post_id`, and UTC `created_at`.
+They commit with the post transaction. Board and post IDs are historical
+references. The user FK uses `ON DELETE SET NULL`; indexes support actor/time
+and post/time lookup. Rows carry no post text or user profile snapshot.
+
 ### `operational_audit_logs`
 
 Purpose: immutable record of protected administrator changes.

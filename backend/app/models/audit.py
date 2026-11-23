@@ -23,6 +23,25 @@ class OperationalAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class UserPostActivityLog(Base):
+    __tablename__ = "user_post_activity_logs"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('post.create', 'post.update', 'post.delete')",
+            name="ck_user_post_activity_logs_action",
+        ),
+        Index("ix_user_post_activity_logs_actor_created", "actor_id", "created_at"),
+        Index("ix_user_post_activity_logs_post_created", "post_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    board_id: Mapped[int] = mapped_column(nullable=False)
+    post_id: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class AccountDeletionReceipt(Base):
     __tablename__ = "account_deletion_receipts"
     __table_args__ = (

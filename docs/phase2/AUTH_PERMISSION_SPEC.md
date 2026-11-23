@@ -239,6 +239,9 @@ Rules:
 - Every authored post/comment remains regardless of status or board type. Before the user row is removed, missing writing-time name/cohort snapshots are filled and `author_id` is cleared. Every connected owned media asset remains with its `owner_id` cleared; filenames and bytes are unchanged.
 - Anonymous and forced-anonymous content remains anonymous to non-admin readers. Administrators may resolve its live author or historical snapshot. Mutual-aid evidence keeps the request's read policy after account deletion.
 - Administrators must transfer operational responsibility and be demoted by another administrator before self-deletion.
+- Member post activity is server-side. Account deletion clears the activity
+  row's actor reference through the database foreign key. The row retains the
+  action, board, post, and event time.
 - The completion receipt is deliberately non-identifying. There is no fixed application-level legal retention claim; any receipt or backup interval requires explicit privacy-owner approval.
 
 2026-09-17 client isolation (WP5/WP9): the root query cache and mounted form state are replaced when the authenticated principal (ID/role) changes; retired caches are cleared. Private edit responses and signed media URLs cannot carry over to the next account. Edit forms wait for a fresh mount fetch before their one-time hydration.
