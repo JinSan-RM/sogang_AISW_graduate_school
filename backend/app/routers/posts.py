@@ -1517,11 +1517,9 @@ def get_post_detail(
     )
 
 
-def _lock_member_post_actor(db: Session, user: User) -> None:
-    if user.role == "admin":
-        return
+def _lock_post_actor(db: Session, user: User) -> None:
     # Account deletion locks the user before its authored posts. Follow the same
-    # order before an edit or deletion adds an activity row with an actor FK.
+    # order before an edit or deletion creates a record with an actor FK.
     actor_id = db.scalar(
         select(User.id)
         .where(User.id == user.id, User.is_active.is_(True))
@@ -1558,7 +1556,7 @@ def create_post(
     if payload.is_anonymous and not board.allow_anonymous and board.board_type != "suggestion":
         raise AppException(status_code=400, message="Anonymous posts are not allowed on this board.", code="BAD_REQUEST")
 
-    _lock_member_post_actor(db, current_user)
+    _lock_post_actor(db, current_user)
     is_anonymous = True if board.board_type == "suggestion" else payload.is_anonymous
     post_metadata = _canonical_activity_metadata(db, board, normalized_metadata)
     post_metadata, activity_source_title = _canonical_activity_source(db, board, post_metadata, is_new=True)
@@ -1611,7 +1609,7 @@ def update_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _lock_member_post_actor(db, current_user)
+    _lock_post_actor(db, current_user)
     post = db.scalar(select(Post).where(Post.id == post_id).with_for_update())
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
@@ -1804,7 +1802,7 @@ def update_post_representative_image(
 
 @router.delete("/posts/{post_id}")
 def delete_post(post_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _lock_member_post_actor(db, current_user)
+    _lock_post_actor(db, current_user)
     post = db.scalar(select(Post).where(Post.id == post_id).with_for_update())
     if post is None or post.deleted_at is not None:
         raise AppException(status_code=404, message="Post not found.", code="NOT_FOUND")
