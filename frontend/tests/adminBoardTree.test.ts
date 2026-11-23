@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Board } from "../types";
-import { adminBoardParent, adminBoardSection, adminBoardSections, adminBoardCreationType, adminNoticeEditReady, adminBoardVisiblePage } from "../utils/adminBoardTree";
+import { ADMIN_BOARD_GROUPS, adminBoardParent, adminBoardSection, adminBoardSections, adminBoardCreationType, adminNoticeEditReady, adminBoardVisiblePage } from "../utils/adminBoardTree";
 
 const board = (id: number, slug: string, category: string, type = "post", metadata?: Record<string, unknown>): Board => ({
   id, slug, name: slug, category, board_type: type, metadata, sort_order: id,
   allow_anonymous: false, read_permission: "user", write_permission: "user", is_active: true,
+});
+
+test("관리 분류가 회원 앱의 게시판 탭 순서와 일치한다", () => {
+  assert.deepEqual(ADMIN_BOARD_GROUPS.map(({ label }) => label), [
+    "공지사항", "커뮤니티", "참여활동", "원우회",
+  ]);
 });
 
 test("current taxonomy groups resource tags and participation modes without old notice menus", () => {

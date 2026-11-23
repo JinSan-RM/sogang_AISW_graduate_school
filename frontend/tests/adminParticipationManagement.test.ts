@@ -14,7 +14,7 @@ const board = (id: number, slug: string, type = "post", is_active = true): Board
   is_active, allow_anonymous: false, read_permission: "user", write_permission: "user",
 });
 
-function workspacePage(section: "club" | "networking", boards: Board[], boardId: number | null = null) {
+function workspacePage(section: "club" | "study" | "networking", boards: Board[], boardId: number | null = null) {
   const pushes: unknown[] = [];
   const opened: string[] = [];
   const target = boards.find(b => b.id === boardId) ?? boards[0];
@@ -53,15 +53,17 @@ function workspacePage(section: "club" | "networking", boards: Board[], boardId:
   new Function("module", "exports", "require", compiled)(module, module.exports, requirePage);
   const root = module.exports.default!();
   const actions: {label: string; onPress: () => void}[] = [];
+  const filters: string[] = [];
   function walk(node: unknown) {
     if (Array.isArray(node)) {node.forEach(walk); return;}
     if (!react.isValidElement(node)) return;
     const element = node as {type: unknown; props: {children?: unknown; label?: string; onPress?: () => void}};
     if (element.type === "ActionButton") actions.push(element.props as {label: string; onPress: () => void});
+    if (element.type === "Chip" && element.props.label) filters.push(element.props.label);
     walk(element.props.children);
   }
   walk(root);
-  return {actions, pushes, opened};
+  return {actions, filters, pushes, opened};
 }
 
 for (const [section, guideSlug, activitySlug, label, guideId] of [
@@ -87,8 +89,29 @@ for (const [section, guideSlug, activitySlug, label, guideId] of [
   });
 }
 
+for (const [section, guideSlug, guideOrder, activitySlug, activityOrder, guideLabel] of [
+  ["club", "club-promo", 51, "club-activity", 30, "동아리 목록"],
+  ["study", "study-recruit", 60, "study-activity", 31, "모집"],
+  ["networking", "networking-programs", 72, "networking-activity", 32, "행사 목록"],
+] as const) {
+  test(`${section} shows the guide filter before activity certification`, () => {
+    const extra = {
+      ...board(90, "추가 게시판"),
+      metadata: { admin_navigation: { section } },
+    };
+    const view = workspacePage(section, [
+      board(activityOrder, activitySlug, "activity_certification"),
+      board(guideOrder, guideSlug),
+      extra,
+    ]);
+
+    assert.deepEqual(view.filters, ["전체", guideLabel, "활동 인증", "추가 게시판"]);
+  });
+}
+
 test("a hidden guide cannot turn registration into certification writing", () => {
   const view = workspacePage("club", [board(1, "club-activity", "activity_certification"), board(21, "club-promo", "post", false)]);
   assert.equal(view.actions.some(action => action.label === "동아리 등록" || action.label === "글 작성"), false);
   assert.ok(view.actions.find(action => action.label === "활동 인증 보기"));
+  assert.deepEqual(view.filters, ["전체", "활동 인증"]);
 });

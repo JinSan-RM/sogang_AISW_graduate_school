@@ -2,8 +2,10 @@ import type { Board } from "../types";
 import type { AdminContentScope } from "./adminContentManagement";
 
 export const ADMIN_BOARD_GROUPS = [
-  {key:"council", label:"원우회"}, {key:"participation", label:"참여활동"},
-  {key:"community", label:"커뮤니티"}, {key:"notices", label:"공지사항"},
+  {key:"notices", label:"공지사항"},
+  {key:"community", label:"커뮤니티"},
+  {key:"participation", label:"참여활동"},
+  {key:"council", label:"원우회"},
 ] as const;
 export const ADMIN_BOARD_SECTION_DEFINITIONS = [
   {key:"executives", label:"원우회 임원진 소개", scope:"council", category:"gsa", type:"organization_intro"},

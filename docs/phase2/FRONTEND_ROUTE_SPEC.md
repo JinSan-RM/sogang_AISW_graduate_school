@@ -474,7 +474,10 @@ Before frontend expansion, Figma should provide:
 - 2026-09-17 WP5/WP9 club operation setting: administrator club create/edit forms expose `운영 중 / 운영 종료` independently of recruitment state. Missing legacy state defaults to `운영 중`. A recruitment-closed club remains selectable while operating. Operation-ended clubs disappear from new certification source choices, including source changes during edit, while an existing historical selection stays readable/editable. All source pages are loaded before filtering; an ended-only page cannot hide active clubs on later pages. Saving a guide invalidates the source-option cache along with its board posts.
 
 2026-10-07 WP8/WP9 board console: `/admin/boards` on web uses a white left
-taxonomy rail (원우회, 참여활동, 커뮤니티, 공지사항) and a right content area.
+taxonomy rail and a right content area. Since 2026-11-23, the rail follows the
+member tab order (공지사항, 커뮤니티, 참여활동, 원우회). Each participation
+section displays its guide or recruitment filter before 활동 인증, preserving the
+configured order of its remaining filters.
 Current resource/participation/notice tags filter a 10-row post table; no
 board finder is displayed. Settings, board creation and the existing notice
 editor open on demand. Actual notice boards/custom children remain selectable

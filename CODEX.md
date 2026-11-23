@@ -554,6 +554,11 @@ Definition of done:
 
 ## Work Package 8: Phase 4 Admin Surface
 
+2026-11-23 P0 board management: aligned the web management groups with the member
+tabs and placed the club, study, and networking guide or recruitment filters
+before activity certification. The web view uses the app's guide slugs and
+keeps the existing database order for the other filters.
+
 Source: Notion `Admin page development`.
 
 2026-10-07 participation link deferral (WP8/WP9 P0): per the user's follow-up,

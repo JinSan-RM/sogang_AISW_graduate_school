@@ -9,6 +9,7 @@ import { usePostDetail } from "../../../hooks/usePosts";
 import { useAdminAlert } from "../../../utils/adminAlert";
 import { adminBoardSection, adminBoardSections, adminBoardTag, adminNoticeEditReady, adminParticipationBoards, type AdminBoardSectionKey } from "../../../utils/adminBoardTree";
 import { adminBoardCapability, adminBoardContentControl } from "../../../utils/adminContentManagement";
+import { participationGroupDefaultSlug } from "../../../utils/appRoutes";
 import { requestWriteLeave, setWriteLeaveGuard } from "../../../stores/writeLeaveGuard";
 import { adminBoardSettingsDraft } from "../../../utils/adminBoardSettings";
 import AdminBoardSettingsPanel from "../AdminBoardSettingsPanel";
@@ -43,6 +44,11 @@ export default function AdminBoardsWebPage() {
   const sections=adminBoardSections(boards);
   const section=sections.find(s=>s.key===selection.section);
   const groupedBoards=section?boards.filter(b=>section.boardIds.includes(b.id)&&b.is_active!==false):[];
+  const sectionKey = section?.key;
+  if (sectionKey === "club" || sectionKey === "study" || sectionKey === "networking") {
+    const guideSlug = participationGroupDefaultSlug(sectionKey);
+    groupedBoards.sort((left, right) => Number(right.slug === guideSlug) - Number(left.slug === guideSlug));
+  }
   const participation=adminParticipationBoards(selection.section,boards);
   const label=selection.boardId?boards.find(b=>b.id===selection.boardId)?.name??"게시판":section?.label??"모든 게시판";
   const locked=workspace.managedNavigationLocked||busy;
