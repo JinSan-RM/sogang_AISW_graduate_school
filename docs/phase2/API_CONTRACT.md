@@ -89,7 +89,7 @@ sent as timezone-aware UTC and displayed/edited in Asia/Seoul time.
   `422 POLL_NOTICE_ONLY`. Notice moves retain the same poll and ballots; converting
   its board to another type is rejected. Poll and post saves share one transaction.
 - Poll create/update/remove/close adds administrator audit actions; individual
-  member choices are not duplicated in audit logs. Verification: `docs/qa/ATTENDANCE_POLLS_2026-10-07.md`.
+  member choices are not duplicated in audit logs. Verification: [`ATTENDANCE_POLLS_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ATTENDANCE_POLLS_2026-10-07.md).
 
 2026-07-05 override: `정책_정의서_260705.pdf` supersedes Phase 2 guest-read assumptions for launch. Auth endpoints remain guest-capable, but content APIs now require a Bearer access token: boards, posts, comments, search, media, events, FAQs, banners, notifications, settings, reports, and admin APIs.
 

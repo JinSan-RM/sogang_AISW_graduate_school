@@ -45,7 +45,7 @@ or general member-directory endpoint is added. Participant cache keys additional
 isolate question, option, participation mode and page. Administrator duplication
 creates an unsaved new card and uses the existing protected post save; it cannot
 copy ballot identities or reopen the source. Verification:
-`docs/qa/KAKAO_POLL_PARITY_2026-10-07.md`.
+[`KAKAO_POLL_PARITY_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/KAKAO_POLL_PARITY_2026-10-07.md).
 
 2026-07-05 override: `정책_정의서_260705.pdf` changes the launch access model to a member-only app. `guest` users may use login, signup/email verification, password reset, public account-deletion request/verify, token refresh, registration options, legal/support screens, and health/docs only. Board, post, comment, search, event, FAQ, media, banner, notification, settings, and admin APIs require an authenticated user unless a later policy document explicitly re-opens a public route. A signed media file URL is a short-lived capability issued only after an authenticated authorization check.
 

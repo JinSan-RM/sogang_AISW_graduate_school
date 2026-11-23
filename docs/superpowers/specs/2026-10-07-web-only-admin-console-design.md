@@ -2,7 +2,7 @@
 
 작성일: 2026-10-07 · 작업 범위: WP8 관리자 / WP9 통합
 
-상태: **확정한 메인과 모든 기존 관리자 탭의 웹 페이지 구현.** 2026-10-07 사용자가 메인 구현 후 나머지 기능도 탭별 페이지로 구현하도록 요청했고, 미정인 사항은 임시 기본값으로 진행하도록 승인했다. 방향은 **관리자 웹 운영, 현재 기능 보존, PC 화면 전체 활용**이다. 메인 검증은 `docs/qa/ADMIN_MAIN_WEB_2026-10-07.md`, 전체 페이지의 기본값·기능 보존·검증은 `docs/qa/ADMIN_PAGES_DECISIONS_2026-10-07.md`에 기록한다.
+상태: **확정한 메인과 모든 기존 관리자 탭의 웹 페이지 구현.** 2026-10-07 사용자가 메인 구현 후 나머지 기능도 탭별 페이지로 구현하도록 요청했고, 미정인 사항은 임시 기본값으로 진행하도록 승인했다. 방향은 **관리자 웹 운영, 현재 기능 보존, PC 화면 전체 활용**이다. 메인 검증은 [`ADMIN_MAIN_WEB_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ADMIN_MAIN_WEB_2026-10-07.md), 전체 페이지의 기본값·기능 보존·검증은 `docs/qa/ADMIN_PAGES_DECISIONS_2026-10-07.md`에 기록한다.
 
 현재 구현 결정: 메인 숫자 클릭은 날짜별 통계·게시글/댓글 목록·7일 추이를 갖춘 대시보드를 연다. 트래픽은 회원 전용 정책에 맞춰 로그인한 일반 회원의 앱/웹 이용만 수집하며 관리자와 비회원은 제외한다. 아래 시안의 익명 클라이언트 수집·로그인 병합은 구현하지 않는다. 웹에서 관리자 게시글 상세·작성·수정도 관리자 주소 안에서 이어지며, 기존 네이티브 관리자 진입과 기능은 호환성을 위해 보존한다.
 
@@ -28,7 +28,7 @@
 - `frontend/components/admin/`: 게시판 탐색/설정, 저장 피드백, 명부/회비 컴포넌트가 이미 분리되어 있다.
 - `frontend/services/api.ts`: 관리자 통계/기록, 사용자 관리, 게시판/콘텐츠와 명부/회비 클라이언트가 구현되어 있다.
 - `docs/phase2/FRONTEND_ROUTE_SPEC.md`: `/admin`과 역할 기반 진입 계약이 있다.
-- `docs/superpowers/specs/2026-08-21-admin-board-content-controls-design.md`: 게시판을 하나의 메뉴에서 관리하는 기존 통합 설계를 유지한다.
+- [`2026-08-21-admin-board-content-controls-design.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/superpowers/specs/2026-08-21-admin-board-content-controls-design.md): 게시판을 하나의 메뉴에서 관리하는 기존 통합 설계를 유지한다.
 
 접근 비교:
 

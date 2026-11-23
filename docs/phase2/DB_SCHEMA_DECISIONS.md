@@ -705,7 +705,7 @@ Migration `0032_admin_usage` follows `0031_operation_status_only` and adds `usag
 
 This is first-party ordinary-member app/web navigation, with no provider, raw URL, query string, IP, user agent or content column. Administrators and guests do not create rows. Count sessions/visitors distinctly for a KST day and count accepted event rows for page views; a session continues only within 30 minutes on the same visitor/device. PostgreSQL member row locks serialize event/session assignment. Account deletion removes that member's current-key usage rows in the existing deletion transaction and leaves other members' rows. Rotating the auth secret changes future visitor pseudonyms and unlinks previous-key events from the current derivation. No history is backfilled and no retention duration is invented in this change.
 
-Apply `alembic upgrade head` before running the changed API, including when collection is disabled, because admin overview reads the table. Downgrade drops these usage events and its two indexes. Isolated SQLite upgrade/downgrade/re-upgrade is verified; PostgreSQL/Docker execution is blocked locally as recorded in `docs/qa/ADMIN_MAIN_WEB_2026-10-07.md`.
+Apply `alembic upgrade head` before running the changed API, including when collection is disabled, because admin overview reads the table. Downgrade drops these usage events and its two indexes. Isolated SQLite upgrade/downgrade/re-upgrade is verified; PostgreSQL/Docker execution is blocked locally as recorded in [`ADMIN_MAIN_WEB_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ADMIN_MAIN_WEB_2026-10-07.md).
 
 ### 2026-10-07 administrator board tree (WP8/WP9 P0)
 

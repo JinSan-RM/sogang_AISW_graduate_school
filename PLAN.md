@@ -67,7 +67,7 @@ rows, with infinite scrolling. Only voted profiles additionally expose current
 major; contact/roster fields remain excluded. Admin previews follow the new row
 layout without fabricated counts. Independent manual closure remains unchanged;
 no poll deadline or notice-deadline coupling is introduced. Evidence:
-`docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md`.
+[`POLL_REFERENCE_ALIGNMENT_2026-10-08.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/POLL_REFERENCE_ALIGNMENT_2026-10-08.md).
 
 2026-10-08 WP6/WP8/WP9 P0 poll usability follow-up: implement the user's
 approved audit findings within the existing notice/poll flow. Administrators see
@@ -79,7 +79,7 @@ settings while keeping unsaved notice fields and guarding stale completions.
 The protected admin post page exposes a batched poll summary with distinct
 respondents. Members see saved-answer receipts and progress across currently
 answerable cards. No schema/provider/deployment change. Evidence:
-`docs/qa/POLL_USABILITY_2026-10-08.md`.
+[`POLL_USABILITY_2026-10-08.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/POLL_USABILITY_2026-10-08.md).
 
 2026-10-08 WP6/WP8/WP9 P0 poll visual alignment: the user requested closer
 KakaoTalk styling after reviewing the visual differences. Retain white/blue
@@ -89,7 +89,7 @@ participant rows with circular cohort badges. Poll status uses a full-screen
 view below 600px and a bounded dialog on larger screens. The shared Council
 person-card default remains; polls opt into a plain variant. No route, API,
 database, dependency or deployment change. Evidence:
-`docs/qa/POLL_VISUAL_DESIGN_2026-10-08.md`.
+[`POLL_VISUAL_DESIGN_2026-10-08.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/POLL_VISUAL_DESIGN_2026-10-08.md).
 
 2026-10-07 P0 Kakao poll parity follow-up (WP6/WP8/WP9): the user authorized
 comparison, runtime verification and gap fixes without another approval pause.
@@ -100,7 +100,7 @@ are current active accounts authorized to read the notice, not a chat membership
 snapshot; expose only the existing public name/cohort profile. Stable per-card
 identity preserves pending selections when another card changes. No new database
 schema or provider. Public screenshot comparison and verification limits:
-`docs/qa/KAKAO_POLL_PARITY_2026-10-07.md`.
+[`KAKAO_POLL_PARITY_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/KAKAO_POLL_PARITY_2026-10-07.md).
 
 2026-10-07 WP6/WP8/WP9 P0 notice-editor follow-up: the requested application
 deadline uses the existing calendar/time controls and KST-to-UTC conversion.
@@ -121,7 +121,7 @@ manual closure/locks without changing IDs, ballots or media. Nonbinary/date/phot
 multiple-choice legacy results remain readable; old automatic deadlines no longer
 apply. Notice application deadlines and body/image features remain separate.
 Local preview only; PostgreSQL migration/deployment and native runtime checks remain
-outside this change. Design/verification: `docs/qa/ATTENDANCE_POLLS_2026-10-07.md`.
+outside this change. Design/verification: [`ATTENDANCE_POLLS_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ATTENDANCE_POLLS_2026-10-07.md).
 
 Historical baseline, superseded above: requested P2 notice polls (WP6/WP8/WP9): the user requested the
 KakaoTalk-style poll flow embedded only in notice posts. Administrators alone
@@ -132,8 +132,8 @@ administrator editor and member participation/results are implemented under
 `0033_notice_polls`, preserving the existing post architecture. Settings freeze
 after the first vote; deletion also requires the loaded revision. Local preview
 uses its existing SQLite database; deployment and PostgreSQL migration are not
-performed. Design and QA: `docs/superpowers/specs/2026-10-07-notice-polls-design.md`
-and `docs/qa/NOTICE_POLLS_2026-10-07.md`.
+performed. Design and QA: [`2026-10-07-notice-polls-design.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/superpowers/specs/2026-10-07-notice-polls-design.md)
+and [`NOTICE_POLLS_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/NOTICE_POLLS_2026-10-07.md).
 
 2026-10-07 WP8/WP9 P0 participation follow-up: the user deferred the participation
 button link until later. Club and networking guide registration/editing omits
@@ -142,11 +142,11 @@ support for earlier clients; preserve guide media requirements, operation-state
 controls and activity-certification eligibility. This is a form/API requirement
 correction within the existing board architecture.
 
-2026-10-07 WP8/WP9 follow-up: user authorized implementation of all existing administrator tabs as separate web pages, preserving all operations and allowing provisional choices for later correction. Retain Expo Router and existing server/session/domain logic. Canonical nested admin routes share a persistent layout/controller; presentation is split by page. Old section links and native administration remain compatible. Dashboard receives daily content/detail and seven-day first-party member traffic from protected APIs; no external analytics provider. Implementation/decision ledger: `docs/superpowers/plans/2026-10-07-admin-pages.md` and `docs/qa/ADMIN_PAGES_DECISIONS_2026-10-07.md`.
+2026-10-07 WP8/WP9 follow-up: user authorized implementation of all existing administrator tabs as separate web pages, preserving all operations and allowing provisional choices for later correction. Retain Expo Router and existing server/session/domain logic. Canonical nested admin routes share a persistent layout/controller; presentation is split by page. Old section links and native administration remain compatible. Dashboard receives daily content/detail and seven-day first-party member traffic from protected APIs; no external analytics provider. Implementation/decision ledger: [`2026-10-07-admin-pages.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/superpowers/plans/2026-10-07-admin-pages.md) and `docs/qa/ADMIN_PAGES_DECISIONS_2026-10-07.md`.
 
 Admin direction confirmed on 2026-10-07 (WP8/WP9): administrators will operate through the web. Preserve all current administration behavior while giving `/admin` a desktop console independent of the member app's 405px web frame. Reuse the existing Expo project, APIs, sessions, and domain rules; native administrators retain ordinary member features. The user approved the latest main-page mockup and requested implementation with “메인부터 작업 시작”. The main, desktop shell, protected daily overview, first-party member traffic and expanded audit coverage are implemented. Existing editors and dashboard remain reachable; their new designs remain under review in `docs/superpowers/specs/2026-10-07-web-only-admin-console-design.md`.
 
-2026-10-07 admin main implementation (WP8/WP9): `/admin` defaults to main on web and shows seven daily metrics above pending work, paginated mutual-aid/suggestion lists and five recent administrator actions. SQL filters the complete dataset before pagination: old pending records remain, and completed/rejected/answered records require a current KST review/reply timestamp. Request processing uses existing protected APIs inside the web shell and refreshes the main/logs after success. Removed guidance and quick actions stay absent. Administrator post/comment changes now join existing control logs, with no-op processing preserving handling timestamps. Traffic is P1 basic statistics, uses authenticated ordinary-member app/web route events under the existing member-only access policy, and excludes administrators and guests. Apply Alembic `0032_admin_usage` before starting this backend. New seven-day dashboard trends and metric/date drilldown remain the next dashboard slice; the main's metric links currently open the existing dashboard. Verification and local PostgreSQL/Docker limitations: `docs/qa/ADMIN_MAIN_WEB_2026-10-07.md`.
+2026-10-07 admin main implementation (WP8/WP9): `/admin` defaults to main on web and shows seven daily metrics above pending work, paginated mutual-aid/suggestion lists and five recent administrator actions. SQL filters the complete dataset before pagination: old pending records remain, and completed/rejected/answered records require a current KST review/reply timestamp. Request processing uses existing protected APIs inside the web shell and refreshes the main/logs after success. Removed guidance and quick actions stay absent. Administrator post/comment changes now join existing control logs, with no-op processing preserving handling timestamps. Traffic is P1 basic statistics, uses authenticated ordinary-member app/web route events under the existing member-only access policy, and excludes administrators and guests. Apply Alembic `0032_admin_usage` before starting this backend. New seven-day dashboard trends and metric/date drilldown remain the next dashboard slice; the main's metric links currently open the existing dashboard. Verification and local PostgreSQL/Docker limitations: [`ADMIN_MAIN_WEB_2026-10-07.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ADMIN_MAIN_WEB_2026-10-07.md).
 
 This repository already has the correct broad architecture.
 
@@ -156,7 +156,7 @@ This repository already has the correct broad architecture.
 - Local release-engineering gate verified on 2026-07-27: SQLite and isolated PostgreSQL each passed 104/104 backend tests; the isolated Compose stack reached `0021_account_deletion_receipts`; clean, `0019`→head, `0021`→`0019`→`0021`, and exact unversioned `0001` recovery paths passed; unknown schemas remained fail-closed. PostgreSQL dump/restore and media tar/restore rehearsals also passed.
 - An isolated Windows short-path rehearsal built a temporary unsigned Android release AAB from the same 115 frontend source files. Bundletool validation, API 36, 16 KB page alignment, release-manifest security, and an extracted-artifact Gitleaks scan passed. That disposable artifact contained placeholder identity/development strings and was not a signed production or store candidate.
 - A provider-neutral operational-alert adapter now covers unhandled API exceptions, notification worker failures, and push send/ticket/receipt failures with structured non-PII context. Production startup requires an approved HTTPS webhook; provider selection, secret registration, routing, and live delivery remain external operations work.
-- Store readiness is tracked separately. Android branding/native identity, 10 EAS public production values, and the new-registration upload key are prepared. On 2026-09-09 the user deferred remote push; strict checks pass with the explicit disabled flag and Firebase/FCM activation is later-release work. Signed AAB `outputs/android/AI-SW-CAMPUS-0.1.0-2.aab` was generated and passed bundle, signature, API 36, 16 KB alignment, and secret-scan checks. Final policy content, physical-device QA, Play submission, and iOS archive remain open; see `docs/qa/ANDROID_BRANDING_2026-09-08.md`.
+- Store readiness is tracked separately. Android branding/native identity, 10 EAS public production values, and the new-registration upload key are prepared. On 2026-09-09 the user deferred remote push; strict checks pass with the explicit disabled flag and Firebase/FCM activation is later-release work. Signed AAB `outputs/android/AI-SW-CAMPUS-0.1.0-2.aab` was generated and passed bundle, signature, API 36, 16 KB alignment, and secret-scan checks. Final policy content, physical-device QA, Play submission, and iOS archive remain open; see [`ANDROID_BRANDING_2026-09-08.md`](https://github.com/JinSan-RM/sogang_AISW_graduate_school/blob/85f6e8bf94b9d319804fc0e00a2c3f00aac706e3/docs/qa/ANDROID_BRANDING_2026-09-08.md).
 
 ### Navigation decision: one stack per bottom tab (2026-10-07)
 
